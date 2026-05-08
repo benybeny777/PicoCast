@@ -72,7 +72,7 @@ class GenerationReport:
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
                        custom_bg_prompt=None):
-    """Generate thumbnail: AI background (no text) + PIL title overlay."""
+    """Generate thumbnail image via Nano Banana (text baked into prompt)."""
     def _log(msg):
         if update_status: update_status(msg)
         else: print(msg, flush=True)
