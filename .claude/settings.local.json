@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(del \"c:\\\\00_PG\\\\yukkurijidou\\\\test_comfy.py\")"
+    ]
+  }
+}

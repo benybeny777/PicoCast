@@ -1,0 +1,606 @@
+import tkinter as tk
+from tkinter import ttk, scrolledtext, messagebox
+import threading
+import re
+import os
+import sys
+import subprocess
+import traceback
+import time
+import shutil
+from main import run_pipeline
+from core.ai_generator import AIGenerator
+from config import VOICEVOX_URL, VOICEVOX_PATH
+import requests
+
+VIDIQ_PROMPT = """\
+あなたはYouTubeゆっくり動画の脚本家です。
+チャンネル: https://www.youtube.com/@zunkami（ずんだもんとめたんのゆっくり解説チャンネル）
+以下のフォーマットで出力してください。
+
+━━ 出力フォーマット（厳守） ━━
+
+動画形式: （テーマを見て「Shorts」か「ロング」かを判定して記載。Shorts: 1つの感情的エピソード・シンプルな驚き・オチがある話。ロング: 複数エピソード・詳細な解説・情報量が多い内容）
+動画タイトル: （YouTubeに貼るタイトルをそのまま記載。クリック率重視・30文字以内・数字/感情語/疑問形を活用）
+説明文: （YouTubeの概要欄にそのままコピペできる文章。検索キーワードを含む150文字程度。先頭に必ず #ずんだもん #ゆっくり解説 を入れること。末尾に「👍いいね＆チャンネル登録お願いします！💬感想はコメントで！🔔通知オンで見逃しなし！」などCTAを自然に含めること）
+タグ: （YouTubeタグ欄にそのままコピペできるカンマ区切り10〜15個。必ず先頭3つを「ずんだもん,ゆっくり解説,VOICEVOX」にすること）
+サムネイル: （日本語プロンプト。漫画風・アニメ調。以下を必ず守ること: メインテキストは2〜5文字のパワーワードを画面中央に配置・「赤地に白抜き」または「黄色に黒縁」などの高コントラスト配色・極太フォントで視認性最大化・人物描画禁止・上下左右20%マージン確保・下半分空白）
+
+背景: （日本語の画像生成プロンプト。漫画風・アニメ調で。必ずその場面に合ったキャッチコピーを引用符で囲んで含める。このテキストはNano Bananaが画像内に直接描画するため、表示したい文字と配置位置（画面上部のみ・下半分空白）を明確に記述すること。例: 「夜の薄暗いオフィス、窓に雨、漫画風、画面上部に"上司が激怒…"を描画、下半分は空白」）
+サムネイル: （日本語プロンプト。漫画風・アニメ調。目を引く劇的な構図。動画タイトルのテキストを引用符で囲んで画面上部30%以内に描画するよう明記。下半分は空白）
+ずんだもん(感情): セリフ
+四国めたん(感情): セリフ
+背景: ...
+（以下繰り返し）
+
+━━ 出力形式（厳守） ━━
+台本全体を必ず1つのコードブロック（```）で囲んで出力すること。
+ユーザーがそのまま一括コピーして別ツールに貼り付けられるようにするため。
+
+━━ ルール ━━
+・キャラクターは「ずんだもん」と「四国めたん」の2人のみ
+  - ずんだもん：ボクっ娘、語尾は「〜なのだ」
+  - 四国めたん：プライド高め、丁寧語
+・感情は（ノーマル）（あまあま）（ツンツン）（ささやき）から選ぶ
+・背景・サムネイルプロンプトは日本語で書き、漫画風・アニメ調を基本スタイルとすること
+・背景のキャッチコピーは引用符で囲んで含めること。Nano Bananaが画像内に直接描画するため、表示する文字と配置（画面上部のみ・下半分空白）を明確に記述すること
+・背景・サムネイルプロンプトに特定クリエイター名（例: 新海誠、宮崎駿 等）を絶対に含めないこと
+・Shortsの場合：全体60〜150秒、セリフ40〜55行、1行15文字以内。起承転結がはっきりわかり最後まで見た視聴者が満足できる結末にすること。背景シーンは10秒につき1枚を目安に用意すること（例: 90秒なら約9枚）
+・ロングの場合：全体3〜10分、セリフ100〜200行。より詳細・丁寧に展開すること。背景シーンは10秒につき1枚を目安に用意すること（例: 5分なら約30枚）
+・台本の最後はキャラクターがいいね・チャンネル登録・コメントを視聴者に呼びかけるセリフで締めること
+
+━━ 複数本まとめて生成する場合 ━━
+各台本と次の台本の間に、必ず以下の区切り行を【単独の行として】挿入してください。
+区切り行の前後には必ず空行を1行ずつ入れてください。
+
+（区切り行）
+---
+
+【出力例（2本の場合）】
+
+動画タイトル: 1本目のタイトル
+説明文: ...
+タグ: ...
+サムネイル: ...
+背景: ...
+ずんだもん(ノーマル): セリフ
+...
+
+---
+
+動画タイトル: 2本目のタイトル
+説明文: ...
+タグ: ...
+サムネイル: ...
+背景: ...
+ずんだもん(ノーマル): セリフ
+...
+
+この区切り記号（---）が正しく入っていないと、複数の台本が1本として処理されてしまいます。\
+"""
+
+def unified_check(name, primary_url, path):
+    file_ok = os.path.exists(path)
+    found_url = None
+    urls_to_try = [primary_url]
+    if "8188" in primary_url or "8000" in primary_url:
+        for p in ["8188", "8000", "8189"]:
+            alt = primary_url.replace("8188", p).replace("8000", p)
+            if alt not in urls_to_try: urls_to_try.append(alt)
+    for url in urls_to_try:
+        try:
+            requests.get(url, timeout=0.8)
+            found_url = url
+            break
+        except:
+            continue
+    return {
+        "name": name,
+        "connected": found_url is not None,
+        "url": found_url if found_url else primary_url,
+        "file_ok": file_ok,
+        "path": path
+    }
+
+print(f"\n--- [System Startup Check] ---")
+for n, u, p in [("VOICEVOX", VOICEVOX_URL, VOICEVOX_PATH)]:
+    res = unified_check(n, u, p)
+    c_status = f"[Conn: OK ({res['url']})]" if res['connected'] else "[Conn: ERR]"
+    f_status = "[File: OK]" if res['file_ok'] else "[File: ERR]"
+    print(f"{res['name']:<10}: {c_status:<35} {f_status}")
+print(f"------------------------------\n")
+
+class YMM4AutoGui:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("YMM4 Auto Video Factory")
+        self.root.geometry("920x780")
+        self.root.minsize(800, 620)
+        self.root.configure(bg="#f5f7fa")
+
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure("TFrame", background="#f5f7fa")
+        style.configure("TLabel", font=("Meiryo", 9), background="#f5f7fa")
+        style.configure("Header.TLabel", font=("Meiryo", 13, "bold"), foreground="#2d3436")
+        style.configure("TButton", font=("Meiryo", 9, "bold"), padding=4)
+        style.configure("Accent.TButton", foreground="white", background="#0984e3")
+        style.map("Accent.TButton", background=[('active', '#0773c5')])
+
+        main_frame = ttk.Frame(root, padding="12")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Header + script controls in one row
+        top_frame = ttk.Frame(main_frame)
+        top_frame.pack(fill=tk.X, pady=(0, 4))
+        ttk.Label(top_frame, text="🚀 YMM4 自動動画生成ファクトリー", style="Header.TLabel").pack(side=tk.LEFT)
+        self.generate_btn = ttk.Button(top_frame, text="🎬 生成 🚀", style="Accent.TButton", command=self.start_generation)
+        self.generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
+        ttk.Button(top_frame, text="📋 VidIQ", command=self.copy_vidiq_prompt).pack(side=tk.RIGHT)
+        ttk.Button(top_frame, text="クリア", width=6, command=self.clear_script).pack(side=tk.RIGHT, padx=4)
+
+        # Script area
+        self.ref_text = scrolledtext.ScrolledText(main_frame, height=6, font=("Consolas", 10), bg="#fdfdfd", borderwidth=1, relief="solid", highlightthickness=1, highlightbackground="#dfe6e9", highlightcolor="#0984e3")
+        self.ref_text.pack(fill=tk.X, expand=False, pady=(0, 4))
+
+        # Options row (all in one line)
+        opt_frame = ttk.Frame(main_frame)
+        opt_frame.pack(fill=tk.X, pady=2)
+
+        self.auto_open_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(opt_frame, text="完成後に開く", variable=self.auto_open_var).pack(side=tk.LEFT, padx=4)
+
+        self.debug_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(opt_frame, text="デバッグ", variable=self.debug_var).pack(side=tk.LEFT, padx=4)
+
+        ttk.Label(opt_frame, text="画風:").pack(side=tk.LEFT, padx=(12, 2))
+        self.style_var = tk.StringVar(value="nanobanana2")
+        self.style_combo = ttk.Combobox(opt_frame, textvariable=self.style_var, values=["nanobanana2", "nanobanana pro"], state="readonly", width=14)
+        self.style_combo.pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(opt_frame, text="履歴:").pack(side=tk.LEFT, padx=(10, 2))
+        self.history_combo = ttk.Combobox(opt_frame, state="readonly", width=22, font=("Meiryo", 9))
+        self.history_combo.set("履歴から選択")
+        self.history_combo.pack(side=tk.LEFT, padx=2)
+        self.history_combo.bind("<<ComboboxSelected>>", self.on_history_selected)
+
+        # Sub buttons row
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.pack(fill=tk.X, pady=(0, 4))
+        self.upload_btn = ttk.Button(btn_frame, text="📤 YouTubeアップ", command=self.start_youtube_upload)
+        self.upload_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self.bulk_upload_btn = ttk.Button(btn_frame, text="📤 一括アップ", command=self.start_bulk_upload)
+        self.bulk_upload_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self.open_folder_btn = ttk.Button(btn_frame, text="📁 出力フォルダを開く", command=self.open_output_dir)
+        self.open_folder_btn.pack(side=tk.LEFT)
+
+        # Copy buttons row
+        copy_frame = ttk.Frame(main_frame)
+        copy_frame.pack(fill=tk.X, pady=(0, 3))
+        ttk.Label(copy_frame, text="コピー:").pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Button(copy_frame, text="📋 タイトル", command=lambda: self._copy_meta("title")).pack(side=tk.LEFT, padx=2)
+        ttk.Button(copy_frame, text="📋 説明文", command=lambda: self._copy_meta("description")).pack(side=tk.LEFT, padx=2)
+        ttk.Button(copy_frame, text="📋 タグ", command=lambda: self._copy_meta("tags")).pack(side=tk.LEFT, padx=2)
+
+        # Metadata preview
+        ttk.Label(main_frame, text="メタデータ:").pack(anchor=tk.W)
+        self.meta_preview = scrolledtext.ScrolledText(main_frame, height=4, font=("Meiryo", 8), bg="#fdfdfd", borderwidth=1, relief="solid", state=tk.DISABLED)
+        self.meta_preview.pack(fill=tk.X, pady=(2, 4))
+
+        # Status + progress
+        self.status_var = tk.StringVar(value="Ready")
+        self.status_label = ttk.Label(main_frame, textvariable=self.status_var, font=("Meiryo", 8, "italic"))
+        self.status_label.pack(anchor=tk.W)
+        self.progress = ttk.Progressbar(main_frame, mode='determinate')
+        self.progress.pack(fill=tk.X, pady=(2, 4))
+
+        # Log（最下部・残りスペースを埋める）
+        ttk.Label(main_frame, text="実行ログ:").pack(anchor=tk.W)
+        self.log_area = scrolledtext.ScrolledText(main_frame, height=6, font=("Meiryo", 9), bg="#1e272e", fg="#d2dae2")
+        self.log_area.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
+        self.log_area.tag_config("info", foreground="#00d8d6")
+        self.log_area.tag_config("error", foreground="#ff5e57")
+        self.log_area.tag_config("success", foreground="#05c46b")
+        self.log_area.tag_config("batch", foreground="#ef57ff", font=("Meiryo", 9, "bold"))
+
+        self.last_output_dir = None
+
+        self.refresh_history()
+        threading.Thread(target=self.check_engines_startup, daemon=True).start()
+
+    def check_engines_startup(self):
+        self.log("--- システム接続確認 ---")
+        ai = AIGenerator(debug=self.debug_var.get())
+        g_status = "接続OK (Gemini / Nano Banana)" if ai.client else "未設定 (configを確認してください)"
+        self.log(f"Google AI : {g_status}", "info" if ai.client else "error")
+
+        for n, u, p in [("VOICEVOX", VOICEVOX_URL, VOICEVOX_PATH)]:
+            res = unified_check(n, u, p)
+            status = "OK" if res['connected'] else "ERR"
+            style = "success" if res['connected'] else "error"
+            self.log(f"{res['name']:<10}: {status} ({res['url']})", style)
+        self.log("----------------------")
+
+    def copy_vidiq_prompt(self):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(VIDIQ_PROMPT)
+        self.root.update()
+        self.log("VidIQプロンプトをクリップボードにコピーしました ✅", "success")
+
+    def clear_script(self):
+        self.ref_text.delete("1.0", tk.END)
+        self.log("台本をクリアしました")
+
+    def log(self, message, tag="info"):
+        self.root.after(0, lambda: self._log_ui(message, tag))
+
+    def _log_ui(self, message, tag):
+        self.log_area.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] {message}\n", tag)
+        if int(self.log_area.index("end-1c").split(".")[0]) > 500:
+            self.log_area.delete("1.0", "101.0")
+        self.log_area.see(tk.END)
+        self.status_var.set(message)
+
+    def refresh_history(self):
+        if not os.path.exists("output"): os.makedirs("output", exist_ok=True)
+        history = [d for d in os.listdir("output") if os.path.isdir(os.path.join("output", d)) and d != "000_uploaded"]
+        history.sort(key=lambda d: os.path.getmtime(os.path.join("output", d)), reverse=True)
+        self.history_combo['values'] = history
+
+    def on_history_selected(self, event):
+        selected = self.history_combo.get()
+        if not selected:
+            return
+        output_dir = os.path.join("output", selected)
+        script_path = os.path.join(output_dir, "script.txt")
+        if os.path.exists(script_path):
+            with open(script_path, "r", encoding="utf-8") as f:
+                self.ref_text.delete("1.0", tk.END)
+                self.ref_text.insert("1.0", f.read())
+            self.log(f"履歴 '{selected}' から台本を読み込みました")
+        if os.path.exists(os.path.join(output_dir, "metadata.txt")):
+            self.last_output_dir = output_dir
+            self._update_meta_preview()
+
+    def start_generation(self):
+        raw_scripts = self.ref_text.get("1.0", tk.END).strip()
+        scripts = [s.strip() for s in re.split(r'\n-{3,}\n', raw_scripts) if s.strip()]
+
+        if not scripts:
+            messagebox.showwarning("Error", "台本を入力してください")
+            return
+
+        self._toggle_ui(False)
+        self.log(f"一括処理開始: 合計 {len(scripts)} 件")
+        threading.Thread(target=self._run_batch, args=(scripts,), daemon=True).start()
+
+    def _run_batch(self, scripts):
+        count = len(scripts)
+        is_batch = count > 1
+
+        for idx, script in enumerate(scripts):
+            try:
+                # Derive topic from 動画タイトル: line, fallback to first line
+                topic = None
+                for line in script.split("\n"):
+                    line = line.strip().replace("**", "")
+                    m = re.match(r'^(?:動画タイトル|Title)[:：]\s*(.+)$', line, re.IGNORECASE)
+                    if m:
+                        topic = m.group(1).strip()[:50]
+                        break
+                if not topic:
+                    first_line = script.split("\n")[0].strip()
+                    topic = re.sub(r'^[#*【]|\s*[:：].*$', '', first_line).strip()[:30]
+                if not topic:
+                    topic = f"Generated_Project_{idx+1}"
+
+                if is_batch:
+                    self.log(f"\n>>> 処理中 ({idx+1}/{count}): {topic}", "batch")
+                    self.root.after(0, lambda v=int((idx/count)*100): self.progress.config(value=v))
+
+                msg, report = run_pipeline(
+                    topic,
+                    pregenerated_script=script,
+                    debug_mode=self.debug_var.get(),
+                    image_style=self.style_var.get(),
+                    progress_callback=self.log,
+                )
+
+                self.log(f"成功: {topic}", "success")
+                if not is_batch:
+                    self.root.after(0, lambda m=msg, r=report: self.finish_generation(m, r))
+                    return
+
+            except Exception as e:
+                err_msg = str(e)
+                if self.debug_var.get():
+                    self.log(traceback.format_exc(), "error")
+                self.log(f"❌ エラー: {err_msg}", "error")
+                if not is_batch:
+                    self.root.after(0, lambda m=err_msg: self.finish_generation(m, None, is_error=True))
+                    return
+
+        if is_batch:
+            self.root.after(0, lambda: self.progress.config(value=100))
+            self.log("\n✅ 全ての一括処理が完了しました！", "success")
+            messagebox.showinfo("一括完了", f"{count}件の処理が完了しました。")
+            self.root.after(0, lambda: self._toggle_ui(True))
+
+    def _update_meta_preview(self):
+        if not self.last_output_dir:
+            return
+        meta_path = os.path.join(self.last_output_dir, "metadata.txt")
+        if not os.path.exists(meta_path):
+            return
+        with open(meta_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        self.meta_preview.config(state=tk.NORMAL)
+        self.meta_preview.delete("1.0", tk.END)
+        self.meta_preview.insert("1.0", content)
+        self.meta_preview.config(state=tk.DISABLED)
+
+    def start_bulk_upload(self):
+        if not os.path.exists("output"):
+            messagebox.showinfo("情報", "outputフォルダがありません")
+            return
+
+        folders = [
+            d for d in os.listdir("output")
+            if os.path.isdir(os.path.join("output", d)) and d != "000_uploaded"
+            and any(f.endswith(".mp4") for f in os.listdir(os.path.join("output", d)))
+        ]
+        if not folders:
+            messagebox.showinfo("情報", "アップロード可能な動画が見つかりません")
+            return
+
+        folders.sort(key=lambda d: os.path.getmtime(os.path.join("output", d)), reverse=True)
+
+        win = tk.Toplevel(self.root)
+        win.title("一括アップロード")
+        win.geometry("520x480")
+        win.configure(bg="#f5f7fa")
+        win.grab_set()
+
+        ttk.Label(win, text="アップロードする動画を選択", font=("Meiryo", 10, "bold")).pack(pady=(12, 4))
+
+        frame = ttk.Frame(win)
+        frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+
+        canvas = tk.Canvas(frame, bg="#f5f7fa", highlightthickness=0)
+        sb = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        canvas.configure(yscrollcommand=sb.set)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1*(e.delta//120), "units"))
+
+        checks = {}
+        for folder in folders:
+            var = tk.BooleanVar(value=True)
+            checks[folder] = var
+            ttk.Checkbutton(inner, text=folder, variable=var).pack(anchor=tk.W, padx=8, pady=2)
+
+        btn_row = ttk.Frame(win)
+        btn_row.pack(pady=8)
+
+        def _all(v):
+            for var in checks.values(): var.set(v)
+        ttk.Button(btn_row, text="全選択", command=lambda: _all(True)).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn_row, text="全解除", command=lambda: _all(False)).pack(side=tk.LEFT, padx=4)
+
+        def _start():
+            selected = [f for f, v in checks.items() if v.get()]
+            if not selected:
+                messagebox.showwarning("未選択", "動画を1つ以上選択してください", parent=win)
+                return
+            win.destroy()
+            self.upload_btn.config(state=tk.DISABLED)
+            self.bulk_upload_btn.config(state=tk.DISABLED)
+            threading.Thread(target=self._run_bulk_upload, args=(selected,), daemon=True).start()
+
+        ttk.Button(btn_row, text="▶ アップロード開始", style="Accent.TButton", command=_start).pack(side=tk.LEFT, padx=8)
+
+    def _run_bulk_upload(self, folders):
+        total = len(folders)
+        self.log(f"📤 一括アップロード開始: {total}件", "batch")
+        success, failed = 0, 0
+        for i, folder in enumerate(folders):
+            output_dir = os.path.join("output", folder)
+            mp4_files = [f for f in os.listdir(output_dir) if f.endswith(".mp4")]
+            if not mp4_files:
+                self.log(f"⚠ [{i+1}/{total}] MP4なし: {folder}", "error")
+                failed += 1
+                continue
+
+            mp4_path = os.path.join(output_dir, mp4_files[0])
+            meta = self._read_meta_from_dir(output_dir)
+            title = meta.get("title", folder)
+            description = meta.get("description", "")
+            tags = meta.get("tags", "")
+            is_shorts = folder.startswith("[Shorts]")
+            thumb = None if is_shorts else os.path.join(output_dir, "thumbnail.png")
+            if thumb and not os.path.exists(thumb):
+                thumb = None
+
+            self.log(f"\n>>> [{i+1}/{total}] {folder}", "batch")
+            try:
+                from core.youtube_uploader import upload_video
+                upload_video(mp4_path, title, description, tags,
+                             thumbnail_path=thumb, privacy="private",
+                             progress_callback=self.log)
+                if os.path.exists(output_dir):
+                    uploaded_base = os.path.join("output", "000_uploaded")
+                    os.makedirs(uploaded_base, exist_ok=True)
+                    dest = os.path.join(uploaded_base, folder)
+                    if os.path.exists(dest):
+                        shutil.rmtree(dest)
+                    shutil.move(output_dir, dest)
+                    self.log(f"📦 移動完了: {folder}", "success")
+                success += 1
+            except Exception as e:
+                self.log(f"❌ エラー: {e}", "error")
+                failed += 1
+
+        self.log(f"\n✅ 一括アップロード完了: 成功={success} 失敗={failed}", "success")
+        self.root.after(0, self.refresh_history)
+        self.root.after(0, lambda: self.upload_btn.config(state=tk.NORMAL))
+        self.root.after(0, lambda: self.bulk_upload_btn.config(state=tk.NORMAL))
+        if failed:
+            self.root.after(0, lambda: messagebox.showwarning("完了", f"完了: 成功={success} / 失敗={failed}"))
+        else:
+            self.root.after(0, lambda: messagebox.showinfo("完了", f"{success}件アップロードしました"))
+
+    def start_youtube_upload(self):
+        from tkinter import filedialog
+        mp4_path = filedialog.askopenfilename(
+            title="アップロードする動画ファイルを選択",
+            initialdir="output",
+            filetypes=[("MP4 動画", "*.mp4"), ("すべてのファイル", "*.*")]
+        )
+        if not mp4_path:
+            return
+
+        output_dir = os.path.dirname(mp4_path)
+        meta = self._read_meta_from_dir(output_dir)
+        title = meta.get("title", os.path.basename(output_dir))
+        description = meta.get("description", "")
+        tags = meta.get("tags", "")
+        is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
+        thumb = None if is_shorts else os.path.join(output_dir, "thumbnail.png")
+
+        privacy = "private"
+        self.upload_btn.config(state=tk.DISABLED)
+        threading.Thread(
+            target=self._run_upload,
+            args=(mp4_path, title, description, tags, thumb, privacy, output_dir),
+            daemon=True
+        ).start()
+
+    def _run_upload(self, mp4_path, title, description, tags, thumb, privacy, output_dir):
+        try:
+            from core.youtube_uploader import upload_video
+            upload_video(mp4_path, title, description, tags,
+                         thumbnail_path=thumb, privacy=privacy,
+                         progress_callback=self.log)
+
+            # アップロード成功 → 000_uploaded/ へ移動
+            if output_dir and os.path.exists(output_dir):
+                uploaded_base = os.path.join("output", "000_uploaded")
+                os.makedirs(uploaded_base, exist_ok=True)
+                dest = os.path.join(uploaded_base, os.path.basename(output_dir))
+                if os.path.exists(dest):
+                    shutil.rmtree(dest)
+                shutil.move(output_dir, dest)
+                self.log(f"📦 アップロード済みフォルダへ移動: {os.path.basename(output_dir)}", "success")
+                self.root.after(0, self.refresh_history)
+        except Exception as e:
+            self.log(f"❌ アップロードエラー: {e}", "error")
+        finally:
+            self.root.after(0, lambda: self.upload_btn.config(state=tk.NORMAL))
+
+    def _read_meta_from_dir(self, output_dir):
+        if not output_dir:
+            return {}
+        meta_path = os.path.join(output_dir, "metadata.txt")
+        if not os.path.exists(meta_path):
+            return {}
+        with open(meta_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        sections = [
+            ("title", "【動画タイトル】"),
+            ("description", "【説明文】"),
+            ("tags", "【タグ】"),
+            ("thumbnail", "【サムネイルプロンプト】"),
+        ]
+        data = {}
+        for i, (key, header) in enumerate(sections):
+            start = content.find(header)
+            if start == -1:
+                continue
+            start += len(header)
+            end = len(content)
+            for _, next_header in sections[i + 1:]:
+                pos = content.find(next_header, start)
+                if pos != -1 and pos < end:
+                    end = pos
+            data[key] = content[start:end].strip()
+        return data
+
+    def finish_generation(self, message, report, is_error=False):
+        self._toggle_ui(True)
+        self.progress.config(mode='determinate', value=100 if not is_error else 0)
+
+        if is_error:
+            self.status_label.config(foreground="#ff5e57")
+            self.status_var.set("❌ エラーにより停止しました")
+            messagebox.showerror("エラー", f"生成に失敗しました:\n\n{message}")
+        else:
+            self.status_label.config(foreground="#05c46b")
+            self.status_var.set("✅ すべての処理が完了しました")
+            self.log("プロジェクト生成完了！", "success")
+            self.refresh_history()
+
+            summary = report.summary() if report else ""
+            full_msg = f"{message}\n\n{summary}"
+
+            project_path = None
+            if "プロジェクト保存済み: " in message:
+                project_path = message.split("プロジェクト保存済み: ")[1].strip()
+
+            if project_path and os.path.exists(project_path):
+                self.last_output_dir = os.path.dirname(project_path)
+
+            self._update_meta_preview()
+
+            # 補正済み script.txt をテキストエリアに反映
+            if self.last_output_dir:
+                script_path = os.path.join(self.last_output_dir, "script.txt")
+                if os.path.exists(script_path):
+                    with open(script_path, "r", encoding="utf-8") as f:
+                        corrected = f.read()
+                    self.ref_text.config(state=tk.NORMAL)
+                    self.ref_text.delete("1.0", tk.END)
+                    self.ref_text.insert("1.0", corrected)
+
+            if self.auto_open_var.get() and project_path and os.path.exists(project_path):
+                self.log(f"YMM4で開いています: {os.path.basename(project_path)}")
+                os.startfile(project_path)
+
+            messagebox.showinfo("成功", full_msg)
+
+    def _copy_meta(self, field):
+        if not self.last_output_dir:
+            messagebox.showwarning("情報", "先に動画を生成するか、履歴から選択してください")
+            return
+        if not os.path.exists(os.path.join(self.last_output_dir, "metadata.txt")):
+            messagebox.showwarning("情報", "metadata.txt が見つかりません")
+            return
+        data = self._read_meta_from_dir(self.last_output_dir)
+        value = data.get(field, "")
+        if not value:
+            messagebox.showwarning("情報", f"データが見つかりません: {field}")
+            return
+        self.root.clipboard_clear()
+        self.root.clipboard_append(value)
+        self.root.update()
+        labels = {"title": "タイトル", "description": "説明文", "tags": "タグ"}
+        self.log(f"📋 {labels.get(field, field)} をコピーしました", "success")
+
+    def _toggle_ui(self, enabled):
+        state = tk.NORMAL if enabled else tk.DISABLED
+        self.generate_btn.config(state=state)
+        self.ref_text.config(state=state)
+        if enabled: self.progress.stop()
+        else: self.progress.start(10)
+
+    def open_output_dir(self):
+        out_dir = os.path.abspath("output")
+        os.makedirs(out_dir, exist_ok=True)
+        os.startfile(out_dir)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = YMM4AutoGui(root)
+    root.mainloop()
