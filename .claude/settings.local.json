@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(python -c ' *)",
-      "Bash(del \"c:\\\\00_PG\\\\yukkurijidou\\\\test_comfy.py\")"
+      "Bash(del \"c:\\\\00_PG\\\\yukkurijidou\\\\test_comfy.py\")",
+      "Bash(Test-Path \"C:\\\\Users\\\\benyb\\\\Desktop\\\\素材\\\\四国めたん立ち絵素材2.1\\\\四国めたん立ち絵素材2.1\\\\四国めたん立ち絵素材2.1.psd\")",
+      "Read(//c/Users/benyb/Desktop/�f��/�l���߂��񗧂��G�f��2.1/�l���߂��񗧂��G�f��2.1/**)"
     ]
   }
 }

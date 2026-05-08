@@ -407,19 +407,25 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         char_dialogues[char].append((emotion, start, end))
 
     tachie_offset = 200 if is_shorts else 450
+    tachie_y = 700 if is_shorts else 0
     for i, char_name in enumerate(char_order):
         x_pos = -tachie_offset if "ずんだもん" in char_name else (tachie_offset if "めたん" in char_name else 0)
-        y_pos = 0
+        y_pos = tachie_y
         layer = 3 + i
 
         # Fill gaps between dialogues with ノーマル, then merge consecutive same-emotion blocks
+        # All segments clipped to start at frame 3 (TACHIE_START_FRAME) at the earliest
+        TACHIE_START_FRAME = 3
         segs = sorted(char_dialogues[char_name], key=lambda x: x[1])
         full_segs = []
-        prev_end = 3
+        prev_end = TACHIE_START_FRAME
         for emotion, start, end in segs:
+            effective_start = max(start, TACHIE_START_FRAME)
+            if end <= effective_start:
+                continue
             if start > prev_end:
-                full_segs.append(["ノーマル", prev_end, start])
-            full_segs.append([emotion, start, end])
+                full_segs.append(["ノーマル", prev_end, effective_start])
+            full_segs.append([emotion, effective_start, end])
             prev_end = end
         if prev_end < current_frame:
             full_segs.append(["ノーマル", prev_end, current_frame])
