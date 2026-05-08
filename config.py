@@ -34,12 +34,5 @@ CHARACTERS = {
 
 OUTPUT_DIR = "output"
 
-# Backgrounds & Audio Assets
-ASSETS_DIR = "assets"
-BACKGROUND_DIR = "assets/backgrounds"
-DEFAULT_BACKGROUND = "bg_lab.png"
-
 # Cost control: max unique background images generated per video (thumbnail excluded)
 MAX_BACKGROUNDS = 7
-
-os.makedirs(BACKGROUND_DIR, exist_ok=True)

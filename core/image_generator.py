@@ -1,7 +1,7 @@
 import os
 import uuid
 from google import genai
-from config import BACKGROUND_DIR, GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL
+from config import GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL
 
 class ImageGenerator:
     def __init__(self, width=1920, height=1080, debug=False, image_style="通常"):
@@ -22,7 +22,7 @@ class ImageGenerator:
             print("  [Error] Google API キーが未設定です")
             return None
 
-        save_dir = target_dir if target_dir else BACKGROUND_DIR
+        save_dir = target_dir or "output/backgrounds"
         os.makedirs(save_dir, exist_ok=True)
 
         model_name = NANOBANANA_PRO_MODEL if (force_nanobanana_pro or "pro" in self.image_style) else NANOBANANA_FLASH_MODEL

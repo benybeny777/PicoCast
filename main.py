@@ -14,7 +14,7 @@ from core.parser import ScriptParser
 from core.ymmp_editor import YmmpEditor
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
-from config import CHARACTERS, VOICEVOX_PATH, BACKGROUND_DIR, MAX_BACKGROUNDS
+from config import CHARACTERS, VOICEVOX_PATH, MAX_BACKGROUNDS
 
 
 def _find_locking_process(path):
@@ -307,7 +307,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     update_status(f"🎬 アセット生成 & タイムライン構築を開始します...")
 
-    current_bg = "bg_lab_ai.png"
+    current_bg = None
     bg_start_frame = current_frame
     voice_num = 0
     bg_num = 0
@@ -322,8 +322,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if item["type"] == "background":
             if current_bg and current_frame > bg_start_frame:
                 bg_path = os.path.join(theme_bg_dir, current_bg)
-                if not os.path.exists(bg_path):
-                    bg_path = os.path.join(BACKGROUND_DIR, current_bg)
                 if os.path.exists(bg_path):
                     editor.add_image_item(bg_path, bg_start_frame, current_frame - bg_start_frame, layer=0)
                     if first_bg_placed:
@@ -395,7 +393,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # Finalize
     if current_bg and current_frame > bg_start_frame:
         bg_path = os.path.join(theme_bg_dir, current_bg)
-        if not os.path.exists(bg_path): bg_path = os.path.join(BACKGROUND_DIR, current_bg)
         if os.path.exists(bg_path):
             editor.add_image_item(bg_path, bg_start_frame, current_frame - bg_start_frame, layer=0)
             
