@@ -390,6 +390,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             editor.add_voice_item(char_key, text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=duration_frames)
             current_frame += duration_frames + 15
 
+    # 終了画面用に5秒延長
+    current_frame += 5 * editor.fps
+
     # Finalize
     if current_bg and current_frame > bg_start_frame:
         bg_path = os.path.join(theme_bg_dir, current_bg)

@@ -35,19 +35,30 @@ class ImageGenerator:
             import io
 
             w, h = self.width, self.height
-            ratio_str = f"{h}:{w}" if h > w else f"{w}:{h}"
+            ratio_str = f"{w}:{h}"
             safe_left   = round(w * 0.20)
             safe_right  = round(w * 0.80)
             safe_top    = round(h * 0.20)
             safe_bottom = round(h * 0.50)
+            is_shorts = h > w
+            if is_shorts:
+                layout_rules = (
+                    f"【絶対厳守ルール】"
+                    f"▼シーン描画: 背景シーンは画像全体（{w}x{h}px）に描画すること。上から下まで全域にシーンを描くこと。"
+                    f"▼人物禁止: 人物・キャラクター・アニメキャラ・シルエットを一切描画しない。"
+                    f"▼テキスト配置のみ制限: テキスト・文字・ロゴを描く場合は必ず上部中央（y={safe_top}px〜{round(h*0.35)}px・x={safe_left}px〜{safe_right}px）のみ。テキスト以外のシーン描画はこの制限を受けない。"
+                    f"▼テキストスタイル: 白文字・極太黒縁取り・ドロップシャドウ・太ゴシック体で統一。"
+                    f"---"
+                )
+            else:
+                layout_rules = (
+                    f"人物・キャラクター・アニメキャラを一切描画しないこと。---"
+                )
             full_prompt = (
-                f"画像サイズ {w}x{h}px・アスペクト比{ratio_str}で生成すること。"
-                f"高品質な漫画風アニメ調背景画像を生成してください。{description}。"
+                f"{layout_rules}"
+                f"画像サイズ {w}x{h}px・アスペクト比{ratio_str}。高品質な漫画風アニメ調背景画像。"
+                f"{description}。"
                 f"マスターピース、精細なデジタルアート、劇的な照明、鮮烈な色彩、映画的構図。"
-                f"【厳守レイアウトルール】"
-                f"テキスト・文字・ロゴは必ずセーフゾーン内（左{safe_left}px〜右{safe_right}px・上{safe_top}px〜下{safe_bottom}px）に収めること。"
-                f"上下左右各20%のマージン（{round(w*0.2)}px/{round(h*0.2)}px）にはテキストも重要オブジェクトも一切配置禁止。"
-                f"画像下部50%（{safe_bottom}px以下）はキャラクター立ち絵と字幕のために完全に空白にすること。"
             )
 
             response = self.client.models.generate_content(
@@ -57,24 +68,9 @@ class ImageGenerator:
 
             for part in response.parts:
                 if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
-                    bio = io.BytesIO(part.inline_data.data)
-                    img = Image.open(bio)
-                    try:
-                        img = img.convert("RGB")
-                        if img.size != (self.width, self.height):
-                            scale = max(self.width / img.width, self.height / img.height)
-                            new_w = round(img.width * scale)
-                            new_h = round(img.height * scale)
-                            img = img.resize((new_w, new_h), Image.LANCZOS)
-                            left = (new_w - self.width) // 2
-                            top = (new_h - self.height) // 2
-                            img = img.crop((left, top, left + self.width, top + self.height))
-                        img = self._apply_bottom_gradient(img)
-                        local_filename = f"bg_{uuid.uuid4().hex[:8]}.png"
-                        img.save(os.path.join(save_dir, local_filename))
-                    finally:
-                        img.close()
-                        bio.close()
+                    local_filename = f"bg_{uuid.uuid4().hex[:8]}.png"
+                    with open(os.path.join(save_dir, local_filename), "wb") as out:
+                        out.write(part.inline_data.data)
                     if self.debug:
                         print(f"  [AI] Nano Banana 完了: {local_filename}")
                     return local_filename

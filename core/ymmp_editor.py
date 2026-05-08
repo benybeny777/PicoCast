@@ -147,16 +147,6 @@ class YmmpEditor:
 
     def add_image_item(self, file_path, start_frame, duration, layer=0):
         scale = 100.0
-        try:
-            from PIL import Image
-            with Image.open(file_path) as img:
-                img_w, img_h = img.size
-            if img_w != self.width or img_h != self.height:
-                scale_w = self.width / img_w * 100.0
-                scale_h = self.height / img_h * 100.0
-                scale = max(scale_w, scale_h)
-        except Exception:
-            pass
 
         item = {
             "$type": "YukkuriMovieMaker.Project.Items.ImageItem, YukkuriMovieMaker",
