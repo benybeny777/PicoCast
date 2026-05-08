@@ -288,7 +288,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     from config import ASSETS_DIR
     TEMPLATES_DIR = os.path.join(ASSETS_DIR, "templates")
     op_template = os.path.join(TEMPLATES_DIR, "opening_shorts.ymmp" if is_shorts else "opening.ymmp")
-    current_frame = 0
+    current_frame = 3  # frame 0-2 reserved for YMM4 init
     if os.path.exists(op_template):
         editor.merge_project(op_template, offset_frames=0)
         current_frame = _read_ymmp_duration(op_template)
@@ -301,7 +301,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                                     custom_bg_prompt=ai_thumbnail_prompt)
     if thumb_path:
         if is_shorts:
-            editor.add_image_item(thumb_path, 0, 1, layer=0)
+            editor.add_image_item(thumb_path, 0, 3, layer=0)
             update_status("  📌 サムネイルをショート先頭フレームに挿入")
         # ロングの場合は theme_dir に保存済み（YMM4 挿入なし）
 

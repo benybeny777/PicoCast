@@ -2,7 +2,7 @@ import re
 from config import CHARACTERS
 
 class ScriptParser:
-    _bg_re = re.compile(r'^(?:背景|Background|シーン|Scene)[:：](.*)$', re.IGNORECASE)
+    _bg_re = re.compile(r'^(?:背景|Background|シーン|Scene)\d*[:：](.*)$', re.IGNORECASE)
     _dialogue_re = re.compile(r'^([^:：(（【]+)(?:\s*[（(]([^)）]+)[）)])?\s*[:：]\s*(.*)$')
     _telop_re = re.compile(r'^(?:テロップ|Telop)[:：](.*)$', re.IGNORECASE)
     _thumb_re = re.compile(r'^(?:サムネイル|Thumbnail)[:：](.*)$', re.IGNORECASE)
@@ -150,7 +150,7 @@ class ScriptParser:
             errors.append("セリフが一つも見つかりませんでした。「名前: セリフ」の形式になっているか確認してください。")
         
         if bg_count == 0:
-            warnings.append("背景(背景: ...)が設定されていません。デフォルトの背景が使用されます。")
+            warnings.append("背景(背景: ...)が設定されていません。")
             
         # Check for unknown characters (best effort)
         known_names = [info["name"] for info in CHARACTERS.values()]

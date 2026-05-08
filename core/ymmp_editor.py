@@ -76,7 +76,7 @@ class YmmpEditor:
             if "$type" not in char_data:
                 char_data["$type"] = "YukkuriMovieMaker.Project.CharacterParameter, YukkuriMovieMaker"
             # Scale font size for portrait (Shorts) layout
-            font_size = 65.0
+            font_size = 71.5
             if "FontSize" in char_data and "Values" in char_data["FontSize"]:
                 for v in char_data["FontSize"]["Values"]:
                     v["Value"] = font_size
@@ -269,7 +269,7 @@ class YmmpEditor:
 
         self.project["Timelines"][0]["Items"].append(item)
 
-    def add_text_item(self, text, start_frame, duration, layer=2, font_size=60.0, y=350.0):
+    def add_text_item(self, text, start_frame, duration, layer=2, font_size=66.0, y=350.0):
         item = {
             "$type": "YukkuriMovieMaker.Project.Items.TextItem, YukkuriMovieMaker",
             "Text": text,
@@ -277,7 +277,7 @@ class YmmpEditor:
             "Length": duration,
             "Layer": layer,
             "FontSize": float(font_size),
-            "Font": "Meiryo",
+            "Font": "源ノ角ゴシック JP Bold",
             "FontColor": "#FFFFFFFF",
             "Style": 1, # Border
             "StyleColor": "#FF000000",

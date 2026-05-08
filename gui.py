@@ -150,6 +150,9 @@ class YMM4AutoGui:
         self.auto_open_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(opt_frame, text="完成後に開く", variable=self.auto_open_var).pack(side=tk.LEFT, padx=4)
 
+        self.auto_render_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opt_frame, text="完成後YMM4で開く", variable=self.auto_render_var).pack(side=tk.LEFT, padx=4)
+
         self.debug_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(opt_frame, text="デバッグ", variable=self.debug_var).pack(side=tk.LEFT, padx=4)
 
@@ -171,6 +174,8 @@ class YMM4AutoGui:
         self.upload_btn.pack(side=tk.LEFT, padx=(0, 4))
         self.bulk_upload_btn = ttk.Button(btn_frame, text="📤 一括アップ", command=self.start_bulk_upload)
         self.bulk_upload_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self.render_btn = ttk.Button(btn_frame, text="📂 YMM4で開く", command=self.start_render)
+        self.render_btn.pack(side=tk.LEFT, padx=(0, 4))
         self.open_folder_btn = ttk.Button(btn_frame, text="📁 出力フォルダを開く", command=self.open_output_dir)
         self.open_folder_btn.pack(side=tk.LEFT)
 
@@ -481,19 +486,24 @@ class YMM4AutoGui:
     def _run_upload(self, mp4_path, title, description, tags, thumb, privacy, output_dir):
         try:
             from core.youtube_uploader import upload_video
+            from core.ai_generator import AIGenerator
+            self.log("✍️  説明文をGeminiで整形中...")
+            description = AIGenerator().format_description(description)
             upload_video(mp4_path, title, description, tags,
                          thumbnail_path=thumb, privacy=privacy,
                          progress_callback=self.log)
 
-            # アップロード成功 → 000_uploaded/ へ移動
+            # アップロード成功 → 000_uploaded/ へ移動（既に中にある場合はスキップ）
             if output_dir and os.path.exists(output_dir):
-                uploaded_base = os.path.join("output", "000_uploaded")
-                os.makedirs(uploaded_base, exist_ok=True)
-                dest = os.path.join(uploaded_base, os.path.basename(output_dir))
-                if os.path.exists(dest):
-                    shutil.rmtree(dest)
-                shutil.move(output_dir, dest)
-                self.log(f"📦 アップロード済みフォルダへ移動: {os.path.basename(output_dir)}", "success")
+                uploaded_base = os.path.abspath(os.path.join("output", "000_uploaded"))
+                abs_output = os.path.abspath(output_dir)
+                if not abs_output.startswith(uploaded_base + os.sep):
+                    os.makedirs(uploaded_base, exist_ok=True)
+                    dest = os.path.join(uploaded_base, os.path.basename(output_dir))
+                    if os.path.exists(dest):
+                        shutil.rmtree(dest)
+                    shutil.move(output_dir, dest)
+                    self.log(f"📦 アップロード済みフォルダへ移動: {os.path.basename(output_dir)}", "success")
                 self.root.after(0, self.refresh_history)
         except Exception as e:
             self.log(f"❌ アップロードエラー: {e}", "error")
@@ -564,6 +574,9 @@ class YMM4AutoGui:
                     self.ref_text.delete("1.0", tk.END)
                     self.ref_text.insert("1.0", corrected)
 
+            if self.auto_render_var.get() and project_path and os.path.exists(project_path):
+                self._open_in_ymm4(project_path)
+
             if self.auto_open_var.get() and project_path and os.path.exists(project_path):
                 self.log(f"YMM4で開いています: {os.path.basename(project_path)}")
                 os.startfile(project_path)
@@ -594,6 +607,28 @@ class YMM4AutoGui:
         self.ref_text.config(state=state)
         if enabled: self.progress.stop()
         else: self.progress.start(10)
+
+    def start_render(self):
+        """Open the currently selected project in YMM4."""
+        if not self.last_output_dir:
+            messagebox.showwarning("情報", "先に動画を生成するか、履歴から選択してください")
+            return
+        ymmp_files = [f for f in os.listdir(self.last_output_dir) if f.endswith(".ymmp")]
+        if not ymmp_files:
+            messagebox.showwarning("情報", "ymmpファイルが見つかりません")
+            return
+        ymmp_path = os.path.join(self.last_output_dir, ymmp_files[0])
+        self._open_in_ymm4(ymmp_path)
+
+    def _open_in_ymm4(self, ymmp_path: str):
+        try:
+            from config import YMM4_EXE
+            import subprocess
+            subprocess.Popen([YMM4_EXE, ymmp_path])
+            self.log(f"📂 YMM4で開いています: {os.path.basename(ymmp_path)}", "info")
+        except Exception as e:
+            self.log(f"❌ YMM4起動エラー: {e}", "error")
+            messagebox.showerror("エラー", str(e))
 
     def open_output_dir(self):
         out_dir = os.path.abspath("output")

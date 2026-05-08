@@ -156,6 +156,36 @@ Nano Banana（画像生成AI）にそのまま渡すプロンプトとなるた�
             print(f"  [AI] YouTube補正エラー: {e}")
         return script_text
 
+    def format_description(self, description: str) -> str:
+        """YouTube説明文をGeminiで整形・改善する。"""
+        if not self.client:
+            return description
+        prompt = f"""以下はYouTubeゆっくり動画（ずんだもん・四国めたんチャンネル）の概要欄テキストです。
+YouTube SEOとエンゲージメントを最大化するよう、内容・構成・改行を改善してください。
+
+改善ルール:
+- 冒頭1〜2行は動画の内容を簡潔に表す魅力的な文にする（検索キーワードを自然に含める）
+- ハッシュタグ(#)はまとめて末尾に配置し、各タグの間はスペース区切り
+- CTAフレーズ（「いいね」「チャンネル登録」「コメント」等）は独立した行にする
+- URLは単独行にする
+- 「VOICEVOX」クレジットと「チャンネル登録」URLは必ず残す
+- 段落間は空行を1行入れる
+- 整形後のテキストのみ出力。説明や前置きは不要
+
+【説明文】
+{description}
+"""
+        try:
+            response = self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt
+            )
+            if response and response.text:
+                return response.text.strip()
+        except Exception as e:
+            print(f"  [AI] 説明文整形エラー: {e}")
+        return description
+
     def enhance_background_prompts(self, script_text, bg_prompts):
         """台本全体を渡してGeminiに背景プロンプトをインパクト重視で書き直させる。"""
         import re
