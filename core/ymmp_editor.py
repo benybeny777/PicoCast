@@ -80,6 +80,10 @@ class YmmpEditor:
             if "FontSize" in char_data and "Values" in char_data["FontSize"]:
                 for v in char_data["FontSize"]["Values"]:
                     v["Value"] = font_size
+            # MaxWidth をキャンバス幅に合わせて折り返し位置を設定
+            if "MaxWidth" in char_data and "Values" in char_data["MaxWidth"]:
+                for v in char_data["MaxWidth"]["Values"]:
+                    v["Value"] = float(self.width)
             self.project["Characters"].append(char_data)
         else:
             # Fallback to minimal definition with simple numbers

@@ -150,11 +150,11 @@ class YMM4AutoGui:
         self.auto_open_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(opt_frame, text="完成後に開く", variable=self.auto_open_var).pack(side=tk.LEFT, padx=4)
 
-        self.auto_render_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(opt_frame, text="完成後YMM4で開く", variable=self.auto_render_var).pack(side=tk.LEFT, padx=4)
-
         self.debug_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(opt_frame, text="デバッグ", variable=self.debug_var).pack(side=tk.LEFT, padx=4)
+
+        self.reuse_bg_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(opt_frame, text="背景再利用", variable=self.reuse_bg_var).pack(side=tk.LEFT, padx=4)
 
         ttk.Label(opt_frame, text="画風:").pack(side=tk.LEFT, padx=(12, 2))
         self.style_var = tk.StringVar(value="nanobanana2")
@@ -174,8 +174,6 @@ class YMM4AutoGui:
         self.upload_btn.pack(side=tk.LEFT, padx=(0, 4))
         self.bulk_upload_btn = ttk.Button(btn_frame, text="📤 一括アップ", command=self.start_bulk_upload)
         self.bulk_upload_btn.pack(side=tk.LEFT, padx=(0, 4))
-        self.render_btn = ttk.Button(btn_frame, text="📂 YMM4で開く", command=self.start_render)
-        self.render_btn.pack(side=tk.LEFT, padx=(0, 4))
         self.open_folder_btn = ttk.Button(btn_frame, text="📁 出力フォルダを開く", command=self.open_output_dir)
         self.open_folder_btn.pack(side=tk.LEFT)
 
@@ -309,6 +307,7 @@ class YMM4AutoGui:
                     debug_mode=self.debug_var.get(),
                     image_style=self.style_var.get(),
                     progress_callback=self.log,
+                    reuse_backgrounds=self.reuse_bg_var.get(),
                 )
 
                 self.log(f"成功: {topic}", "success")
@@ -574,9 +573,6 @@ class YMM4AutoGui:
                     self.ref_text.delete("1.0", tk.END)
                     self.ref_text.insert("1.0", corrected)
 
-            if self.auto_render_var.get() and project_path and os.path.exists(project_path):
-                self._open_in_ymm4(project_path)
-
             if self.auto_open_var.get() and project_path and os.path.exists(project_path):
                 self.log(f"YMM4で開いています: {os.path.basename(project_path)}")
                 os.startfile(project_path)
@@ -607,28 +603,6 @@ class YMM4AutoGui:
         self.ref_text.config(state=state)
         if enabled: self.progress.stop()
         else: self.progress.start(10)
-
-    def start_render(self):
-        """Open the currently selected project in YMM4."""
-        if not self.last_output_dir:
-            messagebox.showwarning("情報", "先に動画を生成するか、履歴から選択してください")
-            return
-        ymmp_files = [f for f in os.listdir(self.last_output_dir) if f.endswith(".ymmp")]
-        if not ymmp_files:
-            messagebox.showwarning("情報", "ymmpファイルが見つかりません")
-            return
-        ymmp_path = os.path.join(self.last_output_dir, ymmp_files[0])
-        self._open_in_ymm4(ymmp_path)
-
-    def _open_in_ymm4(self, ymmp_path: str):
-        try:
-            from config import YMM4_EXE
-            import subprocess
-            subprocess.Popen([YMM4_EXE, ymmp_path])
-            self.log(f"📂 YMM4で開いています: {os.path.basename(ymmp_path)}", "info")
-        except Exception as e:
-            self.log(f"❌ YMM4起動エラー: {e}", "error")
-            messagebox.showerror("エラー", str(e))
 
     def open_output_dir(self):
         out_dir = os.path.abspath("output")

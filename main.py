@@ -1,6 +1,7 @@
 import os
 import sys
 import wave
+import math
 import time
 import subprocess
 import re
@@ -38,6 +39,22 @@ TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
 _CHANNEL_FOOTER = f"\n\n▶ チャンネル登録はこちら → {_CHANNEL_URL}"
+
+
+
+
+def _split_at_punctuation(text):
+    """Shorts用: 句読点(。！？)でセリフを文節に分割する。"""
+    chunks = []
+    current = ""
+    for ch in text:
+        current += ch
+        if ch in "。！？" and current.strip():
+            chunks.append(current)
+            current = ""
+    if current.strip():
+        chunks.append(current)
+    return chunks if chunks else [text]
 
 
 def _detect_is_shorts(script_content):
@@ -157,7 +174,7 @@ def merge_telops_into_backgrounds(items):
 
 def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
-                 image_style="通常"):
+                 image_style="通常", reuse_backgrounds=False):
     report = GenerationReport()
     pipeline_start = time.time()
 
@@ -194,8 +211,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     width = 1080 if is_shorts else 1920
     height = 1920 if is_shorts else 1080
 
-    # Step 4: 既存フォルダ削除
+    # Step 4: 既存フォルダ削除（背景再利用時は退避）
+    import tempfile
+    _saved_bg_tmp = None
     if os.path.exists(theme_dir):
+        if reuse_backgrounds:
+            _old_bg_dir = os.path.join(theme_dir, "backgrounds")
+            if os.path.exists(_old_bg_dir):
+                _saved_bg_tmp = tempfile.mkdtemp()
+                for f in os.listdir(_old_bg_dir):
+                    shutil.copy2(os.path.join(_old_bg_dir, f), _saved_bg_tmp)
         gc.collect()  # release any PIL file handles from previous run
         def _on_rm_error(func, path, exc_info):
             os.chmod(path, stat.S_IWRITE)
@@ -220,6 +245,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     theme_bg_dir = os.path.join(theme_dir, "backgrounds")
     os.makedirs(theme_audio_dir, exist_ok=True)
     os.makedirs(theme_bg_dir, exist_ok=True)
+
+    # 背景再利用: 退避したファイルを復元（新規作成時は_saved_bg_tmp=Noneなので通常生成へ）
+    _has_saved_bgs = False
+    if _saved_bg_tmp:
+        for f in os.listdir(_saved_bg_tmp):
+            shutil.copy2(os.path.join(_saved_bg_tmp, f), theme_bg_dir)
+        shutil.rmtree(_saved_bg_tmp)
+        _has_saved_bgs = True
+        update_status("🖼  既存の背景を再利用します")
 
     update_status("🔍 YouTubeポリシー補正中...")
     script_content = ai.sanitize_for_youtube(script_content)
@@ -297,8 +331,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style)
 
     thumbnail_title = meta.get("video_title", topic)
-    thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
-                                    custom_bg_prompt=ai_thumbnail_prompt)
+    if _has_saved_bgs:
+        # 既存サムネイルをそのまま使用
+        thumb_path = os.path.join(theme_dir, "thumbnail.png") if os.path.exists(os.path.join(theme_dir, "thumbnail.png")) else None
+        if thumb_path:
+            update_status("  📌 既存サムネイルを再利用")
+    else:
+        thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
+                                        custom_bg_prompt=ai_thumbnail_prompt)
     if thumb_path:
         if is_shorts:
             editor.add_image_item(thumb_path, 0, 3, layer=0)
@@ -336,6 +376,23 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
             bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
 
+            if _has_saved_bgs:
+                # 既存背景を順番に割り当て
+                existing_bgs = sorted(
+                    f for f in os.listdir(theme_bg_dir)
+                    if f.startswith("bg_") and f.endswith(".png")
+                )
+                bg_idx = bg_num - 1
+                if bg_idx < len(existing_bgs):
+                    current_bg = existing_bgs[bg_idx]
+                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 再利用: {current_bg}")
+                    report.backgrounds_generated += 1
+                else:
+                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 既存ファイル不足 — スキップ")
+                    report.backgrounds_failed += 1
+                bg_start_frame = current_frame
+                continue
+
             update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 生成中: {bg_name[:30]}...")
             try:
                 generated_file = img_gen.generate_background(bg_name, target_dir=theme_bg_dir)
@@ -365,30 +422,33 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     speaker_id = v.get("styles", {}).get(emotion, v["speaker_id"])
                     break
 
-            audio_filename = f"{uuid.uuid4().hex}.wav"
-            audio_path = os.path.join(theme_audio_dir, audio_filename)
+            chunks = _split_at_punctuation(text) if is_shorts else [text]
 
-            preview = text[:20] + ("…" if len(text) > 20 else "")
-            update_status(f"🎤 音声 [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」")
-            try:
-                _, kana = vv.generate_audio(text, speaker_id, audio_path)
-                report.voices_generated += 1
-            except Exception as e:
-                update_status(f"  ❌ 音声合成失敗: {e}")
-                report.voices_failed += 1
-                continue
+            for chunk_text in chunks:
+                audio_filename = f"{uuid.uuid4().hex}.wav"
+                audio_path = os.path.join(theme_audio_dir, audio_filename)
 
-            try:
-                with wave.open(audio_path, 'rb') as wr:
-                    duration_frames = int(wr.getnframes() / wr.getframerate() * 60)
-            except Exception as e:
-                update_status(f"  ❌ WAV読み込み失敗: {e}")
-                report.voices_failed += 1
-                continue
-            
-            dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + duration_frames))
-            editor.add_voice_item(char_key, text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=duration_frames)
-            current_frame += duration_frames + 15
+                preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
+                update_status(f"🎤 音声 [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」")
+                try:
+                    _, kana = vv.generate_audio(chunk_text, speaker_id, audio_path)
+                    report.voices_generated += 1
+                except Exception as e:
+                    update_status(f"  ❌ 音声合成失敗: {e}")
+                    report.voices_failed += 1
+                    continue
+
+                try:
+                    with wave.open(audio_path, 'rb') as wr:
+                        duration_frames = math.ceil(wr.getnframes() / wr.getframerate() * 60)
+                except Exception as e:
+                    update_status(f"  ❌ WAV読み込み失敗: {e}")
+                    report.voices_failed += 1
+                    continue
+
+                dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + duration_frames))
+                editor.add_voice_item(char_key, chunk_text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=duration_frames)
+                current_frame += duration_frames + 15
 
     # 終了画面用に5秒延長
     current_frame += 5 * editor.fps

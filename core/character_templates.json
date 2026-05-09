@@ -1373,7 +1373,7 @@
         "IsQuadratic": false
       }
     },
-    "WordWrap": "NoWrap",
+    "WordWrap": "Character",
     "MaxWidth": {
       "Values": [
         {
