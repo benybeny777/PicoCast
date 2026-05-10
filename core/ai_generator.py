@@ -54,6 +54,15 @@ Shorts の場合:
 
 ロング の場合:
 - 全体3〜10分（セリフ100〜200行程度）
+- 構成: イントロ(約30秒) → 本編チャプター×3〜5個 → まとめ → アウトロCTA
+- メタデータの直後（台本本文の前）に以下の形式でチャプター一覧を必ず出力すること:
+  チャプター一覧:
+  1. イントロ
+  2. （チャプタータイトル）
+  ...（以降のチャプター）
+- 各チャプターの冒頭セリフに「次はXについて話すのだ！」形式のミニフックを入れる
+- 2〜3分ごと（セリフ約40〜60行ごと）に視聴者へのコメント誘発セリフを1行挿入する
+  例:「これ知ってた？コメントで教えてほしいのだ！」「みんなはどう思う？」
 - セリフはより詳細・丁寧に展開すること
 - 背景シーンは10秒につき1枚を目安に用意すること（例: 5分なら約30枚）
 
@@ -118,6 +127,38 @@ Nano Banana（画像生成AI）にそのまま渡すプロンプトとなるた�
                 raise Exception(f"Google AI エラー: {e}")
 
         return "Error: Google API キーが未設定です。"
+
+    def generate_chapter_markers(self, script_text: str) -> str:
+        """ロング台本からYouTube用チャプターマーカーを生成する（1行≒3秒で推定）。"""
+        if not self.client:
+            return ""
+        prompt = f"""以下のゆっくり動画台本から、YouTube概要欄に貼り付けるチャプターマーカーを生成してください。
+
+【推定方法】
+- セリフ行（「キャラ名(感情): テキスト」形式）1行を約3秒として累計秒数を計算する
+- 背景切り替え行（「背景: 」）はカウントしない
+- チャプター区切りは台本内の「チャプター一覧:」または話題の転換点を参考にする
+- 1本目は必ず「00:00」から始める
+
+【出力形式（この形式のみ・説明不要）】
+00:00 イントロ
+01:30 〇〇について
+03:00 〇〇の真実
+...
+
+【台本】
+{script_text}
+"""
+        try:
+            response = self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt
+            )
+            if response and response.text:
+                return response.text.strip()
+        except Exception as e:
+            print(f"  [AI] チャプターマーカー生成エラー: {e}")
+        return ""
 
     def sanitize_for_youtube(self, script_text):
         """台本・説明文・タグをYouTubeポリシーに違反しないよう補正する。タイトルは変更しない。"""

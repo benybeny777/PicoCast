@@ -91,7 +91,7 @@ class ImageGenerator:
                         parts.append(types.Part.from_bytes(data=f.read(), mime_type="image/png"))
                 parts.append(types.Part.from_text(text=(
                     "上記の画像はキャラクターの立ち絵です。これらのキャラクターが自然に映えるよう、"
-                    "背景・構図・色調を設計してください。キャラクター自体は描画しないでください。\n\n"
+                    "背景・構図・色調を設計してください。\n\n"
                     + full_prompt
                 )))
                 contents = parts
@@ -180,16 +180,4 @@ class ImageGenerator:
 
         return results
 
-    def _apply_bottom_gradient(self, img):
-        """キャラクター立ち絵エリア確保のため下部をグラデーションで暗くする。"""
-        from PIL import Image, ImageDraw
-        fade_start_ratio = 0.50 if self.height > self.width else 0.60
-        start_y = int(self.height * fade_start_ratio)
-        overlay = Image.new('RGBA', (self.width, self.height), (0, 0, 0, 0))
-        draw = ImageDraw.Draw(overlay)
-        for y in range(start_y, self.height):
-            progress = (y - start_y) / (self.height - start_y)
-            alpha = int(210 * progress)
-            draw.line([(0, y), (self.width, y)], fill=(0, 0, 0, alpha))
-        result = Image.alpha_composite(img.convert('RGBA'), overlay)
-        return result.convert('RGB')
+

@@ -43,8 +43,4 @@ CHARACTER_PNGS = {
 # Cost control: max unique background images generated per video (thumbnail excluded)
 MAX_BACKGROUNDS = 7
 
-# YMM4 auto rendering
-YMM4_EXE = r"C:\00_PG\YukkuriMovieMaker_v4\YukkuriMovieMaker.exe"
-# pywinauto key notation for the 動画出力 shortcut set in YMM4's command settings
-# e.g. "^{F1}" = Ctrl+F1, "^+{F1}" = Ctrl+Shift+F1
-YMM4_OUTPUT_SHORTCUT = "^{F1}"
+
