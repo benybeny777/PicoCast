@@ -1,5 +1,6 @@
 import os
 import uuid
+import time
 from google import genai
 from config import GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL
 
@@ -17,7 +18,50 @@ class ImageGenerator:
             except Exception as e:
                 print(f"  [Warning] Failed to initialize Google GenAI Client: {e}")
 
-    def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None):
+    def _build_full_prompt(self, description, raw=False):
+        if raw:
+            return description
+        is_shorts = self.height > self.width
+        if is_shorts:
+            layout_rules = (
+                "【絶対厳守ルール】"
+                "▼アスペクト比: 縦9:16（ポートレート）で描画すること。"
+                "▼シーン描画: 背景シーンは画像全体（上から下まで全域）に描くこと。"
+                "▼人物禁止: 人物・キャラクター・アニメキャラ・シルエットを一切描画しない。"
+                "▼セーフゾーン（厳守）: 上下左右30%の範囲にはテキスト・文字・重要な要素を一切配置しないこと。テキスト以外のシーン描画はこの制限を受けない。"
+                "▼テキストスタイル: 白文字・極太黒縁取り・ドロップシャドウ・太ゴシック体で統一。"
+                "---"
+            )
+        else:
+            layout_rules = (
+                "【絶対厳守ルール】"
+                "▼アスペクト比: 横16:9（ランドスケープ）で描画すること。"
+                "▼人物禁止: 人物・キャラクター・アニメキャラ・シルエットを一切描画しない。"
+                "▼セーフゾーン（厳守）: 上下左右30%の範囲にはテキスト・文字・重要な要素を一切配置しないこと。テキスト以外のシーン描画はこの制限を受けない。"
+                "▼右半分に空間: キャラクター立ち絵配置のため右側50〜90%エリアに重要な描写を密集させないこと。"
+                "---"
+            )
+        return (
+            f"{layout_rules}"
+            f"高品質な漫画風アニメ調背景画像。"
+            f"{description}。"
+            f"マスターピース、精細なデジタルアート、劇的な照明、鮮烈な色彩、映画的構図。"
+        )
+
+    def _save_image_part(self, part, save_dir):
+        """inline_data part を PNG として保存・リサイズし、ファイル名を返す。"""
+        from PIL import Image
+        fname = f"bg_{uuid.uuid4().hex[:8]}.png"
+        path = os.path.join(save_dir, fname)
+        with open(path, "wb") as f:
+            f.write(part.inline_data.data)
+        with Image.open(path) as img:
+            if img.size != (self.width, self.height):
+                img = img.resize((self.width, self.height), Image.LANCZOS)
+                img.save(path)
+        return fname
+
+    def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None):
         if not self.client:
             print("  [Error] Google API キーが未設定です")
             return None
@@ -31,51 +75,26 @@ class ImageGenerator:
             print(f"  [AI] Google {model_name} (Nano Banana) で描画を開始します: {description[:40]}...")
 
         try:
-            from PIL import Image
-            import io
+            full_prompt = self._build_full_prompt(description, raw)
 
-            if raw:
-                full_prompt = description
-            else:
-                is_shorts = self.height > self.width
-                if is_shorts:
-                    layout_rules = (
-                        f"【絶対厳守ルール】"
-                        f"▼アスペクト比: 縦9:16（ポートレート）で描画すること。"
-                        f"▼シーン描画: 背景シーンは画像全体（上から下まで全域）に描くこと。"
-                        f"▼人物禁止: 人物・キャラクター・アニメキャラ・シルエットを一切描画しない。"
-                        f"▼テキスト配置のみ制限: テキスト・文字・ロゴを描く場合は上部中央（上から20〜35%の範囲・左右20%マージン確保）のみ。テキスト以外のシーン描画はこの制限を受けない。"
-                        f"▼テキストスタイル: 白文字・極太黒縁取り・ドロップシャドウ・太ゴシック体で統一。"
-                        f"---"
-                    )
-                else:
-                    layout_rules = (
-                        f"【絶対厳守ルール】"
-                        f"▼アスペクト比: 横16:9（ランドスケープ）で描画すること。"
-                        f"▼人物禁止: 人物・キャラクター・アニメキャラ・シルエットを一切描画しない。"
-                        f"▼安全領域: テキスト・ロゴ・重要な要素は外周10%を空けた内側に配置すること。"
-                        f"▼右半分に空間: キャラクター立ち絵配置のため右側50〜90%エリアに重要な描写を密集させないこと。"
-                        f"---"
-                    )
-                full_prompt = (
-                    f"{layout_rules}"
-                    f"高品質な漫画風アニメ調背景画像。"
-                    f"{description}。"
-                    f"マスターピース、精細なデジタルアート、劇的な照明、鮮烈な色彩、映画的構図。"
-                )
+            # 複数リファレンス画像の統合
+            all_refs = list(reference_image_paths or [])
+            if reference_image_path:
+                all_refs = [reference_image_path] + all_refs
+            all_refs = [p for p in all_refs if p and os.path.exists(p)]
 
-            if reference_image_path and os.path.exists(reference_image_path):
+            if all_refs:
                 from google.genai import types
-                with open(reference_image_path, "rb") as f:
-                    image_bytes = f.read()
-                contents = [
-                    types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-                    types.Part.from_text(text=(
-                        "この画像のアートスタイル・色調・世界観を完全に踏襲してください。"
-                        "同じ画風・同じ色彩設計・同じレンダリングスタイルで、新しいシーンを描いてください。\n\n"
-                        + full_prompt
-                    )),
-                ]
+                parts = []
+                for ref_path in all_refs:
+                    with open(ref_path, "rb") as f:
+                        parts.append(types.Part.from_bytes(data=f.read(), mime_type="image/png"))
+                parts.append(types.Part.from_text(text=(
+                    "上記の画像はキャラクターの立ち絵です。これらのキャラクターが自然に映えるよう、"
+                    "背景・構図・色調を設計してください。キャラクター自体は描画しないでください。\n\n"
+                    + full_prompt
+                )))
+                contents = parts
             else:
                 contents = full_prompt
 
@@ -86,24 +105,80 @@ class ImageGenerator:
 
             for part in response.parts:
                 if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
-                    local_filename = f"bg_{uuid.uuid4().hex[:8]}.png"
-                    saved_path = os.path.join(save_dir, local_filename)
-                    with open(saved_path, "wb") as out:
-                        out.write(part.inline_data.data)
-                    # リサイズして正しいアスペクト比解像度に揃える
-                    with Image.open(saved_path) as img:
-                        if img.size != (self.width, self.height):
-                            img = img.resize((self.width, self.height), Image.LANCZOS)
-                            img.save(saved_path)
+                    fname = self._save_image_part(part, save_dir)
                     if self.debug:
-                        print(f"  [AI] Nano Banana 完了: {local_filename} ({self.width}x{self.height})")
-                    return local_filename
+                        print(f"  [AI] Nano Banana 完了: {fname} ({self.width}x{self.height})")
+                    return fname
 
             raise Exception("No image part found in response.")
 
         except Exception as e:
             print(f"  [AI] Nano Banana エラー: {e}")
             raise Exception(f"Nano Banana ({model_name}) が失敗しました: {e}")
+
+    def generate_backgrounds_batch(self, requests_list, target_dir=None):
+        """Google Batch API で複数背景を一括生成する。
+        requests_list: [{"description": str, "raw": bool}, ...]
+        戻り値: 同順のファイル名リスト（失敗は None）
+        注意: スタイル参照（1枚目を基準にする機能）はバッチモードでは無効。
+        """
+        if not self.client:
+            raise Exception("Google API キーが未設定です")
+
+        save_dir = target_dir or "output/backgrounds"
+        os.makedirs(save_dir, exist_ok=True)
+
+        model_name = NANOBANANA_PRO_MODEL if "pro" in self.image_style else NANOBANANA_FLASH_MODEL
+
+        # inline リクエストを組み立て
+        inline_requests = []
+        for req in requests_list:
+            prompt = self._build_full_prompt(req["description"], req.get("raw", False))
+            inline_requests.append({
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}]
+            })
+
+        if self.debug:
+            print(f"  [Batch] {len(inline_requests)}件を送信: {model_name}")
+
+        batch_job = self.client.batches.create(model=model_name, src=inline_requests)
+        if self.debug:
+            print(f"  [Batch] ジョブ名: {batch_job.name}  初期状態: {batch_job.state}")
+
+        # 完了までポーリング（30秒間隔）
+        terminal = {"JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED"}
+        while str(batch_job.state) not in terminal:
+            time.sleep(30)
+            batch_job = self.client.batches.get(name=batch_job.name)
+            if self.debug:
+                print(f"  [Batch] 状態: {batch_job.state}")
+
+        if str(batch_job.state) != "JOB_STATE_SUCCEEDED":
+            raise Exception(f"Batch APIジョブ失敗: {batch_job.state}")
+
+        # 結果を保存
+        results = [None] * len(requests_list)
+        for i, result in enumerate(self.client.batches.list_job_results(name=batch_job.name)):
+            if i >= len(results):
+                break
+            try:
+                # response が GenerateContentResponse 相当
+                response = result.response
+                parts = getattr(response, 'parts', None)
+                if parts is None and hasattr(response, 'candidates') and response.candidates:
+                    parts = response.candidates[0].content.parts
+                for part in (parts or []):
+                    if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
+                        fname = self._save_image_part(part, save_dir)
+                        results[i] = fname
+                        if self.debug:
+                            print(f"  [Batch] 結果[{i+1}]: {fname}")
+                        break
+            except Exception as e:
+                if self.debug:
+                    print(f"  [Batch] 結果[{i}]処理エラー: {e}")
+
+        return results
 
     def _apply_bottom_gradient(self, img):
         """キャラクター立ち絵エリア確保のため下部をグラデーションで暗くする。"""

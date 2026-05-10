@@ -220,7 +220,7 @@ class YmmpEditor:
         }
         self.project["Timelines"][0]["Items"].append(item)
 
-    def add_tachie_item(self, character_name, start_frame, duration, layer=4, x=0, y=0):
+    def add_tachie_item(self, character_name, start_frame, duration, layer=4, x=0, y=0, zoom=30):
         resolved_name = self._resolve_name(character_name)
         self._get_character_id(resolved_name)  # ensure registered
 
@@ -239,7 +239,7 @@ class YmmpEditor:
             "Y": self._anim_value(y),
             "Z": self._anim_value(0),
             "Opacity": self._anim_value(100),
-            "Zoom": self._anim_value(30),
+            "Zoom": self._anim_value(zoom),
             "Rotation": self._anim_value(0),
             "FadeIn": 0.0,
             "FadeOut": 0.0,
@@ -262,6 +262,38 @@ class YmmpEditor:
         item["FaceItemParameter"] = {}
 
         self.project["Timelines"][0]["Items"].append(item)
+
+    def merge_consecutive_tachie_items(self):
+        """同キャラ・同レイヤー・同パラメータで連続するTachieItemを1つに統合する。"""
+        import json as _json
+        items = self.project["Timelines"][0]["Items"]
+        tachie = [i for i in items if "TachieItem" in i.get("$type", "")]
+        others = [i for i in items if "TachieItem" not in i.get("$type", "")]
+
+        # (char, layer) ごとにグループ化してソート
+        from collections import defaultdict
+        groups = defaultdict(list)
+        for t in tachie:
+            key = (t["CharacterName"], t["Layer"])
+            groups[key].append(t)
+
+        merged_tachie = []
+        for key, segs in groups.items():
+            segs.sort(key=lambda x: x["Frame"])
+            current = dict(segs[0])
+            current_param = _json.dumps(current.get("TachieItemParameter"), sort_keys=True)
+            for seg in segs[1:]:
+                seg_param = _json.dumps(seg.get("TachieItemParameter"), sort_keys=True)
+                # 連続（隙間なし）かつ同パラメータなら結合
+                if seg_param == current_param and seg["Frame"] == current["Frame"] + current["Length"]:
+                    current["Length"] += seg["Length"]
+                else:
+                    merged_tachie.append(current)
+                    current = dict(seg)
+                    current_param = seg_param
+            merged_tachie.append(current)
+
+        self.project["Timelines"][0]["Items"] = others + merged_tachie
 
     def add_text_item(self, text, start_frame, duration, layer=2, font_size=66.0, y=350.0):
         item = {

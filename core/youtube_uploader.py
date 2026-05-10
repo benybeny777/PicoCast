@@ -102,9 +102,4 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
             os.remove(upload_thumb)
         _log("  ✅ サムネイル設定完了")
 
-    import webbrowser
-    studio_url = f"https://studio.youtube.com/video/{video_id}/edit"
-    _log(f"🌐 YouTube Studio を開いています...")
-    webbrowser.open(studio_url)
-
     return video_id

@@ -8,26 +8,24 @@ import subprocess
 import traceback
 import time
 import shutil
-from main import run_pipeline
+from main import run_pipeline, regenerate_thumbnail_only
 from core.ai_generator import AIGenerator
 from config import VOICEVOX_URL, VOICEVOX_PATH
 import requests
 
 VIDIQ_PROMPT = """\
 あなたはYouTubeゆっくり動画の脚本家です。
-チャンネル: https://www.youtube.com/@zunkami（ずんだもんとめたんのゆっくり解説チャンネル）
+チャンネル: https://www.youtube.com/@zunkami（ずんだもんとめたんのゆっくり解説チャンネル。食べ物雑学・アニメ雑学をメインに扱う）
 以下のフォーマットで出力してください。
 
 ━━ 出力フォーマット（厳守） ━━
 
 動画形式: （テーマを見て「Shorts」か「ロング」かを判定して記載。Shorts: 1つの感情的エピソード・シンプルな驚き・オチがある話。ロング: 複数エピソード・詳細な解説・情報量が多い内容）
-動画タイトル: （YouTubeに貼るタイトルをそのまま記載。クリック率重視・30文字以内・数字/感情語/疑問形を活用）
+動画タイトル: （YouTubeに貼るタイトルをそのまま記載。クリック率重視・30文字以内・数字/感情語/疑問形を活用。文末は必ず「言い切りの文章（〜がある、〜だった、〜など）」にすること。「〜時代」「〜理由」「〜瞬間」などの体言止めは絶対に避けること。過去の成功パターンを踏襲し、身近なテーマの意外性が一目で伝わる強い引きを作ること）
 説明文: （YouTubeの概要欄にそのままコピペできる文章。検索キーワードを含む150文字程度。先頭に必ず #ずんだもん #ゆっくり解説 を入れること。末尾に「👍いいね＆チャンネル登録お願いします！💬感想はコメントで！🔔通知オンで見逃しなし！」などCTAを自然に含めること）
-タグ: （YouTubeタグ欄にそのままコピペできるカンマ区切り10〜15個。必ず先頭3つを「ずんだもん,ゆっくり解説,VOICEVOX」にすること）
-サムネイル: （日本語プロンプト。漫画風・アニメ調。以下を必ず守ること: メインテキストは2〜5文字のパワーワードを画面中央に配置・「赤地に白抜き」または「黄色に黒縁」などの高コントラスト配色・極太フォントで視認性最大化・人物描画禁止・上下左右20%マージン確保・下半分空白）
+タグ: （YouTubeタグ欄にそのままコピペできるカンマ区切り。必ず先頭3つを「ずんだもん,ゆっくり解説,VOICEVOX」にすること。合計が200〜500バイト以内に収まるよう、動画内容に合ったタグをできるだけ多く追加すること）
 
-背景: （日本語の画像生成プロンプト。漫画風・アニメ調で。必ずその場面に合ったキャッチコピーを引用符で囲んで含める。このテキストはNano Bananaが画像内に直接描画するため、表示したい文字と配置位置（画面上部のみ・下半分空白）を明確に記述すること。例: 「夜の薄暗いオフィス、窓に雨、漫画風、画面上部に"上司が激怒…"を描画、下半分は空白」）
-サムネイル: （日本語プロンプト。漫画風・アニメ調。目を引く劇的な構図。動画タイトルのテキストを引用符で囲んで画面上部30%以内に描画するよう明記。下半分は空白）
+背景: （日本語の画像生成プロンプト。漫画風・アニメ調で。必ずその場面に合ったキャッチコピーを引用符で囲んで含める。このテキストはNano Bananaが画像内に直接描画するため、表示したい文字と配置位置（画面上部のみ）を明確に記述すること。例: 「夜の薄暗いオフィス、窓に雨、漫画風、画面上部に"上司が激怒…"を描画」）
 ずんだもん(感情): セリフ
 四国めたん(感情): セリフ
 背景: ...
@@ -40,11 +38,11 @@ VIDIQ_PROMPT = """\
 ━━ ルール ━━
 ・キャラクターは「ずんだもん」と「四国めたん」の2人のみ
   - ずんだもん：ボクっ娘、語尾は「〜なのだ」
-  - 四国めたん：プライド高め、丁寧語
+  - 四国めたん：プライド高め、お嬢様口調（「〜ですわ」「〜よ」）
 ・感情は（ノーマル）（あまあま）（ツンツン）（ささやき）から選ぶ
-・背景・サムネイルプロンプトは日本語で書き、漫画風・アニメ調を基本スタイルとすること
-・背景のキャッチコピーは引用符で囲んで含めること。Nano Bananaが画像内に直接描画するため、表示する文字と配置（画面上部のみ・下半分空白）を明確に記述すること
-・背景・サムネイルプロンプトに特定クリエイター名（例: 新海誠、宮崎駿 等）を絶対に含めないこと
+・背景プロンプトは日本語で書き、漫画風・アニメ調を基本スタイルとすること
+・背景のキャッチコピーは引用符で囲んで含めること。Nano Bananaが画像内に直接描画するため、表示する文字と配置（画面上部のみ）を明確に記述すること
+・背景プロンプトに特定クリエイター名（例: 新海誠、宮崎駿 等）を絶対に含めないこと
 ・Shortsの場合：全体60〜150秒、セリフ40〜55行、1行15文字以内。起承転結がはっきりわかり最後まで見た視聴者が満足できる結末にすること。背景シーンは10秒につき1枚を目安に用意すること（例: 90秒なら約9枚）
 ・ロングの場合：全体3〜10分、セリフ100〜200行。より詳細・丁寧に展開すること。背景シーンは10秒につき1枚を目安に用意すること（例: 5分なら約30枚）
 ・台本の最後はキャラクターがいいね・チャンネル登録・コメントを視聴者に呼びかけるセリフで締めること
@@ -61,7 +59,6 @@ VIDIQ_PROMPT = """\
 動画タイトル: 1本目のタイトル
 説明文: ...
 タグ: ...
-サムネイル: ...
 背景: ...
 ずんだもん(ノーマル): セリフ
 ...
@@ -71,7 +68,6 @@ VIDIQ_PROMPT = """\
 動画タイトル: 2本目のタイトル
 説明文: ...
 タグ: ...
-サムネイル: ...
 背景: ...
 ずんだもん(ノーマル): セリフ
 ...
@@ -136,7 +132,7 @@ class YMM4AutoGui:
         ttk.Label(top_frame, text="🚀 YMM4 自動動画生成ファクトリー", style="Header.TLabel").pack(side=tk.LEFT)
         self.generate_btn = ttk.Button(top_frame, text="🎬 生成 🚀", style="Accent.TButton", command=self.start_generation)
         self.generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
-        ttk.Button(top_frame, text="📋 VidIQ", command=self.copy_vidiq_prompt).pack(side=tk.RIGHT)
+        ttk.Button(top_frame, text="AI台本作成", command=self.copy_vidiq_prompt).pack(side=tk.RIGHT)
         ttk.Button(top_frame, text="クリア", width=6, command=self.clear_script).pack(side=tk.RIGHT, padx=4)
 
         # Script area
@@ -156,6 +152,9 @@ class YMM4AutoGui:
         self.reuse_bg_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(opt_frame, text="背景再利用", variable=self.reuse_bg_var).pack(side=tk.LEFT, padx=4)
 
+        self.batch_api_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opt_frame, text="Batch API", variable=self.batch_api_var).pack(side=tk.LEFT, padx=4)
+
         ttk.Label(opt_frame, text="画風:").pack(side=tk.LEFT, padx=(12, 2))
         self.style_var = tk.StringVar(value="nanobanana2")
         self.style_combo = ttk.Combobox(opt_frame, textvariable=self.style_var, values=["nanobanana2", "nanobanana pro"], state="readonly", width=14)
@@ -172,18 +171,14 @@ class YMM4AutoGui:
         btn_frame.pack(fill=tk.X, pady=(0, 4))
         self.upload_btn = ttk.Button(btn_frame, text="📤 YouTubeアップ", command=self.start_youtube_upload)
         self.upload_btn.pack(side=tk.LEFT, padx=(0, 4))
-        self.bulk_upload_btn = ttk.Button(btn_frame, text="📤 一括アップ", command=self.start_bulk_upload)
-        self.bulk_upload_btn.pack(side=tk.LEFT, padx=(0, 4))
         self.open_folder_btn = ttk.Button(btn_frame, text="📁 出力フォルダを開く", command=self.open_output_dir)
         self.open_folder_btn.pack(side=tk.LEFT)
+        self.regen_thumb_btn = ttk.Button(btn_frame, text="🖼 サムネ再生成", command=self.start_regen_thumbnail)
+        self.regen_thumb_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self._studio_url = None
+        self.studio_btn = ttk.Button(btn_frame, text="🌐 YouTube Studio", command=self._open_studio)
+        self.studio_btn.pack(side=tk.LEFT, padx=(8, 0))
 
-        # Copy buttons row
-        copy_frame = ttk.Frame(main_frame)
-        copy_frame.pack(fill=tk.X, pady=(0, 3))
-        ttk.Label(copy_frame, text="コピー:").pack(side=tk.LEFT, padx=(0, 2))
-        ttk.Button(copy_frame, text="📋 タイトル", command=lambda: self._copy_meta("title")).pack(side=tk.LEFT, padx=2)
-        ttk.Button(copy_frame, text="📋 説明文", command=lambda: self._copy_meta("description")).pack(side=tk.LEFT, padx=2)
-        ttk.Button(copy_frame, text="📋 タグ", command=lambda: self._copy_meta("tags")).pack(side=tk.LEFT, padx=2)
 
         # Metadata preview
         ttk.Label(main_frame, text="メタデータ:").pack(anchor=tk.W)
@@ -308,6 +303,7 @@ class YMM4AutoGui:
                     image_style=self.style_var.get(),
                     progress_callback=self.log,
                     reuse_backgrounds=self.reuse_bg_var.get(),
+                    use_batch_api=self.batch_api_var.get(),
                 )
 
                 self.log(f"成功: {topic}", "success")
@@ -343,118 +339,6 @@ class YMM4AutoGui:
         self.meta_preview.insert("1.0", content)
         self.meta_preview.config(state=tk.DISABLED)
 
-    def start_bulk_upload(self):
-        if not os.path.exists("output"):
-            messagebox.showinfo("情報", "outputフォルダがありません")
-            return
-
-        folders = [
-            d for d in os.listdir("output")
-            if os.path.isdir(os.path.join("output", d)) and d != "000_uploaded"
-            and any(f.endswith(".mp4") for f in os.listdir(os.path.join("output", d)))
-        ]
-        if not folders:
-            messagebox.showinfo("情報", "アップロード可能な動画が見つかりません")
-            return
-
-        folders.sort(key=lambda d: os.path.getmtime(os.path.join("output", d)), reverse=True)
-
-        win = tk.Toplevel(self.root)
-        win.title("一括アップロード")
-        win.geometry("520x480")
-        win.configure(bg="#f5f7fa")
-        win.grab_set()
-
-        ttk.Label(win, text="アップロードする動画を選択", font=("Meiryo", 10, "bold")).pack(pady=(12, 4))
-
-        frame = ttk.Frame(win)
-        frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
-
-        canvas = tk.Canvas(frame, bg="#f5f7fa", highlightthickness=0)
-        sb = ttk.Scrollbar(frame, orient="vertical", command=canvas.yview)
-        inner = ttk.Frame(canvas)
-        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=inner, anchor="nw")
-        canvas.configure(yscrollcommand=sb.set)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        sb.pack(side=tk.RIGHT, fill=tk.Y)
-        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1*(e.delta//120), "units"))
-
-        checks = {}
-        for folder in folders:
-            var = tk.BooleanVar(value=True)
-            checks[folder] = var
-            ttk.Checkbutton(inner, text=folder, variable=var).pack(anchor=tk.W, padx=8, pady=2)
-
-        btn_row = ttk.Frame(win)
-        btn_row.pack(pady=8)
-
-        def _all(v):
-            for var in checks.values(): var.set(v)
-        ttk.Button(btn_row, text="全選択", command=lambda: _all(True)).pack(side=tk.LEFT, padx=4)
-        ttk.Button(btn_row, text="全解除", command=lambda: _all(False)).pack(side=tk.LEFT, padx=4)
-
-        def _start():
-            selected = [f for f, v in checks.items() if v.get()]
-            if not selected:
-                messagebox.showwarning("未選択", "動画を1つ以上選択してください", parent=win)
-                return
-            win.destroy()
-            self.upload_btn.config(state=tk.DISABLED)
-            self.bulk_upload_btn.config(state=tk.DISABLED)
-            threading.Thread(target=self._run_bulk_upload, args=(selected,), daemon=True).start()
-
-        ttk.Button(btn_row, text="▶ アップロード開始", style="Accent.TButton", command=_start).pack(side=tk.LEFT, padx=8)
-
-    def _run_bulk_upload(self, folders):
-        total = len(folders)
-        self.log(f"📤 一括アップロード開始: {total}件", "batch")
-        success, failed = 0, 0
-        for i, folder in enumerate(folders):
-            output_dir = os.path.join("output", folder)
-            mp4_files = [f for f in os.listdir(output_dir) if f.endswith(".mp4")]
-            if not mp4_files:
-                self.log(f"⚠ [{i+1}/{total}] MP4なし: {folder}", "error")
-                failed += 1
-                continue
-
-            mp4_path = os.path.join(output_dir, mp4_files[0])
-            meta = self._read_meta_from_dir(output_dir)
-            title = meta.get("title", folder)
-            description = meta.get("description", "")
-            tags = meta.get("tags", "")
-            is_shorts = folder.startswith("[Shorts]")
-            thumb = None if is_shorts else os.path.join(output_dir, "thumbnail.png")
-            if thumb and not os.path.exists(thumb):
-                thumb = None
-
-            self.log(f"\n>>> [{i+1}/{total}] {folder}", "batch")
-            try:
-                from core.youtube_uploader import upload_video
-                upload_video(mp4_path, title, description, tags,
-                             thumbnail_path=thumb, privacy="private",
-                             progress_callback=self.log)
-                if os.path.exists(output_dir):
-                    uploaded_base = os.path.join("output", "000_uploaded")
-                    os.makedirs(uploaded_base, exist_ok=True)
-                    dest = os.path.join(uploaded_base, folder)
-                    if os.path.exists(dest):
-                        shutil.rmtree(dest)
-                    shutil.move(output_dir, dest)
-                    self.log(f"📦 移動完了: {folder}", "success")
-                success += 1
-            except Exception as e:
-                self.log(f"❌ エラー: {e}", "error")
-                failed += 1
-
-        self.log(f"\n✅ 一括アップロード完了: 成功={success} 失敗={failed}", "success")
-        self.root.after(0, self.refresh_history)
-        self.root.after(0, lambda: self.upload_btn.config(state=tk.NORMAL))
-        self.root.after(0, lambda: self.bulk_upload_btn.config(state=tk.NORMAL))
-        if failed:
-            self.root.after(0, lambda: messagebox.showwarning("完了", f"完了: 成功={success} / 失敗={failed}"))
-        else:
-            self.root.after(0, lambda: messagebox.showinfo("完了", f"{success}件アップロードしました"))
 
     def start_youtube_upload(self):
         from tkinter import filedialog
@@ -482,15 +366,22 @@ class YMM4AutoGui:
             daemon=True
         ).start()
 
+    def _open_studio(self):
+        import webbrowser
+        webbrowser.open(self._studio_url or "https://studio.youtube.com/")
+
     def _run_upload(self, mp4_path, title, description, tags, thumb, privacy, output_dir):
         try:
             from core.youtube_uploader import upload_video
             from core.ai_generator import AIGenerator
             self.log("✍️  説明文をGeminiで整形中...")
             description = AIGenerator().format_description(description)
-            upload_video(mp4_path, title, description, tags,
-                         thumbnail_path=thumb, privacy=privacy,
-                         progress_callback=self.log)
+            video_id = upload_video(mp4_path, title, description, tags,
+                                    thumbnail_path=thumb, privacy=privacy,
+                                    progress_callback=self.log)
+
+            if video_id:
+                self._studio_url = f"https://studio.youtube.com/video/{video_id}/edit"
 
             # アップロード成功 → 000_uploaded/ へ移動（既に中にある場合はスキップ）
             if output_dir and os.path.exists(output_dir):
@@ -579,23 +470,29 @@ class YMM4AutoGui:
 
             messagebox.showinfo("成功", full_msg)
 
-    def _copy_meta(self, field):
-        if not self.last_output_dir:
-            messagebox.showwarning("情報", "先に動画を生成するか、履歴から選択してください")
+
+    def start_regen_thumbnail(self):
+        output_dir = self.last_output_dir
+        if not output_dir or not os.path.exists(output_dir):
+            messagebox.showwarning("エラー", "対象フォルダが選択されていません。履歴から選択してください。")
             return
-        if not os.path.exists(os.path.join(self.last_output_dir, "metadata.txt")):
-            messagebox.showwarning("情報", "metadata.txt が見つかりません")
-            return
-        data = self._read_meta_from_dir(self.last_output_dir)
-        value = data.get(field, "")
-        if not value:
-            messagebox.showwarning("情報", f"データが見つかりません: {field}")
-            return
-        self.root.clipboard_clear()
-        self.root.clipboard_append(value)
-        self.root.update()
-        labels = {"title": "タイトル", "description": "説明文", "tags": "タグ"}
-        self.log(f"📋 {labels.get(field, field)} をコピーしました", "success")
+        self.regen_thumb_btn.config(state=tk.DISABLED)
+        self.log(f"🖼 サムネイル再生成開始: {os.path.basename(output_dir)}")
+        threading.Thread(target=self._run_regen_thumbnail, args=(output_dir,), daemon=True).start()
+
+    def _run_regen_thumbnail(self, output_dir):
+        try:
+            thumb_path = regenerate_thumbnail_only(
+                output_dir,
+                image_style=self.style_var.get(),
+                debug=self.debug_var.get(),
+                progress_callback=self.log,
+            )
+            self.log(f"✅ サムネイル保存: {thumb_path}", "success")
+        except Exception as e:
+            self.log(f"❌ サムネイル再生成エラー: {e}", "error")
+        finally:
+            self.root.after(0, lambda: self.regen_thumb_btn.config(state=tk.NORMAL))
 
     def _toggle_ui(self, enabled):
         state = tk.NORMAL if enabled else tk.DISABLED

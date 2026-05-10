@@ -24,8 +24,8 @@ log = logging.getLogger(__name__)
 
 # ── public API ────────────────────────────────────────────────────────────────
 
-def render_ymmp(ymmp_path: str, close_after: bool = True) -> bool:
-    """Open ymmp in YMM4, export video, optionally close YMM4.
+def render_ymmp(ymmp_path: str) -> bool:
+    """Open ymmp in YMM4 and export video.
 
     Returns True on success, False on failure.
     """
@@ -92,17 +92,7 @@ def render_ymmp(ymmp_path: str, close_after: bool = True) -> bool:
         _handle_file_save_dialog()
 
         # --- Wait for completion ---
-        success = _wait_for_completion(main_win, ymmp_path)
-
-        if close_after:
-            try:
-                main_win.close()
-                time.sleep(1)
-                _dismiss_save_dialog()
-            except Exception:
-                pass
-
-        return success
+        return _wait_for_completion(main_win, ymmp_path)
 
     finally:
         try:
@@ -229,11 +219,48 @@ def _click_start_button(dlg) -> bool:
 
 
 def _wait_for_completion(main_win=None, ymmp_path=None, timeout=_EXPORT_TIMEOUT) -> bool:
-    """Wait for render to complete (fixed 30s wait)."""
-    log.info("Waiting 60s for render to complete...")
-    time.sleep(60)
-    log.info("Wait complete")
-    return True
+    """Wait for render to complete by monitoring the output MP4 file size."""
+    # Derive expected output path from ymmp path
+    mp4_path = None
+    if ymmp_path:
+        base = os.path.splitext(ymmp_path)[0]
+        candidate = base + ".mp4"
+        # Wait up to 30s for the file to appear (encoding start lag)
+        deadline_appear = time.time() + 30
+        while time.time() < deadline_appear:
+            if os.path.exists(candidate):
+                mp4_path = candidate
+                break
+            time.sleep(1)
+
+    if not mp4_path:
+        log.warning("Output MP4 not found — falling back to fixed 120s wait")
+        time.sleep(120)
+        return True
+
+    log.info(f"Monitoring output file: {os.path.basename(mp4_path)}")
+    prev_size = -1
+    stable_count = 0
+    deadline = time.time() + timeout
+
+    while time.time() < deadline:
+        try:
+            size = os.path.getsize(mp4_path)
+        except OSError:
+            size = 0
+        if size > 0 and size == prev_size:
+            stable_count += 1
+            if stable_count >= 5:  # stable for 5 consecutive seconds
+                log.info(f"Render complete: {size:,} bytes")
+                time.sleep(2)  # brief settle
+                return True
+        else:
+            stable_count = 0
+        prev_size = size
+        time.sleep(1)
+
+    log.warning("Render timed out")
+    return False
 
 
 def _project_name_in_window(main_win, project_name: str) -> bool:

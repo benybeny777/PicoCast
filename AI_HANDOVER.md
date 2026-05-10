@@ -1,86 +1,153 @@
 # 🤖 AI Handover Document: YMM4 Auto Video Factory
 
-このドキュメントは、本プロジェクト（yukkurijidou）のさらなる開発を継続するAIエージェント向けの引き継ぎ資料です。システムの全体像、アーキテクチャ、および重要な実装上の注意点をまとめています。
+このドキュメントは、本プロジェクト（yukkurijidou）のさらなる開発を継続するAIエージェント向けの引き継ぎ資料です。
 
 ---
 
 ## 1. プロジェクト概要
-**名称:** YMM4 Auto Video Factory
-**目的:** 台本生成から音声合成、画像生成、BGM選定までを統合し、ゆっくり実況・解説動画用の YMM4 プロジェクトファイル（`.ymmp`）を全自動で生成する。
-**主要ターゲット:** YouTube Shorts（1080x1920）および通常動画（1920x1080）。
+
+**名称:** YMM4 Auto Video Factory  
+**目的:** 台本生成から音声合成、背景画像生成、YMM4プロジェクト組み立て、動画出力、YouTubeアップロードまでを全自動化する。  
+**対象フォーマット:** YouTube Shorts（1080×1920）および通常動画（1920×1080）。
 
 ---
 
 ## 2. システムアーキテクチャ
-プロジェクトはモジュール化されており、`main.py` がパイプライン全体を制御します。
 
-### 核心コンポーネント (`core/`)
-- **`ai_generator.py`**: LLM（Gemini Flash/Pro, Ollama）を使用して動画台本を生成。
-- **`parser.py`**: テキスト形式の台本を解析し、構造化データに変換。
-- **`image_generator.py`**: Google GenAI（Nano Banana）を使用して背景画像を生成。毎回新規生成でキャッシュなし。
-- **`audio_generator.py`**: BGMファイル管理を担当。
-- **`voicevox.py`**: VOICEVOX API を叩き、キャラクター音声を生成。毎回新規生成（uuid ファイル名）。
-- **`ymmp_editor.py`**: YMM4 の JSON 構造を操作し、`.ymmp` ファイルを構築。
+`main.py` がパイプライン全体を制御します。
+
+### パイプライン全体フロー
+
+```
+台本テキスト (GUI貼り付け)
+  → ai_generator.py   : Gemini でメタデータ補完・台本整形
+  → parser.py         : 構造化データへ変換
+  → voicevox.py       : 音声WAV生成
+  → image_generator.py: 背景画像・サムネイル生成（Nano Banana）
+  → ymmp_editor.py    : .ymmp ファイル組み立て
+  → [ymm4_renderer.py]: YMM4 GUI 自動操作で動画出力（任意）
+  → youtube_uploader.py: YouTube アップロード（任意）
+```
+
+### コアモジュール (`core/`)
+
+| ファイル | 役割 |
+|---|---|
+| `ai_generator.py` | Gemini Flash/Pro でメタデータ・台本生成 |
+| `parser.py` | テキスト台本を構造化データへパース |
+| `image_generator.py` | Nano Banana（Gemini画像生成）で背景・サムネイル生成 |
+| `voicevox.py` | VOICEVOX API で音声WAV生成（uuid ファイル名） |
+| `ymmp_editor.py` | YMM4 JSONプロジェクト構造を操作 |
+| `ymm4_renderer.py` | pywinauto でYMM4 GUIを自動操作、動画出力を実行 |
+| `youtube_uploader.py` | Google OAuth2 経由でYouTube アップロード |
 
 ### 設定 (`config.py`)
-- APIキー（Google AI）、ローカルエンジンのURL/パス、キャラクター設定（Speaker ID）を集約。
+
+- Google API キー、VOICEVOX URL/パス、キャラクター設定（Speaker ID）、出力先DIR、MAX_BACKGROUNDS を集約
+- 環境変数は `.env` ファイルから読み込み（`GOOGLE_API_KEY` 必須）
 
 ---
 
-## 3. 重要コンセプト
+## 3. 重要な実装詳細
 
-### 「Nano Banana」エコシステム
-背景画像の中にテロップ（強調文字）を直接描き込む手法を指します。
-- `ai_generator.py` のシステムプロンプトで、背景生成指示に `"TEXT"` を含めるよう厳格に指示しています。
-- これにより、フォントと背景が完全に調和した高品質なビジュアルを実現します。
+### Shorts / ロング判定
 
-### セーフゾーン設計
-YouTube Shorts 等のUI（いいねボタン等）に文字が被らないよう、画像生成プロンプトやテロップ配置において「中央配置」を重視しています。
+`main.py:_detect_is_shorts()` が台本内の `動画形式: Shorts` 行を検出して自動判定。  
+- Shorts: 1080×1920、立ち絵X±200px・Y=700（画面下部86%）
+- ロング: 1920×1080、立ち絵X±450px・Y=0（中央）
 
-### キャッシュなし設計
-音声・背景画像ともにキャッシュは行わず、毎回新規生成する設計。
-- **音声**: `uuid` ベースのファイル名で `audio/` に保存。
-- **背景画像**: Nano Banana で毎回生成し `backgrounds/` に保存。
+### 立ち絵配置ルール（TachieItem）
+
+- **全キャラ共通フレーム3開始**: `TACHIE_START_FRAME = 3`、`effective_start = max(start, 3)` でクリップ
+- セリフ間のギャップは `ノーマル` で埋めてマージ
+- フレーム0〜2 は ymmp の初期化フレームとして空白にする（YMM4表示バグ回避）
+
+### Nano Banana（画像生成）
+
+- **PIL合成なし**: テキストも含めてプロンプトに指示し、Nano Banana が画像内に直接描画
+- 背景: `_apply_bottom_gradient()` で下部50%（Shorts時60%）をグラデーション暗転（立ち絵エリア確保）
+- サムネイル: Nano Banana Pro で生成
+
+### YMM4 自動レンダリング（`ymm4_renderer.py`）
+
+YMM4 はCLIレンダリング非対応のため pywinauto（UIA バックエンド）でGUI自動操作：
+1. `YukkuriMovieMaker.exe <ymmp_path>` でファイルを開きながら起動
+2. ツールバーの「動画出力」ボタンをUIAutomation で検索してクリック
+3. 出力設定ダイアログの「出力開始」ボタンをクリック
+4. 完了ダイアログを検知して結果を返す
+
+**UIツリー確認コマンド**（YMM4起動中に実行）:
+```bash
+python core/ymm4_renderer.py --inspect
+```
+
+### YMM4 プロジェクト JSON 構造
+
+- `.ymmp` = JSON（UTF-8 with BOM）
+- 各アイテムは `$type` フィールドで種別識別
+- `CharacterId` は UUID、`character_templates.json` から読み込み
+- **Volume スケール**: 0〜200（UI上100% = 値200、BGM20% = 値40）
+- **TachieItem アニメーション値**: `{"Aliases":null,"Values":[<value>]}` 形式
 
 ---
 
-## 4. 開発者（AI）向けガイドライン
+## 4. ファイル・ディレクトリ構成
 
-### 台本解析 (`parser.py`)
-- `Character(Emotion): Text` の形式を基本とします。
-- `背景: prompt` タグでシーン切り替えを検知します。
-- 正規表現によるパースを行っているため、LLMへの出力形式指示は非常に重要です。
-
-### YMM4 プロジェクト操作 (`ymmp_editor.py`)
-- `.ymmp` は JSON 形式（UTF-8 with BOM）です。
-- 各アイテム（`VoiceItem`, `ImageItem` 等）は `$type` フィールドで識別されます。
-- `CharacterId` は UUID で管理されており、`character_templates.json` から設定を読み込むことで、立ち絵の配置位置や表情設定を維持しています。
-- **Volume スケール**: YMM4 の Volume 値は 0〜200（200 = UI上100%）。`character_templates.json` の Volume も同スケール。BGM AudioItem も同様（UI上20% = 値40）。
-
-### エラー処理と自己修復
-- 生成された台本が空だったり、キャラクター名が不明な場合は `ScriptParser.validate` で検知します。
-- LLMには「テロップタグを廃止し、背景指示に含める」というルールを徹底させてください。
+```
+yukkurijidou/
+├── main.py                   # パイプライン本体
+├── gui.py                    # tkinter GUI
+├── config.py                 # 設定（APIキー、キャラクター等）
+├── core/
+│   ├── ai_generator.py
+│   ├── parser.py
+│   ├── image_generator.py
+│   ├── voicevox.py
+│   ├── ymmp_editor.py
+│   ├── ymm4_renderer.py      # YMM4 GUI自動操作
+│   ├── youtube_uploader.py
+│   └── character_templates.json
+├── output/                   # 生成物（.gitignore 対象）
+│   └── <動画タイトル>/
+│       ├── *.ymmp
+│       ├── script.txt
+│       ├── thumbnail.png
+│       ├── metadata.txt
+│       ├── audio/
+│       └── backgrounds/
+└── .env                      # GOOGLE_API_KEY（.gitignore 対象）
+```
 
 ---
 
 ## 5. 技術スタック & 依存関係
-- **Python 3.10+** (`requests`, `google-genai`, `Pillow`, `python-dotenv`)
-- **VOICEVOX**: ローカル音声合成エンジン（必須）。
-- **Google GenAI (Nano Banana)**: 台本・背景画像生成（`.env` に `GOOGLE_API_KEY` 設定）。
-- **Ollama**: ローカルLLMエンジン（フォールバック用、任意）。
-- **Yukkuri Movie Maker 4 (YMM4)**: 最終出力先の編集ソフト。
+
+| ライブラリ | 用途 |
+|---|---|
+| `google-genai` | Gemini（台本生成・Nano Banana画像生成） |
+| `requests` | VOICEVOX API 通信 |
+| `Pillow` | 背景画像後処理（グラデーション合成） |
+| `python-dotenv` | .env 読み込み |
+| `pywinauto` | YMM4 GUI自動操作（動画出力） |
+| `google-auth-*` / `google-api-python-client` | YouTube アップロード |
+
+外部ツール:
+- **VOICEVOX** `C:\Program Files\VOICEVOX\VOICEVOX.exe`（必須）
+- **YMM4 v4.52.x** `C:\00_PG\YukkuriMovieMaker_v4\YukkuriMovieMaker.exe`
 
 ---
 
-## 6. 今後の開発課題
-1.  **ComfyUI ワークフローの動的切り替え**: スタイルに応じたワークフロー JSON の切り替え。
-2.  **BGM生成の高度化**: Stable Audio 等を利用した、シーンに合わせたBGM生成。
-3.  **キャラクターの自動増員**: 新しい VOICEVOX キャラクターが登場した際の、テンプレート自動生成機能。
-4.  **UI/UXの改善**: `gui.py` のプレビュー機能の強化。
+## 6. 注意事項・落とし穴
+
+- `ymm4_renderer.py` のUIツリー制御名はYMM4のバージョンアップで変わる可能性がある。動作しない場合は `--inspect` で確認すること
+- `.gitignore` で `output/`、`.env`、`client_secrets.json`、`token.json` を除外済み
+- `MAX_BACKGROUNDS = 7`（config.py）: コスト制御のため1動画あたりの背景生成上限
 
 ---
 
-## 💡 AIへのメッセージ
-このプロジェクトは「爆速で高品質な動画を量産する」ことを至上命題としています。
-コードを修正・拡張する際は、常に **「自動化の徹底」** と **「ビジュアルの美しさ（Nano Banana）」** を意識してください。
-特に `ymmp_editor.py` の JSON 構造は非常にデリケートなため、変更時は既存のプロジェクトファイルとの互換性に注意してください。
+## 7. 今後の開発課題
+
+1. **ymm4_renderer.py の実機検証**: 初回起動時に `--inspect` でUIツリーを確認し、必要なら制御名を修正
+2. **BGM自動選定**: シーンに合わせた動的BGM切り替え
+3. **キャラクター自動増員**: 新VOICEVOX キャラのテンプレート自動生成
+4. **バッチ動画出力**: 複数ymmpを順次自動レンダリングするバッチ機能

@@ -34,6 +34,11 @@ CHARACTERS = {
 
 OUTPUT_DIR = "output"
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")
+CHARACTER_PNGS = {
+    "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
+    "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
+}
 
 # Cost control: max unique background images generated per video (thumbnail excluded)
 MAX_BACKGROUNDS = 7

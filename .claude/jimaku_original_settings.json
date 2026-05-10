@@ -1,0 +1,15 @@
+{
+  "_memo": "YMM4キャラクター字幕の初期設定（変更前）",
+  "ずんだもん": {
+    "FontColor": "#FFFFFFFF",
+    "Style": "Border",
+    "StyleColor": "#FF33A65E",
+    "JimakuVideoEffects": []
+  },
+  "四国めたん": {
+    "FontColor": "#FFFFFFFF",
+    "Style": "Border",
+    "StyleColor": "#FFDF4C94",
+    "JimakuVideoEffects": []
+  }
+}

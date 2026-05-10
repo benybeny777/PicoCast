@@ -97,15 +97,22 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     thumb_path = os.path.join(theme_dir, "thumbnail.png")
 
     ratio_tag = "縦9:16のショート動画" if is_shorts else "横16:9のワイドスクリーン"
+    safe_zone = (
+        "\nセーフゾーン（厳守）: 上下左右30%の範囲にはテキスト・文字・重要な要素を一切配置しないこと。"
+    ) if is_shorts else ""
     prompt = (
-        f"アスペクト比: {ratio_tag}。\n"
+        f"アスペクト比: {ratio_tag}。{safe_zone}\n"
         f"以下の台本を参考に、YouTubeサムネイル画像を生成してください。\n\n"
         f"{script_content or topic}"
     )
 
+    from config import CHARACTER_PNGS
+    char_refs = [p for p in CHARACTER_PNGS.values() if os.path.exists(p)]
+
     _log("🖼  サムネイルを生成中...")
     try:
-        generated = img_gen.generate_background(prompt, target_dir=theme_bg_dir, raw=True)
+        generated = img_gen.generate_background(prompt, target_dir=theme_bg_dir, raw=True,
+                                                 reference_image_paths=char_refs)
     except Exception as e:
         _log(f"  ❌ サムネイル生成失敗: {e}")
         return None
@@ -165,9 +172,40 @@ def merge_telops_into_backgrounds(items):
             result.append(item)
     return result
 
+def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None):
+    """既存の出力フォルダのサムネイルのみ再生成する。"""
+    def update_status(msg):
+        if progress_callback:
+            progress_callback(msg)
+        else:
+            print(msg, flush=True)
+
+    script_path = os.path.join(output_dir, "script.txt")
+    if not os.path.exists(script_path):
+        raise Exception(f"script.txt が見つかりません: {output_dir}")
+
+    with open(script_path, "r", encoding="utf-8") as f:
+        script_content = f.read()
+
+    is_shorts = _detect_is_shorts(script_content)
+    width = 1080 if is_shorts else 1920
+    height = 1920 if is_shorts else 1080
+
+    topic = os.path.basename(output_dir)
+    theme_bg_dir = os.path.join(output_dir, "backgrounds")
+    os.makedirs(theme_bg_dir, exist_ok=True)
+
+    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style)
+    thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
+                                    update_status, script_content=script_content)
+    if not thumb_path:
+        raise Exception("サムネイル生成に失敗しました")
+    return thumb_path
+
+
 def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
-                 image_style="通常", reuse_backgrounds=False):
+                 image_style="通常", reuse_backgrounds=False, use_batch_api=False):
     report = GenerationReport()
     pipeline_start = time.time()
 
@@ -188,6 +226,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if script_content.startswith("Error"):
             report.elapsed_sec = time.time() - pipeline_start
             return script_content, report
+
+    update_status("🔍 YouTubeポリシー補正中...")
+    script_content = ai.sanitize_for_youtube(script_content)
+    script_content = re.sub(r'(?m)^サムネイル[:：][^\n]*\n?', '', script_content)
 
     # Step 2: 動画形式を検出
     is_shorts = _detect_is_shorts(script_content)
@@ -257,9 +299,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if os.path.exists(saved_thumb):
             shutil.copy2(saved_thumb, os.path.join(theme_dir, "thumbnail.png"))
         shutil.rmtree(_saved_thumb_tmp)
-
-    update_status("🔍 YouTubeポリシー補正中...")
-    script_content = ai.sanitize_for_youtube(script_content)
 
     script_txt_path = os.path.join(theme_dir, "script.txt")
     with open(script_txt_path, "w", encoding="utf-8") as f:
@@ -361,6 +400,43 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     first_bg_placed = False
     style_reference_path = None  # 1枚目の背景パス（2枚目以降のスタイル参照用）
 
+    # Batch API: メインループ前に全背景を一括生成
+    batch_bg_results = {}  # {bg_num(1-indexed): filename}
+    if use_batch_api and not _has_saved_bgs:
+        _temp_num = 0
+        _batch_items = []  # (bg_num, bg_name)
+        for item in items:
+            if item["type"] == "background":
+                _temp_num += 1
+                if _temp_num <= MAX_BACKGROUNDS:
+                    bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
+                    _batch_items.append((_temp_num, bg_name))
+
+        if _batch_items:
+            update_status(f"🖼  Batch API: {len(_batch_items)}枚を一括送信中 (完了まで数分かかります)...")
+            batch_requests = [
+                {
+                    "description": (
+                        f"以下の台本を参考に、「{name}」のシーンの背景画像を生成してください。\n\n"
+                        f"【台本】\n{script_content}"
+                    ),
+                    "raw": False,
+                }
+                for _, name in _batch_items
+            ]
+            try:
+                batch_results = img_gen.generate_backgrounds_batch(batch_requests, target_dir=theme_bg_dir)
+                for (bg_n, _), filename in zip(_batch_items, batch_results):
+                    if filename:
+                        batch_bg_results[bg_n] = filename
+                        report.backgrounds_generated += 1
+                    else:
+                        report.backgrounds_failed += 1
+                ok_count = sum(1 for r in batch_results if r)
+                update_status(f"  ✅ Batch API 完了: {ok_count}/{len(batch_results)}枚生成")
+            except Exception as e:
+                raise Exception(f"Batch API エラー: {e}")
+
     for i, item in enumerate(items):
 
         if item["type"] == "background":
@@ -394,6 +470,17 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 else:
                     update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 既存ファイル不足 — スキップ")
                     report.backgrounds_failed += 1
+                bg_start_frame = current_frame
+                continue
+
+            if use_batch_api:
+                # バッチ結果から割り当て
+                if bg_num in batch_bg_results:
+                    current_bg = batch_bg_results[bg_num]
+                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] バッチ結果使用: {current_bg}")
+                else:
+                    update_status(f"  ⚠ 背景 [{bg_num}/{total_bgs}] バッチ結果なし — スキップ")
+                    current_bg = None
                 bg_start_frame = current_frame
                 continue
 
@@ -435,7 +522,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     speaker_id = v.get("styles", {}).get(emotion, v["speaker_id"])
                     break
 
-            chunks = _split_at_punctuation(text) if is_shorts else [text]
+            chunks = _split_at_punctuation(text)
 
             for chunk_text in chunks:
                 audio_filename = f"{uuid.uuid4().hex}.wav"
@@ -453,7 +540,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
                 try:
                     with wave.open(audio_path, 'rb') as wr:
-                        duration_frames = math.ceil(wr.getnframes() / wr.getframerate() * 60)
+                        # AdditionalTime=0.3s from character_templates.json must be added to Length
+                        # so YMM4 plays the full WAV without internal early cutoff
+                        _ADDITIONAL_FRAMES = math.ceil(0.3 * editor.fps)
+                        duration_frames = math.ceil(wr.getnframes() / wr.getframerate() * editor.fps) + _ADDITIONAL_FRAMES
                 except Exception as e:
                     update_status(f"  ❌ WAV読み込み失敗: {e}")
                     report.voices_failed += 1
@@ -479,11 +569,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     for char, emotion, start, end in dialogue_tachie_info:
         char_dialogues[char].append((emotion, start, end))
 
-    tachie_offset = 200 if is_shorts else 450
-    tachie_y = 700 if is_shorts else 0
+    TACHIE_PARAMS = {
+        "ずんだもん": {"long": (-696, 430, 66.9),  "shorts": (-200, 700, 30)},
+        "めたん":     {"long": ( 751, 430, 52.95), "shorts": ( 200, 700, 30)},
+    }
     for i, char_name in enumerate(char_order):
-        x_pos = -tachie_offset if "ずんだもん" in char_name else (tachie_offset if "めたん" in char_name else 0)
-        y_pos = tachie_y
+        mode = "shorts" if is_shorts else "long"
+        key = next((k for k in TACHIE_PARAMS if k in char_name), None)
+        x_pos, y_pos, tachie_zoom = TACHIE_PARAMS[key][mode] if key else (0, 0, 30)
         layer = 3 + i
 
         # Fill gaps between dialogues with ノーマル, then merge consecutive same-emotion blocks
@@ -512,17 +605,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
         for emotion, start, end in merged:
             if end > start:
-                editor.add_tachie_item(char_name, start, end - start, layer=layer, x=x_pos, y=y_pos)
+                editor.add_tachie_item(char_name, start, end - start, layer=layer, x=x_pos, y=y_pos, zoom=tachie_zoom)
 
-    # BGM (Shorts only)
-    if is_shorts:
-        bgm_path = r"C:\Users\benyb\Desktop\素材\Ugly Cute_桃音莉奈.wav"
-        if os.path.exists(bgm_path):
-            editor.add_audio_item(bgm_path, start_frame=0, duration=current_frame, layer=5, volume=20.0)
-            update_status("🎵 BGM を追加しました")
-        else:
-            update_status("⚠ BGMファイルが見つかりません")
-
+    editor.merge_consecutive_tachie_items()
     update_status("💾 YMM4プロジェクトを保存中...")
     editor.save(project_file_path)
     report.elapsed_sec = time.time() - pipeline_start
