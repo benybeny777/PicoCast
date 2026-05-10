@@ -97,10 +97,9 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     thumb_path = os.path.join(theme_dir, "thumbnail.png")
 
     ratio_tag = "縦9:16のショート動画" if is_shorts else "横16:9のワイドスクリーン"
-    char_space = "\n下部50%はキャラクター立ち絵のために空白にすること。" if is_shorts else ""
     prompt = (
         f"アスペクト比: {ratio_tag}。\n"
-        f"以下の台本を参考に、YouTubeサムネイル画像を生成してください。{char_space}\n\n"
+        f"以下の台本を参考に、YouTubeサムネイル画像を生成してください。\n\n"
         f"{script_content or topic}"
     )
 
