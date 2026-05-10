@@ -570,8 +570,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         char_dialogues[char].append((emotion, start, end))
 
     TACHIE_PARAMS = {
-        "ずんだもん": {"long": (-696, 430, 66.9),  "shorts": (-200, 700, 30)},
-        "めたん":     {"long": ( 751, 430, 52.95), "shorts": ( 200, 700, 30)},
+        "ずんだもん": {"long": (-696, 430, 66.9),   "shorts": (-364.5, 850, 60.3)},
+        "めたん":     {"long": ( 751, 430, 52.95),  "shorts": ( 348.0, 850, 50.1)},
     }
     for i, char_name in enumerate(char_order):
         mode = "shorts" if is_shorts else "long"
