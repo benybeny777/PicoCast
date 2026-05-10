@@ -88,8 +88,8 @@ class GenerationReport:
 
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
-                       custom_bg_prompt=None):
-    """Generate thumbnail image via Nano Banana (text baked into prompt)."""
+                       script_content=None):
+    """Generate thumbnail image via Nano Banana using script content."""
     def _log(msg):
         if update_status: update_status(msg)
         else: print(msg, flush=True)
@@ -97,22 +97,16 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     thumb_path = os.path.join(theme_dir, "thumbnail.png")
 
     ratio_tag = "縦9:16のショート動画" if is_shorts else "横16:9のワイドスクリーン"
-    if custom_bg_prompt:
-        prompt = (
-            f"{custom_bg_prompt}、{ratio_tag}、漫画風アニメ調、"
-            f"マスターピース、劇的な照明、鮮烈な色彩。"
-            f"下部50%はキャラクター立ち絵のために空白にすること。"
-        )
-    else:
-        prompt = (
-            f"YouTubeサムネイル背景、{ratio_tag}、漫画風アニメ調、"
-            f"目を引く劇的なシーン、高コントラスト、シネマティックな雰囲気、マスターピース。"
-            f"下部50%はキャラクター立ち絵のために空白にすること。"
-        )
+    char_space = "\n下部50%はキャラクター立ち絵のために空白にすること。" if is_shorts else ""
+    prompt = (
+        f"アスペクト比: {ratio_tag}。\n"
+        f"以下の台本を参考に、YouTubeサムネイル画像を生成してください。{char_space}\n\n"
+        f"{script_content or topic}"
+    )
 
     _log("🖼  サムネイルを生成中...")
     try:
-        generated = img_gen.generate_background(prompt, target_dir=theme_bg_dir)
+        generated = img_gen.generate_background(prompt, target_dir=theme_bg_dir, raw=True)
     except Exception as e:
         _log(f"  ❌ サムネイル生成失敗: {e}")
         return None
@@ -214,6 +208,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # Step 4: 既存フォルダ削除（背景再利用時は退避）
     import tempfile
     _saved_bg_tmp = None
+    _saved_thumb_tmp = None
     if os.path.exists(theme_dir):
         if reuse_backgrounds:
             _old_bg_dir = os.path.join(theme_dir, "backgrounds")
@@ -221,6 +216,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 _saved_bg_tmp = tempfile.mkdtemp()
                 for f in os.listdir(_old_bg_dir):
                     shutil.copy2(os.path.join(_old_bg_dir, f), _saved_bg_tmp)
+            _old_thumb = os.path.join(theme_dir, "thumbnail.png")
+            if os.path.exists(_old_thumb):
+                _saved_thumb_tmp = tempfile.mkdtemp()
+                shutil.copy2(_old_thumb, os.path.join(_saved_thumb_tmp, "thumbnail.png"))
         gc.collect()  # release any PIL file handles from previous run
         def _on_rm_error(func, path, exc_info):
             os.chmod(path, stat.S_IWRITE)
@@ -254,6 +253,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         shutil.rmtree(_saved_bg_tmp)
         _has_saved_bgs = True
         update_status("🖼  既存の背景を再利用します")
+    if _saved_thumb_tmp:
+        saved_thumb = os.path.join(_saved_thumb_tmp, "thumbnail.png")
+        if os.path.exists(saved_thumb):
+            shutil.copy2(saved_thumb, os.path.join(theme_dir, "thumbnail.png"))
+        shutil.rmtree(_saved_thumb_tmp)
 
     update_status("🔍 YouTubeポリシー補正中...")
     script_content = ai.sanitize_for_youtube(script_content)
@@ -338,7 +342,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             update_status("  📌 既存サムネイルを再利用")
     else:
         thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
-                                        custom_bg_prompt=ai_thumbnail_prompt)
+                                        script_content=script_content)
     if thumb_path:
         if is_shorts:
             editor.add_image_item(thumb_path, 0, 3, layer=0)
@@ -356,6 +360,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     dialogue_tachie_info = []  # (char_name, emotion, start_frame, end_frame)
     transition_frames = round(TRANSITION_SEC * editor.fps)
     first_bg_placed = False
+    style_reference_path = None  # 1枚目の背景パス（2枚目以降のスタイル参照用）
 
     for i, item in enumerate(items):
 
@@ -395,13 +400,22 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
             update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 生成中: {bg_name[:30]}...")
             try:
-                generated_file = img_gen.generate_background(bg_name, target_dir=theme_bg_dir)
+                bg_description = (
+                    f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
+                    f"【台本】\n{script_content}"
+                )
+                generated_file = img_gen.generate_background(
+                    bg_description, target_dir=theme_bg_dir,
+                    reference_image_path=style_reference_path
+                )
             except Exception as e:
                 update_status(f"  ❌ 背景生成失敗: {e}")
                 generated_file = None
             if generated_file:
                 current_bg = generated_file
                 report.backgrounds_generated += 1
+                if style_reference_path is None:
+                    style_reference_path = os.path.join(theme_bg_dir, generated_file)
                 update_status(f"  ✅ 背景生成完了")
             else:
                 report.backgrounds_failed += 1
