@@ -1,13 +1,22 @@
 {
-  "skipDangerousModePermissionPrompt": true,
   "permissions": {
-    "defaultMode": "bypassPermissions",
     "allow": [
       "*",
       "Bash(*)",
       "Bash(python -c ' *)",
       "Skill(update-config)",
-      "Skill(update-config:*)"
+      "Skill(update-config:*)",
+      "PowerShell(ssh -T git@github.com -o StrictHostKeyChecking=no 2>&1)",
+      "PowerShell(Start-Service -Name ssh-agent -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Service -Name ssh-agent)",
+      "PowerShell(Set-Service -Name ssh-agent -StartupType Automatic)",
+      "PowerShell(Start-Service -Name ssh-agent)",
+      "PowerShell(ssh -T git@github.com -i \"C:\\\\Users\\\\benyb\\\\.ssh\\\\id_ed25519\" -o StrictHostKeyChecking=no 2>&1)"
+    ],
+    "defaultMode": "bypassPermissions",
+    "additionalDirectories": [
+      "C:\\Users\\benyb\\.ssh"
     ]
-  }
+  },
+  "skipDangerousModePermissionPrompt": true
 }
