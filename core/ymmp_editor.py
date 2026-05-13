@@ -117,7 +117,7 @@ class YmmpEditor:
         self.add_character(target_name, new_id)
         return new_id
 
-    def add_voice_item(self, character_name, text, hatsuon=None, file_path=None, start_frame=0, duration=100, layer=2, volume=200.0):
+    def add_voice_item(self, character_name, text, hatsuon=None, file_path=None, start_frame=0, duration=100, layer=6, volume=200.0):
         resolved_name = self._resolve_name(character_name)
         self._get_character_id(resolved_name)  # ensure registered
 

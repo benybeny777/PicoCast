@@ -15,7 +15,7 @@ from core.parser import ScriptParser
 from core.ymmp_editor import YmmpEditor
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
-from config import CHARACTERS, VOICEVOX_PATH, MAX_BACKGROUNDS
+from config import BGM_LAYER, BGM_PATH, BGM_VOLUME, CHARACTERS, VOICEVOX_PATH, MAX_BACKGROUNDS
 
 
 def _find_locking_process(path):
@@ -143,6 +143,23 @@ def _read_ymmp_duration(path):
         return 0
 
 
+def _add_fixed_bgm(editor, total_frames, update_status=print):
+    if not BGM_PATH or total_frames <= 0:
+        return
+    if not os.path.exists(BGM_PATH):
+        update_status(f"  BGMなし: {BGM_PATH} が見つかりません")
+        return
+
+    editor.add_audio_item(
+        BGM_PATH,
+        start_frame=0,
+        duration=total_frames,
+        layer=BGM_LAYER,
+        volume=BGM_VOLUME,
+    )
+    update_status(f"  BGM追加: {os.path.basename(BGM_PATH)} 音量{BGM_VOLUME:g}%")
+
+
 def merge_telops_into_backgrounds(items):
     """Fold テロップ items into the preceding 背景 prompt so Nano Banana renders the text."""
     result = []
@@ -171,6 +188,28 @@ def merge_telops_into_backgrounds(items):
                 last_bg_idx = len(result)
             result.append(item)
     return result
+
+
+def normalize_background_order(items):
+    """Accept scripts that put a background line immediately after its dialogue."""
+    normalized = []
+    i = 0
+    while i < len(items):
+        current = items[i]
+        next_item = items[i + 1] if i + 1 < len(items) else None
+        if (
+            current.get("type") == "dialogue"
+            and next_item
+            and next_item.get("type") == "background"
+        ):
+            normalized.append(next_item)
+            normalized.append(current)
+            i += 2
+            continue
+        normalized.append(current)
+        i += 1
+    return normalized
+
 
 def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None):
     """既存の出力フォルダのサムネイルのみ再生成する。"""
@@ -205,7 +244,8 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
 
 def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
-                 image_style="通常", reuse_backgrounds=False, use_batch_api=False):
+                 image_style="通常", reuse_backgrounds=False, use_batch_api=False,
+                 cancel_event=None):
     report = GenerationReport()
     pipeline_start = time.time()
 
@@ -214,6 +254,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             progress_callback(msg)
         else:
             print(msg, flush=True)
+
+    def is_cancelled():
+        return bool(cancel_event and cancel_event.is_set())
+
+    def cancel_result():
+        report.elapsed_sec = time.time() - pipeline_start
+        msg = "⏹ 作業を中止しました。"
+        update_status(msg)
+        return msg, report
 
     # Step 1: スクリプト取得（形式判定のために先に行う）
     ai = AIGenerator(debug=debug_mode)
@@ -226,10 +275,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if script_content.startswith("Error"):
             report.elapsed_sec = time.time() - pipeline_start
             return script_content, report
+    if is_cancelled():
+        return cancel_result()
 
     update_status("🔍 YouTubeポリシー補正中...")
     script_content = ai.sanitize_for_youtube(script_content)
     script_content = re.sub(r'(?m)^サムネイル[:：][^\n]*\n?', '', script_content)
+    if is_cancelled():
+        return cancel_result()
 
     # Step 2: 動画形式を検出
     is_shorts = _detect_is_shorts(script_content)
@@ -254,9 +307,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if reuse_backgrounds:
             _old_bg_dir = os.path.join(theme_dir, "backgrounds")
             if os.path.exists(_old_bg_dir):
-                _saved_bg_tmp = tempfile.mkdtemp()
-                for f in os.listdir(_old_bg_dir):
-                    shutil.copy2(os.path.join(_old_bg_dir, f), _saved_bg_tmp)
+                reusable_bgs = [
+                    f for f in os.listdir(_old_bg_dir)
+                    if f.startswith("bg_") and f.lower().endswith(".png")
+                ]
+                if reusable_bgs:
+                    _saved_bg_tmp = tempfile.mkdtemp()
+                    for f in reusable_bgs:
+                        shutil.copy2(os.path.join(_old_bg_dir, f), _saved_bg_tmp)
             _old_thumb = os.path.join(theme_dir, "thumbnail.png")
             if os.path.exists(_old_thumb):
                 _saved_thumb_tmp = tempfile.mkdtemp()
@@ -289,11 +347,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # 背景再利用: 退避したファイルを復元（新規作成時は_saved_bg_tmp=Noneなので通常生成へ）
     _has_saved_bgs = False
     if _saved_bg_tmp:
+        restored_bg_count = 0
         for f in os.listdir(_saved_bg_tmp):
             shutil.copy2(os.path.join(_saved_bg_tmp, f), theme_bg_dir)
+            restored_bg_count += 1
         shutil.rmtree(_saved_bg_tmp)
-        _has_saved_bgs = True
-        update_status("🖼  既存の背景を再利用します")
+        _has_saved_bgs = restored_bg_count > 0
+        if _has_saved_bgs:
+            update_status(f"🖼  既存の背景を再利用します: {restored_bg_count}枚")
     if _saved_thumb_tmp:
         saved_thumb = os.path.join(_saved_thumb_tmp, "thumbnail.png")
         if os.path.exists(saved_thumb):
@@ -316,6 +377,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     meta_types = {"thumbnail", "video_title", "description", "tags", "video_format"}
     meta = {it["type"]: it["text"] for it in items if it["type"] in meta_types}
     items = [it for it in items if it["type"] not in meta_types]
+    items = normalize_background_order(items)
 
     ai_thumbnail_prompt = meta.get("thumbnail")
 
@@ -337,6 +399,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             mf.write("\n".join(lines))
         if "video_title" in meta:
             update_status(f"📝 動画タイトル: {meta['video_title']}")
+    if is_cancelled():
+        return cancel_result()
 
     telop_count = sum(1 for it in items if it["type"] == "telop")
     items = merge_telops_into_backgrounds(items)
@@ -356,6 +420,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         subprocess.Popen([VOICEVOX_PATH], creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(60):
+            if is_cancelled():
+                return cancel_result()
             if vv.check_connection(): break
             time.sleep(2)
 
@@ -379,6 +445,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if thumb_path:
             update_status("  📌 既存サムネイルを再利用")
     else:
+        if is_cancelled():
+            return cancel_result()
         thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
                                         script_content=script_content)
     if thumb_path:
@@ -413,6 +481,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     _batch_items.append((_temp_num, bg_name))
 
         if _batch_items:
+            if is_cancelled():
+                return cancel_result()
             update_status(f"🖼  Batch API: {len(_batch_items)}枚を一括送信中 (完了まで数分かかります)...")
             batch_requests = [
                 {
@@ -438,6 +508,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 raise Exception(f"Batch API エラー: {e}")
 
     for i, item in enumerate(items):
+        if is_cancelled():
+            return cancel_result()
 
         if item["type"] == "background":
             if current_bg and current_frame > bg_start_frame:
@@ -486,6 +558,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
             update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 生成中: {bg_name[:30]}...")
             try:
+                if is_cancelled():
+                    return cancel_result()
                 bg_description = (
                     f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
                     f"【台本】\n{script_content}"
@@ -525,6 +599,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             chunks = _split_at_punctuation(text)
 
             for chunk_text in chunks:
+                if is_cancelled():
+                    return cancel_result()
                 audio_filename = f"{uuid.uuid4().hex}.wav"
                 audio_path = os.path.join(theme_audio_dir, audio_filename)
 
@@ -537,6 +613,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     update_status(f"  ❌ 音声合成失敗: {e}")
                     report.voices_failed += 1
                     continue
+                if is_cancelled():
+                    return cancel_result()
 
                 try:
                     with wave.open(audio_path, 'rb') as wr:
@@ -554,6 +632,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 current_frame += duration_frames + 15
 
     # 終了画面用に5秒延長
+    if is_cancelled():
+        return cancel_result()
     current_frame += 5 * editor.fps
 
     # Finalize
@@ -574,6 +654,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         "めたん":     {"long": ( 751, 430, 52.95),  "shorts": ( 348.0, 850, 50.1)},
     }
     for i, char_name in enumerate(char_order):
+        if is_cancelled():
+            return cancel_result()
         mode = "shorts" if is_shorts else "long"
         key = next((k for k in TACHIE_PARAMS if k in char_name), None)
         x_pos, y_pos, tachie_zoom = TACHIE_PARAMS[key][mode] if key else (0, 0, 30)
@@ -608,6 +690,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 editor.add_tachie_item(char_name, start, end - start, layer=layer, x=x_pos, y=y_pos, zoom=tachie_zoom)
 
     editor.merge_consecutive_tachie_items()
+    _add_fixed_bgm(editor, current_frame, update_status)
+    if is_cancelled():
+        return cancel_result()
     update_status("💾 YMM4プロジェクトを保存中...")
     editor.save(project_file_path)
     report.elapsed_sec = time.time() - pipeline_start

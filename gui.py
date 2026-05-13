@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
+from tkinter import ttk, scrolledtext, messagebox, filedialog
 import threading
 import re
 import os
@@ -8,14 +8,58 @@ import subprocess
 import traceback
 import time
 import shutil
-from main import run_pipeline, regenerate_thumbnail_only
+from main import run_pipeline, regenerate_thumbnail_only, normalize_background_order
 from core.ai_generator import AIGenerator
+from core.image_generator import ImageGenerator
 from core.ng_words import NG_WORD_PROMPT
+from core.parser import ScriptParser
 from core.script_prompts import build_vidiq_prompt
 from config import VOICEVOX_URL, VOICEVOX_PATH
 import requests
 
+try:
+    from PIL import Image, ImageTk
+except Exception:
+    Image = ImageTk = None
+
 VIDIQ_PROMPT = build_vidiq_prompt()
+
+
+def split_input_scripts(raw_scripts):
+    """Split pasted scripts by supported batch separators."""
+    raw_scripts = raw_scripts.strip()
+    if not raw_scripts:
+        return []
+
+    # Preferred separator from our prompt.
+    scripts = [s.strip() for s in re.split(r'\n-{3,}\n', raw_scripts) if s.strip()]
+    if len(scripts) > 1:
+        return scripts
+
+    # Also accept headings like: ━━ 動画1：ショート版 ━━
+    heading_re = re.compile(r'^\s*━+\s*動画\s*\d+[^。\n]*━+\s*$', re.MULTILINE)
+    if heading_re.search(raw_scripts):
+        chunks = []
+        current = []
+        for line in raw_scripts.splitlines():
+            if heading_re.match(line):
+                if current and any(part.strip() for part in current):
+                    chunks.append("\n".join(current).strip())
+                current = []
+                continue
+            current.append(line)
+        if current and any(part.strip() for part in current):
+            chunks.append("\n".join(current).strip())
+        if len(chunks) > 1:
+            return chunks
+
+    # Last-resort split: multiple scripts pasted back-to-back starting with 動画形式.
+    starts = [m.start() for m in re.finditer(r'(?m)^動画形式[:：]', raw_scripts)]
+    if len(starts) > 1:
+        starts.append(len(raw_scripts))
+        return [raw_scripts[starts[i]:starts[i + 1]].strip() for i in range(len(starts) - 1)]
+
+    return [raw_scripts]
 
 
 def unified_check(name, primary_url, path):
@@ -75,6 +119,8 @@ class YMM4AutoGui:
         ttk.Label(top_frame, text="🚀 YMM4 自動動画生成ファクトリー", style="Header.TLabel").pack(side=tk.LEFT)
         self.generate_btn = ttk.Button(top_frame, text="🎬 生成 🚀", style="Accent.TButton", command=self.start_generation)
         self.generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
+        self.cancel_btn = ttk.Button(top_frame, text="作業中止", command=self.request_cancel, state=tk.DISABLED)
+        self.cancel_btn.pack(side=tk.RIGHT, padx=(4, 0))
         ttk.Button(top_frame, text="AI台本作成", command=self.copy_vidiq_prompt).pack(side=tk.RIGHT)
         ttk.Button(top_frame, text="クリア", width=6, command=self.clear_script).pack(side=tk.RIGHT, padx=4)
 
@@ -103,11 +149,8 @@ class YMM4AutoGui:
         self.style_combo = ttk.Combobox(opt_frame, textvariable=self.style_var, values=["nanobanana2", "nanobanana pro"], state="readonly", width=14)
         self.style_combo.pack(side=tk.LEFT, padx=2)
 
-        ttk.Label(opt_frame, text="履歴:").pack(side=tk.LEFT, padx=(10, 2))
-        self.history_combo = ttk.Combobox(opt_frame, state="readonly", width=22, font=("Meiryo", 9))
-        self.history_combo.set("履歴から選択")
-        self.history_combo.pack(side=tk.LEFT, padx=2)
-        self.history_combo.bind("<<ComboboxSelected>>", self.on_history_selected)
+        self.history_batch_btn = ttk.Button(opt_frame, text="履歴から複数生成", command=self.open_history_batch_dialog)
+        self.history_batch_btn.pack(side=tk.LEFT, padx=(10, 0))
 
         # Sub buttons row
         btn_frame = ttk.Frame(main_frame)
@@ -118,6 +161,8 @@ class YMM4AutoGui:
         self.open_folder_btn.pack(side=tk.LEFT)
         self.regen_thumb_btn = ttk.Button(btn_frame, text="🖼 サムネ再生成", command=self.start_regen_thumbnail)
         self.regen_thumb_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self.image_review_btn = ttk.Button(btn_frame, text="🔄 画像確認", command=self.start_image_review)
+        self.image_review_btn.pack(side=tk.LEFT, padx=(8, 0))
         self._studio_url = None
         self.studio_btn = ttk.Button(btn_frame, text="🌐 YouTube Studio", command=self._open_studio)
         self.studio_btn.pack(side=tk.LEFT, padx=(8, 0))
@@ -145,6 +190,7 @@ class YMM4AutoGui:
         self.log_area.tag_config("batch", foreground="#ef57ff", font=("Meiryo", 9, "bold"))
 
         self.last_output_dir = None
+        self.cancel_event = threading.Event()
 
         self.refresh_history()
         threading.Thread(target=self.check_engines_startup, daemon=True).start()
@@ -172,6 +218,11 @@ class YMM4AutoGui:
         self.ref_text.delete("1.0", tk.END)
         self.log("台本をクリアしました")
 
+    def request_cancel(self):
+        self.cancel_event.set()
+        self.cancel_btn.config(state=tk.DISABLED)
+        self.log("⏹ 作業中止をリクエストしました。現在の処理区切りで停止します。", "error")
+
     def log(self, message, tag="info"):
         self.root.after(0, lambda: self._log_ui(message, tag))
 
@@ -186,32 +237,157 @@ class YMM4AutoGui:
         if not os.path.exists("output"): os.makedirs("output", exist_ok=True)
         history = [d for d in os.listdir("output") if os.path.isdir(os.path.join("output", d)) and d != "000_uploaded"]
         history.sort(key=lambda d: os.path.getmtime(os.path.join("output", d)), reverse=True)
-        self.history_combo['values'] = history
+        self.history_items = history
 
-    def on_history_selected(self, event):
-        selected = self.history_combo.get()
-        if not selected:
+    def open_history_batch_dialog(self):
+        self.refresh_history()
+        histories = getattr(self, "history_items", [])
+        if not histories:
+            messagebox.showinfo("履歴なし", "実行できる履歴がありません。")
             return
-        output_dir = os.path.join("output", selected)
-        script_path = os.path.join(output_dir, "script.txt")
-        if os.path.exists(script_path):
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("履歴を複数選択")
+        dialog.geometry("520x420")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="生成する履歴を選択してください（Ctrl / Shift で複数選択）").pack(anchor=tk.W, padx=10, pady=(10, 4))
+
+        list_frame = ttk.Frame(dialog)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        history_list = tk.Listbox(
+            list_frame,
+            selectmode=tk.EXTENDED,
+            exportselection=False,
+            font=("Meiryo", 9),
+            yscrollcommand=scrollbar.set,
+        )
+        scrollbar.config(command=history_list.yview)
+        history_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for name in histories:
+            script_path = os.path.join("output", name, "script.txt")
+            output_dir = os.path.join("output", name)
+            try:
+                edited_at = time.strftime("%Y/%m/%d %H:%M", time.localtime(os.path.getmtime(output_dir)))
+            except OSError:
+                edited_at = "----/--/-- --:--"
+            suffix = "" if os.path.exists(script_path) else "  (script.txtなし)"
+            history_list.insert(tk.END, f"{edited_at}  {name}{suffix}")
+
+        def run_selected():
+            indices = list(history_list.curselection())
+            if not indices:
+                messagebox.showwarning("未選択", "履歴を1つ以上選択してください。", parent=dialog)
+                return
+            selected = [histories[i] for i in indices]
+            dialog.destroy()
+            self.start_generation_from_histories(selected)
+
+        btns = ttk.Frame(dialog)
+        btns.pack(fill=tk.X, padx=10, pady=(4, 10))
+        ttk.Button(btns, text="キャンセル", command=dialog.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btns, text="選択した履歴を生成", style="Accent.TButton", command=run_selected).pack(side=tk.RIGHT, padx=(0, 8))
+
+    def start_generation_from_histories(self, history_names):
+        scripts = []
+        missing = []
+        for name in history_names:
+            script_path = os.path.join("output", name, "script.txt")
+            if not os.path.exists(script_path):
+                missing.append(name)
+                continue
             with open(script_path, "r", encoding="utf-8") as f:
-                self.ref_text.delete("1.0", tk.END)
-                self.ref_text.insert("1.0", f.read())
-            self.log(f"履歴 '{selected}' から台本を読み込みました")
-        if os.path.exists(os.path.join(output_dir, "metadata.txt")):
-            self.last_output_dir = output_dir
-            self._update_meta_preview()
+                script = f.read().strip()
+            if script:
+                scripts.append(script)
+
+        if missing:
+            self.log(f"⚠ script.txtなしの履歴をスキップ: {len(missing)}件", "error")
+        if not scripts:
+            messagebox.showwarning("Error", "実行できる履歴台本がありません。")
+            return
+
+        self._toggle_ui(False)
+        self.cancel_event.clear()
+        self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
+        threading.Thread(target=self._run_batch, args=(scripts,), daemon=True).start()
+
+    def select_history_dialog(self, title, action_text, multi=False):
+        self.refresh_history()
+        histories = getattr(self, "history_items", [])
+        if not histories:
+            messagebox.showinfo("履歴なし", "選択できる履歴がありません。")
+            return []
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(title)
+        dialog.geometry("560x420")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        select_text = "Ctrl / Shift で複数選択" if multi else "1件選択"
+        ttk.Label(dialog, text=f"履歴を選択してください（{select_text}）").pack(anchor=tk.W, padx=10, pady=(10, 4))
+
+        list_frame = ttk.Frame(dialog)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL)
+        history_list = tk.Listbox(
+            list_frame,
+            selectmode=tk.EXTENDED if multi else tk.BROWSE,
+            exportselection=False,
+            font=("Meiryo", 9),
+            yscrollcommand=scrollbar.set,
+        )
+        scrollbar.config(command=history_list.yview)
+        history_list.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for name in histories:
+            output_dir = os.path.join("output", name)
+            try:
+                edited_at = time.strftime("%Y/%m/%d %H:%M", time.localtime(os.path.getmtime(output_dir)))
+            except OSError:
+                edited_at = "----/--/-- --:--"
+            script_suffix = "" if os.path.exists(os.path.join(output_dir, "script.txt")) else "  (script.txtなし)"
+            image_suffix = "" if (
+                os.path.exists(os.path.join(output_dir, "thumbnail.png"))
+                or os.path.isdir(os.path.join(output_dir, "backgrounds"))
+            ) else "  (画像なし)"
+            mp4_suffix = "" if any(f.lower().endswith(".mp4") for f in os.listdir(output_dir)) else "  (MP4なし)"
+            history_list.insert(tk.END, f"{edited_at}  {name}{script_suffix}{image_suffix}{mp4_suffix}")
+
+        result = {"selected": []}
+
+        def run_selected():
+            indices = list(history_list.curselection())
+            if not indices:
+                messagebox.showwarning("未選択", "履歴を選択してください。", parent=dialog)
+                return
+            result["selected"] = [histories[i] for i in indices]
+            dialog.destroy()
+
+        btns = ttk.Frame(dialog)
+        btns.pack(fill=tk.X, padx=10, pady=(4, 10))
+        ttk.Button(btns, text="キャンセル", command=dialog.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btns, text=action_text, style="Accent.TButton", command=run_selected).pack(side=tk.RIGHT, padx=(0, 8))
+
+        self.root.wait_window(dialog)
+        return result["selected"]
 
     def start_generation(self):
         raw_scripts = self.ref_text.get("1.0", tk.END).strip()
-        scripts = [s.strip() for s in re.split(r'\n-{3,}\n', raw_scripts) if s.strip()]
+        scripts = split_input_scripts(raw_scripts)
 
         if not scripts:
             messagebox.showwarning("Error", "台本を入力してください")
             return
 
         self._toggle_ui(False)
+        self.cancel_event.clear()
         self.log(f"一括処理開始: 合計 {len(scripts)} 件")
         threading.Thread(target=self._run_batch, args=(scripts,), daemon=True).start()
 
@@ -220,6 +396,9 @@ class YMM4AutoGui:
         is_batch = count > 1
 
         for idx, script in enumerate(scripts):
+            if self.cancel_event.is_set():
+                self.log("⏹ 中止しました。残りの履歴/台本は処理しません。", "error")
+                break
             try:
                 # Derive topic from 動画タイトル: line, fallback to first line
                 topic = None
@@ -247,9 +426,13 @@ class YMM4AutoGui:
                     progress_callback=self.log,
                     reuse_backgrounds=self.reuse_bg_var.get(),
                     use_batch_api=self.batch_api_var.get(),
+                    cancel_event=self.cancel_event,
                 )
 
                 self.log(f"成功: {topic}", "success")
+                if self.cancel_event.is_set():
+                    self.log("⏹ 中止しました。残りの履歴/台本は処理しません。", "error")
+                    break
                 if not is_batch:
                     self.root.after(0, lambda m=msg, r=report: self.finish_generation(m, r))
                     return
@@ -263,7 +446,13 @@ class YMM4AutoGui:
                     self.root.after(0, lambda m=err_msg: self.finish_generation(m, None, is_error=True))
                     return
 
-        if is_batch:
+        if self.cancel_event.is_set():
+            self.root.after(0, lambda: self.progress.config(value=100))
+            self.log("\n⏹ 処理を中止しました。", "error")
+            if is_batch:
+                messagebox.showinfo("中止", "一括処理を中止しました。")
+            self.root.after(0, lambda: self._toggle_ui(True))
+        elif is_batch:
             self.root.after(0, lambda: self.progress.config(value=100))
             self.log("\n✅ 全ての一括処理が完了しました！", "success")
             messagebox.showinfo("一括完了", f"{count}件の処理が完了しました。")
@@ -284,36 +473,63 @@ class YMM4AutoGui:
 
 
     def start_youtube_upload(self):
-        from tkinter import filedialog
-        mp4_path = filedialog.askopenfilename(
-            title="アップロードする動画ファイルを選択",
-            initialdir="output",
-            filetypes=[("MP4 動画", "*.mp4"), ("すべてのファイル", "*.*")]
-        )
-        if not mp4_path:
+        selected = self.select_history_dialog("YouTubeアップロードする履歴を選択", "アップロード", multi=True)
+        if not selected:
             return
 
-        output_dir = os.path.dirname(mp4_path)
-        meta = self._read_meta_from_dir(output_dir)
-        title = meta.get("title", os.path.basename(output_dir))
-        description = meta.get("description", "")
-        tags = meta.get("tags", "")
-        is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
-        thumb = None if is_shorts else os.path.join(output_dir, "thumbnail.png")
+        jobs = []
+        skipped = []
+        for name in selected:
+            output_dir = os.path.join("output", name)
+            mp4_candidates = [
+                os.path.join(output_dir, f)
+                for f in os.listdir(output_dir)
+                if f.lower().endswith(".mp4")
+            ] if os.path.isdir(output_dir) else []
+            if not mp4_candidates:
+                skipped.append(name)
+                continue
+            mp4_candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+            mp4_path = mp4_candidates[0]
 
-        privacy = "private"
+            meta = self._read_meta_from_dir(output_dir)
+            title = meta.get("title", os.path.basename(output_dir))
+            description = meta.get("description", "")
+            tags = meta.get("tags", "")
+            is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
+            thumb = None if is_shorts else os.path.join(output_dir, "thumbnail.png")
+            jobs.append((mp4_path, title, description, tags, thumb, "private", output_dir))
+
+        if skipped:
+            self.log(f"⚠ MP4なしの履歴をスキップ: {len(skipped)}件", "error")
+        if not jobs:
+            messagebox.showwarning("MP4なし", "選択した履歴フォルダにアップロード可能なMP4がありません。")
+            return
+
         self.upload_btn.config(state=tk.DISABLED)
         threading.Thread(
-            target=self._run_upload,
-            args=(mp4_path, title, description, tags, thumb, privacy, output_dir),
+            target=self._run_upload_batch,
+            args=(jobs,),
             daemon=True
         ).start()
+
+    def _run_upload_batch(self, jobs):
+        total = len(jobs)
+        try:
+            for idx, job in enumerate(jobs, start=1):
+                mp4_path, title, *_ = job
+                self.log(f"📤 アップロード [{idx}/{total}]: {title}", "batch")
+                self._run_upload(*job, restore_button=False)
+            self.log(f"✅ YouTubeアップロード完了: {total}件", "success")
+        finally:
+            self.root.after(0, lambda: self.upload_btn.config(state=tk.NORMAL))
+            self.root.after(0, self.refresh_history)
 
     def _open_studio(self):
         import webbrowser
         webbrowser.open(self._studio_url or "https://studio.youtube.com/")
 
-    def _run_upload(self, mp4_path, title, description, tags, thumb, privacy, output_dir):
+    def _run_upload(self, mp4_path, title, description, tags, thumb, privacy, output_dir, restore_button=True):
         try:
             from core.youtube_uploader import upload_video
             from core.ai_generator import AIGenerator
@@ -341,7 +557,8 @@ class YMM4AutoGui:
         except Exception as e:
             self.log(f"❌ アップロードエラー: {e}", "error")
         finally:
-            self.root.after(0, lambda: self.upload_btn.config(state=tk.NORMAL))
+            if restore_button:
+                self.root.after(0, lambda: self.upload_btn.config(state=tk.NORMAL))
 
     def _read_meta_from_dir(self, output_dir):
         if not output_dir:
@@ -433,9 +650,230 @@ class YMM4AutoGui:
         finally:
             self.root.after(0, lambda: self.regen_thumb_btn.config(state=tk.NORMAL))
 
+    def start_image_review(self):
+        selected = self.select_history_dialog("画像確認する履歴を選択", "画像確認", multi=False)
+        if not selected:
+            return
+        output_dir = os.path.join("output", selected[0])
+        self.last_output_dir = output_dir
+        self.image_review_btn.config(state=tk.DISABLED)
+        self.log(f"🔄 画像確認: {os.path.basename(output_dir)}")
+        threading.Thread(target=self._run_image_review, args=(output_dir,), daemon=True).start()
+
+    def _collect_image_review_specs(self, output_dir):
+        specs = []
+        script_path = os.path.join(output_dir, "script.txt")
+        bg_dir = os.path.join(output_dir, "backgrounds")
+        thumb_path = os.path.join(output_dir, "thumbnail.png")
+
+        script_content = ""
+        is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
+        bg_prompts = []
+        if os.path.exists(script_path):
+            with open(script_path, "r", encoding="utf-8") as f:
+                script_content = f.read()
+            tmp_items = ScriptParser.parse(script_path)
+            meta_types = {"thumbnail", "video_title", "description", "tags", "video_format"}
+            meta = {it["type"]: it["text"] for it in tmp_items if it["type"] in meta_types}
+            is_shorts = meta.get("video_format", "").strip().lower() in ("shorts", "ショート")
+            items = normalize_background_order([it for it in tmp_items if it["type"] not in meta_types])
+            bg_prompts = [it.get("text", "").strip() for it in items if it["type"] == "background"]
+
+        if os.path.exists(thumb_path):
+            title = self._read_meta_from_dir(output_dir).get("title", os.path.basename(output_dir))
+            prompt = (
+                f"以下の台本を参考に、YouTubeサムネイル画像を生成してください。\n\n"
+                f"{script_content or title}"
+            )
+            specs.append({
+                "kind": "thumbnail",
+                "path": thumb_path,
+                "prompt": prompt,
+                "label": "サムネイル",
+                "is_shorts": is_shorts,
+            })
+
+        if os.path.isdir(bg_dir):
+            bg_files = sorted(
+                f for f in os.listdir(bg_dir)
+                if f.startswith("bg_") and f.lower().endswith(".png")
+            )
+            for idx, filename in enumerate(bg_files):
+                bg_prompt = bg_prompts[idx] if idx < len(bg_prompts) else ""
+                prompt = (
+                    f"以下の台本を参考に、「{bg_prompt or filename}」のシーンの背景画像を生成してください。\n\n"
+                    f"【台本】\n{script_content}"
+                )
+                specs.append({
+                    "kind": "background",
+                    "path": os.path.join(bg_dir, filename),
+                    "prompt": prompt,
+                    "label": f"背景 {idx + 1}",
+                    "scene": bg_prompt,
+                    "is_shorts": is_shorts,
+                })
+        return specs
+
+    def _run_image_review(self, output_dir):
+        try:
+            specs = self._collect_image_review_specs(output_dir)
+            if not specs:
+                self.log("⚠ 確認できる画像が見つかりません。", "error")
+                return
+
+            while True:
+                regen_set = self.confirm_images_bulk(specs)
+                if not regen_set:
+                    break
+
+                self.log(f"🔄 選択画像を再生成中: {len(regen_set)}枚", "batch")
+                for idx in sorted(regen_set):
+                    spec = specs[idx]
+                    try:
+                        width, height = (1080, 1920) if spec.get("is_shorts") else (1920, 1080)
+                        img_gen = ImageGenerator(width=width, height=height, debug=self.debug_var.get(), image_style=self.style_var.get())
+                        target_dir = os.path.dirname(spec["path"])
+                        generated = img_gen.generate_background(
+                            spec["prompt"],
+                            target_dir=target_dir,
+                            raw=(spec["kind"] == "thumbnail"),
+                        )
+                        if generated:
+                            src = os.path.join(target_dir, generated)
+                            shutil.copy2(src, spec["path"])
+                            if os.path.abspath(src) != os.path.abspath(spec["path"]):
+                                try:
+                                    os.remove(src)
+                                except OSError:
+                                    pass
+                            self.log(f"  ✅ 再生成: {spec['label']}", "success")
+                    except Exception as e:
+                        self.log(f"  ❌ 再生成失敗: {spec['label']}: {e}", "error")
+
+                specs = self._collect_image_review_specs(output_dir)
+
+            self.log("✅ 画像確認完了", "success")
+        except Exception as e:
+            self.log(f"❌ 画像確認エラー: {e}", "error")
+        finally:
+            self.root.after(0, lambda: self.image_review_btn.config(state=tk.NORMAL))
+
+    def confirm_images_bulk(self, specs):
+        if not Image or not ImageTk or not specs:
+            messagebox.showwarning("画像確認不可", "Pillow が利用できないため画像を表示できません。")
+            return set()
+
+        result = {"regen": set()}
+        toggle_states = [False] * len(specs)
+        btn_refs = {}
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title(f"画像一括確認 ({len(specs)}枚)")
+        dialog.geometry("920x720")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        container = ttk.Frame(dialog)
+        container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        canvas = tk.Canvas(container)
+        scrollbar = ttk.Scrollbar(container, orient=tk.VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        inner = ttk.Frame(canvas)
+        canvas_window = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def on_configure(*_):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+            canvas.itemconfig(canvas_window, width=canvas.winfo_width())
+
+        inner.bind("<Configure>", on_configure)
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
+
+        def _on_mousewheel(e):
+            if canvas.winfo_exists():
+                canvas.yview_scroll(-1 * (e.delta // 120), "units")
+
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+        dialog.bind("<Destroy>", lambda e: canvas.unbind_all("<MouseWheel>"))
+
+        style = ttk.Style()
+        style.configure("OK.TButton", foreground="green")
+        style.configure("Regen.TButton", foreground="red")
+
+        photo_refs = []
+
+        def toggle(idx):
+            toggle_states[idx] = not toggle_states[idx]
+            btn_refs[idx].config(
+                text="🔄 再生成" if toggle_states[idx] else "✅ OK",
+                style="Regen.TButton" if toggle_states[idx] else "OK.TButton",
+            )
+
+        def show_enlarged(path):
+            win = tk.Toplevel(dialog)
+            win.title("拡大表示")
+            win.transient(dialog)
+            try:
+                img = Image.open(path)
+                img.thumbnail((900, 900), Image.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+                lbl = tk.Label(win, image=photo)
+                lbl.image = photo
+                lbl.pack()
+            except Exception as e:
+                ttk.Label(win, text=f"読込失敗: {e}").pack(padx=20, pady=20)
+            ttk.Button(win, text="閉じる", command=win.destroy).pack(pady=6)
+
+        cols = 3
+        thumb_size = 210
+        for idx, spec in enumerate(specs):
+            row, col = divmod(idx, cols)
+            cell = ttk.Frame(inner, relief=tk.RIDGE, borderwidth=1)
+            cell.grid(row=row, column=col, padx=5, pady=5, sticky="n")
+            ttk.Label(cell, text=spec.get("label", f"画像 {idx + 1}"), font=("", 9, "bold")).pack()
+            try:
+                img = Image.open(spec["path"])
+                img.thumbnail((thumb_size, thumb_size), Image.LANCZOS)
+                photo = ImageTk.PhotoImage(img)
+                photo_refs.append(photo)
+                lbl = ttk.Label(cell, image=photo, cursor="hand2")
+                lbl.pack()
+                lbl.bind("<Button-1>", lambda e, p=spec["path"]: show_enlarged(p))
+            except Exception:
+                photo_refs.append(None)
+                ttk.Label(cell, text="(読込失敗)", width=24).pack(pady=20)
+
+            scene = spec.get("scene") or ""
+            if scene:
+                ttk.Label(cell, text=scene, wraplength=thumb_size, foreground="#0984e3").pack()
+            btn = ttk.Button(cell, text="✅ OK", style="OK.TButton", command=lambda i=idx: toggle(i))
+            btn.pack(pady=4)
+            btn_refs[idx] = btn
+
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(pady=8)
+
+        def do_ok():
+            result["regen"] = set()
+            dialog.destroy()
+
+        def do_regen():
+            result["regen"] = {i for i, selected in enumerate(toggle_states) if selected}
+            dialog.destroy()
+
+        ttk.Button(btn_frame, text="全部このままOK", command=do_ok).pack(side=tk.LEFT, padx=8)
+        ttk.Button(btn_frame, text="選択した画像を再生成", command=do_regen).pack(side=tk.LEFT, padx=8)
+
+        self.root.wait_window(dialog)
+        return result["regen"]
+
     def _toggle_ui(self, enabled):
         state = tk.NORMAL if enabled else tk.DISABLED
         self.generate_btn.config(state=state)
+        self.history_batch_btn.config(state=state)
+        self.cancel_btn.config(state=tk.DISABLED if enabled else tk.NORMAL)
+        self.image_review_btn.config(state=state)
         self.ref_text.config(state=state)
         if enabled: self.progress.stop()
         else: self.progress.start(10)

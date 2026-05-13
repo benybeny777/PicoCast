@@ -12,6 +12,7 @@ class ScriptParser:
     _format_re = re.compile(r'^(?:動画形式|Format)[:：](.*)$', re.IGNORECASE)
     _ignore_patterns = [
         re.compile(r'^```.*$'),
+        re.compile(r'^━+.*━+$'),
         re.compile(r'^#.*$'),
         re.compile(r'^---.*$'),
         re.compile(r'^[（(].*[）)]$'),

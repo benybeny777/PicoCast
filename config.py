@@ -4,6 +4,7 @@ load_dotenv()
 
 VOICEVOX_URL = "http://localhost:50021"
 VOICEVOX_PATH = r"C:\Program Files\VOICEVOX\VOICEVOX.exe"
+VOICE_SPEED_SCALE = 1.3
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
 # Google AI Models (Nano Banana Suite)
@@ -39,6 +40,11 @@ CHARACTER_PNGS = {
     "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
     "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
 }
+
+# Fixed background music. Source: BGMer "のほほん"
+BGM_PATH = os.path.join(ASSETS_DIR, "bgm", "nohohon_long_BPM97.mp3")
+BGM_VOLUME = 15.0
+BGM_LAYER = 2
 
 # Cost control: max unique background images generated per video (thumbnail excluded)
 MAX_BACKGROUNDS = 7
