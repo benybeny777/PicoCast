@@ -19,13 +19,31 @@
 
 ## 重要な最近の変更
 
+### 最新セッション
+- **台本プロンプト全面刷新** (`core/script_prompts.py`): `build_vidiq_prompt()` を高視聴維持・高テンポ・Shorts特化の新プロンプトに完全置き換え。最優先ルール8項目・禁止事項・理想構成・NGワード対策を包含
+- **サムネ文字フィールド追加**: 台本に `サムネ文字:` フィールドを追加。パーサー・メタデータ保存・Geminiプロンプトすべてに対応
+- **パーサー強化** (`core/parser.py`):
+  - `サムネ文字:` を `thumbnail_text` として認識
+  - 値が次行に来る形式（`フィールド名:\n値`）を全フィールドでサポート（タイトル・背景・タグ等）
+  - セリフ行・ignoreパターンを誤って値として取り込まないよう保護
+  - `parse_string(text)` メソッドを追加（ファイル経由不要）
+- **バリデーション強化** (`core/parser.py` `validate()`): 空タイトル・不正タイトル（`[Shorts]`や`動画形式`を含む）・空背景・空セリフ・セリフ数不足を検出
+- **API課金前に全チェック完了**:
+  - `gui.py` `start_generation()`: 処理開始前に全スクリプトを一括バリデーション
+  - `run_pipeline()`: `sanitize_for_youtube()`（Gemini API）より前にバリデーション実施
+  - `sanitize` 後の2回目バリデーションを削除（重複のため）
+- **説明文Gemini整形をYYM作成プロセスに移動**: 以前はアップロード時に `format_description()` を呼んでいたが、プロジェクト生成時（メタデータ保存前）に変更
+- **Shortsサムネイルを1フレームに変更**: `editor.add_image_item(thumb_path, 0, 1)` （以前は3フレーム）
+- **音声速度を1.5倍に変更**: `config.VOICE_SPEED_SCALE = 1.5`（以前は1.3）
+- ルートの `script.txt`（不要な残骸）を削除
+
+### それ以前
 - YouTube NGワード置換を追加: `core/ng_words.py`
 - 台本作成プロンプトを分離: `core/script_prompts.py`
 - 台本中のコードフェンスや `━━ 動画1 ━━` 見出しを無視 / 分割できるようにした
 - `動画形式:` が複数ある入力を複数動画として扱う
 - セリフの後に `背景:` が来る台本を `main.normalize_background_order()` で補正
 - 背景は展開変更時だけ入れる方針にプロンプトを調整済み
-- VOICEVOX 音声速度を `config.VOICE_SPEED_SCALE = 1.3` に変更
 - YMM4のセリフ字幕 / 音声を立ち絵より上のレイヤー `6` に変更
 - 固定BGMとして BGMer「のほほん」を追加
 - GUIから作業中止できるよう `cancel_event` を導入

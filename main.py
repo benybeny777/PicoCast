@@ -278,6 +278,17 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if is_cancelled():
         return cancel_result()
 
+    # ★ 最初のバリデーション（sanitize前）
+    _early_items = ScriptParser.parse_string(script_content)
+    _is_valid, _messages = ScriptParser.validate(_early_items)
+    if not _is_valid:
+        report.elapsed_sec = time.time() - pipeline_start
+        msg = "❌ 台本形式エラー:\n" + "\n".join(_messages)
+        update_status(msg)
+        return msg, report
+    if is_cancelled():
+        return cancel_result()
+
     update_status("🔍 YouTubeポリシー補正中...")
     script_content = ai.sanitize_for_youtube(script_content)
     script_content = re.sub(r'(?m)^サムネイル[:：][^\n]*\n?', '', script_content)
@@ -366,15 +377,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         f.write(script_content)
 
     items = ScriptParser.parse(script_txt_path)
-    is_valid, messages = ScriptParser.validate(items)
-    if not is_valid:
-        report.elapsed_sec = time.time() - pipeline_start
-        msg = "❌ 台本形式エラー:\n" + "\n".join(messages)
-        update_status(msg)
-        return msg, report
 
     # Extract and save metadata (thumbnail / title / description / tags)
-    meta_types = {"thumbnail", "video_title", "description", "tags", "video_format"}
+    meta_types = {"thumbnail", "video_title", "description", "tags", "video_format", "thumbnail_text"}
     meta = {it["type"]: it["text"] for it in items if it["type"] in meta_types}
     items = [it for it in items if it["type"] not in meta_types]
     items = normalize_background_order(items)
@@ -382,13 +387,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     ai_thumbnail_prompt = meta.get("thumbnail")
 
     if "description" in meta:
-        meta["description"] = meta["description"].rstrip() + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+        update_status("✍️  説明文をGeminiで整形中...")
+        meta["description"] = ai.format_description(meta["description"].rstrip()) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
 
     if meta:
         meta_path = os.path.join(theme_dir, "metadata.txt")
         lines = []
         if "video_title" in meta:
             lines += ["【動画タイトル】", meta["video_title"], ""]
+        if "thumbnail_text" in meta:
+            lines += ["【サムネ文字】", meta["thumbnail_text"], ""]
         if "description" in meta:
             lines += ["【説明文】", meta["description"], ""]
         if "tags" in meta:
@@ -451,8 +459,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                                         script_content=script_content)
     if thumb_path:
         if is_shorts:
-            editor.add_image_item(thumb_path, 0, 3, layer=0)
-            update_status("  📌 サムネイルをショート先頭フレームに挿入")
+            editor.add_image_item(thumb_path, 0, 1, layer=0)
+            update_status("  📌 サムネイルをショート先頭1フレームに挿入")
         # ロングの場合は theme_dir に保存済み（YMM4 挿入なし）
 
     update_status(f"🎬 アセット生成 & タイムライン構築を開始します...")

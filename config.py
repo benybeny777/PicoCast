@@ -4,7 +4,7 @@ load_dotenv()
 
 VOICEVOX_URL = "http://localhost:50021"
 VOICEVOX_PATH = r"C:\Program Files\VOICEVOX\VOICEVOX.exe"
-VOICE_SPEED_SCALE = 1.3
+VOICE_SPEED_SCALE = 1.5
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
 # Google AI Models (Nano Banana Suite)

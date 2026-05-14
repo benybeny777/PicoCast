@@ -379,11 +379,24 @@ class YMM4AutoGui:
         return result["selected"]
 
     def start_generation(self):
+        from core.parser import ScriptParser
         raw_scripts = self.ref_text.get("1.0", tk.END).strip()
         scripts = split_input_scripts(raw_scripts)
 
         if not scripts:
             messagebox.showwarning("Error", "台本を入力してください")
+            return
+
+        # 全スクリプトを処理開始前に一括バリデーション
+        errors = []
+        for i, script in enumerate(scripts, 1):
+            items = ScriptParser.parse_string(script)
+            is_valid, messages = ScriptParser.validate(items)
+            if not is_valid:
+                prefix = f"[台本{i}] " if len(scripts) > 1 else ""
+                errors.extend(f"{prefix}{m}" for m in messages if not m.startswith("⚠"))
+        if errors:
+            messagebox.showerror("台本形式エラー", "\n".join(errors))
             return
 
         self._toggle_ui(False)
@@ -532,9 +545,6 @@ class YMM4AutoGui:
     def _run_upload(self, mp4_path, title, description, tags, thumb, privacy, output_dir, restore_button=True):
         try:
             from core.youtube_uploader import upload_video
-            from core.ai_generator import AIGenerator
-            self.log("✍️  説明文をGeminiで整形中...")
-            description = AIGenerator().format_description(description)
             video_id = upload_video(mp4_path, title, description, tags,
                                     thumbnail_path=thumb, privacy=privacy,
                                     progress_callback=self.log)
