@@ -168,6 +168,8 @@ class YMM4AutoGui:
         self.studio_btn.pack(side=tk.LEFT, padx=(8, 0))
         self.schedule_btn = ttk.Button(btn_frame, text="📅 スケジュール", command=self.show_upload_schedule_dialog)
         self.schedule_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self.copy_titles_btn = ttk.Button(btn_frame, text="📋 タイトル一覧コピー", command=self.copy_titles_to_clipboard)
+        self.copy_titles_btn.pack(side=tk.LEFT, padx=(8, 0))
 
 
         # Metadata preview
@@ -240,6 +242,26 @@ class YMM4AutoGui:
         history = [d for d in os.listdir("output") if os.path.isdir(os.path.join("output", d)) and d != "000_uploaded"]
         history.sort(key=lambda d: os.path.getmtime(os.path.join("output", d)), reverse=True)
         self.history_items = history
+
+    def copy_titles_to_clipboard(self):
+        self.refresh_history()
+        histories = getattr(self, "history_items", [])
+        if not histories:
+            messagebox.showinfo("タイトルなし", "出力フォルダに動画がありません。")
+            return
+        # フォルダ名から [Shorts] などのプレフィックスを除いたタイトルを列挙
+        titles = []
+        for name in histories:
+            title = name
+            for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+                if title.startswith(prefix):
+                    title = title[len(prefix):].strip()
+                    break
+            titles.append(title)
+        text = "\n".join(titles)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(text)
+        self.log(f"📋 タイトル {len(titles)} 件をクリップボードにコピーしました")
 
     def open_history_batch_dialog(self):
         self.refresh_history()
