@@ -193,6 +193,8 @@ class ScriptParser:
                 errors.append("動画タイトルが取得できませんでした。「動画タイトル: タイトル」の形式を確認してください。")
             elif "[Shorts]" in title_text or "動画形式" in title_text:
                 errors.append(f"動画タイトルに不正な内容が含まれています: 「{title_text}」。パースに失敗している可能性があります。")
+            elif "\n" in title_text or len(title_text) > 100:
+                errors.append(f"動画タイトルに改行または不正な内容が含まれています: 「{title_text[:50]}...」。「動画タイトル: タイトル」を1行に収めてください。")
 
         # 背景なし
         if bg_count == 0:

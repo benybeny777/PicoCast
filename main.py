@@ -281,6 +281,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # ★ 最初のバリデーション（sanitize前）
     _early_items = ScriptParser.parse_string(script_content)
     _is_valid, _messages = ScriptParser.validate(_early_items)
+    _early_title = next((it["text"] for it in _early_items if it["type"] == "video_title"), None)
+    if _early_title:
+        update_status(f"  📋 取得タイトル: {_early_title}")
     if not _is_valid:
         report.elapsed_sec = time.time() - pipeline_start
         msg = "❌ 台本形式エラー:\n" + "\n".join(_messages)
@@ -387,8 +390,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     ai_thumbnail_prompt = meta.get("thumbnail")
 
     if "description" in meta:
-        update_status("✍️  説明文をGeminiで整形中...")
-        meta["description"] = ai.format_description(meta["description"].rstrip()) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+        from core.ng_words import apply_ng_word_replacements
+        meta["description"] = apply_ng_word_replacements(meta["description"].rstrip()) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
 
     if meta:
         meta_path = os.path.join(theme_dir, "metadata.txt")
@@ -420,7 +423,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         + (f" / テロップ {telop_count}件(背景に統合)" if telop_count else "")
         + (f" / サムネイル指示あり" if ai_thumbnail_prompt else "")
     )
-    for warn in messages:
+    for warn in _messages:
         update_status(f"  ⚠ {warn}")
 
     vv = VoicevoxAPI()

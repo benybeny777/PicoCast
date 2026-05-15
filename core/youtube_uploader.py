@@ -49,7 +49,11 @@ def get_youtube_client():
 
 
 def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
-                 privacy="private", progress_callback=None):
+                 privacy="private", publish_at=None, progress_callback=None):
+    """
+    publish_at: datetime (JST) または ISO8601 文字列を指定すると予約投稿になる。
+                指定時は privacyStatus が自動的に 'private' になる。
+    """
     def _log(msg):
         if progress_callback:
             progress_callback(msg)
@@ -61,6 +65,20 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
 
     tag_list = [t.strip() for t in tags.replace("、", ",").split(",") if t.strip()]
 
+    # publish_at が指定されていれば ISO8601 文字列に統一
+    publish_at_str = None
+    if publish_at is not None:
+        from datetime import datetime
+        publish_at_str = publish_at.isoformat() if isinstance(publish_at, datetime) else str(publish_at)
+
+    status_body = {
+        "privacyStatus": "private" if publish_at_str else privacy,
+        "selfDeclaredMadeForKids": False,
+        "containsSyntheticMedia": False,
+    }
+    if publish_at_str:
+        status_body["publishAt"] = publish_at_str
+
     body = {
         "snippet": {
             "title": title,
@@ -70,11 +88,7 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
             "defaultLanguage": "ja",
             "defaultAudioLanguage": "ja",
         },
-        "status": {
-            "privacyStatus": privacy,
-            "selfDeclaredMadeForKids": False,
-            "containsSyntheticMedia": True,
-        },
+        "status": status_body,
     }
 
     media = MediaFileUpload(mp4_path, chunksize=5 * 1024 * 1024, resumable=True)

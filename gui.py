@@ -166,6 +166,8 @@ class YMM4AutoGui:
         self._studio_url = None
         self.studio_btn = ttk.Button(btn_frame, text="🌐 YouTube Studio", command=self._open_studio)
         self.studio_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self.schedule_btn = ttk.Button(btn_frame, text="📅 スケジュール", command=self.show_upload_schedule_dialog)
+        self.schedule_btn.pack(side=tk.LEFT, padx=(8, 0))
 
 
         # Metadata preview
@@ -311,6 +313,18 @@ class YMM4AutoGui:
             messagebox.showwarning("Error", "実行できる履歴台本がありません。")
             return
 
+        # 全スクリプトを処理開始前に一括バリデーション
+        errors = []
+        for i, script in enumerate(scripts, 1):
+            items = ScriptParser.parse_string(script)
+            is_valid, messages = ScriptParser.validate(items)
+            if not is_valid:
+                prefix = f"[台本{i}] " if len(scripts) > 1 else ""
+                errors.extend(f"{prefix}{m}" for m in messages if not m.startswith("⚠"))
+        if errors:
+            messagebox.showerror("台本形式エラー", "\n".join(errors))
+            return
+
         self._toggle_ui(False)
         self.cancel_event.clear()
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
@@ -413,17 +427,16 @@ class YMM4AutoGui:
                 self.log("⏹ 中止しました。残りの履歴/台本は処理しません。", "error")
                 break
             try:
-                # Derive topic from 動画タイトル: line, fallback to first line
-                topic = None
-                for line in script.split("\n"):
-                    line = line.strip().replace("**", "")
-                    m = re.match(r'^(?:動画タイトル|Title)[:：]\s*(.+)$', line, re.IGNORECASE)
-                    if m:
-                        topic = m.group(1).strip()[:50]
-                        break
+                # Derive topic via parser (handles both same-line and next-line values)
+                try:
+                    _items_for_topic = ScriptParser.parse_string(script)
+                    _title_items = [it for it in _items_for_topic if it["type"] == "video_title"]
+                    topic = _title_items[0]["text"].strip()[:50] if _title_items and _title_items[0]["text"].strip() else None
+                except Exception:
+                    topic = None
                 if not topic:
-                    first_line = script.split("\n")[0].strip()
-                    topic = re.sub(r'^[#*【]|\s*[:：].*$', '', first_line).strip()[:30]
+                    first_line = next((l.strip() for l in script.split("\n") if l.strip()), "")
+                    topic = re.sub(r'^[#*【]|\s*[:：].*$', '', first_line.replace("**", "")).strip()[:30]
                 if not topic:
                     topic = f"Generated_Project_{idx+1}"
 
@@ -490,7 +503,7 @@ class YMM4AutoGui:
         if not selected:
             return
 
-        jobs = []
+        base_jobs = []
         skipped = []
         for name in selected:
             output_dir = os.path.join("output", name)
@@ -511,13 +524,43 @@ class YMM4AutoGui:
             tags = meta.get("tags", "")
             is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
             thumb = None if is_shorts else os.path.join(output_dir, "thumbnail.png")
-            jobs.append((mp4_path, title, description, tags, thumb, "private", output_dir))
+            base_jobs.append((mp4_path, title, description, tags, thumb, output_dir))
 
         if skipped:
             self.log(f"⚠ MP4なしの履歴をスキップ: {len(skipped)}件", "error")
-        if not jobs:
+        if not base_jobs:
             messagebox.showwarning("MP4なし", "選択した履歴フォルダにアップロード可能なMP4がありません。")
             return
+
+        # Shorts / Long をタイプ別にスロット割り当て
+        from core.upload_scheduler import assign_slots, format_slot
+
+        shorts_jobs = [(j, "shorts") for j in base_jobs if os.path.basename(j[5]).startswith("[Shorts]")]
+        long_jobs   = [(j, "long")   for j in base_jobs if not os.path.basename(j[5]).startswith("[Shorts]")]
+
+        shorts_slots = assign_slots(len(shorts_jobs), "shorts")
+        long_slots   = assign_slots(len(long_jobs),   "long")
+
+        # (job, video_type, slot) を結合して元の選択順に並べ替え
+        slot_map = {}
+        for (j, vt), slot in zip(shorts_jobs, shorts_slots):
+            slot_map[id(j)] = (vt, slot)
+        for (j, vt), slot in zip(long_jobs, long_slots):
+            slot_map[id(j)] = (vt, slot)
+
+        # 確認ダイアログ
+        rows = []
+        for j in base_jobs:
+            vt, slot = slot_map[id(j)]
+            rows.append(("Shorts" if vt == "shorts" else "Long", j[1], format_slot(slot)))
+        if not self._confirm_upload_schedule(rows):
+            return
+
+        jobs = [
+            (mp4, title, desc, tags, thumb, output_dir, slot_map[id(j)][1], slot_map[id(j)][0])
+            for j in base_jobs
+            for mp4, title, desc, tags, thumb, output_dir in [j]
+        ]
 
         self.upload_btn.config(state=tk.DISABLED)
         threading.Thread(
@@ -526,13 +569,155 @@ class YMM4AutoGui:
             daemon=True
         ).start()
 
+    def show_upload_schedule_dialog(self):
+        from core.upload_scheduler import list_schedule, format_slot
+        from datetime import datetime, timedelta, timezone
+        JST = timezone(timedelta(hours=9))
+        now = datetime.now(JST)
+
+        # Shorts / Long を統合してソート
+        schedule = list_schedule()
+        rows = []
+        for vt, entries in schedule.items():
+            label = "Shorts" if vt == "shorts" else "Long"
+            for iso, title in entries.items():
+                try:
+                    dt = datetime.fromisoformat(iso)
+                except ValueError:
+                    continue
+                status = "済" if dt < now else "予定"
+                rows.append((dt, label, title.split("\n")[0], status))
+        rows.sort(key=lambda r: r[0])
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("アップロードスケジュール")
+        dialog.geometry("780x420")
+        dialog.resizable(True, True)
+        dialog.transient(self.root)
+
+        ttk.Label(dialog, text="アップロード済み・予約中のスケジュール一覧",
+                  font=("Meiryo", 9, "bold")).pack(anchor=tk.W, padx=12, pady=(10, 4))
+
+        frame = ttk.Frame(dialog)
+        frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+
+        cols = ("日時", "種別", "タイトル", "状態")
+        tree = ttk.Treeview(frame, columns=cols, show="headings", height=14)
+        tree.heading("日時",   text="予約日時 (JST)", anchor=tk.CENTER)
+        tree.heading("種別",   text="種別",           anchor=tk.CENTER)
+        tree.heading("タイトル", text="タイトル",     anchor=tk.W)
+        tree.heading("状態",   text="状態",           anchor=tk.CENTER)
+        tree.column("日時",    width=160, stretch=False, anchor=tk.CENTER)
+        tree.column("種別",    width=60,  stretch=False, anchor=tk.CENTER)
+        tree.column("タイトル", width=440, stretch=True,  anchor=tk.W)
+        tree.column("状態",    width=48,  stretch=False, anchor=tk.CENTER)
+
+        tree.tag_configure("done",     foreground="#aaaaaa", background="#f5f5f5")
+        tree.tag_configure("upcoming", foreground="#0984e3", font=("Meiryo", 9, "bold"))
+
+        sb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=sb.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for dt, label, title, status in rows:
+            dt_str = dt.strftime("%Y/%m/%d %H:%M")
+            tag = "done" if status == "済" else "upcoming"
+            tree.insert("", tk.END, values=(dt_str, label, title, status), tags=(tag,))
+
+        # 削除ボタン
+        def delete_selected():
+            sel = tree.selection()
+            if not sel:
+                return
+            if not messagebox.askyesno("削除確認", f"{len(sel)}件のスケジュールを削除しますか？", parent=dialog):
+                return
+            from core.upload_scheduler import _load, _save
+            schedules = {vt: _load(vt) for vt in ("shorts", "long")}
+            for item in sel:
+                vals = tree.item(item, "values")
+                dt_str, label = vals[0], vals[1]
+                vt = "shorts" if label == "Shorts" else "long"
+                # ISO キーを再構築
+                try:
+                    dt = datetime.strptime(dt_str, "%Y/%m/%d %H:%M").replace(tzinfo=JST)
+                    schedules[vt].pop(dt.isoformat(), None)
+                except Exception:
+                    pass
+                tree.delete(item)
+            for vt, data in schedules.items():
+                _save(data, vt)
+            self.log(f"🗑 スケジュール {len(sel)}件を削除しました", "info")
+
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
+        ttk.Label(btn_frame, text=f"合計 {len(rows)} 件  /  予定 {sum(1 for r in rows if r[3]=='予定')} 件  /  済 {sum(1 for r in rows if r[3]=='済')} 件",
+                  font=("Meiryo", 8)).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="閉じる", command=dialog.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btn_frame, text="選択を削除", command=delete_selected).pack(side=tk.RIGHT, padx=(0, 8))
+
+    def _confirm_upload_schedule(self, rows):
+        """rows: [(type_label, title, slot_str), ...] — True で確定、False でキャンセル。"""
+        result = {"ok": False}
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("アップロードスケジュール確認")
+        dialog.geometry("700x320")
+        dialog.resizable(True, True)
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="以下のスケジュールでアップロードします。確認してOKを押してください。",
+                  font=("Meiryo", 9)).pack(anchor=tk.W, padx=12, pady=(10, 4))
+
+        frame = ttk.Frame(dialog)
+        frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+
+        cols = ("#", "種別", "タイトル", "予約日時")
+        tree = ttk.Treeview(frame, columns=cols, show="headings", height=8)
+        tree.heading("#",    text="#",    anchor=tk.CENTER)
+        tree.heading("種別", text="種別", anchor=tk.CENTER)
+        tree.heading("タイトル", text="タイトル", anchor=tk.W)
+        tree.heading("予約日時", text="予約日時 (JST)", anchor=tk.CENTER)
+        tree.column("#",    width=36,  stretch=False, anchor=tk.CENTER)
+        tree.column("種別", width=60,  stretch=False, anchor=tk.CENTER)
+        tree.column("タイトル", width=340, stretch=True, anchor=tk.W)
+        tree.column("予約日時", width=180, stretch=False, anchor=tk.CENTER)
+
+        sb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=sb.set)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for i, (label, title, slot_str) in enumerate(rows, 1):
+            # 予約日時から (JST) を除いて表示
+            slot_disp = slot_str.replace(" (JST)", "")
+            tree.insert("", tk.END, values=(i, label, title, slot_disp))
+
+        btn_frame = ttk.Frame(dialog)
+        btn_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
+
+        def do_ok():
+            result["ok"] = True
+            dialog.destroy()
+
+        ttk.Button(btn_frame, text="キャンセル", command=dialog.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btn_frame, text="OK・アップロード開始", style="Accent.TButton",
+                   command=do_ok).pack(side=tk.RIGHT, padx=(0, 8))
+
+        self.root.wait_window(dialog)
+        return result["ok"]
+
     def _run_upload_batch(self, jobs):
+        from core.upload_scheduler import format_slot
         total = len(jobs)
         try:
-            for idx, job in enumerate(jobs, start=1):
-                mp4_path, title, *_ = job
-                self.log(f"📤 アップロード [{idx}/{total}]: {title}", "batch")
-                self._run_upload(*job, restore_button=False)
+            for idx, (mp4_path, title, description, tags, thumb, output_dir, publish_at, video_type) in enumerate(jobs, start=1):
+                slot_str = format_slot(publish_at)
+                label = "Shorts" if video_type == "shorts" else "Long"
+                self.log(f"📤 アップロード [{idx}/{total}] [{label}]: {title}  →  {slot_str}", "batch")
+                self._run_upload(mp4_path, title, description, tags, thumb, output_dir,
+                                 publish_at=publish_at, video_type=video_type, restore_button=False)
             self.log(f"✅ YouTubeアップロード完了: {total}件", "success")
         finally:
             self.root.after(0, lambda: self.upload_btn.config(state=tk.NORMAL))
@@ -542,15 +727,21 @@ class YMM4AutoGui:
         import webbrowser
         webbrowser.open(self._studio_url or "https://studio.youtube.com/")
 
-    def _run_upload(self, mp4_path, title, description, tags, thumb, privacy, output_dir, restore_button=True):
+    def _run_upload(self, mp4_path, title, description, tags, thumb, output_dir,
+                    publish_at=None, video_type="long", restore_button=True):
         try:
             from core.youtube_uploader import upload_video
+            from core.upload_scheduler import mark_slot_used, format_slot
             video_id = upload_video(mp4_path, title, description, tags,
-                                    thumbnail_path=thumb, privacy=privacy,
+                                    thumbnail_path=thumb, privacy="private",
+                                    publish_at=publish_at,
                                     progress_callback=self.log)
 
             if video_id:
                 self._studio_url = f"https://studio.youtube.com/video/{video_id}/edit"
+                if publish_at:
+                    mark_slot_used(publish_at, title, video_type)
+                    self.log(f"📅 予約登録: {format_slot(publish_at)}", "success")
 
             # アップロード成功 → 000_uploaded/ へ移動（既に中にある場合はスキップ）
             if output_dir and os.path.exists(output_dir):

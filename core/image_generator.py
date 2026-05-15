@@ -27,7 +27,7 @@ class ImageGenerator:
                 "【絶対厳守ルール】"
                 "▼アスペクト比: 縦9:16（ポートレート）で描画すること。"
                 "▼シーン描画: 背景シーンは画像全体（上から下まで全域）に描くこと。"
-                "▼人物禁止: 人物・キャラクター・アニメキャラ・シルエットを一切描画しない。"
+                "▼人物禁止: 人物・キャラクター・アニメキャラ・シルエット・影絵を一切描画しない。ずんだもん・四国めたんを含むいかなるキャラクターも描画禁止。"
                 "▼セーフゾーン（厳守）: 上下左右30%の範囲にはテキスト・文字・重要な要素を一切配置しないこと。テキスト以外のシーン描画はこの制限を受けない。"
                 "▼テキストスタイル: 白文字・極太黒縁取り・ドロップシャドウ・太ゴシック体で統一。"
                 "---"
@@ -36,7 +36,7 @@ class ImageGenerator:
             layout_rules = (
                 "【絶対厳守ルール】"
                 "▼アスペクト比: 横16:9（ランドスケープ）で描画すること。"
-                "▼人物禁止: 人物・キャラクター・アニメキャラ・シルエットを一切描画しない。"
+                "▼人物禁止: 人物・キャラクター・アニメキャラ・シルエット・影絵を一切描画しない。ずんだもん・四国めたんを含むいかなるキャラクターも描画禁止。"
                 "▼セーフゾーン（厳守）: 上下左右30%の範囲にはテキスト・文字・重要な要素を一切配置しないこと。テキスト以外のシーン描画はこの制限を受けない。"
                 "▼右半分に空間: キャラクター立ち絵配置のため右側50〜90%エリアに重要な描写を密集させないこと。"
                 "---"
@@ -47,6 +47,11 @@ class ImageGenerator:
             f"{description}。"
             f"マスターピース、精細なデジタルアート、劇的な照明、鮮烈な色彩、映画的構図。"
         )
+
+    def _save_prompt_log(self, save_dir, fname, prompt):
+        log_path = os.path.join(save_dir, "image_prompts.txt")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"=== {fname} ===\n{prompt}\n\n")
 
     def _save_image_part(self, part, save_dir):
         """inline_data part を PNG として保存・リサイズし、ファイル名を返す。"""
@@ -108,6 +113,7 @@ class ImageGenerator:
                     fname = self._save_image_part(part, save_dir)
                     if self.debug:
                         print(f"  [AI] Nano Banana 完了: {fname} ({self.width}x{self.height})")
+                        self._save_prompt_log(save_dir, fname, full_prompt)
                     return fname
 
             raise Exception("No image part found in response.")
@@ -132,11 +138,13 @@ class ImageGenerator:
 
         # inline リクエストを組み立て
         inline_requests = []
+        batch_prompts = []
         for req in requests_list:
             prompt = self._build_full_prompt(req["description"], req.get("raw", False))
             inline_requests.append({
                 "contents": [{"role": "user", "parts": [{"text": prompt}]}]
             })
+            batch_prompts.append(prompt)
 
         if self.debug:
             print(f"  [Batch] {len(inline_requests)}件を送信: {model_name}")
@@ -173,6 +181,7 @@ class ImageGenerator:
                         results[i] = fname
                         if self.debug:
                             print(f"  [Batch] 結果[{i+1}]: {fname}")
+                            self._save_prompt_log(save_dir, fname, batch_prompts[i])
                         break
             except Exception as e:
                 if self.debug:

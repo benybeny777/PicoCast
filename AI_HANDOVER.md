@@ -14,50 +14,55 @@
 - Nano Banana画像生成
 - YMM4 `.ymmp` 組み立て
 - YMM4動画出力の自動操作
-- YouTubeアップロード
+- YouTubeアップロード（予約投稿・スケジュール管理）
 - 履歴選択、画像確認、再生成
 
 ## 重要な最近の変更
 
 ### 最新セッション
-- **台本プロンプト全面刷新** (`core/script_prompts.py`): `build_vidiq_prompt()` を高視聴維持・高テンポ・Shorts特化の新プロンプトに完全置き換え。最優先ルール8項目・禁止事項・理想構成・NGワード対策を包含
-- **サムネ文字フィールド追加**: 台本に `サムネ文字:` フィールドを追加。パーサー・メタデータ保存・Geminiプロンプトすべてに対応
-- **パーサー強化** (`core/parser.py`):
-  - `サムネ文字:` を `thumbnail_text` として認識
-  - 値が次行に来る形式（`フィールド名:\n値`）を全フィールドでサポート（タイトル・背景・タグ等）
-  - セリフ行・ignoreパターンを誤って値として取り込まないよう保護
-  - `parse_string(text)` メソッドを追加（ファイル経由不要）
-- **バリデーション強化** (`core/parser.py` `validate()`): 空タイトル・不正タイトル（`[Shorts]`や`動画形式`を含む）・空背景・空セリフ・セリフ数不足を検出
-- **API課金前に全チェック完了**:
-  - `gui.py` `start_generation()`: 処理開始前に全スクリプトを一括バリデーション
-  - `run_pipeline()`: `sanitize_for_youtube()`（Gemini API）より前にバリデーション実施
-  - `sanitize` 後の2回目バリデーションを削除（重複のため）
-- **説明文Gemini整形をYYM作成プロセスに移動**: 以前はアップロード時に `format_description()` を呼んでいたが、プロジェクト生成時（メタデータ保存前）に変更
-- **Shortsサムネイルを1フレームに変更**: `editor.add_image_item(thumb_path, 0, 1)` （以前は3フレーム）
-- **音声速度を1.5倍に変更**: `config.VOICE_SPEED_SCALE = 1.5`（以前は1.3）
-- ルートの `script.txt`（不要な残骸）を削除
+
+- **YouTubeアップロード予約投稿** (`core/upload_scheduler.py` 新規):
+  - スロット: 毎日 0:00 / 7:00 / 12:00 / 19:00 (JST)
+  - Shorts / Long を**別ファイルで管理**: `output/upload_schedule_shorts.json` / `output/upload_schedule_long.json`
+  - 同一スロットに Shorts 1本 + Long 1本の同時予約が可能
+  - `assign_slots(count, video_type)` で空きスロットを自動アサイン
+  - `mark_slot_used(slot_dt, title, video_type)` でアップロード後に永続保存
+- **アップロード確認ダイアログを Treeview 化** (`gui.py`): タイトル・種別・予約日時を表形式で表示
+- **スケジュール確認画面** (`gui.py` `show_upload_schedule_dialog()`):
+  - 「📅 スケジュール」ボタンから起動
+  - 済み（グレー背景）/ 予定（青太字）で色分け
+  - 行選択して削除可能
+- **`publish_at` パラメータ追加** (`core/youtube_uploader.py`): datetime または ISO8601 文字列を指定すると予約投稿。`privacyStatus` は自動で `"private"` になる
+- **`containsSyntheticMedia` を `False` に変更**: 「改変または合成コンテンツ」ラベルを非表示
+- **説明文のGemini整形を廃止** (`main.py`): NGワード置換のみ実施し、`_VOICEVOX_CREDIT` + `_CHANNEL_FOOTER` を末尾に固定付与。Gemini整形が CTA や URL を重複させる問題を解消
+- **説明文にVOICEVOXクレジット不要** (`core/script_prompts.py`, `core/ai_generator.py`): AI台本の説明文フィールドにクレジットを書かせない。`format_description()` のプロンプトでも削除指示
+- **バリデーション強化** (`core/parser.py`):
+  - タイトルに改行または100文字超を検出してエラー
+  - 履歴からの複数選択時にも、スレッド開始前に全台本を一括バリデーション（`start_generation_from_histories()`）
+- **背景画像に人物禁止ルール追加** (`core/image_generator.py`): Shorts・Long 両方のレイアウトルールに「ずんだもん・四国めたんを含むキャラクター描画禁止」を明記
+- **デバッグ時に画像プロンプトをファイル保存** (`core/image_generator.py`): `debug=True` のとき `backgrounds/image_prompts.txt` に追記（画面には表示しない）
 
 ### それ以前
+
+- **台本プロンプト全面刷新** (`core/script_prompts.py`): `build_vidiq_prompt()` を高視聴維持・高テンポ・Shorts特化の新プロンプトに完全置き換え
+- **サムネ文字フィールド追加**: 台本に `サムネ文字:` フィールドを追加
+- **パーサー強化** (`core/parser.py`): 次行形式のメタデータ対応・`parse_string()` 追加
+- **API課金前に全チェック完了**: `gui.py` `start_generation()` で事前バリデーション
 - YouTube NGワード置換を追加: `core/ng_words.py`
 - 台本作成プロンプトを分離: `core/script_prompts.py`
-- 台本中のコードフェンスや `━━ 動画1 ━━` 見出しを無視 / 分割できるようにした
 - `動画形式:` が複数ある入力を複数動画として扱う
-- セリフの後に `背景:` が来る台本を `main.normalize_background_order()` で補正
-- 背景は展開変更時だけ入れる方針にプロンプトを調整済み
 - YMM4のセリフ字幕 / 音声を立ち絵より上のレイヤー `6` に変更
 - 固定BGMとして BGMer「のほほん」を追加
 - GUIから作業中止できるよう `cancel_event` を導入
 - 履歴コンボボックスを廃止し、履歴選択ダイアログに統一
-- 履歴選択時に最終更新日時を表示
-- 履歴から複数選択して再生成できる
-- YouTubeアップロードも履歴から複数選択できる
-- 画像確認機能を取り込み、履歴から対象を選んでサムネイル / 背景を確認・再生成できる
+- 履歴から複数選択して再生成・アップロードできる
+- 画像確認機能（履歴からサムネイル / 背景を確認・再生成）
 
 ## 主要ファイル
 
 | ファイル | 役割 |
 |---|---|
-| `gui.py` | tkinter GUI。履歴選択、一括生成、画像確認、アップロード、キャンセル |
+| `gui.py` | tkinter GUI。履歴選択、一括生成、画像確認、アップロード、スケジュール確認 |
 | `main.py` | パイプライン本体。台本整形、画像/音声生成、YMM4保存 |
 | `config.py` | VOICEVOX、モデル、キャラ、BGM、背景生成上限など |
 | `core/parser.py` | 台本パーサ |
@@ -66,9 +71,23 @@
 | `core/voicevox.py` | VOICEVOX API |
 | `core/ymmp_editor.py` | YMM4 JSON作成 |
 | `core/ymm4_renderer.py` | YMM4 GUI自動操作 |
-| `core/youtube_uploader.py` | YouTubeアップロード |
+| `core/youtube_uploader.py` | YouTubeアップロード（予約投稿対応） |
+| `core/upload_scheduler.py` | アップロードスケジュール管理（Shorts/Long 別） |
 | `core/ng_words.py` | NGワード置換 |
 | `core/script_prompts.py` | 台本生成プロンプト |
+
+## YouTubeアップロード・スケジュール
+
+- スロット: 毎日 **0:00 / 7:00 / 12:00 / 19:00 (JST)**
+- Shorts と Long は**独立して管理**（同一スロットに両方投稿可）
+- 永続化: `output/upload_schedule_shorts.json` / `output/upload_schedule_long.json`
+- GUI「📅 スケジュール」ボタン → `show_upload_schedule_dialog()` で一覧・削除
+- アップロードフロー:
+  1. `start_youtube_upload()` で履歴を複数選択
+  2. Shorts/Long 別にスロット自動アサイン
+  3. `_confirm_upload_schedule()` で Treeview 確認ダイアログ
+  4. `_run_upload_batch()` で順番にアップロード
+  5. 成功後: `mark_slot_used()` でスケジュール記録 → `output/000_uploaded/` へ移動
 
 ## レイヤー方針
 
@@ -106,7 +125,6 @@ BGMファイルがない場合は警告ログだけ出して処理を続行す�
 - `start_image_review()`
 - `_collect_image_review_specs()`
 - `confirm_images_bulk()`
-- `regenerate_review_images()`
 
 YouTubeアップロード:
 
@@ -146,7 +164,7 @@ YouTubeアップロード:
 ## 確認コマンド
 
 ```bash
-uv run python -m py_compile config.py main.py gui.py core/parser.py core/voicevox.py core/ymmp_editor.py core/ng_words.py core/script_prompts.py
+uv run python -m py_compile config.py main.py gui.py core/parser.py core/voicevox.py core/ymmp_editor.py core/ng_words.py core/script_prompts.py core/upload_scheduler.py
 ```
 
 必要なら `.uv-cache` は確認してから削除する。
