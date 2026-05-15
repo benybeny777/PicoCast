@@ -245,23 +245,48 @@ class YMM4AutoGui:
 
     def copy_titles_to_clipboard(self):
         self.refresh_history()
-        histories = getattr(self, "history_items", [])
-        if not histories:
+
+        def collect(folder):
+            """フォルダ内のサブディレクトリ名からタイトルを収集（存在しない場合は空リスト）。"""
+            if not os.path.isdir(folder):
+                return []
+            names = sorted(
+                (d for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d))),
+                key=lambda d: os.path.getmtime(os.path.join(folder, d)),
+                reverse=True,
+            )
+            result = []
+            for name in names:
+                title = name
+                for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+                    if title.startswith(prefix):
+                        title = title[len(prefix):].strip()
+                        break
+                result.append(title)
+            return result
+
+        active = collect("output")
+        active = [t for t in active]  # 000_uploaded はrefresh_historyで除外済み
+        uploaded = collect(os.path.join("output", "000_uploaded"))
+
+        if not active and not uploaded:
             messagebox.showinfo("タイトルなし", "出力フォルダに動画がありません。")
             return
-        # フォルダ名から [Shorts] などのプレフィックスを除いたタイトルを列挙
-        titles = []
-        for name in histories:
-            title = name
-            for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
-                if title.startswith(prefix):
-                    title = title[len(prefix):].strip()
-                    break
-            titles.append(title)
-        text = "\n".join(titles)
+
+        lines = []
+        if active:
+            lines.append("【作成済み・作成中】")
+            lines.extend(active)
+        if uploaded:
+            if lines:
+                lines.append("")
+            lines.append("【投稿済み】")
+            lines.extend(uploaded)
+
+        text = "\n".join(lines)
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
-        self.log(f"📋 タイトル {len(titles)} 件をクリップボードにコピーしました")
+        self.log(f"📋 タイトル {len(active) + len(uploaded)} 件をクリップボードにコピーしました（作成済み{len(active)}件 / 投稿済み{len(uploaded)}件）")
 
     def open_history_batch_dialog(self):
         self.refresh_history()
