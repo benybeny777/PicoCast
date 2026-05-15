@@ -11,6 +11,7 @@ class ScriptParser:
     _desc_re = re.compile(r'^(?:説明文|Description)[:：](.*)$', re.IGNORECASE)
     _tags_re = re.compile(r'^(?:タグ|Tags?)[:：](.*)$', re.IGNORECASE)
     _format_re = re.compile(r'^(?:動画形式|Format)[:：](.*)$', re.IGNORECASE)
+    _fixed_comment_re = re.compile(r'^(?:固定コメント|PinnedComment)[:：](.*)$', re.IGNORECASE)
     _bracket_meta_re = re.compile(
         r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?)\s*】\s*(.*)$',
         re.IGNORECASE,
@@ -51,6 +52,7 @@ class ScriptParser:
         desc_re = ScriptParser._desc_re
         tags_re = ScriptParser._tags_re
         format_re = ScriptParser._format_re
+        fixed_comment_re = ScriptParser._fixed_comment_re
         bracket_meta_re = ScriptParser._bracket_meta_re
         ignore_patterns = ScriptParser._ignore_patterns
 
@@ -84,7 +86,7 @@ class ScriptParser:
 
                 # Continuation of metadata (description=multi-line, others=next-line-only)
                 if last_meta:
-                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, bracket_meta_re])
+                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
                     is_ignore = any(p.match(line) for p in ignore_patterns)
                     if not is_keyword and not is_dialogue and (not is_ignore or last_meta["type"] == "description"):
@@ -124,6 +126,7 @@ class ScriptParser:
                     (title_re, "video_title"),
                     (desc_re, "description"),
                     (tags_re, "tags"),
+                    (fixed_comment_re, "fixed_comment"),
                 ]:
                     m = meta_re.match(line)
                     if m:
@@ -157,6 +160,11 @@ class ScriptParser:
                         if key in char_name:
                             found_char_name = CHARACTERS[key]["name"]
                             break
+
+                    # 句読点・記号のみのセリフは読み上げ不能なのでスキップ
+                    if not text.strip("。、！？…・〜　 "):
+                        last_meta = None
+                        continue
 
                     new_item = {
                         "type": "dialogue",

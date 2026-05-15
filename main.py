@@ -51,18 +51,28 @@ _CHANNEL_FOOTER = (
 
 
 
+_PUNCT = set("。！？")
+
 def _split_at_punctuation(text):
-    """Shorts用: 句読点(。！？)でセリフを文節に分割する。"""
+    """Shorts用: 句読点(。！？)でセリフを文節に分割する。
+    「！？」など連続句読点は前チャンクに結合して単体句読点チャンクを作らない。"""
     chunks = []
     current = ""
     for ch in text:
         current += ch
-        if ch in "。！？" and current.strip():
+        if ch in _PUNCT and current.strip():
             chunks.append(current)
             current = ""
     if current.strip():
         chunks.append(current)
-    return chunks if chunks else [text]
+    # 句読点のみのチャンクを直前チャンクに結合
+    merged = []
+    for chunk in chunks:
+        if merged and not chunk.strip("".join(_PUNCT) + "　 "):
+            merged[-1] += chunk
+        else:
+            merged.append(chunk)
+    return merged if merged else [text]
 
 
 def _detect_is_shorts(script_content):
@@ -96,7 +106,7 @@ class GenerationReport:
 
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
-                       script_content=None):
+                       script_content=None, debug_mode=False):
     """Generate thumbnail image via Nano Banana using script content."""
     def _log(msg):
         if update_status: update_status(msg)
@@ -117,7 +127,17 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     from config import CHARACTER_PNGS
     char_refs = [p for p in CHARACTER_PNGS.values() if os.path.exists(p)]
 
+    # プロンプトをファイルに保存（再生成・デバッグ用）
+    prompt_path = os.path.join(theme_dir, "thumbnail_prompt.txt")
+    try:
+        with open(prompt_path, "w", encoding="utf-8") as pf:
+            pf.write(prompt)
+    except Exception:
+        pass
+
     _log("🖼  サムネイルを生成中...")
+    if debug_mode:
+        _log(f"  [DEBUG] サムネイルプロンプト:\n{prompt}")
     try:
         generated = img_gen.generate_background(prompt, target_dir=theme_bg_dir, raw=True,
                                                  reference_image_paths=char_refs)
@@ -245,7 +265,7 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
 
     img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style)
     thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
-                                    update_status, script_content=script_content)
+                                    update_status, script_content=script_content, debug_mode=debug)
     if not thumb_path:
         raise Exception("サムネイル生成に失敗しました")
     return thumb_path
@@ -339,10 +359,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     _saved_bg_tmp = tempfile.mkdtemp()
                     for f in reusable_bgs:
                         shutil.copy2(os.path.join(_old_bg_dir, f), _saved_bg_tmp)
-            _old_thumb = os.path.join(theme_dir, "thumbnail.png")
-            if os.path.exists(_old_thumb):
-                _saved_thumb_tmp = tempfile.mkdtemp()
-                shutil.copy2(_old_thumb, os.path.join(_saved_thumb_tmp, "thumbnail.png"))
+        # サムネイルは再生成の有無に関係なく常に退避（再生成失敗時のフォールバック用）
+        _old_thumb = os.path.join(theme_dir, "thumbnail.png")
+        if os.path.exists(_old_thumb):
+            _saved_thumb_tmp = tempfile.mkdtemp()
+            shutil.copy2(_old_thumb, os.path.join(_saved_thumb_tmp, "thumbnail.png"))
         gc.collect()  # release any PIL file handles from previous run
         def _on_rm_error(func, path, exc_info):
             os.chmod(path, stat.S_IWRITE)
@@ -392,7 +413,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     items = ScriptParser.parse(script_txt_path)
 
     # Extract and save metadata (thumbnail / title / description / tags)
-    meta_types = {"thumbnail", "video_title", "description", "tags", "video_format", "thumbnail_text"}
+    meta_types = {"thumbnail", "video_title", "description", "tags", "video_format", "thumbnail_text", "fixed_comment"}
     meta = {it["type"]: it["text"] for it in items if it["type"] in meta_types}
     items = [it for it in items if it["type"] not in meta_types]
     items = normalize_background_order(items)
@@ -416,6 +437,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             lines += ["【タグ】", meta["tags"], ""]
         if "thumbnail" in meta:
             lines += ["【サムネイルプロンプト】", meta["thumbnail"], ""]
+        # 台本に固定コメントがなければAIで生成
+        pinned_comment = meta.get("fixed_comment", "")
+        if not pinned_comment:
+            update_status("💬 固定コメントを生成中...")
+            pinned_comment = ai.generate_pinned_comment(script_content)
+        if pinned_comment:
+            lines += ["【固定コメント】", pinned_comment, ""]
         with open(meta_path, "w", encoding="utf-8") as mf:
             mf.write("\n".join(lines))
         if "video_title" in meta:
@@ -469,12 +497,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if is_cancelled():
             return cancel_result()
         thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
-                                        script_content=script_content)
-    if thumb_path:
-        if is_shorts:
-            editor.add_image_item(thumb_path, 0, 1, layer=0)
-            update_status("  📌 サムネイルをショート先頭1フレームに挿入")
-        # ロングの場合は theme_dir に保存済み（YMM4 挿入なし）
+                                        script_content=script_content, debug_mode=debug_mode)
+
+    if thumb_path is None:
+        raise Exception("サムネイル画像を生成できませんでした。\nNano Bananaの接続・残高を確認してください。")
+
+    if is_shorts:
+        editor.add_image_item(thumb_path, 0, current_frame, layer=0)
+        update_status("  📌 サムネイルをショート先頭に挿入")
+    # ロングの場合は theme_dir に保存済み（YMM4 挿入なし）
 
     update_status(f"🎬 アセット生成 & タイムライン構築を開始します...")
 
@@ -585,6 +616,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
                     f"【台本】\n{script_content}"
                 )
+                # プロンプトをファイルに保存（デバッグ・再生成参照用）
+                prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:02d}.txt")
+                try:
+                    with open(prompt_file, "w", encoding="utf-8") as _pf:
+                        _pf.write(bg_description)
+                except Exception:
+                    pass
+                if debug_mode:
+                    update_status(f"  [DEBUG] 背景プロンプト:\n{bg_description}")
                 generated_file = img_gen.generate_background(
                     bg_description, target_dir=theme_bg_dir,
                     reference_image_path=style_reference_path
@@ -636,6 +676,23 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     continue
                 if is_cancelled():
                     return cancel_result()
+
+                # VOICEVOXのpostPhonemeが効かない場合があるため、生成後に無音を直接追加
+                _TAIL_SILENCE_SEC = 0.5
+                try:
+                    with wave.open(audio_path, 'rb') as wr:
+                        sr = wr.getframerate()
+                        ch = wr.getnchannels()
+                        sw = wr.getsampwidth()
+                        orig_frames = wr.readframes(wr.getnframes())
+                    silence = b'\x00' * (int(sr * _TAIL_SILENCE_SEC) * ch * sw)
+                    with wave.open(audio_path, 'wb') as ww:
+                        ww.setframerate(sr)
+                        ww.setnchannels(ch)
+                        ww.setsampwidth(sw)
+                        ww.writeframes(orig_frames + silence)
+                except Exception as e:
+                    update_status(f"  ⚠ 無音追加失敗(無視): {e}")
 
                 try:
                     with wave.open(audio_path, 'rb') as wr:

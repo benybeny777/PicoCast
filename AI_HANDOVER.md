@@ -105,9 +105,34 @@
 
 ## 音声タイミング方針
 
-`main.py` の音声配置は、VOICEVOX WAV 実長に `character_templates.json` の `AdditionalTime` 0.3 秒相当を足し、さらに `VOICE_TAIL_SAFETY_FRAMES = 20` フレームを音声アイテム長へ加える。次セリフ開始までは `INTER_DIALOGUE_GAP_FRAMES = 25` フレーム空ける。
+`main.py` の音声配置:
 
-この処理は Shorts / Long 共通。ずんだもんの語尾「なのだ」が詰まって聞こえやすかったため、キャラ別ではなく全音声アイテムに同じ余白を適用している。
+- VOICEVOX WAV 実長に `character_templates.json` の `AdditionalTime` 0.3 秒相当 (`_ADDITIONAL_FRAMES`) を足す
+- さらに `VOICE_TAIL_SAFETY_FRAMES = 20` フレームを音声アイテム長へ加える
+- 次セリフ開始までは `INTER_DIALOGUE_GAP_FRAMES = 25` フレーム空ける
+
+この処理は Shorts / Long 共通。
+
+### 音声末尾切れ対策（重要）
+
+**症状**: YMM4 で音声の末尾が切れる（WAV を直接再生すると切れていない）
+
+**原因**: VOICEVOX の `postPhonemeLength` API パラメータが `speedScale=1.5` 環境で効かず、WAV に末尾無音が付加されない。YMM4 が音声アイテムをわずかに早めに終端するため、末尾の音声が途切れる。
+
+**対策**: WAV 生成直後に Python で 0.5 秒分の無音サンプルを WAV に直接追記する（`main.py` 内 `_TAIL_SILENCE_SEC = 0.5`）。`postPhonemeLength` API パラメータは信頼しない。
+
+```python
+_TAIL_SILENCE_SEC = 0.5
+with wave.open(audio_path, 'rb') as wr:
+    sr, ch, sw = wr.getframerate(), wr.getnchannels(), wr.getsampwidth()
+    orig_frames = wr.readframes(wr.getnframes())
+silence = b'\x00' * (int(sr * _TAIL_SILENCE_SEC) * ch * sw)
+with wave.open(audio_path, 'wb') as ww:
+    ww.setframerate(sr); ww.setnchannels(ch); ww.setsampwidth(sw)
+    ww.writeframes(orig_frames + silence)
+```
+
+再発した場合は `_TAIL_SILENCE_SEC` を増やす（0.5 → 0.7 など）。
 
 ## 立ち絵PSDレイヤー注意
 

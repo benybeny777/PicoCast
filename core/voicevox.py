@@ -1,6 +1,6 @@
 import requests
 import os
-from config import VOICEVOX_URL, VOICE_SPEED_SCALE
+from config import VOICEVOX_URL, VOICE_SPEED_SCALE, VOICE_POST_PHONEME_LENGTH
 
 class VoicevoxAPI:
     def __init__(self, base_url=VOICEVOX_URL):
@@ -13,7 +13,8 @@ class VoicevoxAPI:
         except:
             return False
 
-    def generate_audio(self, text, speaker_id, output_path, volume_scale=2.0, speed_scale=VOICE_SPEED_SCALE):
+    def generate_audio(self, text, speaker_id, output_path, volume_scale=2.0, speed_scale=VOICE_SPEED_SCALE,
+                       post_phoneme_length=VOICE_POST_PHONEME_LENGTH):
         # 1. Audio Query
         params = (
             ('text', text),
@@ -27,6 +28,7 @@ class VoicevoxAPI:
         kana = query.get("kana", "")
         query["volumeScale"] = volume_scale
         query["speedScale"] = speed_scale
+        query["postPhonemeLength"] = post_phoneme_length
 
         # 2. Synthesis
         params = (

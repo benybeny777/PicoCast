@@ -14,7 +14,7 @@ from core.image_generator import ImageGenerator
 from core.ng_words import NG_WORD_PROMPT
 from core.parser import ScriptParser
 from core.script_prompts import build_vidiq_prompt
-from config import VOICEVOX_URL, VOICEVOX_PATH
+from config import VOICEVOX_URL, VOICEVOX_PATH, CHARACTER_PNGS
 import requests
 
 try:
@@ -100,6 +100,17 @@ class YMM4AutoGui:
         self.root.geometry("920x780")
         self.root.minsize(800, 620)
         self.root.configure(bg="#f5f7fa")
+
+        # アプリアイコン（ずんだもん）
+        try:
+            from PIL import Image as _PilImage, ImageTk as _ImageTk
+            _icon_path = os.path.join(os.path.dirname(__file__), "assets", "characters", "zundamon.png")
+            if os.path.exists(_icon_path):
+                _icon_img = _PilImage.open(_icon_path).resize((64, 64), _PilImage.LANCZOS)
+                self._app_icon = _ImageTk.PhotoImage(_icon_img)
+                self.root.iconphoto(True, self._app_icon)
+        except Exception:
+            pass
 
         style = ttk.Style()
         style.theme_use('clam')
@@ -595,9 +606,10 @@ class YMM4AutoGui:
             title = meta.get("title", os.path.basename(output_dir))
             description = meta.get("description", "")
             tags = meta.get("tags", "")
+            fixed_comment = meta.get("fixed_comment", "")
             is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
             thumb = None if is_shorts else os.path.join(output_dir, "thumbnail.png")
-            base_jobs.append((mp4_path, title, description, tags, thumb, output_dir))
+            base_jobs.append((mp4_path, title, description, tags, thumb, output_dir, fixed_comment))
 
         if skipped:
             self.log(f"⚠ MP4なしの履歴をスキップ: {len(skipped)}件", "error")
@@ -630,9 +642,9 @@ class YMM4AutoGui:
             return
 
         jobs = [
-            (mp4, title, desc, tags, thumb, output_dir, slot_map[id(j)][1], slot_map[id(j)][0])
+            (mp4, title, desc, tags, thumb, output_dir, slot_map[id(j)][1], slot_map[id(j)][0], fixed_comment)
             for j in base_jobs
-            for mp4, title, desc, tags, thumb, output_dir in [j]
+            for mp4, title, desc, tags, thumb, output_dir, fixed_comment in [j]
         ]
 
         self.upload_btn.config(state=tk.DISABLED)
@@ -785,12 +797,13 @@ class YMM4AutoGui:
         from core.upload_scheduler import format_slot
         total = len(jobs)
         try:
-            for idx, (mp4_path, title, description, tags, thumb, output_dir, publish_at, video_type) in enumerate(jobs, start=1):
+            for idx, (mp4_path, title, description, tags, thumb, output_dir, publish_at, video_type, fixed_comment) in enumerate(jobs, start=1):
                 slot_str = format_slot(publish_at)
                 label = "Shorts" if video_type == "shorts" else "Long"
                 self.log(f"📤 アップロード [{idx}/{total}] [{label}]: {title}  →  {slot_str}", "batch")
                 self._run_upload(mp4_path, title, description, tags, thumb, output_dir,
-                                 publish_at=publish_at, video_type=video_type, restore_button=False)
+                                 publish_at=publish_at, video_type=video_type,
+                                 fixed_comment=fixed_comment, restore_button=False)
             self.log(f"✅ YouTubeアップロード完了: {total}件", "success")
         finally:
             self.root.after(0, lambda: self.upload_btn.config(state=tk.NORMAL))
@@ -801,9 +814,9 @@ class YMM4AutoGui:
         webbrowser.open(self._studio_url or "https://studio.youtube.com/")
 
     def _run_upload(self, mp4_path, title, description, tags, thumb, output_dir,
-                    publish_at=None, video_type="long", restore_button=True):
+                    publish_at=None, video_type="long", fixed_comment="", restore_button=True):
         try:
-            from core.youtube_uploader import upload_video
+            from core.youtube_uploader import upload_video, post_comment
             from core.upload_scheduler import mark_slot_used, format_slot
             video_id = upload_video(mp4_path, title, description, tags,
                                     thumbnail_path=thumb, privacy="private",
@@ -815,6 +828,11 @@ class YMM4AutoGui:
                 if publish_at:
                     mark_slot_used(publish_at, title, video_type)
                     self.log(f"📅 予約登録: {format_slot(publish_at)}", "success")
+                if fixed_comment:
+                    self.log("💬 固定コメントを投稿中...")
+                    comment_id = post_comment(video_id, fixed_comment, progress_callback=self.log)
+                    if comment_id:
+                        self.log("  ✅ コメント投稿完了（YouTube Studioでピン留めできます）", "success")
 
             # アップロード成功 → 000_uploaded/ へ移動（既に中にある場合はスキップ）
             if output_dir and os.path.exists(output_dir):
@@ -861,6 +879,7 @@ class YMM4AutoGui:
             ("description", "【説明文】"),
             ("tags", "【タグ】"),
             ("thumbnail", "【サムネイルプロンプト】"),
+            ("fixed_comment", "【固定コメント】"),
         ]
         data = {}
         for i, (key, header) in enumerate(sections):
@@ -1021,11 +1040,30 @@ class YMM4AutoGui:
                         width, height = (1080, 1920) if spec.get("is_shorts") else (1920, 1080)
                         img_gen = ImageGenerator(width=width, height=height, debug=self.debug_var.get(), image_style=self.style_var.get())
                         target_dir = os.path.dirname(spec["path"])
-                        generated = img_gen.generate_background(
-                            spec["prompt"],
-                            target_dir=target_dir,
-                            raw=(spec["kind"] == "thumbnail"),
-                        )
+                        if spec["kind"] == "thumbnail":
+                            char_refs = [p for p in CHARACTER_PNGS.values() if os.path.exists(p)]
+                            generated = img_gen.generate_background(
+                                spec["prompt"],
+                                target_dir=target_dir,
+                                raw=True,
+                                reference_image_paths=char_refs or None,
+                            )
+                        else:
+                            all_bgs = sorted(
+                                f for f in os.listdir(target_dir)
+                                if f.startswith("bg_") and f.lower().endswith(".png")
+                            )
+                            style_ref = next(
+                                (os.path.join(target_dir, b) for b in all_bgs
+                                 if os.path.abspath(os.path.join(target_dir, b)) != os.path.abspath(spec["path"])),
+                                None
+                            )
+                            generated = img_gen.generate_background(
+                                spec["prompt"],
+                                target_dir=target_dir,
+                                raw=False,
+                                reference_image_path=style_ref,
+                            )
                         if generated:
                             src = os.path.join(target_dir, generated)
                             shutil.copy2(src, spec["path"])
@@ -1034,6 +1072,18 @@ class YMM4AutoGui:
                                     os.remove(src)
                                 except OSError:
                                     pass
+                            # プロンプトをファイルに保存
+                            try:
+                                if spec["kind"] == "background":
+                                    bg_stem = os.path.splitext(os.path.basename(spec["path"]))[0]
+                                    num = bg_stem.replace("bg_", "")
+                                    prompt_file = os.path.join(target_dir, f"prompt_bg_{num}.txt")
+                                else:
+                                    prompt_file = os.path.join(target_dir, "thumbnail_prompt.txt")
+                                with open(prompt_file, "w", encoding="utf-8") as pf:
+                                    pf.write(spec["prompt"])
+                            except Exception:
+                                pass
                             self.log(f"  ✅ 再生成: {spec['label']}", "success")
                     except Exception as e:
                         self.log(f"  ❌ 再生成失敗: {spec['label']}: {e}", "error")

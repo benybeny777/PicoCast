@@ -5,6 +5,7 @@ load_dotenv()
 VOICEVOX_URL = "http://localhost:50021"
 VOICEVOX_PATH = r"C:\Program Files\VOICEVOX\VOICEVOX.exe"
 VOICE_SPEED_SCALE = 1.5
+VOICE_POST_PHONEME_LENGTH = 0.3  # 各音声WAVの末尾に追加する無音（秒）
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
 # Google AI Models (Nano Banana Suite)

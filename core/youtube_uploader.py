@@ -7,7 +7,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
-SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+]
 CLIENT_SECRETS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "client_secrets.json")
 TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "token.json")
 
@@ -39,13 +42,51 @@ def get_youtube_client():
         creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except Exception as e:
+                # スコープ変更・トークン失効などで再認証が必要な場合
+                if any(k in str(e).lower() for k in ("invalid_scope", "invalid_grant", "unauthorized")):
+                    if os.path.exists(TOKEN_FILE):
+                        os.remove(TOKEN_FILE)
+                    creds = None
+                else:
+                    raise
+        if not creds or not creds.valid:
             flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS, SCOPES)
             creds = flow.run_local_server(port=0)
         with open(TOKEN_FILE, "w") as f:
             f.write(creds.to_json())
     return build("youtube", "v3", credentials=creds)
+
+
+def post_comment(video_id: str, comment_text: str, progress_callback=None) -> str | None:
+    """動画にコメントを投稿する。成功時はコメントスレッドIDを返す。"""
+    def _log(msg):
+        if progress_callback:
+            progress_callback(msg)
+        else:
+            print(msg, flush=True)
+
+    try:
+        youtube = get_youtube_client()
+        response = youtube.commentThreads().insert(
+            part="snippet",
+            body={
+                "snippet": {
+                    "videoId": video_id,
+                    "topLevelComment": {
+                        "snippet": {"textOriginal": comment_text}
+                    }
+                }
+            }
+        ).execute()
+        return response.get("id")
+    except Exception as e:
+        _log(f"  ⚠ コメント投稿エラー: {e}")
+        if "forbidden" in str(e).lower() or "403" in str(e):
+            _log("  💡 token.json を削除して再認証すると解決する場合があります")
+        return None
 
 
 def upload_video(mp4_path, title, description, tags, thumbnail_path=None,

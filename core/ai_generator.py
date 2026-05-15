@@ -150,6 +150,35 @@ YouTube SEOとエンゲージメントを最大化するよう、内容・構成
             print(f"  [AI] 説明文整形エラー: {e}")
         return description
 
+    def generate_pinned_comment(self, script_text: str) -> str:
+        """台本から固定コメント用テキストを生成する。"""
+        if not self.client:
+            return ""
+        prompt = f"""以下はYouTubeゆっくり動画の台本です。
+動画の内容を踏まえて、投稿者がピン留めする固定コメント文を1つ生成してください。
+
+【要件】
+- 視聴者への問いかけを含む（例:「知ってた？」「どっち派？」「コメントで教えてね！」）
+- 動画の主テーマに直結した内容
+- 2〜3文以内
+- 絵文字を適度に使う（過剰NG）
+- チャンネル登録・いいね呼びかけは不要（説明欄にあるため）
+- 固定コメント本文のみ出力。前置き・説明・引用符不要
+
+【台本（冒頭部分）】
+{script_text[:2000]}
+"""
+        try:
+            response = self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt
+            )
+            if response and response.text:
+                return apply_ng_word_replacements(response.text.strip())
+        except Exception as e:
+            print(f"  [AI] 固定コメント生成エラー: {e}")
+        return ""
+
     def enhance_background_prompts(self, script_text, bg_prompts):
         """台本全体を渡してGeminiに背景プロンプトをインパクト重視で書き直させる。"""
         import re
