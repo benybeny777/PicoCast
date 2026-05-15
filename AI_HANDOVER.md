@@ -41,6 +41,7 @@
   - 履歴からの複数選択時にも、スレッド開始前に全台本を一括バリデーション（`start_generation_from_histories()`）
 - **背景画像に人物禁止ルール追加** (`core/image_generator.py`): Shorts・Long 両方のレイアウトルールに「ずんだもん・四国めたんを含むキャラクター描画禁止」を明記
 - **デバッグ時に画像プロンプトをファイル保存** (`core/image_generator.py`): `debug=True` のとき `backgrounds/image_prompts.txt` に追記（画面には表示しない）
+- **四国めたんの既定手ポーズを普通に変更** (`core/character_templates.json`): YMM4 PSDレイヤーIDで右手 `n16`、左手 `n24` を有効化。目レイヤーはGit版の `n65,n60,n34,n32,n26,n25,n17` 系を維持
 
 ### それ以前
 
@@ -100,6 +101,17 @@
 | 6 | セリフ字幕 / 音声 |
 
 `core/ymmp_editor.py:add_voice_item()` のデフォルトレイヤーは `6`。
+
+## 立ち絵PSDレイヤー注意
+
+四国めたんのPSDレイヤーIDは、`metan_layers.txt` の見た目順とYMM4の `n番号` が一致しない。YMM4プロジェクトで使う実IDはPSDレコード順ベース。
+
+- 右手「普通」: `n16`
+- 左手「普通」: `n24`
+- 旧ポーズ: 右手「指差す」 `n15`、左手「マイク」 `n21`
+- 目はGit版を維持: `n65`, `n60`, `n34`, `n32`, `n26`, `n25`, `n17`
+
+`core/character_templates.json` の四国めたん `TachieDefaultItemParameter.EnableLayers` は、通常手として `n16` / `n24` を含める。
 
 ## BGM
 

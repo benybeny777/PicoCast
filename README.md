@@ -117,6 +117,10 @@ output/upload_schedule_long.json
 | 3-4 | 立ち絵 |
 | 6 | セリフ字幕 / 音声 |
 
+## 立ち絵テンプレート
+
+四国めたんの既定ポーズは、`core/character_templates.json` で両手とも普通手に設定しています。YMM4のPSDレイヤーIDでは、右手が `n16`、左手が `n24` です。目レイヤーはGit版の既定状態を維持しています。
+
 ## 主要設定
 
 | 設定 | 内容 |
