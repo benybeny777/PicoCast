@@ -35,6 +35,8 @@ def _find_locking_process(path):
     return None
 
 TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
+VOICE_TAIL_SAFETY_FRAMES = 20
+INTER_DIALOGUE_GAP_FRAMES = 25
 
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
@@ -638,9 +640,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     with wave.open(audio_path, 'rb') as wr:
                         # AdditionalTime=0.3s from character_templates.json must be added to Length
                         # so YMM4 plays the full WAV without internal early cutoff.
-                        # +10 frames safety margin ensures no cutoff even with YMM4 timing jitter.
                         _ADDITIONAL_FRAMES = math.ceil(0.3 * editor.fps)
-                        _SAFETY_FRAMES = 10
                         wav_frames = math.ceil(wr.getnframes() / wr.getframerate() * editor.fps)
                         duration_frames = wav_frames + _ADDITIONAL_FRAMES
                 except Exception as e:
@@ -648,9 +648,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     report.voices_failed += 1
                     continue
 
-                dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + duration_frames))
-                editor.add_voice_item(char_key, chunk_text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=duration_frames + _SAFETY_FRAMES)
-                current_frame += duration_frames + 15
+                voice_item_frames = duration_frames + VOICE_TAIL_SAFETY_FRAMES
+                dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + voice_item_frames))
+                editor.add_voice_item(char_key, chunk_text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=voice_item_frames)
+                current_frame += voice_item_frames + INTER_DIALOGUE_GAP_FRAMES
 
     # 終了画面用に2秒延長
     if is_cancelled():

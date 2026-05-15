@@ -42,6 +42,7 @@
 - **背景画像に人物禁止ルール追加** (`core/image_generator.py`): Shorts・Long 両方のレイアウトルールに「ずんだもん・四国めたんを含むキャラクター描画禁止」を明記
 - **デバッグ時に画像プロンプトをファイル保存** (`core/image_generator.py`): `debug=True` のとき `backgrounds/image_prompts.txt` に追記（画面には表示しない）
 - **四国めたんの既定手ポーズを普通に変更** (`core/character_templates.json`): YMM4 PSDレイヤーIDで右手 `n16`、左手 `n24` を有効化。目レイヤーはGit版の `n65,n60,n34,n32,n26,n25,n17` 系を維持
+- **音声末尾切れ対策** (`main.py`): Shorts / Long 共通で音声アイテムに `VOICE_TAIL_SAFETY_FRAMES = 20` を追加し、次セリフまで `INTER_DIALOGUE_GAP_FRAMES = 25` フレーム空ける
 
 ### それ以前
 
@@ -101,6 +102,12 @@
 | 6 | セリフ字幕 / 音声 |
 
 `core/ymmp_editor.py:add_voice_item()` のデフォルトレイヤーは `6`。
+
+## 音声タイミング方針
+
+`main.py` の音声配置は、VOICEVOX WAV 実長に `character_templates.json` の `AdditionalTime` 0.3 秒相当を足し、さらに `VOICE_TAIL_SAFETY_FRAMES = 20` フレームを音声アイテム長へ加える。次セリフ開始までは `INTER_DIALOGUE_GAP_FRAMES = 25` フレーム空ける。
+
+この処理は Shorts / Long 共通。ずんだもんの語尾「なのだ」が詰まって聞こえやすかったため、キャラ別ではなく全音声アイテムに同じ余白を適用している。
 
 ## 立ち絵PSDレイヤー注意
 
