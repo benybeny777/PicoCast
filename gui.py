@@ -771,6 +771,7 @@ class YMM4AutoGui:
             content = f.read()
         sections = [
             ("title", "【動画タイトル】"),
+            ("thumbnail_text", "【サムネ文字】"),
             ("description", "【説明文】"),
             ("tags", "【タグ】"),
             ("thumbnail", "【サムネイルプロンプト】"),
@@ -968,32 +969,54 @@ class YMM4AutoGui:
         toggle_states = [False] * len(specs)
         btn_refs = {}
 
+        # 各画像の実寸を取得し、最大高さ240pxに合わせたサイズを計算
+        max_display_h = 240
+        display_sizes = []
+        for spec in specs:
+            try:
+                with Image.open(spec["path"]) as img:
+                    w, h = img.size
+                scale = max_display_h / h
+                display_sizes.append((int(w * scale), int(h * scale)))
+            except Exception:
+                display_sizes.append((int(max_display_h * 16 / 9), max_display_h))
+
+        cell_w = max(s[0] for s in display_sizes)
+        cell_h = max(s[1] for s in display_sizes)
+
         dialog = tk.Toplevel(self.root)
         dialog.title(f"画像一括確認 ({len(specs)}枚)")
-        dialog.geometry("920x720")
         dialog.transient(self.root)
         dialog.grab_set()
+
+        screen_w = dialog.winfo_screenwidth()
+        screen_h = dialog.winfo_screenheight()
+        dialog_w = min((cell_w + 16) * len(specs) + 30, screen_w - 80)
+        dialog_h = min(cell_h + 260, screen_h - 80)
+        dialog.geometry(f"{dialog_w}x{dialog_h}")
 
         container = ttk.Frame(dialog)
         container.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         canvas = tk.Canvas(container)
-        scrollbar = ttk.Scrollbar(container, orient=tk.VERTICAL, command=canvas.yview)
-        canvas.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar = ttk.Scrollbar(container, orient=tk.HORIZONTAL, command=canvas.xview)
+        canvas.configure(xscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+        canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         inner = ttk.Frame(canvas)
         canvas_window = canvas.create_window((0, 0), window=inner, anchor="nw")
 
-        def on_configure(*_):
+        def on_inner_configure(*_):
             canvas.configure(scrollregion=canvas.bbox("all"))
-            canvas.itemconfig(canvas_window, width=canvas.winfo_width())
 
-        inner.bind("<Configure>", on_configure)
-        canvas.bind("<Configure>", lambda e: canvas.itemconfig(canvas_window, width=e.width))
+        def on_canvas_configure(e):
+            canvas.itemconfig(canvas_window, height=e.height)
+
+        inner.bind("<Configure>", on_inner_configure)
+        canvas.bind("<Configure>", on_canvas_configure)
 
         def _on_mousewheel(e):
             if canvas.winfo_exists():
-                canvas.yview_scroll(-1 * (e.delta // 120), "units")
+                canvas.xview_scroll(-1 * (e.delta // 120), "units")
 
         canvas.bind_all("<MouseWheel>", _on_mousewheel)
         dialog.bind("<Destroy>", lambda e: canvas.unbind_all("<MouseWheel>"))
@@ -1026,28 +1049,31 @@ class YMM4AutoGui:
                 ttk.Label(win, text=f"読込失敗: {e}").pack(padx=20, pady=20)
             ttk.Button(win, text="閉じる", command=win.destroy).pack(pady=6)
 
-        cols = 3
-        thumb_size = 210
         for idx, spec in enumerate(specs):
-            row, col = divmod(idx, cols)
             cell = ttk.Frame(inner, relief=tk.RIDGE, borderwidth=1)
-            cell.grid(row=row, column=col, padx=5, pady=5, sticky="n")
+            cell.grid(row=0, column=idx, padx=5, pady=5, sticky="n")
             ttk.Label(cell, text=spec.get("label", f"画像 {idx + 1}"), font=("", 9, "bold")).pack()
+
+            img_frame = ttk.Frame(cell, width=cell_w, height=cell_h)
+            img_frame.pack_propagate(False)
+            img_frame.pack()
+
             try:
                 img = Image.open(spec["path"])
-                img.thumbnail((thumb_size, thumb_size), Image.LANCZOS)
+                img.thumbnail((cell_w, cell_h), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
                 photo_refs.append(photo)
-                lbl = ttk.Label(cell, image=photo, cursor="hand2")
-                lbl.pack()
+                lbl = ttk.Label(img_frame, image=photo, cursor="hand2", anchor="center")
+                lbl.place(relx=0.5, rely=0.5, anchor="center")
                 lbl.bind("<Button-1>", lambda e, p=spec["path"]: show_enlarged(p))
             except Exception:
                 photo_refs.append(None)
-                ttk.Label(cell, text="(読込失敗)", width=24).pack(pady=20)
+                ttk.Label(img_frame, text="(読込失敗)", anchor="center").place(relx=0.5, rely=0.5, anchor="center")
 
             scene = spec.get("scene") or ""
             if scene:
-                ttk.Label(cell, text=scene, wraplength=thumb_size, foreground="#0984e3").pack()
+                display_scene = scene if len(scene) <= 60 else scene[:58] + "…"
+                ttk.Label(cell, text=display_scene, wraplength=cell_w, foreground="#0984e3").pack()
             btn = ttk.Button(cell, text="✅ OK", style="OK.TButton", command=lambda i=idx: toggle(i))
             btn.pack(pady=4)
             btn_refs[idx] = btn

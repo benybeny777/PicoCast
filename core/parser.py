@@ -11,6 +11,24 @@ class ScriptParser:
     _desc_re = re.compile(r'^(?:説明文|Description)[:：](.*)$', re.IGNORECASE)
     _tags_re = re.compile(r'^(?:タグ|Tags?)[:：](.*)$', re.IGNORECASE)
     _format_re = re.compile(r'^(?:動画形式|Format)[:：](.*)$', re.IGNORECASE)
+    _bracket_meta_re = re.compile(
+        r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?)\s*】\s*(.*)$',
+        re.IGNORECASE,
+    )
+    _bracket_meta_types = {
+        "動画形式": "video_format",
+        "format": "video_format",
+        "動画タイトル": "video_title",
+        "title": "video_title",
+        "サムネ文字": "thumbnail_text",
+        "サムネテキスト": "thumbnail_text",
+        "サムネイル": "thumbnail",
+        "thumbnail": "thumbnail",
+        "説明文": "description",
+        "description": "description",
+        "タグ": "tags",
+        "tags": "tags",
+    }
     _ignore_patterns = [
         re.compile(r'^```.*$'),
         re.compile(r'^━+.*━+$'),
@@ -33,6 +51,7 @@ class ScriptParser:
         desc_re = ScriptParser._desc_re
         tags_re = ScriptParser._tags_re
         format_re = ScriptParser._format_re
+        bracket_meta_re = ScriptParser._bracket_meta_re
         ignore_patterns = ScriptParser._ignore_patterns
 
         lines = []
@@ -49,12 +68,26 @@ class ScriptParser:
                 # Clean up common AI decorations
                 line = line.replace("**", "").replace("__", "")
 
+                # Metadata header style:
+                # 【動画タイトル】
+                # タイトル
+                m = bracket_meta_re.match(line)
+                if m:
+                    label = m.group(1).strip().lower()
+                    meta_type = ScriptParser._bracket_meta_types.get(label)
+                    if meta_type:
+                        item = {"type": meta_type, "text": m.group(2).strip()}
+                        lines.append(item)
+                        last_dialogue = None
+                        last_meta = item
+                        continue
+
                 # Continuation of metadata (description=multi-line, others=next-line-only)
                 if last_meta:
-                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re])
+                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
                     is_ignore = any(p.match(line) for p in ignore_patterns)
-                    if not is_keyword and not is_dialogue and not is_ignore:
+                    if not is_keyword and not is_dialogue and (not is_ignore or last_meta["type"] == "description"):
                         if last_meta["type"] == "description":
                             last_meta["text"] = (last_meta["text"] + "\n" + line).strip()
                             continue
@@ -191,7 +224,7 @@ class ScriptParser:
             title_text = title_items[0]["text"].strip()
             if not title_text:
                 errors.append("動画タイトルが取得できませんでした。「動画タイトル: タイトル」の形式を確認してください。")
-            elif "[Shorts]" in title_text or "動画形式" in title_text:
+            elif "[Shorts]" in title_text or "動画形式" in title_text or "サムネ文字" in title_text or "【" in title_text:
                 errors.append(f"動画タイトルに不正な内容が含まれています: 「{title_text}」。パースに失敗している可能性があります。")
             elif "\n" in title_text or len(title_text) > 100:
                 errors.append(f"動画タイトルに改行または不正な内容が含まれています: 「{title_text[:50]}...」。「動画タイトル: タイトル」を1行に収めてください。")

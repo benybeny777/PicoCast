@@ -133,6 +133,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     if os.path.exists(thumb_path):
         os.remove(thumb_path)
     shutil.copy2(src, thumb_path)
+    os.remove(src)  # 背景フォルダに混入しないよう元ファイルを削除
 
     _log(f"  ✅ サムネイル保存: {thumb_path}")
     return thumb_path

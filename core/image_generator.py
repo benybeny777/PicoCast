@@ -1,5 +1,4 @@
 import os
-import uuid
 import time
 from google import genai
 from config import GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL
@@ -56,7 +55,13 @@ class ImageGenerator:
     def _save_image_part(self, part, save_dir):
         """inline_data part を PNG として保存・リサイズし、ファイル名を返す。"""
         from PIL import Image
-        fname = f"bg_{uuid.uuid4().hex[:8]}.png"
+        existing_nums = []
+        for f in os.listdir(save_dir):
+            stem = f[3:-4] if f.startswith("bg_") and f.endswith(".png") else ""
+            if stem.isdigit():
+                existing_nums.append(int(stem))
+        next_num = max(existing_nums, default=0) + 1
+        fname = f"bg_{next_num:04d}.png"
         path = os.path.join(save_dir, fname)
         with open(path, "wb") as f:
             f.write(part.inline_data.data)
