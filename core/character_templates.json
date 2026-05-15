@@ -382,7 +382,7 @@
     "IsAlwaysOnTop": false,
     "IsZOrderEnabled": false,
     "IsClippingWithObjectAbove": false,
-    "Font": "源ノ角ゴシック JP Bold",
+    "Font": "ラノベPOP v2",
     "FontSize": {
       "Values": [
         {
@@ -553,9 +553,9 @@
       }
     },
     "BasePoint": "CenterBottom",
-    "FontColor": "#FF50E88A",
+    "FontColor": "#FFFFFFFF",
     "Style": "Border",
-    "StyleColor": "#FF000000",
+    "StyleColor": "#FF33A65E",
     "Bold": false,
     "Italic": false,
     "Underline": false,
@@ -569,7 +569,7 @@
     "JimakuVideoEffects": [
       {
         "$type": "YukkuriMovieMaker.Project.Effects.OutlineEffect, YukkuriMovieMaker",
-        "StrokeThickness": {"Values": [{"Value": 6.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
+        "StrokeThickness": {"Values": [{"Value": 8.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Blur": {"Values": [{"Value": 0.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Quality": {"Values": [{"Value": 64.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Smoothness": {"Values": [{"Value": 100.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
@@ -578,7 +578,7 @@
         "Opacity": {"Values": [{"Value": 100.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Zoom": {"Values": [{"Value": 100.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Rotation": {"Values": [{"Value": 0.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
-        "StrokeBrush": {"Type": "YukkuriMovieMaker.Plugin.Brush.SolidColorBrushPlugin, YukkuriMovieMaker, Version=4.52.0.3, Culture=neutral, PublicKeyToken=null", "Parameter": {"$type": "YukkuriMovieMaker.Plugin.Brush.SolidColorBrushParameter, YukkuriMovieMaker", "Color": "#FFFFFFFF"}},
+        "StrokeBrush": {"Type": "YukkuriMovieMaker.Plugin.Brush.SolidColorBrushPlugin, YukkuriMovieMaker, Version=4.52.0.3, Culture=neutral, PublicKeyToken=null", "Parameter": {"$type": "YukkuriMovieMaker.Plugin.Brush.SolidColorBrushParameter, YukkuriMovieMaker", "Color": "#FF33A65E"}},
         "IsOutlineOnly": false,
         "IsAngular": false,
         "IsEnabled": true,
@@ -1291,7 +1291,7 @@
     "IsAlwaysOnTop": false,
     "IsZOrderEnabled": false,
     "IsClippingWithObjectAbove": false,
-    "Font": "源ノ角ゴシック JP Bold",
+    "Font": "ラノベPOP v2",
     "FontSize": {
       "Values": [
         {
@@ -1462,9 +1462,9 @@
       }
     },
     "BasePoint": "CenterBottom",
-    "FontColor": "#FFFF70B8",
+    "FontColor": "#FFFFFFFF",
     "Style": "Border",
-    "StyleColor": "#FF000000",
+    "StyleColor": "#FFDF4C94",
     "Bold": false,
     "Italic": false,
     "Underline": false,
@@ -1478,7 +1478,7 @@
     "JimakuVideoEffects": [
       {
         "$type": "YukkuriMovieMaker.Project.Effects.OutlineEffect, YukkuriMovieMaker",
-        "StrokeThickness": {"Values": [{"Value": 6.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
+        "StrokeThickness": {"Values": [{"Value": 8.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Blur": {"Values": [{"Value": 0.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Quality": {"Values": [{"Value": 64.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Smoothness": {"Values": [{"Value": 100.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
@@ -1487,7 +1487,7 @@
         "Opacity": {"Values": [{"Value": 100.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Zoom": {"Values": [{"Value": 100.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
         "Rotation": {"Values": [{"Value": 0.0}], "Span": 0.0, "AnimationType": "なし", "Bezier": {"Points": [{"Point": {"X": 0.0, "Y": 0.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}, {"Point": {"X": 1.0, "Y": 1.0}, "ControlPoint1": {"X": -0.3, "Y": -0.3}, "ControlPoint2": {"X": 0.3, "Y": 0.3}}], "IsQuadratic": false}},
-        "StrokeBrush": {"Type": "YukkuriMovieMaker.Plugin.Brush.SolidColorBrushPlugin, YukkuriMovieMaker, Version=4.52.0.3, Culture=neutral, PublicKeyToken=null", "Parameter": {"$type": "YukkuriMovieMaker.Plugin.Brush.SolidColorBrushParameter, YukkuriMovieMaker", "Color": "#FFFFFFFF"}},
+        "StrokeBrush": {"Type": "YukkuriMovieMaker.Plugin.Brush.SolidColorBrushPlugin, YukkuriMovieMaker, Version=4.52.0.3, Culture=neutral, PublicKeyToken=null", "Parameter": {"$type": "YukkuriMovieMaker.Plugin.Brush.SolidColorBrushParameter, YukkuriMovieMaker", "Color": "#FFDF4C94"}},
         "IsOutlineOnly": false,
         "IsAngular": false,
         "IsEnabled": true,

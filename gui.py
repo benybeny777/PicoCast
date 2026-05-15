@@ -876,7 +876,7 @@ class YMM4AutoGui:
             tmp_items = ScriptParser.parse(script_path)
             meta_types = {"thumbnail", "video_title", "description", "tags", "video_format"}
             meta = {it["type"]: it["text"] for it in tmp_items if it["type"] in meta_types}
-            is_shorts = meta.get("video_format", "").strip().lower() in ("shorts", "ショート")
+            is_shorts = meta.get("video_format", "").strip().lower() in ("shorts", "ショート", "short")
             items = normalize_background_order([it for it in tmp_items if it["type"] not in meta_types])
             bg_prompts = [it.get("text", "").strip() for it in items if it["type"] == "background"]
 

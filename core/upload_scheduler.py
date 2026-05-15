@@ -1,6 +1,7 @@
 """
 YouTube アップロードスケジュール管理。
-スロット: 毎日 0:00 / 7:00 / 12:00 / 19:00 (JST)
+Shorts スロット: 毎日 0:00 / 7:00 / 12:00 / 19:00 (JST)
+Long  スロット: 毎日 19:00 (JST) のみ、1日1本
 Shorts / Long は別管理 — 同一スロットに両方の投稿が可能。
 永続化: output/upload_schedule_shorts.json / upload_schedule_long.json
 """
@@ -9,7 +10,8 @@ import os
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
-SLOTS = [0, 7, 12, 19]  # JST 時刻 (ソート済み)
+SLOTS = [0, 7, 12, 19]        # Shorts 用スロット (JST 時刻)
+LONG_SLOTS = [19]              # Long 用スロット: 19:00 のみ
 
 _BASE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
 _SCHEDULE_FILES = {
@@ -34,15 +36,18 @@ def _save(data: dict, video_type: str):
 
 
 def assign_slots(count: int, video_type: str) -> list:
-    """video_type ('shorts'|'long') の空きスロットを count 個返す。"""
+    """video_type ('shorts'|'long') の空きスロットを count 個返す。
+    Long は 19:00 のみ・1日1本。
+    """
     schedule = _load(video_type)
     used = set(schedule.keys())
     now = datetime.now(JST)
     result = []
     candidate = now.date()
+    slots = LONG_SLOTS if video_type == "long" else SLOTS
 
     for _ in range(90):
-        for hour in SLOTS:
+        for hour in slots:
             slot_dt = datetime(candidate.year, candidate.month, candidate.day,
                                hour, 0, 0, tzinfo=JST)
             if slot_dt <= now + timedelta(minutes=5):

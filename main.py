@@ -38,7 +38,13 @@ TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
 
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
-_CHANNEL_FOOTER = f"\n\n▶ チャンネル登録はこちら → {_CHANNEL_URL}"
+_CHANNEL_FOOTER = (
+    "\n\n"
+    "👍 いいね＆チャンネル登録お願いします！\n"
+    "💬 感想はコメントで！\n"
+    "🔔 通知オンで見逃しなし！\n"
+    f"\n▶ チャンネル登録はこちら → {_CHANNEL_URL}"
+)
 
 
 
@@ -58,7 +64,7 @@ def _split_at_punctuation(text):
 
 
 def _detect_is_shorts(script_content):
-    """台本テキストから動画形式: Shorts/ロングを検出する。"""
+    """台本テキストから動画形式を検出する。Shorts/ショート のみ True。Long/ロング は False。"""
     for line in script_content.splitlines():
         line = line.strip().replace("**", "")
         m = re.match(r'^(?:動画形式|Format)[:：]\s*(.+)$', line, re.IGNORECASE)
@@ -302,8 +308,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     is_shorts = _detect_is_shorts(script_content)
     update_status(f"📐 動画形式: {'Shorts' if is_shorts else 'ロング'}")
 
-    # Step 3: パス設定
-    safe_topic = re.sub(r'[\\/:*?"<>|]', '_', topic)
+    # Step 3: パス設定（台本のvideo_titleを優先してフォルダ名に使う）
+    folder_base = _early_title if _early_title else topic
+    safe_topic = re.sub(r'[\\/:*?"<>|]', '_', folder_base)
     if is_shorts and not safe_topic.startswith("[Shorts]"):
         safe_topic = f"[Shorts]{safe_topic}"
 
@@ -630,22 +637,25 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 try:
                     with wave.open(audio_path, 'rb') as wr:
                         # AdditionalTime=0.3s from character_templates.json must be added to Length
-                        # so YMM4 plays the full WAV without internal early cutoff
+                        # so YMM4 plays the full WAV without internal early cutoff.
+                        # +10 frames safety margin ensures no cutoff even with YMM4 timing jitter.
                         _ADDITIONAL_FRAMES = math.ceil(0.3 * editor.fps)
-                        duration_frames = math.ceil(wr.getnframes() / wr.getframerate() * editor.fps) + _ADDITIONAL_FRAMES
+                        _SAFETY_FRAMES = 10
+                        wav_frames = math.ceil(wr.getnframes() / wr.getframerate() * editor.fps)
+                        duration_frames = wav_frames + _ADDITIONAL_FRAMES
                 except Exception as e:
                     update_status(f"  ❌ WAV読み込み失敗: {e}")
                     report.voices_failed += 1
                     continue
 
                 dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + duration_frames))
-                editor.add_voice_item(char_key, chunk_text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=duration_frames)
+                editor.add_voice_item(char_key, chunk_text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=duration_frames + _SAFETY_FRAMES)
                 current_frame += duration_frames + 15
 
-    # 終了画面用に5秒延長
+    # 終了画面用に2秒延長
     if is_cancelled():
         return cancel_result()
-    current_frame += 5 * editor.fps
+    current_frame += 2 * editor.fps
 
     # Finalize
     if current_bg and current_frame > bg_start_frame:
