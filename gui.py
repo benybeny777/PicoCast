@@ -251,7 +251,7 @@ class YMM4AutoGui:
             if not os.path.isdir(folder):
                 return []
             names = sorted(
-                (d for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d))),
+                (d for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d)) and d != "000_uploaded"),
                 key=lambda d: os.path.getmtime(os.path.join(folder, d)),
                 reverse=True,
             )
@@ -265,9 +265,35 @@ class YMM4AutoGui:
                 result.append(title)
             return result
 
-        active = collect("output")
-        active = [t for t in active]  # 000_uploaded はrefresh_historyで除外済み
-        uploaded = collect(os.path.join("output", "000_uploaded"))
+        active = collect("output")  # 000_uploaded はrefresh_historyで除外済み
+
+        # 投稿済み: ログファイル（フォルダが消えても残る）＋現存フォルダをマージ
+        log_path = os.path.join("output", "uploaded_titles.txt")
+        logged_names = []
+        if os.path.exists(log_path):
+            with open(log_path, "r", encoding="utf-8") as lf:
+                logged_names = [l.strip() for l in lf if l.strip()]
+        folder_names = []
+        uploaded_dir = os.path.join("output", "000_uploaded")
+        if os.path.isdir(uploaded_dir):
+            folder_names = sorted(
+                (d for d in os.listdir(uploaded_dir) if os.path.isdir(os.path.join(uploaded_dir, d))),
+                key=lambda d: os.path.getmtime(os.path.join(uploaded_dir, d)),
+                reverse=True,
+            )
+        # ログ優先（順序保持）、フォルダにあってログにないものを末尾に追加
+        seen = set(logged_names)
+        merged_names = list(logged_names)
+        for n in folder_names:
+            if n not in seen:
+                merged_names.append(n)
+        # フォルダ名からプレフィックスを除いてタイトルに変換
+        def to_title(name):
+            for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+                if name.startswith(prefix):
+                    return name[len(prefix):].strip()
+            return name
+        uploaded = [to_title(n) for n in merged_names]
 
         if not active and not uploaded:
             messagebox.showinfo("タイトルなし", "出力フォルダに動画がありません。")
@@ -796,11 +822,24 @@ class YMM4AutoGui:
                 abs_output = os.path.abspath(output_dir)
                 if not abs_output.startswith(uploaded_base + os.sep):
                     os.makedirs(uploaded_base, exist_ok=True)
-                    dest = os.path.join(uploaded_base, os.path.basename(output_dir))
+                    folder_name = os.path.basename(output_dir)
+                    dest = os.path.join(uploaded_base, folder_name)
                     if os.path.exists(dest):
                         shutil.rmtree(dest)
                     shutil.move(output_dir, dest)
-                    self.log(f"📦 アップロード済みフォルダへ移動: {os.path.basename(output_dir)}", "success")
+                    self.log(f"📦 アップロード済みフォルダへ移動: {folder_name}", "success")
+                    # タイトルログに追記（000_uploaded が消えても残るよう output/ 直下に保存）
+                    log_path = os.path.join("output", "uploaded_titles.txt")
+                    try:
+                        existing = set()
+                        if os.path.exists(log_path):
+                            with open(log_path, "r", encoding="utf-8") as lf:
+                                existing = {l.strip() for l in lf if l.strip()}
+                        if folder_name not in existing:
+                            with open(log_path, "a", encoding="utf-8") as lf:
+                                lf.write(folder_name + "\n")
+                    except Exception:
+                        pass
                 self.root.after(0, self.refresh_history)
         except Exception as e:
             self.log(f"❌ アップロードエラー: {e}", "error")
