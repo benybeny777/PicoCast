@@ -10,7 +10,6 @@ from google.oauth2.credentials import Credentials
 SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.force-ssl",
-    "https://www.googleapis.com/auth/yt-analytics.readonly",
 ]
 CLIENT_SECRETS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "client_secrets.json")
 TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "token.json")
