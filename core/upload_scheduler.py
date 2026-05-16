@@ -21,11 +21,24 @@ _SCHEDULE_FILES = {
 
 
 def _load(video_type: str) -> dict:
+    import re as _re
     path = _SCHEDULE_FILES[video_type]
-    if os.path.exists(path):
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        raw = f.read()
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # 末尾カンマなど軽微な不正を自動修正して再試行
+        fixed = _re.sub(r",\s*([}\]])", r"\1", raw)
+        try:
+            data = json.loads(fixed)
+            # 修正できたら上書き保存
+            _save(data, video_type)
+            return data
+        except json.JSONDecodeError:
+            raise
 
 
 def _save(data: dict, video_type: str):

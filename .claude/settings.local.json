@@ -11,7 +11,8 @@
       "PowerShell(Get-Service -Name ssh-agent)",
       "PowerShell(Set-Service -Name ssh-agent -StartupType Automatic)",
       "PowerShell(Start-Service -Name ssh-agent)",
-      "PowerShell(ssh -T git@github.com -i \"C:\\\\Users\\\\benyb\\\\.ssh\\\\id_ed25519\" -o StrictHostKeyChecking=no 2>&1)"
+      "PowerShell(ssh -T git@github.com -i \"C:\\\\Users\\\\benyb\\\\.ssh\\\\id_ed25519\" -o StrictHostKeyChecking=no 2>&1)",
+      "PowerShell(Get-ChildItem c:\\\\00_PG\\\\00_yukkurijidou | Where-Object { $_.Name -ne \".venv\" } | Select-Object Name, Extension)"
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
