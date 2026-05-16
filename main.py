@@ -207,7 +207,7 @@ def merge_telops_into_backgrounds(items):
                     f"太い黒縁取り・鋭いドロップシャドウ。"
                     f"背景演出：テロップ背後に漫画風の放射状集中線・スピードライン・"
                     f"爆発的なエネルギー放射エフェクト。"
-                    f"アニメタイトルカード・少年漫画の必殺技名テキスト風の圧倒的なデザイン。"
+                    f"食品パッケージ広告・雑誌見出し風の圧倒的なデザイン。"
                     f"テロップは画面上部35%以内に配置し、非常にくっきり読みやすくすること。"
                 )
                 result[last_bg_idx] = bg
@@ -498,6 +498,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             return cancel_result()
         thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
                                         script_content=script_content, debug_mode=debug_mode)
+        if is_cancelled():
+            return cancel_result()
 
     if thumb_path is None:
         raise Exception("サムネイル画像を生成できませんでした。\nNano Bananaの接続・残高を確認してください。")
@@ -548,6 +550,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             ]
             try:
                 batch_results = img_gen.generate_backgrounds_batch(batch_requests, target_dir=theme_bg_dir)
+                if is_cancelled():
+                    return cancel_result()
                 for (bg_n, _), filename in zip(_batch_items, batch_results):
                     if filename:
                         batch_bg_results[bg_n] = filename
@@ -629,6 +633,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     bg_description, target_dir=theme_bg_dir,
                     reference_image_path=style_reference_path
                 )
+                if is_cancelled():
+                    return cancel_result()
             except Exception as e:
                 update_status(f"  ❌ 背景生成失敗: {e}")
                 generated_file = None

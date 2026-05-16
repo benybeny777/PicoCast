@@ -12,9 +12,8 @@ import queue
 from main import run_pipeline, regenerate_thumbnail_only, normalize_background_order
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
-from core.ng_words import NG_WORD_PROMPT
 from core.parser import ScriptParser
-from core.script_prompts import build_vidiq_prompt
+from core.script_prompts import build_title_prompt, build_vidiq_prompt
 from config import VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
 import requests
 
@@ -134,6 +133,7 @@ class YMM4AutoGui:
         self.cancel_btn = ttk.Button(top_frame, text="作業中止", command=self.request_cancel, state=tk.DISABLED)
         self.cancel_btn.pack(side=tk.RIGHT, padx=(4, 0))
         ttk.Button(top_frame, text="AI台本作成", command=self.copy_vidiq_prompt).pack(side=tk.RIGHT)
+        ttk.Button(top_frame, text="AIタイトル案", command=self.copy_title_prompt).pack(side=tk.RIGHT, padx=(4, 0))
         ttk.Button(top_frame, text="クリア", width=6, command=self.clear_script).pack(side=tk.RIGHT, padx=4)
 
         # Script area
@@ -182,8 +182,6 @@ class YMM4AutoGui:
         self.schedule_btn.pack(side=tk.LEFT, padx=(8, 0))
         self.copy_titles_btn = ttk.Button(btn_frame, text="📋 タイトル一覧コピー", command=self.copy_titles_to_clipboard)
         self.copy_titles_btn.pack(side=tk.LEFT, padx=(8, 0))
-
-
         # Metadata preview
         ttk.Label(main_frame, text="メタデータ:").pack(anchor=tk.W)
         self.meta_preview = scrolledtext.ScrolledText(main_frame, height=4, font=("Meiryo", 8), bg="#fdfdfd", borderwidth=1, relief="solid", state=tk.DISABLED)
@@ -228,9 +226,19 @@ class YMM4AutoGui:
 
     def copy_vidiq_prompt(self):
         self.root.clipboard_clear()
-        self.root.clipboard_append(VIDIQ_PROMPT + "\n\n" + NG_WORD_PROMPT)
+        self.root.clipboard_append(VIDIQ_PROMPT)
         self.root.update()
         self.log("VidIQプロンプトをクリップボードにコピーしました ✅", "success")
+
+    def copy_title_prompt(self):
+        active, uploaded = self.collect_existing_titles()
+        all_titles = active + uploaded
+        food_titles = [title for title in all_titles if self._is_food_title(title)]
+        title_prompt = build_title_prompt(food_titles)
+        self.root.clipboard_clear()
+        self.root.clipboard_append(title_prompt)
+        self.root.update()
+        self.log(f"動画タイトル作成プロンプトをコピーしました（食べ物系既存タイトル{len(food_titles)}件 / 全{len(all_titles)}件）✅", "success")
 
     def clear_script(self):
         self.ref_text.delete("1.0", tk.END)
@@ -239,7 +247,10 @@ class YMM4AutoGui:
     def request_cancel(self):
         self.cancel_event.set()
         self.cancel_btn.config(state=tk.DISABLED)
-        self.log("⏹ 作業中止をリクエストしました。現在の処理区切りで停止します。", "error")
+        self.progress.stop()
+        self.status_var.set("Canceled")
+        self._toggle_ui(True)
+        self.log("⏹ 作業中止しました。進行中の外部API呼び出しが戻り次第、結果を破棄します。", "error")
 
     def log(self, message, tag="info"):
         self._log_queue.put((str(message), tag))
@@ -326,29 +337,50 @@ class YMM4AutoGui:
         history.sort(key=lambda d: os.path.getmtime(os.path.join("output", d)), reverse=True)
         self.history_items = history
 
-    def copy_titles_to_clipboard(self):
+    def _folder_name_to_title(self, name):
+        for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+            if name.startswith(prefix):
+                return name[len(prefix):].strip()
+        return name
+
+    def _collect_titles_from_folder(self, folder, exclude_uploaded=False):
+        """フォルダ内のサブディレクトリ名からタイトルを収集（存在しない場合は空リスト）。"""
+        if not os.path.isdir(folder):
+            return []
+        names = sorted(
+            (
+                d for d in os.listdir(folder)
+                if os.path.isdir(os.path.join(folder, d))
+                and not (exclude_uploaded and d == "000_uploaded")
+            ),
+            key=lambda d: os.path.getmtime(os.path.join(folder, d)),
+            reverse=True,
+        )
+        return [self._folder_name_to_title(name) for name in names]
+
+    def _is_food_title(self, title):
+        non_food_keywords = (
+            "鬼滅", "ワンピ", "呪術", "スカッと", "こめお", "大喧嘩", "喧嘩", "激論",
+            "アニメ", "漫画", "伏線", "考察"
+        )
+        if any(keyword in title for keyword in non_food_keywords):
+            return False
+        food_keywords = (
+            "食", "飲", "料理", "飯", "味", "お菓子", "菓子", "野菜", "肉", "魚", "寿司", "外食",
+            "保存食", "発酵", "調味料", "薬", "毒扱い", "無毒", "給料",
+            "人参", "にんじん", "ハチミツ", "蜂蜜", "タピオカ", "フグ", "ふぐ",
+            "クロワッサン", "かき氷", "シロップ", "カレー", "コンニャク", "こんにゃく",
+            "メロンパン", "マック", "ポテト", "ケチャップ", "トマト", "サーモン",
+            "鮭", "ロブスター", "オマール海老", "コーラ", "コカ・コーラ", "ポップコーン",
+            "チョコ", "チョコレート", "塩", "フライドポテト", "ポテトフライ",
+            "ポテチ", "ポテトチップス",
+            "オレンジ", "ミイラ", "カエル", "海のゴキブリ"
+        )
+        return any(keyword in title for keyword in food_keywords)
+
+    def collect_existing_titles(self):
         self.refresh_history()
-
-        def collect(folder):
-            """フォルダ内のサブディレクトリ名からタイトルを収集（存在しない場合は空リスト）。"""
-            if not os.path.isdir(folder):
-                return []
-            names = sorted(
-                (d for d in os.listdir(folder) if os.path.isdir(os.path.join(folder, d)) and d != "000_uploaded"),
-                key=lambda d: os.path.getmtime(os.path.join(folder, d)),
-                reverse=True,
-            )
-            result = []
-            for name in names:
-                title = name
-                for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
-                    if title.startswith(prefix):
-                        title = title[len(prefix):].strip()
-                        break
-                result.append(title)
-            return result
-
-        active = collect("output")  # 000_uploaded はrefresh_historyで除外済み
+        active = self._collect_titles_from_folder("output", exclude_uploaded=True)
 
         # 投稿済み: ログファイル（フォルダが消えても残る）＋現存フォルダをマージ
         log_path = os.path.join("output", "uploaded_titles.txt")
@@ -356,8 +388,8 @@ class YMM4AutoGui:
         if os.path.exists(log_path):
             with open(log_path, "r", encoding="utf-8") as lf:
                 logged_names = [l.strip() for l in lf if l.strip()]
-        folder_names = []
         uploaded_dir = os.path.join("output", "000_uploaded")
+        folder_names = []
         if os.path.isdir(uploaded_dir):
             folder_names = sorted(
                 (d for d in os.listdir(uploaded_dir) if os.path.isdir(os.path.join(uploaded_dir, d))),
@@ -370,13 +402,11 @@ class YMM4AutoGui:
         for n in folder_names:
             if n not in seen:
                 merged_names.append(n)
-        # フォルダ名からプレフィックスを除いてタイトルに変換
-        def to_title(name):
-            for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
-                if name.startswith(prefix):
-                    return name[len(prefix):].strip()
-            return name
-        uploaded = [to_title(n) for n in merged_names]
+        uploaded = [self._folder_name_to_title(n) for n in merged_names]
+        return active, uploaded
+
+    def copy_titles_to_clipboard(self):
+        active, uploaded = self.collect_existing_titles()
 
         if not active and not uploaded:
             messagebox.showinfo("タイトルなし", "出力フォルダに動画がありません。")
@@ -396,6 +426,25 @@ class YMM4AutoGui:
         self.root.clipboard_clear()
         self.root.clipboard_append(text)
         self.log(f"📋 タイトル {len(active) + len(uploaded)} 件をクリップボードにコピーしました（作成済み{len(active)}件 / 投稿済み{len(uploaded)}件）")
+
+    def _append_uploaded_titles(self, titles):
+        os.makedirs("output", exist_ok=True)
+        log_path = os.path.join("output", "uploaded_titles.txt")
+        existing = set()
+        if os.path.exists(log_path):
+            with open(log_path, "r", encoding="utf-8") as lf:
+                existing = {line.strip() for line in lf if line.strip()}
+
+        added = 0
+        with open(log_path, "a", encoding="utf-8", newline="\n") as lf:
+            for title in titles:
+                title = str(title).strip()
+                if not title or title in existing:
+                    continue
+                existing.add(title)
+                lf.write(title + "\n")
+                added += 1
+        return added
 
     def open_history_batch_dialog(self):
         self.refresh_history()
@@ -482,9 +531,9 @@ class YMM4AutoGui:
             return
 
         self._toggle_ui(False)
-        self.cancel_event.clear()
+        self.cancel_event = threading.Event()
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
-        threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings()), daemon=True).start()
+        threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
     def select_history_dialog(self, title, action_text, multi=False):
         self.refresh_history()
@@ -570,17 +619,18 @@ class YMM4AutoGui:
             return
 
         self._toggle_ui(False)
-        self.cancel_event.clear()
+        self.cancel_event = threading.Event()
         self.log(f"一括処理開始: 合計 {len(scripts)} 件")
-        threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings()), daemon=True).start()
+        threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
-    def _run_batch(self, scripts, settings=None):
+    def _run_batch(self, scripts, settings=None, cancel_event=None):
         settings = settings or self._generation_settings()
+        cancel_event = cancel_event or self.cancel_event
         count = len(scripts)
         is_batch = count > 1
 
         for idx, script in enumerate(scripts):
-            if self.cancel_event.is_set():
+            if cancel_event.is_set():
                 self.log("⏹ 中止しました。残りの履歴/台本は処理しません。", "error")
                 break
             try:
@@ -609,18 +659,21 @@ class YMM4AutoGui:
                     progress_callback=self.log,
                     reuse_backgrounds=settings["reuse_backgrounds"],
                     use_batch_api=settings["use_batch_api"],
-                    cancel_event=self.cancel_event,
+                    cancel_event=cancel_event,
                 )
 
-                self.log(f"成功: {topic}", "success")
-                if self.cancel_event.is_set():
+                if cancel_event.is_set():
                     self.log("⏹ 中止しました。残りの履歴/台本は処理しません。", "error")
                     break
+                self.log(f"成功: {topic}", "success")
                 if not is_batch:
                     self.root.after(0, lambda m=msg, r=report: self.finish_generation(m, r))
                     return
 
             except Exception as e:
+                if cancel_event.is_set():
+                    self.log("⏹ 中止しました。進行中処理から戻りました。", "error")
+                    break
                 err_msg = str(e)
                 if settings["debug_mode"]:
                     self.log(traceback.format_exc(), "error")
@@ -629,12 +682,11 @@ class YMM4AutoGui:
                     self.root.after(0, lambda m=err_msg: self.finish_generation(m, None, is_error=True))
                     return
 
-        if self.cancel_event.is_set():
-            self.root.after(0, lambda: self.progress.config(value=100))
+        if cancel_event.is_set():
             self.log("\n⏹ 処理を中止しました。", "error")
-            if is_batch:
-                self.root.after(0, lambda: messagebox.showinfo("中止", "一括処理を中止しました。"))
-            self.root.after(0, lambda: self._toggle_ui(True))
+            if cancel_event is self.cancel_event:
+                self.root.after(0, lambda: self.status_var.set("Canceled"))
+                self.root.after(0, lambda: self._toggle_ui(True))
         elif is_batch:
             self.root.after(0, lambda: self.progress.config(value=100))
             self.log("\n✅ 全ての一括処理が完了しました！", "success")
@@ -783,7 +835,7 @@ class YMM4AutoGui:
             tag = "done" if status == "済" else "upcoming"
             tree.insert("", tk.END, values=(dt_str, label, title, status), tags=(tag,))
 
-        # 削除ボタン
+        # 削除・手動公開済みボタン
         def delete_selected():
             sel = tree.selection()
             if not sel:
@@ -807,12 +859,48 @@ class YMM4AutoGui:
                 _save(data, vt)
             self.log(f"🗑 スケジュール {len(sel)}件を削除しました", "info")
 
+        def mark_manual_published():
+            sel = tree.selection()
+            if not sel:
+                return
+            if not messagebox.askyesno(
+                "手動公開済みにする",
+                "選択した動画をYouTube Studio側で手動公開済みとして処理しますか？\n\n"
+                "・予約スケジュールから削除します\n"
+                "・アップロード履歴にタイトルを追記します",
+                parent=dialog,
+            ):
+                return
+
+            from core.upload_scheduler import _load, _save
+            schedules = {vt: _load(vt) for vt in ("shorts", "long")}
+            published_titles = []
+            for item in sel:
+                vals = tree.item(item, "values")
+                dt_str, label, title = vals[0], vals[1], vals[2]
+                vt = "shorts" if label == "Shorts" else "long"
+                try:
+                    dt = datetime.strptime(dt_str, "%Y/%m/%d %H:%M").replace(tzinfo=JST)
+                    schedules[vt].pop(dt.isoformat(), None)
+                except Exception:
+                    pass
+                if title:
+                    published_titles.append(str(title).strip())
+                tree.delete(item)
+
+            for vt, data in schedules.items():
+                _save(data, vt)
+            added = self._append_uploaded_titles(published_titles)
+            self.refresh_history()
+            self.log(f"✅ 手動公開済みとして処理しました: {len(sel)}件（履歴追記 {added}件）", "success")
+
         btn_frame = ttk.Frame(dialog)
         btn_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
         ttk.Label(btn_frame, text=f"合計 {len(rows)} 件  /  予定 {sum(1 for r in rows if r[3]=='予定')} 件  /  済 {sum(1 for r in rows if r[3]=='済')} 件",
                   font=("Meiryo", 8)).pack(side=tk.LEFT)
         ttk.Button(btn_frame, text="閉じる", command=dialog.destroy).pack(side=tk.RIGHT)
         ttk.Button(btn_frame, text="選択を削除", command=delete_selected).pack(side=tk.RIGHT, padx=(0, 8))
+        ttk.Button(btn_frame, text="手動公開済みにする", command=mark_manual_published).pack(side=tk.RIGHT, padx=(0, 8))
 
     def _confirm_upload_schedule(self, rows):
         """rows: [(type_label, title, slot_str), ...] — True で確定、False でキャンセル。"""
@@ -921,15 +1009,8 @@ class YMM4AutoGui:
                     shutil.move(output_dir, dest)
                     self.log(f"📦 アップロード済みフォルダへ移動: {folder_name}", "success")
                     # タイトルログに追記（000_uploaded が消えても残るよう output/ 直下に保存）
-                    log_path = os.path.join("output", "uploaded_titles.txt")
                     try:
-                        existing = set()
-                        if os.path.exists(log_path):
-                            with open(log_path, "r", encoding="utf-8") as lf:
-                                existing = {l.strip() for l in lf if l.strip()}
-                        if folder_name not in existing:
-                            with open(log_path, "a", encoding="utf-8") as lf:
-                                lf.write(folder_name + "\n")
+                        self._append_uploaded_titles([folder_name])
                     except Exception:
                         pass
                 self.root.after(0, self.refresh_history)

@@ -15,11 +15,11 @@ EXPRESSION_LAYER_PRESETS = {
         "セクシー": {"add": ["n79", "n66"], "remove": ["n63", "n65", "n70", "n77"]},
     },
     "四国めたん": {
-        "あまあま": {"add": ["n27", "n69"], "remove": ["n24", "n26", "n64", "n67", "n68"]},
-        "ツンツン": {"add": ["n67"], "remove": ["n27", "n63", "n69"]},
+        "あまあま": {"add": ["n27"], "remove": ["n24", "n26", "n64", "n67"]},
+        "ツンツン": {"add": [], "remove": ["n27", "n63", "n67"]},
         "ささやき": {"add": ["n49", "n66"], "remove": ["n45", "n46", "n64", "n67"]},
         "ヒソヒソ": {"add": ["n49", "n77"], "remove": ["n45", "n46", "n64", "n67"]},
-        "セクシー": {"add": ["n27", "n69"], "remove": ["n24", "n26", "n64", "n67"]},
+        "セクシー": {"add": ["n27"], "remove": ["n24", "n26", "n64", "n67"]},
     },
 }
 
@@ -265,6 +265,11 @@ class YmmpEditor:
         for layer in add:
             if layer not in layers:
                 layers.append(layer)
+        # 四国めたんは目の基本レイヤーを外すと、動き付き感情で目が消えることがある。
+        if character_name == "四国めたん":
+            for layer in ("n68", "n69"):
+                if layer not in layers:
+                    layers.append(layer)
         param["EnableLayers"] = layers
         return param
 

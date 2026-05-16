@@ -21,6 +21,25 @@
 
 ### 最新セッション
 
+- **チャンネル方針を食べ物雑学特化へ更新**:
+  - チャンネル名: `ずんだもんとめたんの食べ物雑学堂`
+  - アニメ雑学系の方向性を削除し、食べ物の歴史・起源・昔の食文化に寄せた
+  - `core/vidiq_food_prompt.txt` に台本生成プロンプトを分離し、`build_vidiq_prompt()` から読み込む
+- **AIタイトル案コピー機能** (`gui.py`, `core/script_prompts.py`):
+  - `AIタイトル案` ボタンを追加
+  - 既存の食べ物系タイトルだけを `output/` と `output/uploaded_titles.txt` から収集
+  - 既存食材・表記ゆれ・同じオチ・同じタイトル型を避けるタイトル案プロンプトをコピー
+  - 出力は20案のMarkdown表 + TOP5のMarkdown表
+- **手動公開済みオペレーション** (`gui.py`):
+  - `📅 スケジュール` 画面に `手動公開済みにする` を追加
+  - YouTube Studio側で予約動画を手動公開した場合、該当スケジュールを削除し `output/uploaded_titles.txt` にタイトルを追記
+- **作業中止の即時化** (`gui.py`, `main.py`):
+  - `作業中止` 押下でGUIを即 `Canceled` 扱いにして後続処理へ進ませない
+  - 生成ごとにキャンセルイベントを分離し、中止後に新しい生成を始めても古い処理が復活しないようにした
+  - 画像生成・Batch API・サムネ生成の戻り直後にもキャンセル判定を追加
+- **四国めたんのアクション時の目消え対策** (`core/ymmp_editor.py`):
+  - めたんの感情差分で目の基本レイヤー `n68` / `n69` を外さないよう変更
+  - 表情適用後も `n68` / `n69` を必ず残すガードを追加
 - **YouTubeアップロード予約投稿** (`core/upload_scheduler.py` 新規):
   - スロット: 毎日 0:00 / 7:00 / 12:00 / 19:00 (JST)
   - Shorts / Long を**別ファイルで管理**: `output/upload_schedule_shorts.json` / `output/upload_schedule_long.json`
@@ -64,7 +83,7 @@
 
 | ファイル | 役割 |
 |---|---|
-| `gui.py` | tkinter GUI。履歴選択、一括生成、画像確認、アップロード、スケジュール確認 |
+| `gui.py` | tkinter GUI。履歴選択、一括生成、画像確認、アップロード、スケジュール確認、手動公開済み処理、AIプロンプトコピー |
 | `main.py` | パイプライン本体。台本整形、画像/音声生成、YMM4保存 |
 | `config.py` | VOICEVOX、モデル、キャラ、BGM、背景生成上限など |
 | `core/parser.py` | 台本パーサ |
@@ -83,7 +102,7 @@
 - スロット: 毎日 **0:00 / 7:00 / 12:00 / 19:00 (JST)**
 - Shorts と Long は**独立して管理**（同一スロットに両方投稿可）
 - 永続化: `output/upload_schedule_shorts.json` / `output/upload_schedule_long.json`
-- GUI「📅 スケジュール」ボタン → `show_upload_schedule_dialog()` で一覧・削除
+- GUI「📅 スケジュール」ボタン → `show_upload_schedule_dialog()` で一覧・削除・手動公開済み処理
 - アップロードフロー:
   1. `start_youtube_upload()` で履歴を複数選択
   2. Shorts/Long 別にスロット自動アサイン
@@ -181,6 +200,8 @@ YouTubeアップロード:
 - `self.cancel_event`
 - `request_cancel()`
 - `main.run_pipeline(..., cancel_event=...)`
+- ボタン押下時点でGUIは即 `Canceled` 扱いに戻す
+- 外部API呼び出し自体は戻るまで待つが、戻り後に成功扱いへ進ませない
 
 ## 生成パイプラインメモ
 
