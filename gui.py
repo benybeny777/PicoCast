@@ -1404,45 +1404,31 @@ class YMM4AutoGui:
     _DOCUMENTS_SEARCH_DIR = r"C:\Users\benyb\OneDrive\Documents"
 
     def _find_and_move_mp4(self, output_dir, folder_name):
-        """output_dir に MP4 がない場合、Documents から探して移動する。見つかればパスを返す。"""
+        """output_dir に MP4 がない場合、Documents から .ymmp と同名の MP4 を探して移動する。"""
         search_dir = self._DOCUMENTS_SEARCH_DIR
         if not os.path.isdir(search_dir):
             return None
 
-        # マッチ候補: フォルダ名（プレフィックス除去）をタイトルとして使う
-        title = self._folder_name_to_title(folder_name)
-
-        mp4s = [
-            os.path.join(search_dir, f)
-            for f in os.listdir(search_dir)
-            if f.lower().endswith(".mp4")
-        ]
-        if not mp4s:
+        # プロジェクトフォルダ内の .ymmp ファイル名（拡張子なし）を基準にする
+        ymmp_stems = [
+            os.path.splitext(f)[0]
+            for f in os.listdir(output_dir)
+            if f.lower().endswith(".ymmp")
+        ] if os.path.isdir(output_dir) else []
+        if not ymmp_stems:
             return None
 
-        # タイトルと一致するものを優先（完全一致 → 部分一致 → 最新ファイル）
-        title_lower = title.lower()
+        for stem in ymmp_stems:
+            mp4_name = stem + ".mp4"
+            src = os.path.join(search_dir, mp4_name)
+            if os.path.exists(src):
+                os.makedirs(output_dir, exist_ok=True)
+                dest = os.path.join(output_dir, mp4_name)
+                shutil.move(src, dest)
+                self.log(f"📦 MP4 を Documents から移動: {mp4_name}", "info")
+                return dest
 
-        def _score(p):
-            stem = os.path.splitext(os.path.basename(p))[0].lower()
-            if stem == title_lower:
-                return 0
-            if title_lower in stem or stem in title_lower:
-                return 1
-            return 2
-
-        mp4s.sort(key=lambda p: (_score(p), -os.path.getmtime(p)))
-        best = mp4s[0]
-
-        # スコア2（無関係）なら移動しない
-        if _score(best) == 2:
-            return None
-
-        os.makedirs(output_dir, exist_ok=True)
-        dest = os.path.join(output_dir, os.path.basename(best))
-        shutil.move(best, dest)
-        self.log(f"📦 MP4 を Documents から移動: {os.path.basename(best)}", "info")
-        return dest
+        return None
 
     def open_output_dir(self):
         out_dir = os.path.abspath("output")
