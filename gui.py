@@ -1136,7 +1136,12 @@ class YMM4AutoGui:
 
         if os.path.exists(thumb_path):
             title = self._read_meta_from_dir(output_dir).get("title", os.path.basename(output_dir))
+            ratio_tag = "縦9:16のショート動画" if is_shorts else "横16:9のワイドスクリーン"
+            safe_zone = (
+                "\nセーフゾーン（厳守）: 上下左右30%の範囲にはテキスト・文字・重要な要素を一切配置しないこと。"
+            ) if is_shorts else ""
             prompt = (
+                f"アスペクト比: {ratio_tag}。{safe_zone}\n"
                 f"以下の台本を参考に、YouTubeサムネイル画像を生成してください。\n\n"
                 f"{script_content or title}"
             )
