@@ -1195,7 +1195,8 @@ class YMM4AutoGui:
                         target_dir = os.path.dirname(spec["path"])
                         if spec["kind"] == "thumbnail":
                             char_refs = [p for p in THUMBNAIL_CHARACTER_PNGS.values() if os.path.exists(p)]
-                            generated = img_gen.generate_background(
+                            thumb_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style="nanobanana2")
+                            generated = thumb_gen.generate_background(
                                 spec["prompt"],
                                 target_dir=target_dir,
                                 raw=True,

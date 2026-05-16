@@ -151,12 +151,18 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     except Exception:
         pass
 
+    # サムネイルは常に nanobanana2 で生成（背景と統一）
+    thumb_img_gen = ImageGenerator(
+        width=img_gen.width, height=img_gen.height,
+        debug=img_gen.debug, image_style="nanobanana2",
+    )
+
     _log("🖼  サムネイルを生成中...")
     if debug_mode:
         _log(f"  [DEBUG] サムネイルプロンプト保存: {prompt_path}")
     try:
-        generated = img_gen.generate_background(prompt, target_dir=theme_bg_dir, raw=True,
-                                                 reference_image_paths=char_refs)
+        generated = thumb_img_gen.generate_background(prompt, target_dir=theme_bg_dir, raw=True,
+                                                      reference_image_paths=char_refs)
     except Exception as e:
         _log(f"  ❌ サムネイル生成失敗: {e}")
         return None
