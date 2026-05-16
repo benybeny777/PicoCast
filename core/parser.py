@@ -12,6 +12,7 @@ class ScriptParser:
     _tags_re = re.compile(r'^(?:タグ|Tags?)[:：](.*)$', re.IGNORECASE)
     _format_re = re.compile(r'^(?:動画形式|Format)[:：](.*)$', re.IGNORECASE)
     _fixed_comment_re = re.compile(r'^(?:固定コメント|PinnedComment)[:：](.*)$', re.IGNORECASE)
+    _chapter_re = re.compile(r'^(?:チャプター|チャプター一覧|Chapter(?:s|List)?)[:：]', re.IGNORECASE)
     _bracket_meta_re = re.compile(
         r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?)\s*】\s*(.*)$',
         re.IGNORECASE,
@@ -103,6 +104,12 @@ class ScriptParser:
 
                 # Check ignore patterns
                 if any(p.match(line) for p in ignore_patterns):
+                    last_dialogue = None
+                    last_meta = None
+                    continue
+
+                # Chapter markers (Long only metadata — ignore)
+                if ScriptParser._chapter_re.match(line):
                     last_dialogue = None
                     last_meta = None
                     continue

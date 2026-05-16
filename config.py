@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 VOICEVOX_URL = "http://localhost:50021"
-VOICEVOX_PATH = r"C:\Program Files\VOICEVOX\VOICEVOX.exe"
+VOICEVOX_PATH = r"C:\Users\benyb\AppData\Local\Programs\VOICEVOX\VOICEVOX.exe"
 VOICE_SPEED_SCALE_SHORTS = 1.65
 VOICE_INTRO_SPEED_SCALE_SHORTS = 2.0
 VOICE_SPEED_SCALE_LONG = 1.35

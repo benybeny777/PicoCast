@@ -9,7 +9,7 @@ import traceback
 import time
 import shutil
 import queue
-from main import run_pipeline, regenerate_thumbnail_only, normalize_background_order
+from main import OutputDirectoryLockedError, run_pipeline, regenerate_thumbnail_only, normalize_background_order
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
 from core.parser import ScriptParser
@@ -182,15 +182,10 @@ class YMM4AutoGui:
         self.schedule_btn.pack(side=tk.LEFT, padx=(8, 0))
         self.copy_titles_btn = ttk.Button(btn_frame, text="📋 タイトル一覧コピー", command=self.copy_titles_to_clipboard)
         self.copy_titles_btn.pack(side=tk.LEFT, padx=(8, 0))
-        # Metadata preview
-        ttk.Label(main_frame, text="メタデータ:").pack(anchor=tk.W)
-        self.meta_preview = scrolledtext.ScrolledText(main_frame, height=4, font=("Meiryo", 8), bg="#fdfdfd", borderwidth=1, relief="solid", state=tk.DISABLED)
-        self.meta_preview.pack(fill=tk.X, pady=(2, 4))
-
         # Status + progress
         self.status_var = tk.StringVar(value="Ready")
-        self.status_label = ttk.Label(main_frame, textvariable=self.status_var, font=("Meiryo", 8, "italic"))
-        self.status_label.pack(anchor=tk.W)
+        self.status_label = ttk.Label(main_frame, textvariable=self.status_var, font=("Meiryo", 8, "italic"), width=110)
+        self.status_label.pack(anchor=tk.W, fill=tk.X)
         self.progress = ttk.Progressbar(main_frame, mode='determinate')
         self.progress.pack(fill=tk.X, pady=(2, 4))
 
@@ -205,6 +200,7 @@ class YMM4AutoGui:
 
         self.last_output_dir = None
         self.cancel_event = threading.Event()
+        self._gen_id = 0
         self._log_queue = queue.Queue()
 
         self.refresh_history()
@@ -300,7 +296,10 @@ class YMM4AutoGui:
         self._trim_log_area()
         if update_status:
             self.log_area.see(tk.END)
-            self.status_var.set(message[:300])
+            status_text = str(message).splitlines()[0].strip()
+            if len(status_text) > 90:
+                status_text = status_text[:87] + "..."
+            self.status_var.set(status_text)
 
     def _run_on_ui_sync(self, func):
         if threading.current_thread() is threading.main_thread():
@@ -333,7 +332,10 @@ class YMM4AutoGui:
 
     def refresh_history(self):
         if not os.path.exists("output"): os.makedirs("output", exist_ok=True)
-        history = [d for d in os.listdir("output") if os.path.isdir(os.path.join("output", d)) and d != "000_uploaded"]
+        history = [
+            d for d in os.listdir("output")
+            if os.path.isdir(os.path.join("output", d)) and d not in {"000_uploaded", "000_backups"}
+        ]
         history.sort(key=lambda d: os.path.getmtime(os.path.join("output", d)), reverse=True)
         self.history_items = history
 
@@ -351,7 +353,7 @@ class YMM4AutoGui:
             (
                 d for d in os.listdir(folder)
                 if os.path.isdir(os.path.join(folder, d))
-                and not (exclude_uploaded and d == "000_uploaded")
+                and not (exclude_uploaded and d in {"000_uploaded", "000_backups"})
             ),
             key=lambda d: os.path.getmtime(os.path.join(folder, d)),
             reverse=True,
@@ -532,6 +534,7 @@ class YMM4AutoGui:
 
         self._toggle_ui(False)
         self.cancel_event = threading.Event()
+        self._gen_id += 1
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
@@ -620,12 +623,14 @@ class YMM4AutoGui:
 
         self._toggle_ui(False)
         self.cancel_event = threading.Event()
+        self._gen_id += 1
         self.log(f"一括処理開始: 合計 {len(scripts)} 件")
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
     def _run_batch(self, scripts, settings=None, cancel_event=None):
         settings = settings or self._generation_settings()
         cancel_event = cancel_event or self.cancel_event
+        gen_id = self._gen_id
         count = len(scripts)
         is_batch = count > 1
 
@@ -651,23 +656,42 @@ class YMM4AutoGui:
                     self.log(f"\n>>> 処理中 ({idx+1}/{count}): {topic}", "batch")
                     self.root.after(0, lambda v=int((idx/count)*100): self.progress.config(value=v))
 
-                msg, report = run_pipeline(
-                    topic,
-                    pregenerated_script=script,
-                    debug_mode=settings["debug_mode"],
-                    image_style=settings["image_style"],
-                    progress_callback=self.log,
-                    reuse_backgrounds=settings["reuse_backgrounds"],
-                    use_batch_api=settings["use_batch_api"],
-                    cancel_event=cancel_event,
-                )
+                while True:
+                    try:
+                        msg, report = run_pipeline(
+                            topic,
+                            pregenerated_script=script,
+                            debug_mode=settings["debug_mode"],
+                            image_style=settings["image_style"],
+                            progress_callback=self.log,
+                            reuse_backgrounds=settings["reuse_backgrounds"],
+                            use_batch_api=settings["use_batch_api"],
+                            cancel_event=cancel_event,
+                        )
+                        break
+                    except OutputDirectoryLockedError as e:
+                        if cancel_event.is_set():
+                            raise
+                        self.log(f"⚠ 既存プロジェクトが開かれている可能性があります: {e}", "error")
+                        retry = self._run_on_ui_sync(
+                            lambda m=str(e): messagebox.askokcancel(
+                                "プロジェクトファイルを閉じてください",
+                                m + "\n\n閉じたらOKを押すと同じ生成を再試行します。\nキャンセルすると処理を中止します。",
+                            )
+                        )
+                        if retry:
+                            self.log("🔁 既存フォルダ退避を再試行します...", "batch")
+                            continue
+                        cancel_event.set()
+                        raise
 
                 if cancel_event.is_set():
                     self.log("⏹ 中止しました。残りの履歴/台本は処理しません。", "error")
                     break
                 self.log(f"成功: {topic}", "success")
                 if not is_batch:
-                    self.root.after(0, lambda m=msg, r=report: self.finish_generation(m, r))
+                    self.root.after(0, lambda m=msg, r=report, gid=gen_id:
+                        self.finish_generation(m, r) if gid == self._gen_id else None)
                     return
 
             except Exception as e:
@@ -679,7 +703,8 @@ class YMM4AutoGui:
                     self.log(traceback.format_exc(), "error")
                 self.log(f"❌ エラー: {err_msg}", "error")
                 if not is_batch:
-                    self.root.after(0, lambda m=err_msg: self.finish_generation(m, None, is_error=True))
+                    self.root.after(0, lambda m=err_msg, gid=gen_id:
+                        self.finish_generation(m, None, is_error=True) if gid == self._gen_id else None)
                     return
 
         if cancel_event.is_set():
@@ -692,20 +717,6 @@ class YMM4AutoGui:
             self.log("\n✅ 全ての一括処理が完了しました！", "success")
             self.root.after(0, lambda c=count: messagebox.showinfo("一括完了", f"{c}件の処理が完了しました。"))
             self.root.after(0, lambda: self._toggle_ui(True))
-
-    def _update_meta_preview(self):
-        if not self.last_output_dir:
-            return
-        meta_path = os.path.join(self.last_output_dir, "metadata.txt")
-        if not os.path.exists(meta_path):
-            return
-        with open(meta_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        self.meta_preview.config(state=tk.NORMAL)
-        self.meta_preview.delete("1.0", tk.END)
-        self.meta_preview.insert("1.0", content)
-        self.meta_preview.config(state=tk.DISABLED)
-
 
     def start_youtube_upload(self):
         selected = self.select_history_dialog("YouTubeアップロードする履歴を選択", "アップロード", multi=True)
@@ -1073,8 +1084,6 @@ class YMM4AutoGui:
 
             if project_path and os.path.exists(project_path):
                 self.last_output_dir = os.path.dirname(project_path)
-
-            self._update_meta_preview()
 
             # 補正済み script.txt をテキストエリアに反映
             if self.last_output_dir:

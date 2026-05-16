@@ -9,7 +9,7 @@
 - `━━ 動画1 ━━` や `動画形式:` が複数ある台本を分割して一括生成
 - YouTube NG ワードをマイルド表現へ自動置換
 - VOICEVOX 音声は Shorts: 冒頭2.0倍速・本編1.65倍速、ロング: 冒頭1.6倍速・本編1.35倍速で生成
-- 音声末尾 0.05s 無音 + 2 フレーム安全余白、セリフ間隔 6 フレーム（約 0.1s）
+- 音声末尾無音は速度比例（`0.05 × speed_scale` 秒）+ 2 フレーム安全余白、セリフ間隔 6 フレーム（約 0.1s）
 - 背景指定がセリフの後に来る台本も自動で補正
 - 台本本編は `# Scene ...` 見出しでシーンごとに生成し、各シーンに背景・必要なテロップ・会話をまとめる
 - 背景は Shorts 6〜9 枚（3〜5秒ごとの見た目変化が理想）・ロングは5〜7秒に1枚を目安に配置
@@ -126,7 +126,9 @@ YouTube Studio 側で予約動画を手動公開した場合は、`📅 スケ�
 
 ## 音声タイミング
 
-Shorts / Long ともに、VOICEVOX の WAV 実長へテンプレートの `AdditionalTime` 0.3 秒を加え、さらに `VOICE_TAIL_SAFETY_FRAMES = 20` フレームを音声アイテム長に足します。次のセリフ開始までは `INTER_DIALOGUE_GAP_FRAMES = 25` フレーム空けます。
+Shorts / Long ともに、VOICEVOX の WAV 実長へテンプレートの `AdditionalTime` 0.3 秒を加え、さらに `VOICE_TAIL_SAFETY_FRAMES = 2` フレームを音声アイテム長に足します。次のセリフ開始までは `INTER_DIALOGUE_GAP_FRAMES = 6` フレーム空けます。
+
+WAV 末尾には `0.05 × speed_scale` 秒の無音を直接書き込みます（Shorts 冒頭 2.0x なら 0.1s）。高速音声で末尾フォネームが切れるのを防ぎます。
 
 音声速度は Shorts が冒頭 `VOICE_INTRO_SPEED_SCALE_SHORTS = 2.0`・本編 `VOICE_SPEED_SCALE_SHORTS = 1.65`、ロングが冒頭 `VOICE_INTRO_SPEED_SCALE_LONG = 1.6`・本編 `VOICE_SPEED_SCALE_LONG = 1.35` です。冒頭判定は `VOICE_INTRO_FAST_SECONDS = 5.0` 秒以内に開始するセリフです。
 
