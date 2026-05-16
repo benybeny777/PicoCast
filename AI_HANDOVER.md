@@ -21,6 +21,17 @@
 
 ### 最新セッション
 
+- **YouTube Analytics GUI 組み込み** (`gui.py`, `core/youtube_analytics.py`):
+  - `core/youtube_analytics.py` 新規作成
+    - `fetch_video_analytics(days)`: Analytics API v2 で動画単位の指標取得 + videos.list でタイトル解決
+    - `fetch_channel_summary(days)`: チャンネル全体集計
+  - `core/youtube_uploader.py` に `yt-analytics.readonly` スコープを追加（`token.json` 削除→再認証が必要）
+  - GUI に「📊 アナリティクス」ボタンを追加
+  - ダイアログ: 期間選択（7/28/90日）、チャンネルサマリー表示、動画別 Treeview、「📋 AI分析用にコピー」ボタン
+  - コピー内容はタブ区切り（Claude/ChatGPT に貼り付けで表として読める）
+
+### 前セッション（冒頭速度・チャプター誤認・中断後エラー）
+
 - **冒頭速度時の末尾切れ修正** (`main.py`):
   - WAV末尾無音を固定 `0.05s` → `0.05 × speed_scale` 秒に変更（速度比例）
   - Shorts冒頭 2.0x では 0.1s、Long本編 1.35x では 0.068s

@@ -12,11 +12,19 @@
       "PowerShell(Set-Service -Name ssh-agent -StartupType Automatic)",
       "PowerShell(Start-Service -Name ssh-agent)",
       "PowerShell(ssh -T git@github.com -i \"C:\\\\Users\\\\benyb\\\\.ssh\\\\id_ed25519\" -o StrictHostKeyChecking=no 2>&1)",
-      "PowerShell(Get-ChildItem c:\\\\00_PG\\\\00_yukkurijidou | Where-Object { $_.Name -ne \".venv\" } | Select-Object Name, Extension)"
+      "PowerShell(Get-ChildItem c:\\\\00_PG\\\\00_yukkurijidou | Where-Object { $_.Name -ne \".venv\" } | Select-Object Name, Extension)",
+      "PowerShell($sh = New-Object -ComObject WScript.Shell; $sh.CreateShortcut\\(\"C:\\\\Users\\\\benyb\\\\AppData\\\\Roaming\\\\Microsoft\\\\Windows\\\\Start Menu\\\\Programs\\\\VOICEVOX.lnk\"\\).TargetPath)",
+      "Read(//c/00_PG/00_yukkurijidou/output/**)",
+      "PowerShell(cmd /c dir \"C:\\\\00_PG\\\\00_yukkurijidou\\\\output\\\\�R�[�q�[�͋֎~����Ă���\" /a /s 2>&1)",
+      "PowerShell(taskkill /PID 2832 /F)",
+      "PowerShell(taskkill /PID 25668 /F)",
+      "PowerShell(cmd /c rd /s /q \"C:\\\\00_PG\\\\00_yukkurijidou\\\\output\\\\�R�[�q�[�͋֎~����Ă���\" 2>&1)",
+      "PowerShell(Start-Process explorer.exe)"
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
-      "C:\\Users\\benyb\\.ssh"
+      "C:\\Users\\benyb\\.ssh",
+      "C:\\00_PG\\00_yukkurijidou\\output"
     ]
   },
   "skipDangerousModePermissionPrompt": true

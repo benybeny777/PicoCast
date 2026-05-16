@@ -1,4 +1,5 @@
 import os
+import re
 from google import genai
 from config import GOOGLE_API_KEY, GEMINI_MODEL
 from core.ng_words import NG_WORD_PROMPT, apply_ng_word_replacements
@@ -10,6 +11,30 @@ class AIGenerator:
         self.client = None
         if GOOGLE_API_KEY:
             self.client = genai.Client(api_key=GOOGLE_API_KEY)
+
+    @staticmethod
+    def _extract_video_title_line(script_text):
+        match = re.search(r"(?m)^(動画タイトル|Title)([:：].*)$", script_text)
+        return match.group(0) if match else None
+
+    @staticmethod
+    def _restore_video_title_line(script_text, original_title_line):
+        if not original_title_line:
+            return script_text
+        restored, count = re.subn(
+            r"(?m)^(動画タイトル|Title)([:：].*)$",
+            original_title_line,
+            script_text,
+            count=1,
+        )
+        if count:
+            return restored
+
+        format_match = re.search(r"(?m)^(動画形式|Format)[:：].*$", script_text)
+        if format_match:
+            insert_at = format_match.end()
+            return script_text[:insert_at] + "\n" + original_title_line + script_text[insert_at:]
+        return original_title_line + "\n" + script_text
 
     def generate_script(self, topic, reference_script=None):
         ref_rule = ""
@@ -87,6 +112,7 @@ class AIGenerator:
         script_text = apply_ng_word_replacements(script_text)
         if not self.client:
             return script_text
+        gemini_title_line = self._extract_video_title_line(script_text)
 
         prompt = f"""あなたはYouTubeコンテンツポリシーの専門家です。
 以下の台本テキストを、YouTubeの収益化ガイドラインに違反しないよう最小限の修正で書き換えてください。
@@ -96,7 +122,7 @@ class AIGenerator:
 【修正ルール】
 - 「死」「殺す」「暴力」「自殺」「性的」など収益化停止リスクのある直接表現を、意味が伝わる婉曲表現に置き換える
 - セリフの感情・流れ・オチは変えない
-- 「動画タイトル:」行も、NGワードや直接的すぎる表現があればクリック率を保ったまま言い換える
+- Geminiは「動画タイトル:」行を変更しない。タイトルの言い換えは行わない
 - 「タグ:」行のリスクワードも同様に置き換える
 - 「説明文:」もリスク表現があれば修正する
 - 問題のない行はそのまま出力する
@@ -112,7 +138,8 @@ class AIGenerator:
                 contents=prompt
             )
             if response and response.text:
-                return apply_ng_word_replacements(response.text.strip())
+                gemini_output = self._restore_video_title_line(response.text.strip(), gemini_title_line)
+                return apply_ng_word_replacements(gemini_output)
         except Exception as e:
             print(f"  [AI] YouTube補正エラー: {e}")
         return script_text
