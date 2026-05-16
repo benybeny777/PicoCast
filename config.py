@@ -4,8 +4,15 @@ load_dotenv()
 
 VOICEVOX_URL = "http://localhost:50021"
 VOICEVOX_PATH = r"C:\Program Files\VOICEVOX\VOICEVOX.exe"
-VOICE_SPEED_SCALE = 1.5
-VOICE_POST_PHONEME_LENGTH = 0.3  # 各音声WAVの末尾に追加する無音（秒）
+VOICE_SPEED_SCALE_SHORTS = 1.65
+VOICE_INTRO_SPEED_SCALE_SHORTS = 2.0
+VOICE_SPEED_SCALE_LONG = 1.35
+VOICE_INTRO_SPEED_SCALE_LONG = 1.6
+VOICE_INTRO_FAST_SECONDS = 5.0
+# Backward-compatible aliases. Runtime selection uses the Shorts/Long values above.
+VOICE_SPEED_SCALE = VOICE_SPEED_SCALE_SHORTS
+VOICE_INTRO_SPEED_SCALE = VOICE_INTRO_SPEED_SCALE_SHORTS
+VOICE_POST_PHONEME_LENGTH = 0.0  # 各音声WAVの末尾に追加する無音（秒）
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 
 # Google AI Models (Nano Banana Suite)
@@ -53,7 +60,11 @@ BGM_PATH = os.path.join(ASSETS_DIR, "bgm", "nohohon_long_BPM97.mp3")
 BGM_VOLUME = 15.0
 BGM_LAYER = 2
 
-# Cost control: max unique background images generated per video (thumbnail excluded)
-MAX_BACKGROUNDS = 7
+# Cost control: max unique background images generated per video (thumbnail excluded).
+# Shorts: ideal visual change every 3-5 seconds.
+# Long: ideal visual change every 5-7 seconds; avoid holding the same image for 10+ seconds.
+MAX_BACKGROUNDS_SHORTS = 9
+MAX_BACKGROUNDS_LONG = 90
+MAX_BACKGROUNDS = MAX_BACKGROUNDS_SHORTS
 
 

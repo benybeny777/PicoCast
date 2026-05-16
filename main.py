@@ -8,14 +8,30 @@ import re
 import uuid
 import json
 import shutil
-import stat
 import gc
 from core.voicevox import VoicevoxAPI
 from core.parser import ScriptParser
 from core.ymmp_editor import YmmpEditor
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
-from config import BGM_LAYER, BGM_PATH, BGM_VOLUME, CHARACTERS, VOICEVOX_PATH, MAX_BACKGROUNDS
+from config import (
+    BGM_LAYER,
+    BGM_PATH,
+    BGM_VOLUME,
+    CHARACTERS,
+    MAX_BACKGROUNDS_LONG,
+    MAX_BACKGROUNDS_SHORTS,
+    VOICEVOX_PATH,
+    VOICE_INTRO_FAST_SECONDS,
+    VOICE_INTRO_SPEED_SCALE_LONG,
+    VOICE_INTRO_SPEED_SCALE_SHORTS,
+    VOICE_SPEED_SCALE_LONG,
+    VOICE_SPEED_SCALE_SHORTS,
+)
+
+
+class OutputDirectoryLockedError(Exception):
+    """既存の出力フォルダが開かれていて退避できない場合の再試行用エラー。"""
 
 
 def _find_locking_process(path):
@@ -35,8 +51,8 @@ def _find_locking_process(path):
     return None
 
 TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
-VOICE_TAIL_SAFETY_FRAMES = 20
-INTER_DIALOGUE_GAP_FRAMES = 25
+VOICE_TAIL_SAFETY_FRAMES = 2
+INTER_DIALOGUE_GAP_FRAMES = 6
 
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
@@ -137,7 +153,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
 
     _log("🖼  サムネイルを生成中...")
     if debug_mode:
-        _log(f"  [DEBUG] サムネイルプロンプト:\n{prompt}")
+        _log(f"  [DEBUG] サムネイルプロンプト保存: {prompt_path}")
     try:
         generated = img_gen.generate_background(prompt, target_dir=theme_bg_dir, raw=True,
                                                  reference_image_paths=char_refs)
@@ -329,6 +345,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # Step 2: 動画形式を検出
     is_shorts = _detect_is_shorts(script_content)
+    max_backgrounds = MAX_BACKGROUNDS_SHORTS if is_shorts else MAX_BACKGROUNDS_LONG
+    intro_voice_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
+    body_voice_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
     update_status(f"📐 動画形式: {'Shorts' if is_shorts else 'ロング'}")
 
     # Step 3: パス設定（台本のvideo_titleを優先してフォルダ名に使う）
@@ -343,68 +362,66 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     width = 1080 if is_shorts else 1920
     height = 1920 if is_shorts else 1080
 
-    # Step 4: 既存フォルダ削除（背景再利用時は退避）
-    import tempfile
-    _saved_bg_tmp = None
-    _saved_thumb_tmp = None
+    # Step 4: 既存フォルダは削除せず、先にバックアップへ退避する。
+    # 開きっぱなしで退避できない場合は、GUI側で警告して同じ生成を再試行する。
+    _existing_theme_backup = None
+    _saved_bg_dir = None
+    _saved_thumb_path = None
     if os.path.exists(theme_dir):
+        gc.collect()  # release any PIL file handles from previous run
+        backup_base = os.path.join("output", "000_backups")
+        backup_name = f"{safe_topic}_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        backup_dir = os.path.join(backup_base, backup_name)
+        try:
+            os.makedirs(backup_base, exist_ok=True)
+            os.replace(theme_dir, backup_dir)
+            _existing_theme_backup = backup_dir
+            update_status(f"📦 既存フォルダをバックアップへ退避しました: {backup_dir}")
+        except PermissionError as e:
+            locker = _find_locking_process(theme_dir)
+            locker_info = f"\nロック中のプロセス: {locker}" if locker else ""
+            raise OutputDirectoryLockedError(
+                f"既存フォルダをバックアップへ退避できませんでした。\n{theme_dir}{locker_info}\n\n"
+                "YMM4やエクスプローラーでプロジェクトファイル・出力フォルダを閉じてからOKを押してください。"
+            ) from e
+        except Exception as e:
+            raise OutputDirectoryLockedError(
+                f"既存フォルダをバックアップへ退避できませんでした。\n"
+                f"YMM4やエクスプローラーでフォルダを開いていないか確認してください。\n({theme_dir})\n\n{e}"
+            ) from e
+
         if reuse_backgrounds:
-            _old_bg_dir = os.path.join(theme_dir, "backgrounds")
+            _old_bg_dir = os.path.join(_existing_theme_backup, "backgrounds")
             if os.path.exists(_old_bg_dir):
                 reusable_bgs = [
                     f for f in os.listdir(_old_bg_dir)
                     if f.startswith("bg_") and f.lower().endswith(".png")
                 ]
                 if reusable_bgs:
-                    _saved_bg_tmp = tempfile.mkdtemp()
-                    for f in reusable_bgs:
-                        shutil.copy2(os.path.join(_old_bg_dir, f), _saved_bg_tmp)
+                    _saved_bg_dir = _old_bg_dir
         # サムネイルは再生成の有無に関係なく常に退避（再生成失敗時のフォールバック用）
-        _old_thumb = os.path.join(theme_dir, "thumbnail.png")
+        _old_thumb = os.path.join(_existing_theme_backup, "thumbnail.png")
         if os.path.exists(_old_thumb):
-            _saved_thumb_tmp = tempfile.mkdtemp()
-            shutil.copy2(_old_thumb, os.path.join(_saved_thumb_tmp, "thumbnail.png"))
-        gc.collect()  # release any PIL file handles from previous run
-        def _on_rm_error(func, path, exc_info):
-            os.chmod(path, stat.S_IWRITE)
-            for _ in range(5):
-                try:
-                    func(path)
-                    return
-                except PermissionError:
-                    time.sleep(0.3)
-            locker = _find_locking_process(path)
-            locker_info = f"\nロック中のプロセス: {locker}" if locker else ""
-            raise PermissionError(f"{path}{locker_info}")
-        try:
-            shutil.rmtree(theme_dir, onerror=_on_rm_error)
-        except PermissionError as e:
-            raise Exception(f"既存フォルダを削除できませんでした。\n{e}\nそのプロセスを閉じてから再生成してください。")
-        except Exception:
-            raise Exception(f"既存フォルダを削除できませんでした。\nYMM4やエクスプローラーでフォルダを開いていないか確認してください。\n({theme_dir})")
-        update_status(f"🗑  既存フォルダを削除しました: {safe_topic}")
+            _saved_thumb_path = _old_thumb
 
     theme_audio_dir = os.path.join(theme_dir, "audio")
     theme_bg_dir = os.path.join(theme_dir, "backgrounds")
     os.makedirs(theme_audio_dir, exist_ok=True)
     os.makedirs(theme_bg_dir, exist_ok=True)
 
-    # 背景再利用: 退避したファイルを復元（新規作成時は_saved_bg_tmp=Noneなので通常生成へ）
+    # 背景再利用: バックアップへ退避したファイルを復元（新規作成時は_saved_bg_dir=Noneなので通常生成へ）
     _has_saved_bgs = False
-    if _saved_bg_tmp:
+    if _saved_bg_dir:
         restored_bg_count = 0
-        for f in os.listdir(_saved_bg_tmp):
-            shutil.copy2(os.path.join(_saved_bg_tmp, f), theme_bg_dir)
-            restored_bg_count += 1
-        shutil.rmtree(_saved_bg_tmp)
+        for f in os.listdir(_saved_bg_dir):
+            if f.startswith("bg_") and f.lower().endswith(".png"):
+                shutil.copy2(os.path.join(_saved_bg_dir, f), theme_bg_dir)
+                restored_bg_count += 1
         _has_saved_bgs = restored_bg_count > 0
         if _has_saved_bgs:
             update_status(f"🖼  既存の背景を再利用します: {restored_bg_count}枚")
-    if _saved_thumb_tmp:
-        saved_thumb = os.path.join(_saved_thumb_tmp, "thumbnail.png")
-        if os.path.exists(saved_thumb):
-            shutil.copy2(saved_thumb, os.path.join(theme_dir, "thumbnail.png"))
-        shutil.rmtree(_saved_thumb_tmp)
+    if _saved_thumb_path and os.path.exists(_saved_thumb_path):
+        shutil.copy2(_saved_thumb_path, os.path.join(theme_dir, "thumbnail.png"))
 
     script_txt_path = os.path.join(theme_dir, "script.txt")
     with open(script_txt_path, "w", encoding="utf-8") as f:
@@ -484,6 +501,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         editor.merge_project(op_template, offset_frames=0)
         current_frame = _read_ymmp_duration(op_template)
         update_status(f"📂 OPテンプレート読み込み完了 ({current_frame}フレーム)")
+    intro_fast_until_frame = current_frame + round(VOICE_INTRO_FAST_SECONDS * editor.fps)
 
     img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style)
 
@@ -530,7 +548,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         for item in items:
             if item["type"] == "background":
                 _temp_num += 1
-                if _temp_num <= MAX_BACKGROUNDS:
+                if _temp_num <= max_backgrounds:
                     bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
                     _batch_items.append((_temp_num, bg_name))
 
@@ -577,8 +595,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     first_bg_placed = True
 
             bg_num += 1
-            if bg_num > MAX_BACKGROUNDS:
-                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 上限({MAX_BACKGROUNDS})超過 — 前の背景を継続使用")
+            if bg_num > max_backgrounds:
+                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 上限({max_backgrounds})超過 — 前の背景を継続使用")
                 bg_start_frame = current_frame
                 continue
 
@@ -628,7 +646,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 except Exception:
                     pass
                 if debug_mode:
-                    update_status(f"  [DEBUG] 背景プロンプト:\n{bg_description}")
+                    update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
                 generated_file = img_gen.generate_background(
                     bg_description, target_dir=theme_bg_dir,
                     reference_image_path=style_reference_path
@@ -670,11 +688,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     return cancel_result()
                 audio_filename = f"{uuid.uuid4().hex}.wav"
                 audio_path = os.path.join(theme_audio_dir, audio_filename)
+                speed_scale = intro_voice_speed if current_frame < intro_fast_until_frame else body_voice_speed
 
                 preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
-                update_status(f"🎤 音声 [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」")
+                update_status(f"🎤 音声 [{voice_num}/{total_voices}] {char_key}({emotion}) x{speed_scale:g}「{preview}」")
                 try:
-                    _, kana = vv.generate_audio(chunk_text, speaker_id, audio_path)
+                    _, kana = vv.generate_audio(chunk_text, speaker_id, audio_path, speed_scale=speed_scale)
                     report.voices_generated += 1
                 except Exception as e:
                     update_status(f"  ❌ 音声合成失敗: {e}")
@@ -684,7 +703,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     return cancel_result()
 
                 # VOICEVOXのpostPhonemeが効かない場合があるため、生成後に無音を直接追加
-                _TAIL_SILENCE_SEC = 0.5
+                _TAIL_SILENCE_SEC = 0.05
                 try:
                     with wave.open(audio_path, 'rb') as wr:
                         sr = wr.getframerate()
@@ -717,10 +736,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 editor.add_voice_item(char_key, chunk_text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=voice_item_frames)
                 current_frame += voice_item_frames + INTER_DIALOGUE_GAP_FRAMES
 
-    # 終了画面用に2秒延長
+    # 終了画面用に1秒延長
     if is_cancelled():
         return cancel_result()
-    current_frame += 2 * editor.fps
+    current_frame += editor.fps
 
     # Finalize
     if current_bg and current_frame > bg_start_frame:

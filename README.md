@@ -8,10 +8,12 @@
 - Shorts / ロングを `動画形式:` から自動判定
 - `━━ 動画1 ━━` や `動画形式:` が複数ある台本を分割して一括生成
 - YouTube NG ワードをマイルド表現へ自動置換
-- VOICEVOX 音声を 1.5 倍速で生成
-- 音声末尾に 20 フレームの安全余白を付け、セリフ間隔を 25 フレーム確保
+- VOICEVOX 音声は Shorts: 冒頭2.0倍速・本編1.65倍速、ロング: 冒頭1.6倍速・本編1.35倍速で生成
+- 音声末尾 0.05s 無音 + 2 フレーム安全余白、セリフ間隔 6 フレーム（約 0.1s）
 - 背景指定がセリフの後に来る台本も自動で補正
-- 背景は Shorts 3〜5 枚・ロング 5〜7 枚を目安に配置
+- 台本本編は `# Scene ...` 見出しでシーンごとに生成し、各シーンに背景・必要なテロップ・会話をまとめる
+- 背景は Shorts 6〜9 枚（3〜5秒ごとの見た目変化が理想）・ロングは5〜7秒に1枚を目安に配置
+- 追加テロップはYMM4字幕と重複させず、短い要約・強調だけに制限
 - 立ち絵より上のレイヤーに字幕を配置
 - BGMer「のほほん」を固定 BGM として自動追加
 - 生成履歴から複数選択して再生成 / YouTube アップロード
@@ -126,6 +128,8 @@ YouTube Studio 側で予約動画を手動公開した場合は、`📅 スケ�
 
 Shorts / Long ともに、VOICEVOX の WAV 実長へテンプレートの `AdditionalTime` 0.3 秒を加え、さらに `VOICE_TAIL_SAFETY_FRAMES = 20` フレームを音声アイテム長に足します。次のセリフ開始までは `INTER_DIALOGUE_GAP_FRAMES = 25` フレーム空けます。
 
+音声速度は Shorts が冒頭 `VOICE_INTRO_SPEED_SCALE_SHORTS = 2.0`・本編 `VOICE_SPEED_SCALE_SHORTS = 1.65`、ロングが冒頭 `VOICE_INTRO_SPEED_SCALE_LONG = 1.6`・本編 `VOICE_SPEED_SCALE_LONG = 1.35` です。冒頭判定は `VOICE_INTRO_FAST_SECONDS = 5.0` 秒以内に開始するセリフです。
+
 ## 立ち絵テンプレート
 
 四国めたんの既定ポーズは、`core/character_templates.json` で両手とも普通手に設定しています。YMM4のPSDレイヤーIDでは、右手が `n16`、左手が `n24` です。目レイヤーは感情・アクション適用時も基本レイヤーが残るよう `core/ymmp_editor.py` で保護しています。
@@ -147,8 +151,13 @@ Shorts / Long ともに、VOICEVOX の WAV 実長へテンプレートの `Addit
 
 | 設定 | 内容 |
 |---|---|
-| `VOICE_SPEED_SCALE` | VOICEVOX 音声速度。現在は `1.5` |
-| `MAX_BACKGROUNDS` | 1動画あたりの背景生成上限。現在は `7` |
+| `VOICE_SPEED_SCALE_SHORTS` | Shorts本編のVOICEVOX音声速度。現在は `1.65` |
+| `VOICE_INTRO_SPEED_SCALE_SHORTS` | Shorts冒頭のVOICEVOX音声速度。現在は `2.0` |
+| `VOICE_SPEED_SCALE_LONG` | ロング本編のVOICEVOX音声速度。現在は `1.35` |
+| `VOICE_INTRO_SPEED_SCALE_LONG` | ロング冒頭のVOICEVOX音声速度。現在は `1.6` |
+| `VOICE_INTRO_FAST_SECONDS` | 冒頭高速化の対象秒数。現在は `5.0` |
+| `MAX_BACKGROUNDS_SHORTS` | Shortsの背景生成上限。現在は `9` |
+| `MAX_BACKGROUNDS_LONG` | ロングの背景生成上限。現在は `90` |
 | `BGM_PATH` | 固定 BGM のパス |
 | `BGM_VOLUME` | 固定 BGM の音量 |
 | `BGM_LAYER` | 固定 BGM のYMM4レイヤー |

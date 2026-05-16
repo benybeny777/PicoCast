@@ -37,11 +37,16 @@ COMMON_SCRIPT_RULES = """\
 - 最初のセリフは、驚くべき事実を前置きなしに即断言する。
 - 【絶対禁止】句読点（。！？）を連続して使わない。「！？」「！！」「？！」などは一切禁止。感嘆は「！」か「？」どちらか1つのみ使う。
 - 【絶対禁止】セリフの内容が句読点・記号のみ（「？」「！」「…」など）になる行を生成しない。セリフには必ず読み上げ可能な日本語テキストを含めること。
-- 30秒前後（Shortsなら20〜40秒付近）に、視聴者へコメントを促す1行を入れる。
-- 台本の最後は以下の順でアウトロCTAを入れる（各1〜2セリフ）:
-  1. 他の動画への誘導: チャンネルの食べ物雑学動画をずんだもんらしく紹介する（例:「他にも食べ物のヤバい歴史を解説してるのだ！チェックしてみてほしいのだ！」）
-  2. チャンネル登録のメリット: ずんだもんキャラ全開で登録を促す（例:「登録してくれると、ずんだもんがめちゃくちゃ喜ぶのだ！」）
-  3. いいね・コメント呼びかけ: 視聴者参加を促す一言で締める
+- 30秒前後（Shortsなら20〜35秒付近）に、視聴者がコメントしたくなる問いを**1行だけ**入れる（例:「どっち派？」「食べたことある？」）。同様の問いを2回以上入れない。
+- 台本の最後はアウトロCTAを**合計2〜3行**に収める。CTAはキャラの会話として自然に入れる。「お願い」口調・事務的な定型文は禁止。
+  【禁止CTA】「チャンネル登録お願いします」「高評価お願いします」「他の動画も見てね」「コメントしてください」「登録も忘れずに」
+  【CTA型】以下のいずれかで締める:
+    1. オチ連動型: 直前のオチを受けてそのままコメント誘導
+    2. 視聴者参加型: 二択の問いでコメント誘導
+    3. 感情ツッコミ型: めたんのツッコミを最後の印象にする
+    4. 続き見たくなる型: 次の雑学が気になる言い方にする
+  【優先順位】コメント誘導 > 登録誘導 > 他動画誘導。Shortsで高評価誘導は基本入れない。
+  【最後の印象】CTAよりオチを優先。最後はキャラらしい余韻（ツッコミ）で締める。
 - 背景プロンプトは日本語で書き、漫画風・イラスト調を基本スタイルにする。
 - 背景プロンプトに特定クリエイター名（例: 新海誠、宮崎駿 等）を含めない。
 - 背景内テキストは10文字以内にし、「」で囲む。
@@ -51,12 +56,47 @@ COMMON_SCRIPT_RULES = """\
   - 食べ物テーマ → シズル感（湯気・艶・断面・盛り付け）を強調した描写
   - 歴史テーマ → 当時の街並み・古文書・古地図・時代を感じる道具や建物
   - 驚き・衝撃シーン → コントラスト強め・ビビッドな色彩・大きなフォントのキャッチコピー
-- 背景はShortsなら3〜5枚、ロングなら5〜7枚を目安に配置する。
+- 背景はShortsなら6〜9枚を目安に配置する。Shortsは理想3〜5秒ごとに背景や見た目を変える。ロングは5〜7秒に1枚を基本にし、同じ背景を10秒以上続けない。
 - 話題の転換・場所・時間・感情の山場が変わるタイミングで背景を切り替える。
 - 同じ場面や近い会話が続く場合は、1つの「背景: 」行の下に複数のセリフをまとめる。
 
+
+## Scene-Based Script Structure
+- Generate the main script scene by scene.
+- Use a comment heading before each scene: `# Scene 1: Opening hook`, `# Scene 2: Reason`, etc.
+- The `# Scene ...` heading is for human readability only and is ignored by the app.
+- Each scene must contain exactly one `背景:` or `Background:` line first.
+- Optional `テロップ:` / `Telop:` lines may appear after the background, but only for short emphasis, not dialogue repetition.
+- Put several dialogue lines under the same scene until the topic, place, time, emotion, or visual point changes.
+- Do not create a new scene for every single dialogue line.
+- Shorts scene target: 6-9 scenes. Change the look about every 3-5 seconds.
+- Long scene target: one scene about every 5-7 seconds. Do not keep the same scene for more than 10 seconds.
+- Scene endings should create curiosity for the next scene.
+
+Scene output example:
+# Scene 1: Opening hook
+背景: Japanese image prompt. Manga illustration style. No people. Put a short catch copy in quotes at the top center.
+テロップ: Short hook only
+ずんだもん(ノーマル): セリフ
+四国めたん(ツンツン): セリフ
+
+# Scene 2: Reason
+背景: Japanese image prompt for the next visual point.
+ずんだもん(ノーマル): セリフ
+四国めたん(ノーマル): セリフ
+
+## YMM4前提の追加テロップルール
+- YMM4のセリフ字幕は常時表示される前提。追加テロップはセリフの丸写しではなく、短い要約と強調だけに使う。
+- 追加テロップは「冒頭フック」「重要ワード強調」「章・場面転換」「オチ・ツッコミ」の4種類だけにする。
+- 追加テロップは下に置かない。画面中央・画面上部・右上/左上を基本にし、YMM4字幕とぶつけない。
+- Shortsは追加テロップ6〜12個、多くても15個以内。表示は0.8〜1.5秒、長くても2秒以内。1行10〜14文字以内、最大2行。
+- Longは章テロップ必須。重要語・数字・年代・固有名詞・オチだけを少なめに入れる。1行14〜18文字以内、最大2行。
+- Longの追加テロップ数目安: 3分15〜25個、5分25〜40個、8分40〜60個、10分50〜80個。
+- 悪い例: セリフ「昔のウナギは安い庶民の味だったのだ」+ テロップ「昔のウナギは安い庶民の味だった」。
+- 良い例: セリフ「昔のウナギは安い庶民の味だったのだ」+ テロップ「昔は安物」。
+
 ## 動画形式
-- Shorts: 60〜150秒、セリフ40〜55行、1セリフ15文字以内。冒頭15秒で視聴者を完全に引き込む。1つの驚き・感情的エピソード・オチを強く見せる。
+- Shorts: 45〜52秒、セリフ28〜32行、シーン6〜9、1セリフ15文字以内。冒頭15秒で視聴者を完全に引き込む。1つの驚き・感情的エピソード・オチを強く見せる。
 - Long: 3〜10分、セリフ100〜200行。イントロ→本編チャプター3〜5個→まとめ→アウトロCTAで構成する。
 - Long の場合は、メタデータ直後に「チャプター: 1.イントロ / 2.〇〇 / ...」を出力する。
 """

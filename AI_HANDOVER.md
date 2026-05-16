@@ -21,6 +21,26 @@
 
 ### 最新セッション
 
+- **セリフ間隔の大幅短縮** (`main.py`, `config.py`):
+  - WAV末尾無音 `_TAIL_SILENCE_SEC`: 0.5s → 0.05s
+  - 安全余白 `VOICE_TAIL_SAFETY_FRAMES`: 20 → 2 フレーム
+  - セリフ間ギャップ `INTER_DIALOGUE_GAP_FRAMES`: 25 → 6 フレーム（60fps で約 0.1s）
+  - `VOICE_POST_PHONEME_LENGTH`: 0.3 → 0.0（API側の無音も除去）
+  - 合計セリフ間隔: 約 0.95s → 約 0.18s
+- **Shorts台本パラメータ更新** (`core/script_prompts.py`, `core/vidiq_food_prompt.txt`):
+  - 目標尺: 45〜52秒
+  - セリフ数: 28〜32行
+  - シーン数: 6〜9（Long は変更なし）
+  - コメント誘導（どっち派など）: 中盤に1回のみ、2回以上禁止
+- **CTAルール刷新** (共通・`core/script_prompts.py`, `core/vidiq_food_prompt.txt`):
+  - 「お願い」口調・事務的定型文を完全禁止
+  - オチ連動型 / 視聴者参加型 / 感情ツッコミ型 / 続き見たくなる型 の4パターンに限定
+  - Shorts CTA は 2〜3行。コメント誘導 > 登録誘導 > 他動画誘導 の優先順位
+  - 最後の印象はキャラらしいツッコミ・余韻で締める
+  - 固定コメントは動画内CTA の問いと必ず連動
+
+### 前セッション
+
 - **チャンネル方針を食べ物雑学特化へ更新**:
   - チャンネル名: `ずんだもんとめたんの食べ物雑学堂`
   - アニメ雑学系の方向性を削除し、食べ物の歴史・起源・昔の食文化に寄せた
@@ -37,6 +57,10 @@
   - `作業中止` 押下でGUIを即 `Canceled` 扱いにして後続処理へ進ませない
   - 生成ごとにキャンセルイベントを分離し、中止後に新しい生成を始めても古い処理が復活しないようにした
   - 画像生成・Batch API・サムネ生成の戻り直後にもキャンセル判定を追加
+- **音声速度調整** (`config.py`, `main.py`):
+  - Shorts本編は `VOICE_SPEED_SCALE_SHORTS = 1.65`、ロング本編は `VOICE_SPEED_SCALE_LONG = 1.35`
+  - 本編冒頭 `VOICE_INTRO_FAST_SECONDS = 5.0` 秒以内に開始するセリフは Shorts `VOICE_INTRO_SPEED_SCALE_SHORTS = 2.0`、ロング `VOICE_INTRO_SPEED_SCALE_LONG = 1.6`
+  - 音声生成ログに `x2` / `x1.65` / `x1.6` / `x1.35` の倍率を表示
 - **四国めたんのアクション時の目消え対策** (`core/ymmp_editor.py`):
   - めたんの感情差分で目の基本レイヤー `n68` / `n69` を外さないよう変更
   - 表情適用後も `n68` / `n69` を必ず残すガードを追加
@@ -137,6 +161,8 @@
 **症状**: YMM4 で音声の末尾が切れる（WAV を直接再生すると切れていない）
 
 **原因**: VOICEVOX の `postPhonemeLength` API パラメータが `speedScale=1.5` 環境で効かず、WAV に末尾無音が付加されない。YMM4 が音声アイテムをわずかに早めに終端するため、末尾の音声が途切れる。
+
+現在の速度は Shorts が冒頭 `speedScale=2.0`・本編 `1.65`、ロングが冒頭 `1.6`・本編 `1.35`。末尾切れ対策は速度に関係なく維持する。
 
 **対策**: WAV 生成直後に Python で 0.5 秒分の無音サンプルを WAV に直接追記する（`main.py` 内 `_TAIL_SILENCE_SEC = 0.5`）。`postPhonemeLength` API パラメータは信頼しない。
 
