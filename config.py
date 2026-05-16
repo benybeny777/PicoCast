@@ -42,6 +42,12 @@ CHARACTER_PNGS = {
     "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
 }
 
+# サムネイル生成用の参照画像。
+THUMBNAIL_CHARACTER_PNGS = {
+    "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
+    "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
+}
+
 # Fixed background music. Source: BGMer "のほほん"
 BGM_PATH = os.path.join(ASSETS_DIR, "bgm", "nohohon_long_BPM97.mp3")
 BGM_VOLUME = 15.0

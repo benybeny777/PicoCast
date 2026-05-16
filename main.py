@@ -124,8 +124,8 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         f"{script_content or topic}"
     )
 
-    from config import CHARACTER_PNGS
-    char_refs = [p for p in CHARACTER_PNGS.values() if os.path.exists(p)]
+    from config import THUMBNAIL_CHARACTER_PNGS
+    char_refs = [p for p in THUMBNAIL_CHARACTER_PNGS.values() if os.path.exists(p)]
 
     # プロンプトをファイルに保存（再生成・デバッグ用）
     prompt_path = os.path.join(theme_dir, "thumbnail_prompt.txt")
@@ -767,7 +767,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
         for emotion, start, end in merged:
             if end > start:
-                editor.add_tachie_item(char_name, start, end - start, layer=layer, x=x_pos, y=y_pos, zoom=tachie_zoom)
+                editor.add_tachie_item(
+                    char_name,
+                    start,
+                    end - start,
+                    layer=layer,
+                    x=x_pos,
+                    y=y_pos,
+                    zoom=tachie_zoom,
+                    emotion=emotion,
+                )
 
     editor.merge_consecutive_tachie_items()
     _add_fixed_bgm(editor, current_frame, update_status)

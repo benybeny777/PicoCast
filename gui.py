@@ -8,13 +8,14 @@ import subprocess
 import traceback
 import time
 import shutil
+import queue
 from main import run_pipeline, regenerate_thumbnail_only, normalize_background_order
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
 from core.ng_words import NG_WORD_PROMPT
 from core.parser import ScriptParser
 from core.script_prompts import build_vidiq_prompt
-from config import VOICEVOX_URL, VOICEVOX_PATH, CHARACTER_PNGS
+from config import VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
 import requests
 
 try:
@@ -206,13 +207,15 @@ class YMM4AutoGui:
 
         self.last_output_dir = None
         self.cancel_event = threading.Event()
+        self._log_queue = queue.Queue()
 
         self.refresh_history()
-        threading.Thread(target=self.check_engines_startup, daemon=True).start()
+        self.root.after(80, self._drain_log_queue)
+        threading.Thread(target=self.check_engines_startup, args=(self.debug_var.get(),), daemon=True).start()
 
-    def check_engines_startup(self):
+    def check_engines_startup(self, debug_mode=False):
         self.log("--- システム接続確認 ---")
-        ai = AIGenerator(debug=self.debug_var.get())
+        ai = AIGenerator(debug=debug_mode)
         g_status = "接続OK (Gemini / Nano Banana)" if ai.client else "未設定 (configを確認してください)"
         self.log(f"Google AI : {g_status}", "info" if ai.client else "error")
 
@@ -239,14 +242,83 @@ class YMM4AutoGui:
         self.log("⏹ 作業中止をリクエストしました。現在の処理区切りで停止します。", "error")
 
     def log(self, message, tag="info"):
-        self.root.after(0, lambda: self._log_ui(message, tag))
+        self._log_queue.put((str(message), tag))
 
-    def _log_ui(self, message, tag):
+    @staticmethod
+    def _compact_log_message(message, limit=6000):
+        if len(message) <= limit:
+            return message
+        head = message[: limit // 2]
+        tail = message[-limit // 2 :]
+        omitted = len(message) - len(head) - len(tail)
+        return f"{head}\n...（ログ表示を短縮: {omitted}文字省略）...\n{tail}"
+
+    def _drain_log_queue(self):
+        processed = 0
+        last_message = None
+        try:
+            while processed < 60:
+                message, tag = self._log_queue.get_nowait()
+                display_message = self._compact_log_message(message)
+                self._append_log_line(display_message, tag)
+                last_message = message
+                processed += 1
+        except queue.Empty:
+            pass
+
+        if last_message is not None:
+            self._trim_log_area()
+            self.status_var.set(last_message[:300])
+            self.log_area.see(tk.END)
+
+        delay = 20 if processed == 60 else 80
+        self.root.after(delay, self._drain_log_queue)
+
+    def _append_log_line(self, message, tag):
         self.log_area.insert(tk.END, f"[{time.strftime('%H:%M:%S')}] {message}\n", tag)
-        if int(self.log_area.index("end-1c").split(".")[0]) > 500:
-            self.log_area.delete("1.0", "101.0")
-        self.log_area.see(tk.END)
-        self.status_var.set(message)
+
+    def _trim_log_area(self, max_lines=500, keep_lines=420):
+        line_count = int(self.log_area.index("end-1c").split(".")[0])
+        if line_count > max_lines:
+            delete_to = max(1, line_count - keep_lines)
+            self.log_area.delete("1.0", f"{delete_to}.0")
+
+    def _log_ui(self, message, tag, update_status=True):
+        display_message = self._compact_log_message(message)
+        self._append_log_line(display_message, tag)
+        self._trim_log_area()
+        if update_status:
+            self.log_area.see(tk.END)
+            self.status_var.set(message[:300])
+
+    def _run_on_ui_sync(self, func):
+        if threading.current_thread() is threading.main_thread():
+            return func()
+
+        done = threading.Event()
+        result = {}
+
+        def wrapper():
+            try:
+                result["value"] = func()
+            except BaseException as e:
+                result["error"] = e
+            finally:
+                done.set()
+
+        self.root.after(0, wrapper)
+        done.wait()
+        if "error" in result:
+            raise result["error"]
+        return result.get("value")
+
+    def _generation_settings(self):
+        return {
+            "debug_mode": self.debug_var.get(),
+            "image_style": self.style_var.get(),
+            "reuse_backgrounds": self.reuse_bg_var.get(),
+            "use_batch_api": self.batch_api_var.get(),
+        }
 
     def refresh_history(self):
         if not os.path.exists("output"): os.makedirs("output", exist_ok=True)
@@ -412,7 +484,7 @@ class YMM4AutoGui:
         self._toggle_ui(False)
         self.cancel_event.clear()
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
-        threading.Thread(target=self._run_batch, args=(scripts,), daemon=True).start()
+        threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings()), daemon=True).start()
 
     def select_history_dialog(self, title, action_text, multi=False):
         self.refresh_history()
@@ -500,9 +572,10 @@ class YMM4AutoGui:
         self._toggle_ui(False)
         self.cancel_event.clear()
         self.log(f"一括処理開始: 合計 {len(scripts)} 件")
-        threading.Thread(target=self._run_batch, args=(scripts,), daemon=True).start()
+        threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings()), daemon=True).start()
 
-    def _run_batch(self, scripts):
+    def _run_batch(self, scripts, settings=None):
+        settings = settings or self._generation_settings()
         count = len(scripts)
         is_batch = count > 1
 
@@ -531,11 +604,11 @@ class YMM4AutoGui:
                 msg, report = run_pipeline(
                     topic,
                     pregenerated_script=script,
-                    debug_mode=self.debug_var.get(),
-                    image_style=self.style_var.get(),
+                    debug_mode=settings["debug_mode"],
+                    image_style=settings["image_style"],
                     progress_callback=self.log,
-                    reuse_backgrounds=self.reuse_bg_var.get(),
-                    use_batch_api=self.batch_api_var.get(),
+                    reuse_backgrounds=settings["reuse_backgrounds"],
+                    use_batch_api=settings["use_batch_api"],
                     cancel_event=self.cancel_event,
                 )
 
@@ -549,7 +622,7 @@ class YMM4AutoGui:
 
             except Exception as e:
                 err_msg = str(e)
-                if self.debug_var.get():
+                if settings["debug_mode"]:
                     self.log(traceback.format_exc(), "error")
                 self.log(f"❌ エラー: {err_msg}", "error")
                 if not is_batch:
@@ -560,12 +633,12 @@ class YMM4AutoGui:
             self.root.after(0, lambda: self.progress.config(value=100))
             self.log("\n⏹ 処理を中止しました。", "error")
             if is_batch:
-                messagebox.showinfo("中止", "一括処理を中止しました。")
+                self.root.after(0, lambda: messagebox.showinfo("中止", "一括処理を中止しました。"))
             self.root.after(0, lambda: self._toggle_ui(True))
         elif is_batch:
             self.root.after(0, lambda: self.progress.config(value=100))
             self.log("\n✅ 全ての一括処理が完了しました！", "success")
-            messagebox.showinfo("一括完了", f"{count}件の処理が完了しました。")
+            self.root.after(0, lambda c=count: messagebox.showinfo("一括完了", f"{c}件の処理が完了しました。"))
             self.root.after(0, lambda: self._toggle_ui(True))
 
     def _update_meta_preview(self):
@@ -828,11 +901,12 @@ class YMM4AutoGui:
                 if publish_at:
                     mark_slot_used(publish_at, title, video_type)
                     self.log(f"📅 予約登録: {format_slot(publish_at)}", "success")
-                if fixed_comment:
-                    self.log("💬 固定コメントを投稿中...")
-                    comment_id = post_comment(video_id, fixed_comment, progress_callback=self.log)
-                    if comment_id:
-                        self.log("  ✅ コメント投稿完了（YouTube Studioでピン留めできます）", "success")
+                # 固定コメント投稿は現在無効（APIエラーのため）
+                # if fixed_comment:
+                #     self.log("💬 固定コメントを投稿中...")
+                #     comment_id = post_comment(video_id, fixed_comment, progress_callback=self.log)
+                #     if comment_id:
+                #         self.log("  ✅ コメント投稿完了（YouTube Studioでピン留めできます）", "success")
 
             # アップロード成功 → 000_uploaded/ へ移動（既に中にある場合はスキップ）
             if output_dir and os.path.exists(output_dir):
@@ -941,14 +1015,18 @@ class YMM4AutoGui:
             return
         self.regen_thumb_btn.config(state=tk.DISABLED)
         self.log(f"🖼 サムネイル再生成開始: {os.path.basename(output_dir)}")
-        threading.Thread(target=self._run_regen_thumbnail, args=(output_dir,), daemon=True).start()
+        threading.Thread(
+            target=self._run_regen_thumbnail,
+            args=(output_dir, self.debug_var.get(), self.style_var.get()),
+            daemon=True,
+        ).start()
 
-    def _run_regen_thumbnail(self, output_dir):
+    def _run_regen_thumbnail(self, output_dir, debug_mode=False, image_style="通常"):
         try:
             thumb_path = regenerate_thumbnail_only(
                 output_dir,
-                image_style=self.style_var.get(),
-                debug=self.debug_var.get(),
+                image_style=image_style,
+                debug=debug_mode,
                 progress_callback=self.log,
             )
             self.log(f"✅ サムネイル保存: {thumb_path}", "success")
@@ -965,7 +1043,11 @@ class YMM4AutoGui:
         self.last_output_dir = output_dir
         self.image_review_btn.config(state=tk.DISABLED)
         self.log(f"🔄 画像確認: {os.path.basename(output_dir)}")
-        threading.Thread(target=self._run_image_review, args=(output_dir,), daemon=True).start()
+        threading.Thread(
+            target=self._run_image_review,
+            args=(output_dir, self.debug_var.get(), self.style_var.get()),
+            daemon=True,
+        ).start()
 
     def _collect_image_review_specs(self, output_dir):
         specs = []
@@ -1021,7 +1103,7 @@ class YMM4AutoGui:
                 })
         return specs
 
-    def _run_image_review(self, output_dir):
+    def _run_image_review(self, output_dir, debug_mode=False, image_style="通常"):
         try:
             specs = self._collect_image_review_specs(output_dir)
             if not specs:
@@ -1029,7 +1111,7 @@ class YMM4AutoGui:
                 return
 
             while True:
-                regen_set = self.confirm_images_bulk(specs)
+                regen_set = self._run_on_ui_sync(lambda s=specs: self.confirm_images_bulk(s))
                 if not regen_set:
                     break
 
@@ -1038,10 +1120,10 @@ class YMM4AutoGui:
                     spec = specs[idx]
                     try:
                         width, height = (1080, 1920) if spec.get("is_shorts") else (1920, 1080)
-                        img_gen = ImageGenerator(width=width, height=height, debug=self.debug_var.get(), image_style=self.style_var.get())
+                        img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style)
                         target_dir = os.path.dirname(spec["path"])
                         if spec["kind"] == "thumbnail":
-                            char_refs = [p for p in CHARACTER_PNGS.values() if os.path.exists(p)]
+                            char_refs = [p for p in THUMBNAIL_CHARACTER_PNGS.values() if os.path.exists(p)]
                             generated = img_gen.generate_background(
                                 spec["prompt"],
                                 target_dir=target_dir,

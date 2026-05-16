@@ -2,6 +2,35 @@ import json
 import uuid
 import os
 import base64
+import copy
+
+
+EXPRESSION_LAYER_PRESETS = {
+    "ずんだもん": {
+        # PSDレイヤーID。口レイヤーは口パク用に触らず、顔色・目・眉・記号を足す。
+        "あまあま": {"add": ["n66", "n74"], "remove": ["n63", "n65", "n70", "n77", "n101"]},
+        "ツンツン": {"add": ["n77", "n101"], "remove": ["n66", "n74", "n102"]},
+        "ささやき": {"add": ["n76", "n99"], "remove": ["n70", "n77", "n100", "n101"]},
+        "ヒソヒソ": {"add": ["n76", "n108"], "remove": ["n70", "n77", "n100", "n101"]},
+        "セクシー": {"add": ["n79", "n66"], "remove": ["n63", "n65", "n70", "n77"]},
+    },
+    "四国めたん": {
+        "あまあま": {"add": ["n27", "n69"], "remove": ["n24", "n26", "n64", "n67", "n68"]},
+        "ツンツン": {"add": ["n67"], "remove": ["n27", "n63", "n69"]},
+        "ささやき": {"add": ["n49", "n66"], "remove": ["n45", "n46", "n64", "n67"]},
+        "ヒソヒソ": {"add": ["n49", "n77"], "remove": ["n45", "n46", "n64", "n67"]},
+        "セクシー": {"add": ["n27", "n69"], "remove": ["n24", "n26", "n64", "n67"]},
+    },
+}
+
+
+ACTION_PRESETS = {
+    "あまあま": [(0, 0, 0, 0), (0, -18, 2.5, -2), (0, 0, 0, 0), (0, -10, 1.5, 2), (0, 0, 0, 0)],
+    "ツンツン": [(-10, 0, 0, -3), (10, 0, 0, 3), (-8, 0, 0, -2), (8, 0, 0, 2), (0, 0, 0, 0)],
+    "ささやき": [(0, 0, 0, 0), (12, -8, 3.0, -2), (10, -6, 2.0, -1)],
+    "ヒソヒソ": [(0, 0, 0, 0), (10, -8, 3.0, -2), (8, -6, 2.0, -1)],
+    "セクシー": [(0, 0, 0, 0), (0, -8, 2.0, -4), (0, -5, 1.5, 4), (0, 0, 0, 0)],
+}
 
 class YmmpEditor:
     def __init__(self, width=1920, height=1080, fps=60, debug=False):
@@ -67,7 +96,6 @@ class YmmpEditor:
             char_id = str(uuid.uuid4())
 
         if name in self.templates:
-            import copy
             char_data = dict(self.templates[name])  # shallow copy
             # deep-copy only the field we mutate below
             if "FontSize" in char_data:
@@ -220,18 +248,30 @@ class YmmpEditor:
         }
         self.project["Timelines"][0]["Items"].append(item)
 
-    def add_tachie_item(self, character_name, start_frame, duration, layer=4, x=0, y=0, zoom=30):
-        resolved_name = self._resolve_name(character_name)
-        self._get_character_id(resolved_name)  # ensure registered
+    @staticmethod
+    def _apply_expression_layers(base_param, character_name, emotion):
+        if not base_param:
+            return None
 
-        # Look up plugin parameters from template
-        tmpl = self.templates.get(resolved_name, {})
-        tachie_item_param = tmpl.get("TachieDefaultItemParameter")
-        face_param = tmpl.get("TachieDefaultFaceParameter")
+        param = copy.deepcopy(base_param)
+        preset = EXPRESSION_LAYER_PRESETS.get(character_name, {}).get(emotion)
+        if not preset:
+            return param
 
+        layers = list(param.get("EnableLayers") or [])
+        remove = set(preset.get("remove") or [])
+        add = list(preset.get("add") or [])
+        layers = [layer for layer in layers if layer not in remove]
+        for layer in add:
+            if layer not in layers:
+                layers.append(layer)
+        param["EnableLayers"] = layers
+        return param
+
+    def _append_tachie_item(self, character_name, start_frame, duration, layer, x, y, zoom, rotation, tachie_item_param):
         item = {
             "$type": "YukkuriMovieMaker.Project.Items.TachieItem, YukkuriMovieMaker",
-            "CharacterName": resolved_name,
+            "CharacterName": character_name,
             "Frame": start_frame,
             "Length": duration,
             "Layer": layer,
@@ -240,7 +280,7 @@ class YmmpEditor:
             "Z": self._anim_value(0),
             "Opacity": self._anim_value(100),
             "Zoom": self._anim_value(zoom),
-            "Rotation": self._anim_value(0),
+            "Rotation": self._anim_value(rotation),
             "FadeIn": 0.0,
             "FadeOut": 0.0,
             "Blend": "Normal",
@@ -263,6 +303,42 @@ class YmmpEditor:
 
         self.project["Timelines"][0]["Items"].append(item)
 
+    def add_tachie_item(self, character_name, start_frame, duration, layer=4, x=0, y=0, zoom=30, emotion="ノーマル"):
+        resolved_name = self._resolve_name(character_name)
+        self._get_character_id(resolved_name)  # ensure registered
+
+        # Look up plugin parameters from template
+        tmpl = self.templates.get(resolved_name, {})
+        tachie_item_param = self._apply_expression_layers(
+            tmpl.get("TachieDefaultItemParameter"), resolved_name, emotion
+        )
+
+        action = ACTION_PRESETS.get(emotion)
+        if not action or duration < len(action) * 3:
+            self._append_tachie_item(resolved_name, start_frame, duration, layer, x, y, zoom, 0, tachie_item_param)
+            return
+
+        remaining = duration
+        frame = start_frame
+        for idx, (dx, dy, dz, drot) in enumerate(action):
+            piece_len = remaining if idx == len(action) - 1 else max(3, duration // len(action))
+            piece_len = min(piece_len, remaining)
+            self._append_tachie_item(
+                resolved_name,
+                frame,
+                piece_len,
+                layer,
+                x + dx,
+                y + dy,
+                zoom + dz,
+                drot,
+                tachie_item_param,
+            )
+            frame += piece_len
+            remaining -= piece_len
+            if remaining <= 0:
+                break
+
     def merge_consecutive_tachie_items(self):
         """同キャラ・同レイヤー・同パラメータで連続するTachieItemを1つに統合する。"""
         import json as _json
@@ -281,9 +357,27 @@ class YmmpEditor:
         for key, segs in groups.items():
             segs.sort(key=lambda x: x["Frame"])
             current = dict(segs[0])
-            current_param = _json.dumps(current.get("TachieItemParameter"), sort_keys=True)
+            current_param = _json.dumps(
+                {
+                    "param": current.get("TachieItemParameter"),
+                    "x": current.get("X"),
+                    "y": current.get("Y"),
+                    "zoom": current.get("Zoom"),
+                    "rotation": current.get("Rotation"),
+                },
+                sort_keys=True,
+            )
             for seg in segs[1:]:
-                seg_param = _json.dumps(seg.get("TachieItemParameter"), sort_keys=True)
+                seg_param = _json.dumps(
+                    {
+                        "param": seg.get("TachieItemParameter"),
+                        "x": seg.get("X"),
+                        "y": seg.get("Y"),
+                        "zoom": seg.get("Zoom"),
+                        "rotation": seg.get("Rotation"),
+                    },
+                    sort_keys=True,
+                )
                 # 連続（隙間なし）かつ同パラメータなら結合
                 if seg_param == current_param and seg["Frame"] == current["Frame"] + current["Length"]:
                     current["Length"] += seg["Length"]
