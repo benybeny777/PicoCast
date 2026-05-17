@@ -1081,6 +1081,46 @@ class YMM4AutoGui:
         import webbrowser
         webbrowser.open(self._studio_url or "https://studio.youtube.com/")
 
+    @staticmethod
+    def _write_upload_record(output_dir, video_id, title, video_type, publish_at):
+        """アップロード結果＋スコアを upload_record.json に書き込む。"""
+        import json as _json
+        from datetime import datetime, timezone
+
+        def _read(name):
+            p = os.path.join(output_dir, name)
+            if not os.path.exists(p):
+                return {}
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return _json.load(f)
+            except Exception:
+                return {}
+
+        opening = _read("opening_review.json")
+        duration = _read("duration_review.json")
+        final = _read("final_review.json")
+
+        record = {
+            "video_id": video_id,
+            "title": title,
+            "video_type": video_type,
+            "uploaded_at": datetime.now(timezone.utc).isoformat(),
+            "publish_at": publish_at.isoformat() if hasattr(publish_at, "isoformat") else str(publish_at) if publish_at else None,
+            "opening_score": opening.get("final_score"),
+            "opening_status": opening.get("final_status"),
+            "duration_sec": duration.get("seconds"),
+            "duration_status": duration.get("status"),
+            "final_score": final.get("final_score") if not final.get("skipped") and not final.get("error") else None,
+            "publish_ok": final.get("publish_ok") if not final.get("skipped") and not final.get("error") else None,
+            "risk": final.get("risk") if not final.get("skipped") and not final.get("error") else None,
+            "must_fix": (final.get("must_fix") or []) if not final.get("skipped") and not final.get("error") else [],
+        }
+        path = os.path.join(output_dir, "upload_record.json")
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(record, f, ensure_ascii=False, indent=2)
+        return path
+
     def _run_upload(self, mp4_path, title, description, tags, thumb, output_dir,
                     publish_at=None, video_type="long", fixed_comment="", restore_button=True):
         try:
@@ -1100,6 +1140,11 @@ class YMM4AutoGui:
                 if publish_at:
                     mark_slot_used(publish_at, title, video_type)
                     self.log(f"📅 予約登録: {format_slot(publish_at)}", "success")
+                try:
+                    rec_path = self._write_upload_record(output_dir, video_id, title, video_type, publish_at)
+                    self.log(f"  📋 アップロード記録: {os.path.basename(rec_path)}", "info")
+                except Exception as e:
+                    self.log(f"  ⚠ upload_record.json 書き込み失敗(無視): {e}")
                 # 固定コメント投稿は現在無効（APIエラーのため）
                 # if fixed_comment:
                 #     self.log("💬 固定コメントを投稿中...")
