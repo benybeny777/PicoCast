@@ -519,10 +519,54 @@ class YMM4AutoGui:
             messagebox.showerror("台本形式エラー", "\n".join(errors))
             return
 
+        # 危険チェック & Shorts尺予測
+        all_errors = []
+        all_warnings = []
+        duration_lines = []
+        for i, script in enumerate(scripts, 1):
+            prefix = f"[台本{i}] " if len(scripts) > 1 else ""
+            items = ScriptParser.parse_string(script)
+            is_shorts = any(it.get("text", "").strip() == "Shorts" for it in items if it["type"] == "video_format")
+            errs, warns = self._pre_generate_check(items, is_shorts)
+            all_errors.extend(f"{prefix}{e}" for e in errs)
+            all_warnings.extend(f"{prefix}{w}" for w in warns)
+            if is_shorts:
+                est, n, avg = self._estimate_shorts_duration(items)
+                if est is not None:
+                    if est < 35:
+                        verdict = "⚠ 短すぎ"
+                    elif est <= 52:
+                        verdict = "✅ OK"
+                    elif est <= 58:
+                        verdict = "⚠ 長め"
+                    else:
+                        verdict = "🚨 長すぎ"
+                    duration_lines.append(
+                        f"{prefix}📏 Shorts推定尺: {est:.0f}秒 {verdict}  "
+                        f"（{n}行 / 平均{avg:.1f}文字）"
+                    )
+
+        if all_errors:
+            messagebox.showerror("生成前エラー", "\n".join(all_errors))
+            return
+
+        if all_warnings or duration_lines:
+            msg_parts = []
+            if duration_lines:
+                msg_parts.append("\n".join(duration_lines))
+            if all_warnings:
+                msg_parts.append("⚠ 警告:\n" + "\n".join(f"  ・{w}" for w in all_warnings))
+            msg_parts.append("\nこのまま生成を続けますか？")
+            if not messagebox.askokcancel("生成前チェック", "\n".join(msg_parts)):
+                return
+
         self._toggle_ui(False)
         self.cancel_event = threading.Event()
         self._gen_id += 1
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
+        for line in duration_lines:
+            tag = "success" if "✅" in line else "warning" if ("⚠" in line or "🚨" in line) else "info"
+            self.log(line, tag)
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
     def select_history_dialog(self, title, action_text, multi=False, require_script=False):
