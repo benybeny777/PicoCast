@@ -343,8 +343,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if is_cancelled():
         return cancel_result()
 
-    update_status("🔍 YouTubeポリシー補正中...")
-    script_content = ai.sanitize_for_youtube(script_content)
+    from core.ng_words import apply_ng_word_replacements
+    script_content = apply_ng_word_replacements(script_content)
     script_content = re.sub(r'(?m)^サムネイル[:：][^\n]*\n?', '', script_content)
     if is_cancelled():
         return cancel_result()
