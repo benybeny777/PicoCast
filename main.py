@@ -33,6 +33,7 @@ from config import (
     CHARACTERS,
     MAX_BACKGROUNDS_LONG,
     MAX_BACKGROUNDS_SHORTS,
+    OPENING_SCORE_ABORT_THRESHOLD,
     VOICEVOX_PATH,
     VOICE_INTRO_FAST_SECONDS,
     VOICE_INTRO_SPEED_SCALE_LONG,
@@ -710,13 +711,23 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             update_status(f"  ⚠ 冒頭Ollamaリライト失敗: {e}")
 
     opening_review_path = save_opening_review(theme_dir, opening_review, llm_review, rewrite_text)
+    final_score = int(final_opening.get("score") or 0)
     update_status(
-        f"━━━━━━━━ 冒頭スコア {final_opening.get('score')}点 / {final_opening.get('status')} ━━━━━━━━\n"
+        f"━━━━━━━━ 冒頭スコア {final_score}点 / {final_opening.get('status')} ━━━━━━━━\n"
         f"  保存先: {opening_review_path}",
         "score",
     )
     for issue in (final_opening.get("issues") or [])[:3]:
         update_status(f"    - {issue}")
+
+    if final_score < OPENING_SCORE_ABORT_THRESHOLD:
+        msg = (
+            f"❌ 冒頭スコアが低すぎるため処理を中止しました（{final_score}点 / 基準: {OPENING_SCORE_ABORT_THRESHOLD}点以上）\n"
+            "台本の冒頭を修正してから再実行してください。"
+        )
+        update_status(msg, "error")
+        report.elapsed_sec = time.time() - pipeline_start
+        return msg, report
 
     if not is_shorts:
         base_title = meta.get("video_title", topic)
