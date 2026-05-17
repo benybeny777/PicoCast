@@ -46,18 +46,6 @@ NG_WORD_REPLACEMENTS = [
 ]
 
 
-NG_WORD_PROMPT = """\
-## YouTube NGワード対策
-以下の直接的な表現は、台本・説明文・タグ・背景プロンプト・テロップでそのまま使わず、意味が伝わる自然な言い換えにしてください。
-既存台本を補正する場合も、セリフの流れやオチは変えず、最小限の置換だけを行ってください。
-
-注意:
-- タイトル以外で事実性が必要な場合は、危険語を避けすぎて意味不明にせず、視聴者に伝わる自然な言い換えを優先してください。
-- 直接語を連続して並べないでください。
-- テロップには伏せ字例を優先して使ってください。
-"""
-
-
 def apply_ng_word_replacements(text):
     """Known direct NG words are replaced locally before/after AI correction."""
     if not text:
