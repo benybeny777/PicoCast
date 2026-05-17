@@ -101,6 +101,18 @@ LONG_THUMBNAIL_VARIANTS = [
 ]
 
 
+def _meta_dir(theme_dir: str) -> str:
+    p = os.path.join(theme_dir, "_meta")
+    os.makedirs(p, exist_ok=True)
+    return p
+
+
+def _thumbs_dir(theme_dir: str) -> str:
+    p = os.path.join(theme_dir, "thumbnails")
+    os.makedirs(p, exist_ok=True)
+    return p
+
+
 def _safe_thumbnail_prefix(theme_dir):
     prefix = os.path.basename(os.path.normpath(theme_dir)) or "video"
     return re.sub(r'[\\/:*?"<>|]', '_', prefix)
@@ -111,7 +123,7 @@ def _thumbnail_variant_filename(theme_dir, variant):
 
 
 def _write_long_thumbnail_manifest(theme_dir, topic, variants, video_id=None):
-    manifest_path = os.path.join(theme_dir, "thumbnail_ab_test.json")
+    manifest_path = os.path.join(_meta_dir(theme_dir), "thumbnail_ab_test.json")
     current = {}
     if os.path.exists(manifest_path):
         try:
@@ -148,7 +160,7 @@ def _fallback_title_variants(base_title):
 
 
 def _write_long_title_manifest(theme_dir, topic, title_variants, default_variant="A"):
-    manifest_path = os.path.join(theme_dir, "title_ab_test.json")
+    manifest_path = os.path.join(_meta_dir(theme_dir), "title_ab_test.json")
     data = {
         "video_title": topic,
         "default_variant": default_variant,
@@ -165,7 +177,7 @@ def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
     """Store uploaded YouTube video id in the long-thumbnail A/B manifest."""
     if not output_dir or not video_id:
         return None
-    manifest_path = os.path.join(output_dir, "thumbnail_ab_test.json")
+    manifest_path = os.path.join(output_dir, "_meta", "thumbnail_ab_test.json")
     updated_path = None
     try:
         if os.path.exists(manifest_path):
@@ -187,7 +199,7 @@ def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
                 json.dump(data, f, ensure_ascii=False, indent=2)
             updated_path = manifest_path
 
-        title_manifest_path = os.path.join(output_dir, "title_ab_test.json")
+        title_manifest_path = os.path.join(output_dir, "_meta", "title_ab_test.json")
         if os.path.exists(title_manifest_path):
             with open(title_manifest_path, "r", encoding="utf-8") as f:
                 title_data = json.load(f)
@@ -280,7 +292,8 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         if update_status: update_status(msg)
         else: print(msg, flush=True)
 
-    thumb_path = os.path.join(theme_dir, "thumbnail.png")
+    thumbs = _thumbs_dir(theme_dir)
+    thumb_path = os.path.join(thumbs, "thumbnail.png")
 
     ratio_tag = "縦9:16のショート動画" if is_shorts else "横16:9のワイドスクリーン"
     safe_zone = (
@@ -296,7 +309,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     char_refs = [p for p in THUMBNAIL_CHARACTER_PNGS.values() if os.path.exists(p)]
 
     # プロンプトをファイルに保存（再生成・デバッグ用）
-    prompt_path = os.path.join(theme_dir, "thumbnail_prompt.txt")
+    prompt_path = os.path.join(thumbs, "thumbnail_prompt.txt")
     try:
         with open(prompt_path, "w", encoding="utf-8") as pf:
             pf.write(prompt)
@@ -363,7 +376,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         for variant in LONG_THUMBNAIL_VARIANTS:
             variant_id = variant["variant"]
             filename = _thumbnail_variant_filename(theme_dir, variant_id)
-            variant_path = os.path.join(theme_dir, filename)
+            variant_path = os.path.join(thumbs, filename)
             variant_prompt = f"{prompt}{common_rules}\n\n{variant['prompt']}"
             saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
             if not saved_path:
@@ -618,9 +631,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 if reusable_bgs:
                     _saved_bg_dir = _old_bg_dir
         # サムネイルは再生成の有無に関係なく常に退避（再生成失敗時のフォールバック用）
-        _old_thumb = os.path.join(_existing_theme_backup, "thumbnail.png")
-        if os.path.exists(_old_thumb):
-            _saved_thumb_path = _old_thumb
+        for _thumb_candidate in (
+            os.path.join(_existing_theme_backup, "thumbnails", "thumbnail.png"),
+            os.path.join(_existing_theme_backup, "thumbnail.png"),  # 旧フォーマット互換
+        ):
+            if os.path.exists(_thumb_candidate):
+                _saved_thumb_path = _thumb_candidate
+                break
 
     theme_audio_dir = os.path.join(theme_dir, "audio")
     theme_bg_dir = os.path.join(theme_dir, "backgrounds")
@@ -639,7 +656,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if _has_saved_bgs:
             update_status(f"🖼  既存の背景を再利用します: {restored_bg_count}枚")
     if _saved_thumb_path and os.path.exists(_saved_thumb_path):
-        shutil.copy2(_saved_thumb_path, os.path.join(theme_dir, "thumbnail.png"))
+        shutil.copy2(_saved_thumb_path, os.path.join(_thumbs_dir(theme_dir), "thumbnail.png"))
 
     script_txt_path = os.path.join(theme_dir, "script.txt")
     with open(script_txt_path, "w", encoding="utf-8") as f:
@@ -754,7 +771,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status(f"  ✅ タイトルA/B/C案保存: {title_manifest_path}")
 
     if meta:
-        meta_path = os.path.join(theme_dir, "metadata.txt")
+        meta_path = os.path.join(_meta_dir(theme_dir), "metadata.txt")
         lines = []
         if "video_title" in meta:
             lines += ["【動画タイトル】", meta["video_title"], ""]
@@ -842,7 +859,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     thumbnail_title = meta.get("video_title", topic)
     if _has_saved_bgs:
         # 既存サムネイルをそのまま使用
-        thumb_path = os.path.join(theme_dir, "thumbnail.png") if os.path.exists(os.path.join(theme_dir, "thumbnail.png")) else None
+        _thumb_candidate_new = os.path.join(theme_dir, "thumbnails", "thumbnail.png")
+        _thumb_candidate_old = os.path.join(theme_dir, "thumbnail.png")
+        _thumb_existing = _thumb_candidate_new if os.path.exists(_thumb_candidate_new) else (_thumb_candidate_old if os.path.exists(_thumb_candidate_old) else None)
+        thumb_path = _thumb_existing
         if thumb_path:
             update_status("  📌 既存サムネイルを再利用")
     else:

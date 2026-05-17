@@ -391,8 +391,15 @@ def apply_opening_rewrite_to_script(script_content: str, rewrite_text: str, is_s
     return "\n".join(original_lines) + ("\n" if script_content.endswith("\n") else "")
 
 
+def _meta_dir(theme_dir: str) -> str:
+    path = os.path.join(theme_dir, "_meta")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review: dict[str, Any] | None = None, rewrite_text: str | None = None) -> str:
-    path = os.path.join(theme_dir, "opening_review.json")
+    meta = _meta_dir(theme_dir)
+    path = os.path.join(meta, "opening_review.json")
     final_review = local_review if rewrite_text else (llm_review or local_review)
     data = {
         "local_review": local_review,
@@ -405,7 +412,7 @@ def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     if rewrite_text:
-        with open(os.path.join(theme_dir, "opening_rewrite_suggestion.txt"), "w", encoding="utf-8") as f:
+        with open(os.path.join(meta, "opening_rewrite_suggestion.txt"), "w", encoding="utf-8") as f:
             f.write(rewrite_text)
     return path
 
@@ -441,7 +448,7 @@ def duration_review(total_sec: float, is_shorts: bool) -> dict[str, Any]:
 
 
 def save_duration_review(theme_dir: str, review: dict[str, Any]) -> str:
-    path = os.path.join(theme_dir, "duration_review.json")
+    path = os.path.join(_meta_dir(theme_dir), "duration_review.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(review, f, ensure_ascii=False, indent=2)
     return path
@@ -590,7 +597,7 @@ def final_chatgpt_review(
 
 
 def save_final_review(theme_dir: str, review: dict[str, Any] | None) -> str:
-    path = os.path.join(theme_dir, "final_review.json")
+    path = os.path.join(_meta_dir(theme_dir), "final_review.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(review or {"skipped": True}, f, ensure_ascii=False, indent=2)
     return path

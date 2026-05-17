@@ -594,7 +594,8 @@ class YMM4AutoGui:
                 edited_at = "----/--/-- --:--"
             script_suffix = "" if os.path.exists(os.path.join(output_dir, "script.txt")) else "  (script.txtなし)"
             image_suffix = "" if (
-                os.path.exists(os.path.join(output_dir, "thumbnail.png"))
+                os.path.exists(os.path.join(output_dir, "thumbnails", "thumbnail.png"))
+                or os.path.exists(os.path.join(output_dir, "thumbnail.png"))
                 or os.path.isdir(os.path.join(output_dir, "backgrounds"))
             ) else "  (画像なし)"
             mp4_suffix = "" if any(f.lower().endswith(".mp4") for f in os.listdir(output_dir)) else "  (MP4なし)"
@@ -857,7 +858,9 @@ class YMM4AutoGui:
             tags = meta.get("tags", "")
             fixed_comment = meta.get("fixed_comment", "")
             is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
-            thumb = None if is_shorts else os.path.join(output_dir, "thumbnail.png")
+            _thumb_new = os.path.join(output_dir, "thumbnails", "thumbnail.png")
+            _thumb_old = os.path.join(output_dir, "thumbnail.png")
+            thumb = None if is_shorts else (_thumb_new if os.path.exists(_thumb_new) else _thumb_old if os.path.exists(_thumb_old) else None)
             base_jobs.append((mp4_path, title, description, tags, thumb, output_dir, fixed_comment))
 
         if skipped:
@@ -1108,15 +1111,18 @@ class YMM4AutoGui:
         import json as _json
         from datetime import datetime, timezone
 
+        meta_dir = os.path.join(output_dir, "_meta")
+
         def _read(name):
-            p = os.path.join(output_dir, name)
-            if not os.path.exists(p):
-                return {}
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    return _json.load(f)
-            except Exception:
-                return {}
+            for base in (meta_dir, output_dir):  # 新フォーマット優先、旧フォーマット互換
+                p = os.path.join(base, name)
+                if os.path.exists(p):
+                    try:
+                        with open(p, "r", encoding="utf-8") as f:
+                            return _json.load(f)
+                    except Exception:
+                        return {}
+            return {}
 
         opening = _read("opening_review.json")
         duration = _read("duration_review.json")
@@ -1137,7 +1143,8 @@ class YMM4AutoGui:
             "risk": final.get("risk") if not final.get("skipped") and not final.get("error") else None,
             "must_fix": (final.get("must_fix") or []) if not final.get("skipped") and not final.get("error") else [],
         }
-        path = os.path.join(output_dir, "upload_record.json")
+        os.makedirs(meta_dir, exist_ok=True)
+        path = os.path.join(meta_dir, "upload_record.json")
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(record, f, ensure_ascii=False, indent=2)
         return path
@@ -1260,16 +1267,18 @@ class YMM4AutoGui:
         import json as _json
         if not output_dir:
             return ""
+        _meta = os.path.join(output_dir, "_meta")
 
         def _read(name):
-            p = os.path.join(output_dir, name)
-            if not os.path.exists(p):
-                return {}
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    return _json.load(f)
-            except Exception:
-                return {}
+            for base in (_meta, output_dir):
+                p = os.path.join(base, name)
+                if os.path.exists(p):
+                    try:
+                        with open(p, "r", encoding="utf-8") as f:
+                            return _json.load(f)
+                    except Exception:
+                        return {}
+            return {}
 
         parts = []
         opening = _read("opening_review.json")
@@ -1301,16 +1310,18 @@ class YMM4AutoGui:
         if not output_dir:
             return ""
         lines = ["━━━━━━━━ 総合判定 ━━━━━━━━"]
+        _meta = os.path.join(output_dir, "_meta")
 
         def _read(name):
-            p = os.path.join(output_dir, name)
-            if not os.path.exists(p):
-                return {}
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    return _json.load(f)
-            except Exception:
-                return {}
+            for base in (_meta, output_dir):
+                p = os.path.join(base, name)
+                if os.path.exists(p):
+                    try:
+                        with open(p, "r", encoding="utf-8") as f:
+                            return _json.load(f)
+                    except Exception:
+                        return {}
+            return {}
 
         opening = _read("opening_review.json")
         duration = _read("duration_review.json")
@@ -1456,7 +1467,9 @@ class YMM4AutoGui:
                 common_rules += f' Use this exact thumbnail text at the top center: "{thumbnail_text}".'
             variant_map = {v["variant"]: v for v in LONG_THUMBNAIL_VARIANTS}
             variant_files = []
-            manifest_path = os.path.join(output_dir, "thumbnail_ab_test.json")
+            manifest_path = os.path.join(output_dir, "_meta", "thumbnail_ab_test.json")
+            if not os.path.exists(manifest_path):
+                manifest_path = os.path.join(output_dir, "thumbnail_ab_test.json")  # 旧互換
             if os.path.exists(manifest_path):
                 try:
                     import json
@@ -1471,7 +1484,8 @@ class YMM4AutoGui:
                     pass
             if not variant_files:
                 import glob
-                for path in sorted(glob.glob(os.path.join(output_dir, "*_thumbnail_?.png"))):
+                _thumb_glob_dirs = [os.path.join(output_dir, "thumbnails"), output_dir]
+                for path in sorted(p for d in _thumb_glob_dirs for p in glob.glob(os.path.join(d, "*_thumbnail_?.png"))):
                     stem = os.path.splitext(os.path.basename(path))[0]
                     variant = stem.rsplit("_", 1)[-1].upper()
                     if variant in variant_map:
