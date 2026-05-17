@@ -775,6 +775,27 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     dialogue_items = [it for it in items if it["type"] == "dialogue"]
     bg_items = [it for it in items if it["type"] == "background"]
+
+    # 背景再利用: 台本の背景数と保存済み枚数が異なる場合は全部再生成
+    if _has_saved_bgs:
+        _saved_bg_files = sorted(
+            f for f in os.listdir(theme_bg_dir)
+            if f.lower().endswith(".png") and f.lower().startswith("bg_")
+        )
+        _expected_bg_count = min(len(bg_items), max_backgrounds)
+        if len(_saved_bg_files) != _expected_bg_count:
+            update_status(
+                f"⚠ 背景枚数が台本と一致しないため再生成します"
+                f"（保存: {len(_saved_bg_files)}枚 / 台本: {_expected_bg_count}枚）",
+                "warning",
+            )
+            for _f in _saved_bg_files:
+                try:
+                    os.remove(os.path.join(theme_bg_dir, _f))
+                except Exception:
+                    pass
+            _has_saved_bgs = False
+
     update_status(
         f"📄 台本解析完了: セリフ {len(dialogue_items)}件 / 背景 {len(bg_items)}箇所"
         + (f" / テロップ {telop_count}件(背景に統合)" if telop_count else "")
