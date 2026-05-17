@@ -52,16 +52,19 @@ class ImageGenerator:
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"=== {fname} ===\n{prompt}\n\n")
 
-    def _save_image_part(self, part, save_dir):
+    def _save_image_part(self, part, save_dir, fname=None):
         """inline_data part を PNG として保存・リサイズし、ファイル名を返す。"""
         from PIL import Image
-        existing_nums = []
-        for f in os.listdir(save_dir):
-            stem = os.path.splitext(f)[0]
-            if f.lower().endswith(".png") and stem.isdigit():
-                existing_nums.append(int(stem))
-        next_num = max(existing_nums, default=0) + 1
-        fname = f"{next_num:03d}.png"
+        if fname is None:
+            existing_nums = []
+            for f in os.listdir(save_dir):
+                if f.lower().endswith(".png") and f.lower().startswith("bg_"):
+                    try:
+                        existing_nums.append(int(f[3:6]))
+                    except ValueError:
+                        pass
+            next_num = max(existing_nums, default=0) + 1
+            fname = f"bg_{next_num:03d}_001.png"
         path = os.path.join(save_dir, fname)
         with open(path, "wb") as f:
             f.write(part.inline_data.data)
@@ -71,7 +74,7 @@ class ImageGenerator:
                 img.save(path)
         return fname
 
-    def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None):
+    def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None):
         if not self.client:
             print("  [Error] Google API キーが未設定です")
             return None
@@ -115,7 +118,7 @@ class ImageGenerator:
 
             for part in response.parts:
                 if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
-                    fname = self._save_image_part(part, save_dir)
+                    fname = self._save_image_part(part, save_dir, fname=fname)
                     if self.debug:
                         print(f"  [AI] Nano Banana 完了: {fname} ({self.width}x{self.height})")
                         self._save_prompt_log(save_dir, fname, full_prompt)
@@ -127,7 +130,7 @@ class ImageGenerator:
             print(f"  [AI] Nano Banana エラー: {e}")
             raise Exception(f"Nano Banana ({model_name}) が失敗しました: {e}")
 
-    def generate_backgrounds_batch(self, requests_list, target_dir=None):
+    def generate_backgrounds_batch(self, requests_list, target_dir=None, fnames=None):
         """Google Batch API で複数背景を一括生成する。
         requests_list: [{"description": str, "raw": bool}, ...]
         戻り値: 同順のファイル名リスト（失敗は None）
@@ -182,7 +185,8 @@ class ImageGenerator:
                     parts = response.candidates[0].content.parts
                 for part in (parts or []):
                     if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
-                        fname = self._save_image_part(part, save_dir)
+                        target_fname = fnames[i] if fnames and i < len(fnames) else None
+                        fname = self._save_image_part(part, save_dir, fname=target_fname)
                         results[i] = fname
                         if self.debug:
                             print(f"  [Batch] 結果[{i+1}]: {fname}")

@@ -401,7 +401,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             if os.path.exists(_old_bg_dir):
                 reusable_bgs = [
                     f for f in os.listdir(_old_bg_dir)
-                    if os.path.splitext(f)[0].isdigit() and f.lower().endswith(".png")
+                    if f.lower().endswith(".png") and f.lower().startswith("bg_")
                 ]
                 if reusable_bgs:
                     _saved_bg_dir = _old_bg_dir
@@ -420,7 +420,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if _saved_bg_dir:
         restored_bg_count = 0
         for f in os.listdir(_saved_bg_dir):
-            if os.path.splitext(f)[0].isdigit() and f.lower().endswith(".png"):
+            if f.lower().endswith(".png") and f.lower().startswith("bg_"):
                 shutil.copy2(os.path.join(_saved_bg_dir, f), theme_bg_dir)
                 restored_bg_count += 1
         _has_saved_bgs = restored_bg_count > 0
@@ -573,8 +573,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 }
                 for _, name in _batch_items
             ]
+            batch_fnames = [f"bg_{n:03d}_001.png" for n, _ in _batch_items]
             try:
-                batch_results = img_gen.generate_backgrounds_batch(batch_requests, target_dir=theme_bg_dir)
+                batch_results = img_gen.generate_backgrounds_batch(batch_requests, target_dir=theme_bg_dir, fnames=batch_fnames)
                 if is_cancelled():
                     return cancel_result()
                 for (bg_n, _), filename in zip(_batch_items, batch_results):
@@ -613,7 +614,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 # 既存背景を順番に割り当て
                 existing_bgs = sorted(
                     f for f in os.listdir(theme_bg_dir)
-                    if os.path.splitext(f)[0].isdigit() and f.lower().endswith(".png")
+                    if f.lower().endswith(".png") and f.lower().startswith("bg_")
                 )
                 bg_idx = bg_num - 1
                 if bg_idx < len(existing_bgs):
@@ -656,7 +657,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
                 generated_file = img_gen.generate_background(
                     bg_description, target_dir=theme_bg_dir,
-                    reference_image_path=style_reference_path
+                    reference_image_path=style_reference_path,
+                    fname=f"bg_{bg_num:03d}_001.png",
                 )
                 if is_cancelled():
                     return cancel_result()
