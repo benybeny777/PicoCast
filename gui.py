@@ -194,6 +194,7 @@ class YMM4AutoGui:
         self.log_area.tag_config("info", foreground="#00d8d6")
         self.log_area.tag_config("error", foreground="#ff5e57")
         self.log_area.tag_config("success", foreground="#05c46b")
+        self.log_area.tag_config("warning", foreground="#ffa502", font=("Meiryo", 9, "bold"))
         self.log_area.tag_config("batch", foreground="#ef57ff", font=("Meiryo", 9, "bold"))
 
         self.last_output_dir = None
@@ -1244,7 +1245,7 @@ class YMM4AutoGui:
                             try:
                                 if spec["kind"] == "background":
                                     bg_stem = os.path.splitext(os.path.basename(spec["path"]))[0]
-                                    prompt_file = os.path.join(target_dir, f"prompt_bg_{bg_stem}.txt")
+                                    prompt_file = os.path.join(target_dir, f"prompt_{bg_stem}.txt")
                                 else:
                                     prompt_file = os.path.join(target_dir, "thumbnail_prompt.txt")
                                 with open(prompt_file, "w", encoding="utf-8") as pf:

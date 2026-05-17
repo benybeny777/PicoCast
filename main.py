@@ -265,9 +265,9 @@ def normalize_background_order(items):
 
 def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None):
     """既存の出力フォルダのサムネイルのみ再生成する。"""
-    def update_status(msg):
+    def update_status(msg, tag="info"):
         if progress_callback:
-            progress_callback(msg)
+            progress_callback(msg, tag)
         else:
             print(msg, flush=True)
 
@@ -301,9 +301,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     report = GenerationReport()
     pipeline_start = time.time()
 
-    def update_status(msg):
+    def update_status(msg, tag="info"):
         if progress_callback:
-            progress_callback(msg)
+            progress_callback(msg, tag)
         else:
             print(msg, flush=True)
 
@@ -651,7 +651,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     f"【台本】\n{script_content}"
                 )
                 # プロンプトをファイルに保存（デバッグ・再生成参照用）
-                prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:02d}.txt")
+                prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:04d}.txt")
                 try:
                     with open(prompt_file, "w", encoding="utf-8") as _pf:
                         _pf.write(bg_description)
@@ -828,6 +828,18 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     report.elapsed_sec = time.time() - pipeline_start
     msg = f"✅ 完成! プロジェクト保存済み: {project_file_path}"
     update_status(msg)
+
+    if is_shorts:
+        total_sec = current_frame / editor.fps
+        if total_sec <= 40:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ 想定範囲内（35〜40秒）", "success")
+        elif total_sec <= 45:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ やや長め（歴史説明系なら許容、40〜45秒）", "warning")
+        elif total_sec <= 52:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠⚠ 長い（本当に強いネタのみ許容、〜50秒）", "warning")
+        else:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 🚨 長すぎ！要カット検討（目安50秒以内）", "error")
+
     update_status(report.summary())
     return msg, report
 
