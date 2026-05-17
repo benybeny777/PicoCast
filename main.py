@@ -203,11 +203,10 @@ _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
 
 
-def _strip_voicevox_credit(text: str) -> str:
+def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
     lines = text.splitlines()
-    return "\n".join(
-        l for l in lines if "VOICEVOX:" not in l and "使用音声合成" not in l
-    ).strip()
+    cleaned = [l for l in lines if "VOICEVOX:" not in l and "使用音声合成" not in l]
+    return "\n".join(cleaned).strip(), len(cleaned) != len(lines)
 _CHANNEL_FOOTER = (
     "\n\n"
     "👍 いいね＆チャンネル登録お願いします！\n"
@@ -658,7 +657,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     if "description" in meta:
         from core.ng_words import apply_ng_word_replacements
-        _desc = _strip_voicevox_credit(meta["description"].rstrip())
+        _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
+        if _stripped:
+            update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
         _desc = re.sub(r'#\S+', '', _desc).strip()
         meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
 
@@ -703,7 +704,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 ai_thumbnail_prompt = meta.get("thumbnail")
                 if "description" in meta:
                     from core.ng_words import apply_ng_word_replacements
-                    _desc = _strip_voicevox_credit(meta["description"].rstrip())
+                    _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
+                    if _stripped:
+                        update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
                     _desc = re.sub(r'#\S+', '', _desc).strip()
                     meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
                 opening_title = meta.get("video_title", topic)
