@@ -631,13 +631,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 if reusable_bgs:
                     _saved_bg_dir = _old_bg_dir
         # サムネイルは再生成の有無に関係なく常に退避（再生成失敗時のフォールバック用）
-        for _thumb_candidate in (
-            os.path.join(_existing_theme_backup, "thumbnails", "thumbnail.png"),
-            os.path.join(_existing_theme_backup, "thumbnail.png"),  # 旧フォーマット互換
-        ):
-            if os.path.exists(_thumb_candidate):
-                _saved_thumb_path = _thumb_candidate
-                break
+        _thumb_candidate = os.path.join(_existing_theme_backup, "thumbnails", "thumbnail.png")
+        if os.path.exists(_thumb_candidate):
+            _saved_thumb_path = _thumb_candidate
 
     theme_audio_dir = os.path.join(theme_dir, "audio")
     theme_bg_dir = os.path.join(theme_dir, "backgrounds")
@@ -859,10 +855,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     thumbnail_title = meta.get("video_title", topic)
     if _has_saved_bgs:
         # 既存サムネイルをそのまま使用
-        _thumb_candidate_new = os.path.join(theme_dir, "thumbnails", "thumbnail.png")
-        _thumb_candidate_old = os.path.join(theme_dir, "thumbnail.png")
-        _thumb_existing = _thumb_candidate_new if os.path.exists(_thumb_candidate_new) else (_thumb_candidate_old if os.path.exists(_thumb_candidate_old) else None)
-        thumb_path = _thumb_existing
+        thumb_path = os.path.join(theme_dir, "thumbnails", "thumbnail.png") if os.path.exists(os.path.join(theme_dir, "thumbnails", "thumbnail.png")) else None
         if thumb_path:
             update_status("  📌 既存サムネイルを再利用")
     else:
