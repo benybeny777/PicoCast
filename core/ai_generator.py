@@ -1,8 +1,7 @@
 import os
-import re
 from google import genai
 from config import GOOGLE_API_KEY, GEMINI_MODEL
-from core.ng_words import NG_WORD_PROMPT, apply_ng_word_replacements
+from core.ng_words import apply_ng_word_replacements
 from core.script_prompts import build_gemini_system_prompt
 
 class AIGenerator:
@@ -11,30 +10,6 @@ class AIGenerator:
         self.client = None
         if GOOGLE_API_KEY:
             self.client = genai.Client(api_key=GOOGLE_API_KEY)
-
-    @staticmethod
-    def _extract_video_title_line(script_text):
-        match = re.search(r"(?m)^(動画タイトル|Title)([:：].*)$", script_text)
-        return match.group(0) if match else None
-
-    @staticmethod
-    def _restore_video_title_line(script_text, original_title_line):
-        if not original_title_line:
-            return script_text
-        restored, count = re.subn(
-            r"(?m)^(動画タイトル|Title)([:：].*)$",
-            original_title_line,
-            script_text,
-            count=1,
-        )
-        if count:
-            return restored
-
-        format_match = re.search(r"(?m)^(動画形式|Format)[:：].*$", script_text)
-        if format_match:
-            insert_at = format_match.end()
-            return script_text[:insert_at] + "\n" + original_title_line + script_text[insert_at:]
-        return original_title_line + "\n" + script_text
 
     def generate_script(self, topic, reference_script=None):
         ref_rule = ""
@@ -106,76 +81,6 @@ class AIGenerator:
         except Exception as e:
             print(f"  [AI] チャプターマーカー生成エラー: {e}")
         return ""
-
-    def sanitize_for_youtube(self, script_text):
-        """台本・説明文・タグをYouTubeポリシーに違反しないよう補正する。タイトルは変更しない。"""
-        script_text = apply_ng_word_replacements(script_text)
-        if not self.client:
-            return script_text
-        gemini_title_line = self._extract_video_title_line(script_text)
-
-        prompt = f"""あなたはYouTubeコンテンツポリシーの専門家です。
-以下の台本テキストを、YouTubeの収益化ガイドラインに違反しないよう最小限の修正で書き換えてください。
-
-{NG_WORD_PROMPT}
-
-【修正ルール】
-- 「死」「殺す」「暴力」「自殺」「性的」など収益化停止リスクのある直接表現を、意味が伝わる婉曲表現に置き換える
-- セリフの感情・流れ・オチは変えない
-- Geminiは「動画タイトル:」行を変更しない。タイトルの言い換えは行わない
-- 「タグ:」行のリスクワードも同様に置き換える
-- 「説明文:」もリスク表現があれば修正する
-- 問題のない行はそのまま出力する
-- フォーマット（背景: / キャラ名(感情): / タグ: 等）は一切変えない
-- 余計なコメントや説明は不要。修正後のテキストのみ出力する
-
-【台本】
-{script_text}
-"""
-        try:
-            response = self.client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=prompt
-            )
-            if response and response.text:
-                gemini_output = self._restore_video_title_line(response.text.strip(), gemini_title_line)
-                return apply_ng_word_replacements(gemini_output)
-        except Exception as e:
-            print(f"  [AI] YouTube補正エラー: {e}")
-        return script_text
-
-    def format_description(self, description: str) -> str:
-        """YouTube説明文をGeminiで整形・改善する。"""
-        description = apply_ng_word_replacements(description)
-        if not self.client:
-            return description
-        prompt = f"""以下はYouTubeゆっくり動画（ずんだもん・四国めたんチャンネル）の概要欄テキストです。
-YouTube SEOとエンゲージメントを最大化するよう、内容・構成・改行を改善してください。
-
-{NG_WORD_PROMPT}
-
-改善ルール:
-- 冒頭1〜2行は動画の内容を簡潔に表す魅力的な文にする（検索キーワードを自然に含める）
-- ハッシュタグ(#)はまとめて末尾に配置し、各タグの間はスペース区切り
-- CTAフレーズ（「いいね」「チャンネル登録」「コメント」等）は独立した行にする
-- URLは単独行にする
-- 「VOICEVOX」クレジット・「使用音声」・「チャンネル登録」URLは削除する（後から自動付与される）
-- 段落間は空行を1行入れる
-- 整形後のテキストのみ出力。説明や前置きは不要
-
-【説明文】
-{description}
-"""
-        try:
-            response = self.client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=prompt
-            )
-            if response and response.text:
-                return apply_ng_word_replacements(response.text.strip())
-        except Exception as e:
-            print(f"  [AI] 説明文整形エラー: {e}")
-        return description
 
     def generate_pinned_comment(self, script_text: str) -> str:
         """台本から固定コメント用テキストを生成する。"""
