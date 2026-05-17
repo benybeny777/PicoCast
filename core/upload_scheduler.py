@@ -1,7 +1,7 @@
 """
 YouTube アップロードスケジュール管理。
-Shorts スロット: 毎日 0:00 / 7:00 / 12:00 / 19:00 (JST)
-Long  スロット: 土日のみ 12:00 / 19:00 (JST)
+Shorts スロット: 毎日 7:00 / 12:00 / 19:00 (JST)
+Long  スロット: 土日のみ 12:00 / 21:00 (JST)
 Shorts / Long は別管理 — 同一スロットに両方の投稿が可能。
 永続化: output/upload_schedule_shorts.json / upload_schedule_long.json
 """
@@ -10,8 +10,8 @@ import os
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
-SLOTS = [0, 7, 12, 19]        # Shorts 用スロット (JST 時刻)
-LONG_SLOTS = [12, 19]          # Long 用スロット: 土日のみ 12:00 / 19:00
+SLOTS = [7, 12, 19]            # Shorts 用スロット (JST 時刻)
+LONG_SLOTS = [12, 21]          # Long 用スロット: 土日のみ 12:00 / 21:00
 
 _BASE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
 _SCHEDULE_FILES = {
