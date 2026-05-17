@@ -508,7 +508,7 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
 def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
-                 cancel_event=None):
+                 cancel_event=None, existing_titles=None):
     report = GenerationReport()
     pipeline_start = time.time()
 
@@ -534,7 +534,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status("台本を読み込み中...")
     else:
         update_status(f"AI台本を生成中: {topic}...")
-        script_content = ai.generate_script(topic, reference_script=reference_script)
+        script_content = ai.generate_script(topic, reference_script=reference_script, existing_titles=existing_titles)
         if script_content.startswith("Error"):
             report.elapsed_sec = time.time() - pipeline_start
             return script_content, report

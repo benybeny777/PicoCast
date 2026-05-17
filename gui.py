@@ -28,8 +28,6 @@ try:
 except Exception:
     Image = ImageTk = None
 
-SCRIPT_GENERATION_PROMPT = build_script_generation_prompt()
-
 
 def split_input_scripts(raw_scripts):
     """Split pasted scripts by supported batch separators."""
@@ -224,10 +222,14 @@ class YMM4AutoGui:
         self.log("----------------------")
 
     def copy_script_generation_prompt(self):
+        active, uploaded = self.collect_existing_titles()
+        all_titles = active + uploaded
+        food_titles = [t for t in all_titles if self._is_food_title(t)]
+        prompt = build_script_generation_prompt(food_titles)
         self.root.clipboard_clear()
-        self.root.clipboard_append(SCRIPT_GENERATION_PROMPT)
+        self.root.clipboard_append(prompt)
         self.root.update()
-        self.log("AI台本生成プロンプトをクリップボードにコピーしました ✅", "success")
+        self.log(f"AI台本生成プロンプトをクリップボードにコピーしました（既存タイトル{len(food_titles)}件）✅", "success")
 
     def copy_title_prompt(self):
         active, uploaded = self.collect_existing_titles()
@@ -733,6 +735,9 @@ class YMM4AutoGui:
         cancel_event = cancel_event or self.cancel_event
         gen_id = self._gen_id
         count = len(scripts)
+        _active, _uploaded = self.collect_existing_titles()
+        _all_titles = _active + _uploaded
+        existing_titles = [t for t in _all_titles if self._is_food_title(t)]
         is_batch = count > 1
 
         for idx, script in enumerate(scripts):
@@ -768,6 +773,7 @@ class YMM4AutoGui:
                             reuse_backgrounds=settings["reuse_backgrounds"],
                             use_batch_api=settings["use_batch_api"],
                             cancel_event=cancel_event,
+                            existing_titles=existing_titles,
                         )
                         break
                     except OutputDirectoryLockedError as e:

@@ -194,8 +194,12 @@ MULTI_SCRIPT_RULES = """\
 """
 
 
-def build_script_generation_prompt() -> str:
-    return (Path(__file__).with_name("script_generation_prompt.txt").read_text(encoding="utf-8").strip() + "\n")
+def build_script_generation_prompt(existing_titles=None) -> str:
+    base = Path(__file__).with_name("script_generation_prompt.txt").read_text(encoding="utf-8").strip()
+    if existing_titles:
+        lines = "\n".join(f"・{t}" for t in existing_titles)
+        base += f"\n\n━━━━━━━━━━━━━━━━━━\n既存タイトル重複禁止（台本生成時も適用）\n━━━━━━━━━━━━━━━━━━\n\n以下と同じ、またはほぼ同じテーマの台本を作らないこと。\n\n{lines}\n"
+    return base + "\n"
 
 
 def build_vidiq_prompt() -> str:
@@ -361,7 +365,7 @@ TOP5出力形式:
 """
 
 
-def build_gemini_system_prompt() -> str:
+def build_gemini_system_prompt(existing_titles=None) -> str:
     return f"""\
 あなたはYouTubeゆっくり動画のプロ脚本家です。
 {CHANNEL_CONTEXT}
@@ -391,4 +395,8 @@ def build_gemini_system_prompt() -> str:
 説明文: チョコレートの驚きの歴史をずんだもんとめたんが解説！実はあの飲み物が起源だったのだ。
 タグ: ずんだもん,ゆっくり解説,VOICEVOX,チョコレート,食べ物の歴史,雑学,驚き,知らなかった
 固定コメント: チョコレートが飲み物だった時代、飲んでみたかった？🍫 コメントで教えてね！
-"""
+""" + (
+        f"\n\n━━━━━━━━━━━━━━━━━━\n既存タイトル重複禁止（台本生成時も適用）\n━━━━━━━━━━━━━━━━━━\n\n以下と同じ、またはほぼ同じテーマの台本を作らないこと。\n\n"
+        + "\n".join(f"・{t}" for t in existing_titles)
+        if existing_titles else ""
+    )

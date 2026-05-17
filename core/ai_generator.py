@@ -1,4 +1,6 @@
 import os
+import json
+import re
 from google import genai
 from config import GOOGLE_API_KEY, GEMINI_MODEL
 from core.ng_words import apply_ng_word_replacements
@@ -11,7 +13,7 @@ class AIGenerator:
         if GOOGLE_API_KEY:
             self.client = genai.Client(api_key=GOOGLE_API_KEY)
 
-    def generate_script(self, topic, reference_script=None):
+    def generate_script(self, topic, reference_script=None, existing_titles=None):
         ref_rule = ""
         if reference_script:
             ref_rule = f"""
@@ -22,7 +24,7 @@ class AIGenerator:
 ---
 """
 
-        system_prompt = build_gemini_system_prompt()
+        system_prompt = build_gemini_system_prompt(existing_titles=existing_titles)
         user_prompt = (
             f"テーマ: {topic}\n{ref_rule}\n\n"
             f"**重要: すべての「背景: 」タグの中に、必ず10文字以内の日本語キャッチコピーを「」で囲んで含めてください。文字なしの背景は絶対に出力しないでください。**"
@@ -110,6 +112,79 @@ class AIGenerator:
         except Exception as e:
             print(f"  [AI] 固定コメント生成エラー: {e}")
         return ""
+
+    def generate_title_variants(self, script_text: str, base_title: str, thumbnail_text: str = "") -> list[dict]:
+        """Generate three long-video title candidates aligned to thumbnail variants A/B/C."""
+        if not self.client:
+            return []
+        prompt = f"""以下のYouTubeロング動画について、サムネイルA/B/Cに対応するタイトル案を3つ作ってください。
+
+目的:
+- クリック率を上げる
+- ただし内容とズレる釣りタイトルは禁止
+- 食べ物雑学だと一瞬で分かる
+- A/B/Cで明確に切り口を変える
+
+共通ルール:
+- 日本語
+- 18〜45文字
+- ハッシュタグなし
+- 絵文字なし
+- 句読点は少なめ
+- 過度な断定や不安煽りは禁止
+
+A案:
+- 食べ物どアップ・クリック重視
+- 今の既定タイトルに近い自然な強さ
+
+B案:
+- 昔ヤバい型
+- 歴史感・意外性重視
+
+C案:
+- 比較ギャップ型
+- 昔と今、名前と実物、勘違いと真実などの差を見せる
+
+既定タイトル:
+{base_title}
+
+サムネ文字:
+{thumbnail_text}
+
+台本:
+{script_text[:3500]}
+
+出力はJSONのみ:
+{{
+  "title_variants": [
+    {{"variant": "A", "title": "...", "concept": "food_closeup_click"}},
+    {{"variant": "B", "title": "...", "concept": "old_history_surprise"}},
+    {{"variant": "C", "title": "...", "concept": "before_after_gap"}}
+  ]
+}}
+"""
+        try:
+            response = self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
+            text = (response.text or "").strip() if response else ""
+            if not text:
+                return []
+            text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.IGNORECASE | re.MULTILINE).strip()
+            data = json.loads(text)
+            variants = data.get("title_variants", [])
+            result = []
+            for item in variants:
+                variant = str(item.get("variant", "")).strip().upper()
+                title = apply_ng_word_replacements(str(item.get("title", "")).strip())
+                concept = str(item.get("concept", "")).strip()
+                if variant in {"A", "B", "C"} and title:
+                    result.append({"variant": variant, "title": title, "concept": concept})
+            return result
+        except Exception as e:
+            print(f"  [AI] タイトルA/B/C生成エラー: {e}")
+            return []
 
     def enhance_background_prompts(self, script_text, bg_prompts):
         """台本全体を渡してGeminiに背景プロンプトをインパクト重視で書き直させる。"""
