@@ -106,13 +106,18 @@ output/<動画タイトル>/
 ├─ <動画タイトル>_thumbnail_B.png        # ロングのみ: 保存のみ
 ├─ <動画タイトル>_thumbnail_C.png        # ロングのみ: 保存のみ
 ├─ thumbnail_ab_test.json               # ロングのみ: A/B/C管理データ
+├─ title_ab_test.json                   # ロングのみ: タイトルA/B/C案
 ├─ audio/
 └─ backgrounds/
 ```
 
 ロング動画ではサムネイルを A/B/C の3案生成します。`thumbnail.png` はA案のコピーとして残るため、通常の YouTube API アップロードではA案だけが設定されます。B/C案はYouTube Studio公式A/Bテストへ手動登録するための保存用です。アップロード後に動画IDが分かった場合は、管理JSONの `video_id` を更新し、`<video_id>_thumbnail_A/B/C.png` 形式のコピーも作成します。
 
+ロング動画ではサムネA/B/Cに合わせたタイトルA/B/C案も `title_ab_test.json` に保存します。YouTube APIアップロード時はA案タイトルを既定として使い、B/C案はYouTube Studioで手動テストするための候補として残します。
+
 `画像確認` ではロングの `thumbnail A` / `thumbnail B` / `thumbnail C` を個別に確認・再生成できます。A案を個別再生成した場合は `thumbnail.png` もA案に同期します。履歴選択で再生成対象にする処理では、`script.txt` がない履歴は候補から除外されます。
+
+台本生成時には `opening_review.json` に冒頭チェック結果を保存します。まずローカルルールだけで採点するためコストはかかりません。必要時だけLLMレビューを使う場合は `.env` に `OPENING_REVIEW_USE_LLM=1` を設定します。OpenAIを使う場合は `OPENAI_API_KEY` と `OPENING_REVIEW_MODEL`、Gemma/Gemini系をGoogle APIで使う場合は `OPENING_REVIEW_PROVIDER=google` と利用可能な `OPENING_REVIEW_MODEL` を設定します。
 
 アップロード済みの履歴は `output/000_uploaded/` に移動します。
 

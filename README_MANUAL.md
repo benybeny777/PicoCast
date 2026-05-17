@@ -127,7 +127,33 @@ VOICEVOX音声は、Shorts本編は `1.65` 倍速、ロング本編は `1.35` �
 - `<動画タイトル>_thumbnail_B.png`
 - `<動画タイトル>_thumbnail_C.png`
 - `thumbnail_ab_test.json`
+- `title_ab_test.json`
 
 YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案はPC版YouTube Studioで手動登録します。通常アップロードではA案だけを `thumbnail.png` としてAPI設定します。アップロード後は動画IDを `thumbnail_ab_test.json` に記録し、`<video_id>_thumbnail_A/B/C.png` 形式のコピーも保存します。
 
+サムネA/B/Cに合わせたタイトルA/B/C案も `title_ab_test.json` に保存します。YouTube APIアップロード時はA案タイトルを既定として使い、B/C案はYouTube Studioで手動テストするための候補として残します。
+
 `画像確認` では `thumbnail A` / `thumbnail B` / `thumbnail C` を個別に再生成できます。A案を再生成した場合は、YouTube APIアップロードで使う `thumbnail.png` もA案に同期されます。`script.txt` がない履歴は再生成用の選択一覧から除外されます。
+
+## 低コスト冒頭チェック
+
+台本生成時に `opening_review.json` を保存します。デフォルトではローカルルールだけで冒頭を採点するため、LLMコストはかかりません。
+
+LLMレビューを使う場合だけ `.env` で有効化します。
+
+```text
+OPENING_REVIEW_USE_LLM=1
+OPENING_REVIEW_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENING_REVIEW_MODEL=gpt-5-mini
+```
+
+Google APIでGemma/Gemini系モデルを使う場合は、利用可能なモデル名を指定します。
+
+```text
+OPENING_REVIEW_USE_LLM=1
+OPENING_REVIEW_PROVIDER=google
+OPENING_REVIEW_MODEL=<利用可能なGemma/Gemini系モデル名>
+```
+
+LLMに送るのはタイトル、サムネ文字、動画形式、目標尺、冒頭セリフのみです。全文台本は送らず、JSON採点だけを行います。

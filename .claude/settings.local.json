@@ -19,7 +19,8 @@
       "PowerShell(taskkill /PID 2832 /F)",
       "PowerShell(taskkill /PID 25668 /F)",
       "PowerShell(cmd /c rd /s /q \"C:\\\\00_PG\\\\00_yukkurijidou\\\\output\\\\�R�[�q�[�͋֎~����Ă���\" 2>&1)",
-      "PowerShell(Start-Process explorer.exe)"
+      "PowerShell(Start-Process explorer.exe)",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\00_PG\\\\00_yukkurijidou\" -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName, Length, LastWriteTime | Sort-Object FullName | Format-Table -AutoSize)"
     ],
     "defaultMode": "bypassPermissions",
     "additionalDirectories": [
