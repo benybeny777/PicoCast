@@ -594,6 +594,57 @@ class YMM4AutoGui:
         self.root.wait_window(dialog)
         return result["selected"]
 
+    @staticmethod
+    def _pre_generate_check(items, is_shorts):
+        """生成前危険チェック。(errors, warnings) のリストを返す。"""
+        errors = []
+        warnings = []
+        meta_types = {"thumbnail", "video_title", "description", "tags", "video_format", "thumbnail_text", "fixed_comment"}
+        meta = {it["type"]: it["text"] for it in items if it["type"] in meta_types}
+        dialogue_items = [it for it in items if it["type"] == "dialogue"]
+        bg_items = [it for it in items if it["type"] == "background"]
+
+        if not meta.get("video_title"):
+            errors.append("video_titleがありません")
+
+        if is_shorts and len(dialogue_items) >= 26:
+            errors.append(f"Shortsでセリフ数が {len(dialogue_items)} 行（上限25行）")
+
+        thumb_text = meta.get("thumbnail_text", "")
+        if thumb_text and len(thumb_text) > 15:
+            warnings.append(f"サムネイル文字が長い（{len(thumb_text)}文字）: 「{thumb_text[:20]}」")
+
+        min_bg = 4 if is_shorts else 3
+        if len(bg_items) < min_bg:
+            warnings.append(f"背景数が少ない（{len(bg_items)}箇所、推奨{min_bg}以上）")
+
+        desc = meta.get("description", "")
+        if "VOICEVOX" in desc or "ずんだもんの声" in desc:
+            warnings.append("説明文にVOICEVOXクレジットが手書きされています（自動追加されるため削除推奨）")
+
+        if dialogue_items:
+            first_text = dialogue_items[0].get("text", "")
+            if len(first_text) < 8:
+                warnings.append(f"冒頭セリフが短すぎます（{len(first_text)}文字）: 「{first_text}」")
+
+        return errors, warnings
+
+    @staticmethod
+    def _estimate_shorts_duration(items):
+        """Shortsの推定尺（秒）を返す。"""
+        dialogue_items = [it for it in items if it["type"] == "dialogue"]
+        if not dialogue_items:
+            return None, 0, 0
+        n = len(dialogue_items)
+        total_chars = sum(len(it.get("text", "")) for it in dialogue_items)
+        avg_chars = total_chars / n if n else 0
+        # VOICEVOX: ~7.5文字/秒@1.0x、Shorts本編: 1.65x → 12.4文字/秒
+        # オーバーヘッド（末尾無音+安全余白+ギャップ+AdditionalTime）: ~1.15秒/行
+        CHARS_PER_SEC = 7.5 * 1.65
+        OVERHEAD_PER_LINE = 1.15
+        estimated = total_chars / CHARS_PER_SEC + n * OVERHEAD_PER_LINE
+        return estimated, n, avg_chars
+
     def start_generation(self):
         from core.parser import ScriptParser
         raw_scripts = self.ref_text.get("1.0", tk.END).strip()
@@ -614,6 +665,47 @@ class YMM4AutoGui:
         if errors:
             messagebox.showerror("台本形式エラー", "\n".join(errors))
             return
+
+        # 危険チェック & Shorts尺予測
+        all_errors = []
+        all_warnings = []
+        duration_lines = []
+        for i, script in enumerate(scripts, 1):
+            prefix = f"[台本{i}] " if len(scripts) > 1 else ""
+            items = ScriptParser.parse_string(script)
+            is_shorts = any(it.get("text", "").strip() == "Shorts" for it in items if it["type"] == "video_format")
+            errs, warns = self._pre_generate_check(items, is_shorts)
+            all_errors.extend(f"{prefix}{e}" for e in errs)
+            all_warnings.extend(f"{prefix}{w}" for w in warns)
+            if is_shorts:
+                est, n, avg = self._estimate_shorts_duration(items)
+                if est is not None:
+                    if est < 35:
+                        verdict = "⚠ 短すぎ"
+                    elif est <= 52:
+                        verdict = "✅ OK"
+                    elif est <= 58:
+                        verdict = "⚠ 長め"
+                    else:
+                        verdict = "🚨 長すぎ"
+                    duration_lines.append(
+                        f"{prefix}📏 Shorts推定尺: {est:.0f}秒 {verdict}  "
+                        f"（{n}行 / 平均{avg:.1f}文字）"
+                    )
+
+        if all_errors:
+            messagebox.showerror("生成前エラー", "\n".join(all_errors))
+            return
+
+        if all_warnings or duration_lines:
+            msg_parts = []
+            if duration_lines:
+                msg_parts.append("\n".join(duration_lines))
+            if all_warnings:
+                msg_parts.append("⚠ 警告:\n" + "\n".join(f"  ・{w}" for w in all_warnings))
+            msg_parts.append("\nこのまま生成を続けますか？")
+            if not messagebox.askokcancel("生成前チェック", "\n".join(msg_parts)):
+                return
 
         self._toggle_ui(False)
         self.cancel_event = threading.Event()
@@ -1092,6 +1184,58 @@ class YMM4AutoGui:
                 pass
         return data
 
+    @staticmethod
+    def _build_verdict_summary(output_dir):
+        """opening/duration/final_review.json から総合判定サマリーを生成する。"""
+        import json as _json
+        if not output_dir:
+            return ""
+        lines = ["━━━━━━━━ 総合判定 ━━━━━━━━"]
+
+        def _read(name):
+            p = os.path.join(output_dir, name)
+            if not os.path.exists(p):
+                return {}
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return _json.load(f)
+            except Exception:
+                return {}
+
+        opening = _read("opening_review.json")
+        duration = _read("duration_review.json")
+        final = _read("final_review.json")
+
+        if opening:
+            score = opening.get("final_score", "?")
+            status = opening.get("final_status", "")
+            lines.append(f"冒頭スコア : {score}点 / {status}")
+            local = opening.get("local_review") or {}
+            for iss in (local.get("issues") or [])[:2]:
+                lines.append(f"  ・{iss}")
+
+        if duration:
+            sec = duration.get("seconds", "?")
+            dur_status = duration.get("status", "")
+            lines.append(f"尺         : {sec}秒 / {dur_status}")
+
+        if final and not final.get("skipped") and not final.get("error"):
+            fscore = final.get("final_score", "?")
+            ok = final.get("publish_ok", "?")
+            risk = final.get("risk", "?")
+            lines.append(f"最終スコア : {fscore}点 / 投稿OK={ok} / リスク={risk}")
+            must = final.get("must_fix") or []
+            if must:
+                lines.append("修正必須:")
+                for m in must[:3]:
+                    lines.append(f"  ・{m}")
+            else:
+                lines.append("修正必須: なし")
+
+        if len(lines) == 1:
+            return ""
+        return "\n".join(lines)
+
     def finish_generation(self, message, report, is_error=False):
         self._toggle_ui(True)
         self.progress.config(mode='determinate', value=100 if not is_error else 0)
@@ -1126,6 +1270,9 @@ class YMM4AutoGui:
                     self.ref_text.delete("1.0", tk.END)
                     self.ref_text.insert("1.0", corrected)
 
+            verdict = self._build_verdict_summary(self.last_output_dir)
+            if verdict:
+                full_msg = f"{verdict}\n\n{full_msg}"
             messagebox.showinfo("成功", full_msg)
 
 
