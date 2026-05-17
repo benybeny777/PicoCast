@@ -51,7 +51,7 @@ def _find_locking_process(path):
     return None
 
 TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
-VOICE_TAIL_SAFETY_FRAMES = 2
+VOICE_TAIL_SAFETY_FRAMES = 15
 INTER_DIALOGUE_GAP_FRAMES = 6
 
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
