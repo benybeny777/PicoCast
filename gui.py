@@ -12,7 +12,6 @@ import queue
 from main import (
     OutputDirectoryLockedError,
     run_pipeline,
-    regenerate_thumbnail_only,
     normalize_background_order,
     record_uploaded_video_id_for_thumbnail_ab_test,
     LONG_THUMBNAIL_VARIANTS,
@@ -176,8 +175,6 @@ class YMM4AutoGui:
         self.upload_btn.pack(side=tk.LEFT, padx=(0, 4))
         self.open_folder_btn = ttk.Button(btn_frame, text="📁 出力フォルダを開く", command=self.open_output_dir)
         self.open_folder_btn.pack(side=tk.LEFT)
-        self.regen_thumb_btn = ttk.Button(btn_frame, text="🖼 サムネ再生成", command=self.start_regen_thumbnail)
-        self.regen_thumb_btn.pack(side=tk.LEFT, padx=(8, 0))
         self.image_review_btn = ttk.Button(btn_frame, text="🔄 画像確認", command=self.start_image_review)
         self.image_review_btn.pack(side=tk.LEFT, padx=(8, 0))
         self._studio_url = None
@@ -1374,48 +1371,6 @@ class YMM4AutoGui:
                 full_msg = f"{verdict}\n\n{full_msg}"
             messagebox.showinfo("成功", full_msg)
 
-
-    def start_regen_thumbnail(self):
-        output_dir = self.last_output_dir
-        if (
-            not output_dir
-            or not os.path.exists(output_dir)
-            or not os.path.exists(os.path.join(output_dir, "script.txt"))
-        ):
-            selected = self.select_history_dialog(
-                "サムネ再生成する履歴を選択",
-                "サムネ再生成",
-                multi=False,
-                require_script=True,
-            )
-            if not selected:
-                return
-            output_dir = os.path.join("output", selected[0])
-            self.last_output_dir = output_dir
-        if not output_dir or not os.path.exists(output_dir):
-            messagebox.showwarning("エラー", "対象フォルダが選択されていません。履歴から選択してください。")
-            return
-        self.regen_thumb_btn.config(state=tk.DISABLED)
-        self.log(f"🖼 サムネイル再生成開始: {os.path.basename(output_dir)}")
-        threading.Thread(
-            target=self._run_regen_thumbnail,
-            args=(output_dir, self.debug_var.get(), self.style_var.get()),
-            daemon=True,
-        ).start()
-
-    def _run_regen_thumbnail(self, output_dir, debug_mode=False, image_style="通常"):
-        try:
-            thumb_path = regenerate_thumbnail_only(
-                output_dir,
-                image_style=image_style,
-                debug=debug_mode,
-                progress_callback=self.log,
-            )
-            self.log(f"✅ サムネイル保存: {thumb_path}", "success")
-        except Exception as e:
-            self.log(f"❌ サムネイル再生成エラー: {e}", "error")
-        finally:
-            self.root.after(0, lambda: self.regen_thumb_btn.config(state=tk.NORMAL))
 
     def start_image_review(self):
         selected = self.select_history_dialog("画像確認する履歴を選択", "画像確認", multi=False)
