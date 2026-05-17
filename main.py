@@ -538,6 +538,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     current_bg = None
     bg_start_frame = current_frame
     voice_num = 0
+    audio_num = 0
     bg_num = 0
     total_voices = len(dialogue_items)
     total_bgs = len(bg_items)
@@ -692,7 +693,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             for chunk_text in chunks:
                 if is_cancelled():
                     return cancel_result()
-                audio_filename = f"{uuid.uuid4().hex}.wav"
+                audio_num += 1
+                _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
+                audio_filename = f"{audio_num:04d}_{_safe_text}.wav"
                 audio_path = os.path.join(theme_audio_dir, audio_filename)
                 speed_scale = intro_voice_speed if current_frame < intro_fast_until_frame else body_voice_speed
 
