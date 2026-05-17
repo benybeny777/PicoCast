@@ -1140,8 +1140,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     total_sec = current_frame / editor.fps
     duration_result = duration_review(total_sec, is_shorts)
     duration_review_path = save_duration_review(theme_dir, duration_result)
+    _dur_label = f"{total_sec:.1f}秒"
+    if not is_shorts:
+        _m, _s = divmod(int(total_sec), 60)
+        _dur_label = f"{_m}分{_s}秒 ({total_sec:.1f}秒)"
     update_status(
-        f"━━━━━━━━ 尺チェック {total_sec:.1f}秒 / {duration_result.get('status')} ━━━━━━━━\n"
+        f"━━━━━━━━ 尺チェック {_dur_label} / {duration_result.get('status')} ━━━━━━━━\n"
         f"  理想: {duration_result.get('ideal')} / 許容: {duration_result.get('acceptable')}\n"
         f"  保存先: {duration_review_path}",
         "duration",
