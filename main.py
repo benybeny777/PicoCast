@@ -695,7 +695,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     return cancel_result()
                 audio_num += 1
                 _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
-                audio_filename = f"{audio_num:04d}_{_safe_text}.wav"
+                audio_filename = f"{bg_num:02d}_{audio_num:04d}_{_safe_text}.wav"
                 audio_path = os.path.join(theme_audio_dir, audio_filename)
                 speed_scale = intro_voice_speed if current_frame < intro_fast_until_frame else body_voice_speed
 
