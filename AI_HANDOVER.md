@@ -30,6 +30,30 @@
   - ダイアログ: 期間選択（7/28/90日）、チャンネルサマリー表示、動画別 Treeview、「📋 AI分析用にコピー」ボタン
   - コピー内容はタブ区切り（Claude/ChatGPT に貼り付けで表として読める）
 
+### 前セッション（Shorts尺アラート・bgプロンプト命名・デバッグデフォルト）
+
+- **Shorts尺アラート刷新** (`main.py`):
+  - `editor.save()` 後に `total_sec = current_frame / editor.fps` で実尺を計算し、6段階で色分け表示
+  - 35秒未満: `warning`（オレンジ）「短すぎ」
+  - 35〜45秒: `success`（緑）「良い」
+  - 45〜52秒: `success`（緑）「理想」
+  - 52〜55秒: `warning`（オレンジ）「やや長いが許容」
+  - 55〜58秒: `warning`（オレンジ）「カット推奨」
+  - 58秒超え: `error`（赤）「要カット」
+- **bgプロンプトファイル名を4桁に統一** (`main.py`, `gui.py`):
+  - `prompt_bg_{n:02d}.txt` → `prompt_bg_{n:04d}.txt`（PNGファイル名 `bg_0001.png` と一致）
+  - `gui.py` の再生成パスで `prompt_bg_{bg_stem}.txt` → `prompt_{bg_stem}.txt`（`bg_stem` が `bg_0001` なので二重prefix防止）
+- **GUIログタグ一覧** (`gui.py` `tag_config`):
+  - `info`: シアン `#00d8d6`
+  - `success`: 緑 `#05c46b`
+  - `warning`: オレンジ `#ffa502`、太字
+  - `error`: 赤 `#ff5e57`
+  - `batch`: 紫 `#ef57ff`、太字
+  - `score`: 黄色 `#ffd32a`、太字 11pt
+  - `duration`: 水色 `#34ace0`、太字 11pt
+- **デバッグチェックボックスのデフォルトをOFFに変更** (`gui.py`):
+  - `BooleanVar(value=True)` → `BooleanVar(value=False)`
+
 ### 前セッション（冒頭速度・チャプター誤認・中断後エラー）
 
 - **冒頭速度時の末尾切れ修正** (`main.py`):
@@ -301,3 +325,85 @@ uv run python -m py_compile config.py main.py gui.py core/parser.py core/voicevo
 - YouTube Data APIでは公式A/Bテスト開始APIを使わず、B/CはYouTube Studio手動登録用として保存のみ。
 - `gui.py`: `画像確認` で `thumbnail A` / `thumbnail B` / `thumbnail C` を個別再生成可能。A案再生成時は `thumbnail.png` も同期。
 - `gui.py`: `script.txt` がない履歴は再生成用の選択一覧から除外。
+
+## 2026-05-17 ロング動画タイトルA/B/C案対応
+
+- `core/ai_generator.py`: ロング動画向けにサムネA/B/Cへ対応するタイトルA/B/C案をJSON生成。
+- `main.py`: `title_ab_test.json` を保存。AI失敗時は既定タイトルからフォールバック案を生成。
+- `gui.py`: YouTubeアップロード時は `title_ab_test.json` のA案を既定タイトルとして優先。
+- `main.py`: アップロード後に `title_ab_test.json` へ `video_id` を追記。
+
+## 2026-05-17 低コスト冒頭チェック
+
+- `core/opening_quality.py`: ローカルルールで冒頭を100点採点し、`opening_review.json` を保存。
+- デフォルトはLLM呼び出しなし。`OPENING_REVIEW_USE_LLM=1` の時だけ、ローカルスコア79点以下でLLMレビューを実行。
+- OpenAI利用時: `OPENING_REVIEW_PROVIDER=openai`, `OPENAI_API_KEY`, `OPENING_REVIEW_MODEL`。
+- Google/Gemma系利用時: `OPENING_REVIEW_PROVIDER=google`, `GOOGLE_API_KEY`, `OPENING_REVIEW_MODEL`。
+- LLMへ送るのはタイトル、サムネ文字、動画形式、目標尺、冒頭セリフのみ。全文台本とリライトは送らない。
+## 2026-05-17 Working note: low-cost review implementation
+
+Current user request:
+- Implement enough to judge with one generated video.
+- Ask for ChatGPT/OpenAI API key only at the end.
+- Assume requested Ollama models exist.
+- Record progress occasionally to avoid losing context.
+
+Implemented so far:
+- `config.py`: added low-cost review settings.
+  - `OLLAMA_REVIEW_MODEL=qwen3:8b`
+  - `OLLAMA_REWRITE_MODEL=qwen3:8b`
+  - `OPENAI_FINAL_REVIEW_MODEL=gpt-5.4-mini`
+  - `OPENAI_FINAL_REVIEW_ENABLED=1`
+  - `SHORT_FULL_SCRIPT_REVIEW=1`
+  - `LONG_FULL_SCRIPT_REVIEW=0`
+  - `AUTO_FULL_REWRITE_ENABLED=0`
+- `core/opening_quality.py` rewritten:
+  - Local rule-based opening score.
+  - Ollama JSON opening review with one retry.
+  - 60-69 score opening-only rewrite helper.
+  - `opening_review.json` and optional `opening_rewrite_suggestion.txt`.
+  - Duration review and `duration_review.json`.
+  - ChatGPT final review and `final_review.json`; if `OPENAI_API_KEY` is missing it writes skipped instead of stopping.
+- `main.py` connected:
+  - Runs local opening check after script parse.
+  - Calls Ollama only when local score is 79 or lower.
+  - Applies opening-only rewrite only when enabled and score is 60-69.
+  - Does not perform full-script auto rewrite.
+  - Runs duration check after VOICEVOX/YMM4 timeline is built.
+  - Runs/saves final ChatGPT review before saving the YMM4 project.
+
+Verified:
+- `uv run python -m py_compile config.py main.py core/opening_quality.py` passed.
+- Local function smoke test passed:
+  - `local_opening_review` returns 100 on a good sample opening.
+  - `duration_review(48, True)` returns `ok`.
+  - `apply_opening_rewrite_to_script` replaces dialogue lines without replacing the title metadata line.
+- Real Ollama smoke test passed with `qwen3:8b`:
+  - `llm_opening_review(...)` returned JSON with `provider=ollama`, `model=qwen3:8b`, `score=82`, `status=pass`.
+- OpenAI API key was added to local `.env` by user request and normalized to UTF-8 no BOM.
+- Real ChatGPT final-review smoke test passed:
+  - `final_chatgpt_review(...)` returned JSON keys: `final_score`, `publish_ok`, `risk`, `must_fix`, `nice_to_fix`, `model`.
+- Score visibility tweak:
+  - `gui.py` adds a `score` log tag: yellow, 11pt bold.
+  - `main.py` now logs opening score and ChatGPT final score as prominent separator lines.
+- Duration visibility tweak:
+  - `gui.py` adds a `duration` log tag: blue, 11pt bold.
+  - `main.py` logs duration result as a prominent separator line with ideal/acceptable ranges and `duration_review.json` path.
+- Thumbnail log wording tweak:
+  - Replaced English thumbnail generation/save/skip/failure log lines in `main.py` with Japanese wording.
+- After sample log review:
+  - Sample generated 31 dialogue lines and measured 64.7s, so Shorts prompt rules were tightened.
+  - `core/script_prompts.py`: Shorts target changed from 45-52s / 28-32 lines to 38-50s / 22-25 lines / 26+ forbidden / 6-8 scenes.
+  - `core/script_generation_prompt.txt`: same Shorts line/duration/background limits updated.
+  - `core/opening_quality.py`: no-surprise opening penalty increased and hook/surprise issues now trigger opening-only auto rewrite when enabled.
+- User-provided Shorts loop structure was merged:
+  - `core/script_prompts.py`: added `Shortsループ構成ルール` to common prompt rules.
+  - `core/script_generation_prompt.txt`: added full detailed loop rules, examples, CTA constraints, and self-check list.
+- Generic prompt naming:
+  - Renamed `core/vidiq_food_prompt.txt` to `core/script_generation_prompt.txt`.
+  - Added `build_script_generation_prompt()` and updated GUI to use `SCRIPT_GENERATION_PROMPT` / `copy_script_generation_prompt()`.
+  - `build_vidiq_prompt()` remains only as a backward-compatible alias.
+
+Still to check:
+- Review `git diff` because there are pre-existing changes in `main.py` around title A/B support; do not revert them.
+- Run one actual video generation and inspect `opening_review.json`, `duration_review.json`, `final_review.json`.

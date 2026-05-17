@@ -14,6 +14,18 @@ from core.parser import ScriptParser
 from core.ymmp_editor import YmmpEditor
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
+from core.opening_quality import (
+    apply_opening_rewrite_to_script,
+    duration_review,
+    final_chatgpt_review,
+    llm_opening_review,
+    local_opening_review,
+    rewrite_opening_with_ollama,
+    save_duration_review,
+    save_final_review,
+    save_opening_review,
+    should_auto_rewrite_opening,
+)
 from config import (
     BGM_LAYER,
     BGM_PATH,
@@ -119,31 +131,70 @@ def _write_long_thumbnail_manifest(theme_dir, topic, variants, video_id=None):
     return manifest_path
 
 
+def _fallback_title_variants(base_title):
+    base = (base_title or "").strip() or "食べ物の意外な話"
+    fallback = [
+        ("A", base, "food_closeup_click"),
+        ("B", f"{base}に隠れた意外な歴史", "old_history_surprise"),
+        ("C", f"{base}は昔と今で何が違うのか", "before_after_gap"),
+    ]
+    result = []
+    for variant, title, concept in fallback:
+        if len(title) > 45:
+            title = title[:44] + "…"
+        result.append({"variant": variant, "title": title, "concept": concept})
+    return result
+
+
+def _write_long_title_manifest(theme_dir, topic, title_variants, default_variant="A"):
+    manifest_path = os.path.join(theme_dir, "title_ab_test.json")
+    data = {
+        "video_title": topic,
+        "default_variant": default_variant,
+        "title_variants": title_variants,
+        "ab_test_status": "manual_pending",
+        "winner": None,
+    }
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return manifest_path
+
+
 def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
     """Store uploaded YouTube video id in the long-thumbnail A/B manifest."""
     if not output_dir or not video_id:
         return None
     manifest_path = os.path.join(output_dir, "thumbnail_ab_test.json")
-    if not os.path.exists(manifest_path):
-        return None
+    updated_path = None
     try:
-        with open(manifest_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        data["video_id"] = video_id
-        for item in data.get("thumbnail_variants", []):
-            variant = item.get("variant")
-            old_file = item.get("file")
-            if not variant or not old_file:
-                continue
-            old_path = os.path.join(output_dir, old_file)
-            new_file = f"{video_id}_thumbnail_{variant}.png"
-            new_path = os.path.join(output_dir, new_file)
-            if os.path.exists(old_path) and os.path.abspath(old_path) != os.path.abspath(new_path):
-                shutil.copy2(old_path, new_path)
-                item["file"] = new_file
-        with open(manifest_path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        return manifest_path
+        if os.path.exists(manifest_path):
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            data["video_id"] = video_id
+            for item in data.get("thumbnail_variants", []):
+                variant = item.get("variant")
+                old_file = item.get("file")
+                if not variant or not old_file:
+                    continue
+                old_path = os.path.join(output_dir, old_file)
+                new_file = f"{video_id}_thumbnail_{variant}.png"
+                new_path = os.path.join(output_dir, new_file)
+                if os.path.exists(old_path) and os.path.abspath(old_path) != os.path.abspath(new_path):
+                    shutil.copy2(old_path, new_path)
+                    item["file"] = new_file
+            with open(manifest_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            updated_path = manifest_path
+
+        title_manifest_path = os.path.join(output_dir, "title_ab_test.json")
+        if os.path.exists(title_manifest_path):
+            with open(title_manifest_path, "r", encoding="utf-8") as f:
+                title_data = json.load(f)
+            title_data["video_id"] = video_id
+            with open(title_manifest_path, "w", encoding="utf-8") as f:
+                json.dump(title_data, f, ensure_ascii=False, indent=2)
+            updated_path = updated_path or title_manifest_path
+        return updated_path
     except Exception:
         return None
 
@@ -252,9 +303,9 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     )
 
     def _generate_one(one_prompt, final_path, label):
-        _log(f"thumbnail generation: {label}")
+        _log(f"サムネイル生成中: {label}")
         if debug_mode:
-            _log(f"  [DEBUG] thumbnail prompt: {prompt_path}")
+            _log(f"  [DEBUG] サムネイルプロンプト保存: {prompt_path}")
         generated_name = thumb_img_gen.generate_background(
             one_prompt,
             target_dir=theme_bg_dir,
@@ -275,12 +326,12 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         try:
             saved_path = _generate_one(prompt, thumb_path, "thumbnail")
         except Exception as e:
-            _log(f"  thumbnail generation failed: {e}")
+            _log(f"  サムネイル生成失敗: {e}")
             return None
         if not saved_path:
-            _log("  thumbnail generation skipped")
+            _log("  サムネイル生成をスキップしました")
             return None
-        _log(f"  thumbnail saved: {saved_path}")
+        _log(f"  サムネイル保存: {saved_path}")
         return saved_path
 
     manifest_variants = []
@@ -309,7 +360,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             variant_prompt = f"{prompt}{common_rules}\n\n{variant['prompt']}"
             saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
             if not saved_path:
-                _log(f"  thumbnail variant {variant_id} skipped")
+                _log(f"  サムネイル案{variant_id}をスキップしました")
                 return None
             if first_variant_path is None:
                 first_variant_path = saved_path
@@ -320,18 +371,18 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
                 "text": thumbnail_text or variant["text"],
             })
     except Exception as e:
-        _log(f"  thumbnail generation failed: {e}")
+        _log(f"  サムネイル生成失敗: {e}")
         return None
 
     if not first_variant_path:
-        _log("  thumbnail generation skipped")
+        _log("  サムネイル生成をスキップしました")
         return None
     if os.path.exists(thumb_path):
         os.remove(thumb_path)
     shutil.copy2(first_variant_path, thumb_path)
     manifest_path = _write_long_thumbnail_manifest(theme_dir, topic, manifest_variants)
-    _log(f"  thumbnail A/B manifest saved: {manifest_path}")
-    _log(f"  thumbnail A saved for API upload: {thumb_path}")
+    _log(f"  サムネイルA/B管理ファイル保存: {manifest_path}")
+    _log(f"  アップロード用サムネイルA保存: {thumb_path}")
     return thumb_path
 
 
@@ -602,6 +653,84 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         _desc = meta["description"].rstrip()
         _desc = re.sub(r'#\S+', '', _desc).strip()
         meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+
+    opening_title = meta.get("video_title", topic)
+    opening_thumb_text = meta.get("thumbnail_text", "")
+    opening_review = local_opening_review(items, opening_title, opening_thumb_text, is_shorts)
+    llm_review = None
+    rewrite_text = None
+    target_duration = "38-50秒" if is_shorts else "5-8分"
+    if opening_review.get("llm_review_required"):
+        try:
+            llm_review = llm_opening_review(
+                opening_review,
+                opening_title,
+                opening_thumb_text,
+                "Shorts" if is_shorts else "Long",
+                target_duration,
+            )
+        except Exception as e:
+            update_status(f"  ⚠ 冒頭Ollamaレビュー失敗: {e}")
+    final_opening = llm_review or opening_review
+
+    if should_auto_rewrite_opening(final_opening):
+        try:
+            rewrite_source = dict(opening_review)
+            rewrite_source["score"] = final_opening.get("score")
+            rewrite_source["issues"] = final_opening.get("issues", opening_review.get("issues", []))
+            rewrite_text = rewrite_opening_with_ollama(
+                rewrite_source,
+                opening_title,
+                opening_thumb_text,
+                "Shorts" if is_shorts else "Long",
+            )
+            if rewrite_text:
+                script_content = apply_opening_rewrite_to_script(script_content, rewrite_text, is_shorts)
+                with open(script_txt_path, "w", encoding="utf-8") as f:
+                    f.write(script_content)
+                items = ScriptParser.parse(script_txt_path)
+                meta = {it["type"]: it["text"] for it in items if it["type"] in meta_types}
+                items = [it for it in items if it["type"] not in meta_types]
+                items = normalize_background_order(items)
+                ai_thumbnail_prompt = meta.get("thumbnail")
+                if "description" in meta:
+                    from core.ng_words import apply_ng_word_replacements
+                    _desc = meta["description"].rstrip()
+                    _desc = re.sub(r'#\S+', '', _desc).strip()
+                    meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+                opening_title = meta.get("video_title", topic)
+                opening_thumb_text = meta.get("thumbnail_text", "")
+                opening_review = local_opening_review(items, opening_title, opening_thumb_text, is_shorts)
+                final_opening = opening_review
+                if llm_review:
+                    llm_review["before_rewrite"] = True
+                    llm_review["final_status_after_rewrite"] = opening_review.get("status")
+                update_status("  ✍ 冒頭をOllamaで軽く修正しました")
+        except Exception as e:
+            update_status(f"  ⚠ 冒頭Ollamaリライト失敗: {e}")
+
+    opening_review_path = save_opening_review(theme_dir, opening_review, llm_review, rewrite_text)
+    update_status(
+        f"━━━━━━━━ 冒頭スコア {final_opening.get('score')}点 / {final_opening.get('status')} ━━━━━━━━\n"
+        f"  保存先: {opening_review_path}",
+        "score",
+    )
+    for issue in (final_opening.get("issues") or [])[:3]:
+        update_status(f"    - {issue}")
+
+    if not is_shorts:
+        base_title = meta.get("video_title", topic)
+        thumbnail_text = meta.get("thumbnail_text", "")
+        update_status("📝 タイトルA/B/C案を生成中...")
+        title_variants = ai.generate_title_variants(script_content, base_title, thumbnail_text)
+        variants_by_id = {item.get("variant"): item for item in title_variants}
+        fallback_by_id = {item["variant"]: item for item in _fallback_title_variants(base_title)}
+        merged_title_variants = [
+            variants_by_id.get(variant) or fallback_by_id[variant]
+            for variant in ("A", "B", "C")
+        ]
+        title_manifest_path = _write_long_title_manifest(theme_dir, base_title, merged_title_variants)
+        update_status(f"  ✅ タイトルA/B/C案保存: {title_manifest_path}")
 
     if meta:
         meta_path = os.path.join(theme_dir, "metadata.txt")
@@ -976,6 +1105,45 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     _add_fixed_bgm(editor, current_frame, update_status)
     if is_cancelled():
         return cancel_result()
+    total_sec = current_frame / editor.fps
+    duration_result = duration_review(total_sec, is_shorts)
+    duration_review_path = save_duration_review(theme_dir, duration_result)
+    update_status(
+        f"━━━━━━━━ 尺チェック {total_sec:.1f}秒 / {duration_result.get('status')} ━━━━━━━━\n"
+        f"  理想: {duration_result.get('ideal')} / 許容: {duration_result.get('acceptable')}\n"
+        f"  保存先: {duration_review_path}",
+        "duration",
+    )
+
+    try:
+        final_review = final_chatgpt_review(
+            title=meta.get("video_title", topic),
+            thumbnail_text=meta.get("thumbnail_text", ""),
+            fixed_comment=meta.get("fixed_comment", ""),
+            script_content=script_content,
+            items=items,
+            is_shorts=is_shorts,
+            estimated_duration=total_sec,
+            local_review=opening_review,
+            ollama_review=llm_review,
+            duration_result=duration_result,
+        )
+        final_review_path = save_final_review(theme_dir, final_review)
+        if final_review and final_review.get("skipped"):
+            update_status(f"  ⚠ ChatGPT最終レビュー skipped: {final_review.get('reason')} ({final_review_path})")
+        elif final_review:
+            update_status(
+                f"━━━━━━━━ ChatGPT最終スコア {final_review.get('final_score')}点 "
+                f"/ publish_ok={final_review.get('publish_ok')} / risk={final_review.get('risk')} ━━━━━━━━\n"
+                f"  保存先: {final_review_path}",
+                "score",
+            )
+            for issue in (final_review.get("must_fix") or [])[:3]:
+                update_status(f"    must_fix: {issue}", "warning")
+    except Exception as e:
+        final_review_path = save_final_review(theme_dir, {"error": str(e)})
+        update_status(f"  ⚠ ChatGPT最終レビュー失敗: {e} ({final_review_path})", "warning")
+
     update_status("💾 YMM4プロジェクトを保存中...")
     editor.save(project_file_path)
     report.elapsed_sec = time.time() - pipeline_start
@@ -983,15 +1151,18 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     update_status(msg)
 
     if is_shorts:
-        total_sec = current_frame / editor.fps
-        if total_sec <= 40:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ 想定範囲内（35〜40秒）", "success")
+        if total_sec < 35:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ 短すぎ（35秒未満）", "warning")
         elif total_sec <= 45:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ やや長め（歴史説明系なら許容、40〜45秒）", "warning")
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ 良い（35〜45秒）", "success")
         elif total_sec <= 52:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠⚠ 長い（本当に強いネタのみ許容、〜50秒）", "warning")
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ 理想（45〜52秒）", "success")
+        elif total_sec <= 55:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ やや長いが許容（〜55秒）", "warning")
+        elif total_sec <= 58:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠⚠ カット推奨（〜58秒）", "warning")
         else:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 🚨 長すぎ！要カット検討（目安50秒以内）", "error")
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 🚨 要カット（58秒超え）", "error")
 
     update_status(report.summary())
     return msg, report

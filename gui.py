@@ -20,7 +20,7 @@ from main import (
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
 from core.parser import ScriptParser
-from core.script_prompts import build_title_prompt, build_vidiq_prompt
+from core.script_prompts import build_script_generation_prompt, build_title_prompt
 from config import VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
 import requests
 
@@ -29,7 +29,7 @@ try:
 except Exception:
     Image = ImageTk = None
 
-VIDIQ_PROMPT = build_vidiq_prompt()
+SCRIPT_GENERATION_PROMPT = build_script_generation_prompt()
 
 
 def split_input_scripts(raw_scripts):
@@ -139,7 +139,7 @@ class YMM4AutoGui:
         self.generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
         self.cancel_btn = ttk.Button(top_frame, text="作業中止", command=self.request_cancel, state=tk.DISABLED)
         self.cancel_btn.pack(side=tk.RIGHT, padx=(4, 0))
-        ttk.Button(top_frame, text="AI台本作成", command=self.copy_vidiq_prompt).pack(side=tk.RIGHT)
+        ttk.Button(top_frame, text="AI台本作成", command=self.copy_script_generation_prompt).pack(side=tk.RIGHT)
         ttk.Button(top_frame, text="AIタイトル案", command=self.copy_title_prompt).pack(side=tk.RIGHT, padx=(4, 0))
         ttk.Button(top_frame, text="クリア", width=6, command=self.clear_script).pack(side=tk.RIGHT, padx=4)
 
@@ -154,7 +154,7 @@ class YMM4AutoGui:
         self.auto_open_var = tk.BooleanVar(value=True)
         ttk.Checkbutton(opt_frame, text="完成後に開く", variable=self.auto_open_var).pack(side=tk.LEFT, padx=4)
 
-        self.debug_var = tk.BooleanVar(value=True)
+        self.debug_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(opt_frame, text="デバッグ", variable=self.debug_var).pack(side=tk.LEFT, padx=4)
 
         self.reuse_bg_var = tk.BooleanVar(value=True)
@@ -203,6 +203,8 @@ class YMM4AutoGui:
         self.log_area.tag_config("success", foreground="#05c46b")
         self.log_area.tag_config("warning", foreground="#ffa502", font=("Meiryo", 9, "bold"))
         self.log_area.tag_config("batch", foreground="#ef57ff", font=("Meiryo", 9, "bold"))
+        self.log_area.tag_config("score", foreground="#ffd32a", font=("Meiryo", 11, "bold"))
+        self.log_area.tag_config("duration", foreground="#34ace0", font=("Meiryo", 11, "bold"))
 
         self.last_output_dir = None
         self.cancel_event = threading.Event()
@@ -226,11 +228,11 @@ class YMM4AutoGui:
             self.log(f"{res['name']:<10}: {status} ({res['url']})", style)
         self.log("----------------------")
 
-    def copy_vidiq_prompt(self):
+    def copy_script_generation_prompt(self):
         self.root.clipboard_clear()
-        self.root.clipboard_append(VIDIQ_PROMPT)
+        self.root.clipboard_append(SCRIPT_GENERATION_PROMPT)
         self.root.update()
-        self.log("VidIQプロンプトをクリップボードにコピーしました ✅", "success")
+        self.log("AI台本生成プロンプトをクリップボードにコピーしました ✅", "success")
 
     def copy_title_prompt(self):
         active, uploaded = self.collect_existing_titles()
@@ -1069,6 +1071,25 @@ class YMM4AutoGui:
                 if pos != -1 and pos < end:
                     end = pos
             data[key] = content[start:end].strip()
+        title_ab_path = os.path.join(output_dir, "title_ab_test.json")
+        if os.path.exists(title_ab_path):
+            try:
+                import json
+                with open(title_ab_path, "r", encoding="utf-8") as f:
+                    title_ab = json.load(f)
+                default_variant = title_ab.get("default_variant", "A")
+                default_title = next(
+                    (
+                        item.get("title", "").strip()
+                        for item in title_ab.get("title_variants", [])
+                        if item.get("variant") == default_variant
+                    ),
+                    "",
+                )
+                if default_title:
+                    data["title"] = default_title
+            except Exception:
+                pass
         return data
 
     def finish_generation(self, message, report, is_error=False):
