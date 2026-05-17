@@ -634,8 +634,8 @@ class YMM4AutoGui:
         total_chars = sum(len(it.get("text", "")) for it in dialogue_items)
         avg_chars = total_chars / n if n else 0
 
-        # 実測キャリブレーション: 予測51秒→実測58秒から逆算
-        CHARS_PER_SEC_AT_1X = 5.8
+        # 実測キャリブレーション: 予測56秒→実測58秒から微調整
+        CHARS_PER_SEC_AT_1X = 5.6
         INTRO_SPEED = 2.0
         BODY_SPEED = 1.65
         INTRO_FAST_SECONDS = 5.0
