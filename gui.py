@@ -151,8 +151,6 @@ class YMM4AutoGui:
         opt_frame = ttk.Frame(main_frame)
         opt_frame.pack(fill=tk.X, pady=2)
 
-        self.auto_open_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(opt_frame, text="完成後に開く", variable=self.auto_open_var).pack(side=tk.LEFT, padx=4)
 
         self.debug_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(opt_frame, text="デバッグ", variable=self.debug_var).pack(side=tk.LEFT, padx=4)
