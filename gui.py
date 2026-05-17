@@ -865,7 +865,8 @@ class YMM4AutoGui:
         rows = []
         for j in base_jobs:
             vt, slot = slot_map[id(j)]
-            rows.append(("Shorts" if vt == "shorts" else "Long", j[1], format_slot(slot)))
+            score_label = self._read_score_label(j[5])
+            rows.append(("Shorts" if vt == "shorts" else "Long", j[1], format_slot(slot), score_label))
         if not self._confirm_upload_schedule(rows):
             return
 
@@ -1006,12 +1007,12 @@ class YMM4AutoGui:
         ttk.Button(btn_frame, text="手動公開済みにする", command=mark_manual_published).pack(side=tk.RIGHT, padx=(0, 8))
 
     def _confirm_upload_schedule(self, rows):
-        """rows: [(type_label, title, slot_str), ...] — True で確定、False でキャンセル。"""
+        """rows: [(type_label, title, slot_str, score_label), ...] — True で確定、False でキャンセル。"""
         result = {"ok": False}
 
         dialog = tk.Toplevel(self.root)
         dialog.title("アップロードスケジュール確認")
-        dialog.geometry("700x320")
+        dialog.geometry("860x320")
         dialog.resizable(True, True)
         dialog.transient(self.root)
         dialog.grab_set()
@@ -1022,15 +1023,17 @@ class YMM4AutoGui:
         frame = ttk.Frame(dialog)
         frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
-        cols = ("#", "種別", "タイトル", "予約日時")
+        cols = ("#", "種別", "タイトル", "スコア", "予約日時")
         tree = ttk.Treeview(frame, columns=cols, show="headings", height=8)
         tree.heading("#",    text="#",    anchor=tk.CENTER)
         tree.heading("種別", text="種別", anchor=tk.CENTER)
         tree.heading("タイトル", text="タイトル", anchor=tk.W)
+        tree.heading("スコア", text="スコア", anchor=tk.CENTER)
         tree.heading("予約日時", text="予約日時 (JST)", anchor=tk.CENTER)
         tree.column("#",    width=36,  stretch=False, anchor=tk.CENTER)
         tree.column("種別", width=60,  stretch=False, anchor=tk.CENTER)
-        tree.column("タイトル", width=340, stretch=True, anchor=tk.W)
+        tree.column("タイトル", width=280, stretch=True, anchor=tk.W)
+        tree.column("スコア", width=160, stretch=False, anchor=tk.CENTER)
         tree.column("予約日時", width=180, stretch=False, anchor=tk.CENTER)
 
         sb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
@@ -1038,10 +1041,11 @@ class YMM4AutoGui:
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
 
-        for i, (label, title, slot_str) in enumerate(rows, 1):
-            # 予約日時から (JST) を除いて表示
+        for i, row in enumerate(rows, 1):
+            label, title, slot_str = row[0], row[1], row[2]
+            score_label = row[3] if len(row) > 3 else "-"
             slot_disp = slot_str.replace(" (JST)", "")
-            tree.insert("", tk.END, values=(i, label, title, slot_disp))
+            tree.insert("", tk.END, values=(i, label, title, score_label, slot_disp))
 
         btn_frame = ttk.Frame(dialog)
         btn_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
@@ -1183,6 +1187,46 @@ class YMM4AutoGui:
             except Exception:
                 pass
         return data
+
+    @staticmethod
+    def _read_score_label(output_dir):
+        """output_dir の review JSON からスコアを短い文字列で返す。"""
+        import json as _json
+        if not output_dir:
+            return ""
+
+        def _read(name):
+            p = os.path.join(output_dir, name)
+            if not os.path.exists(p):
+                return {}
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return _json.load(f)
+            except Exception:
+                return {}
+
+        parts = []
+        opening = _read("opening_review.json")
+        if opening:
+            score = opening.get("final_score")
+            if score is not None:
+                parts.append(f"冒頭{score}")
+
+        duration = _read("duration_review.json")
+        if duration:
+            sec = duration.get("seconds")
+            status = duration.get("status", "")
+            mark = "✅" if status == "ok" else "⚠"
+            if sec is not None:
+                parts.append(f"{sec}s{mark}")
+
+        final = _read("final_review.json")
+        if final and not final.get("skipped") and not final.get("error"):
+            fscore = final.get("final_score")
+            if fscore is not None:
+                parts.append(f"最終{fscore}")
+
+        return " / ".join(parts) if parts else "-"
 
     @staticmethod
     def _build_verdict_summary(output_dir):
