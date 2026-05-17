@@ -1,7 +1,7 @@
 """
 YouTube アップロードスケジュール管理。
 Shorts スロット: 毎日 7:00 / 12:00 / 19:00 (JST)
-Long  スロット: 土日のみ 12:00 / 21:00 (JST)
+Long  スロット: 毎日 21:00 / 土日は追加で 12:00 (JST)
 Shorts / Long は別管理 — 同一スロットに両方の投稿が可能。
 永続化: output/upload_schedule_shorts.json / upload_schedule_long.json
 """
@@ -11,7 +11,8 @@ from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
 SLOTS = [7, 12, 19]            # Shorts 用スロット (JST 時刻)
-LONG_SLOTS = [12, 21]          # Long 用スロット: 土日のみ 12:00 / 21:00
+LONG_SLOTS_WEEKDAY  = [21]     # Long 平日スロット
+LONG_SLOTS_WEEKEND  = [12, 21] # Long 土日スロット
 
 _BASE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "output")
 _SCHEDULE_FILES = {
@@ -50,20 +51,19 @@ def _save(data: dict, video_type: str):
 
 def assign_slots(count: int, video_type: str) -> list:
     """video_type ('shorts'|'long') の空きスロットを count 個返す。
-    Long は 19:00 のみ・1日1本。
+    Long は毎日 21:00、土日は追加で 12:00 も使用。
     """
     schedule = _load(video_type)
     used = set(schedule.keys())
     now = datetime.now(JST)
     result = []
     candidate = now.date()
-    slots = LONG_SLOTS if video_type == "long" else SLOTS
 
     for _ in range(90):
-        # Long は土日のみ (weekday: 5=土, 6=日)
-        if video_type == "long" and candidate.weekday() not in (5, 6):
-            candidate += timedelta(days=1)
-            continue
+        if video_type == "long":
+            slots = LONG_SLOTS_WEEKEND if candidate.weekday() in (5, 6) else LONG_SLOTS_WEEKDAY
+        else:
+            slots = SLOTS
         for hour in slots:
             slot_dt = datetime(candidate.year, candidate.month, candidate.day,
                                hour, 0, 0, tzinfo=JST)
