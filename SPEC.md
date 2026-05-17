@@ -151,7 +151,7 @@ for item in dialogue_items:
 
 ### LLMレビューの有効化
 
-デフォルトはローカルルールのみ。LLMレビューを使う場合は `.env` で設定する。
+デフォルトはLLMレビュー有効（`OPENING_REVIEW_USE_LLM=1`）。無効化する場合は `.env` で `OPENING_REVIEW_USE_LLM=0` を設定する。
 
 ```text
 OPENING_REVIEW_USE_LLM=1
