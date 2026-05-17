@@ -1,7 +1,7 @@
 # ずんかみ自動生成システム 仕様書
 
 チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
-最終更新: 2026-05-17
+最終更新: 2026-05-18
 
 ---
 
@@ -53,14 +53,14 @@ yukkurijidou/
 - 尺計算式: `総文字数 × 0.11秒 + 行数 × 1.2秒 = 推定尺`
 - 背景枚数: 6〜9枚
 - 再生速度: イントロ2.0x（最初5秒）/ 本編1.65x
-- アップロードスロット: 毎日 0:00 / 7:00 / 12:00 / 19:00 (JST)
+- アップロードスロット: 毎日 7:00 / 12:00 / 19:00 (JST)
 
 ### Long
 - 尺: **5〜10分（理想5〜8分）**
 - セリフ数: 150〜250行
 - 背景枚数: 5〜7秒に1枚（同一背景10秒以上禁止）
 - 再生速度: イントロ1.6x / 本編1.35x
-- アップロードスロット: **土日のみ** 12:00 / 19:00 (JST)
+- アップロードスロット: **土日のみ** 12:00 / 21:00 (JST)
 
 ---
 
@@ -90,7 +90,7 @@ yukkurijidou/
 15. 完了レポート
 ```
 
-### 尺推定 (gui.py: `_estimate_shorts_duration`)
+### 尺推定 (gui.py: `_estimate_duration`)
 
 ```python
 CHARS_PER_SEC_AT_1X = 5.4
@@ -138,9 +138,9 @@ for item in dialogue_items:
 - モデル: `OPENAI_FINAL_REVIEW_MODEL`（デフォルト `gpt-5.4-mini`）
 - 入力: タイトル / サムネ文字 / 固定コメント / 台本 / 各レビュー結果 / 推定尺
 - 出力: `final_score` / `publish_ok` / `risk` / `must_fix` / `nice_to_fix`
-- **自動修正なし** — ログ表示と `final_review.json` 保存のみ
+- **自動修正なし** — ログ表示と `_meta/final_review.json` 保存のみ
 
-### 保存ファイル
+### 保存ファイル（`_meta/` 配下）
 
 | ファイル | 内容 |
 |---|---|
@@ -148,6 +148,25 @@ for item in dialogue_items:
 | `opening_rewrite_suggestion.txt` | Ollamaリライト内容（リライトが発生した場合） |
 | `duration_review.json` | 尺レビュー結果（seconds / status / ideal） |
 | `final_review.json` | ChatGPT最終レビュー結果 |
+
+### LLMレビューの有効化
+
+デフォルトはローカルルールのみ。LLMレビューを使う場合は `.env` で設定する。
+
+```text
+OPENING_REVIEW_USE_LLM=1
+OPENING_REVIEW_PROVIDER=openai
+OPENAI_API_KEY=...
+OPENING_REVIEW_MODEL=gpt-5-mini
+```
+
+Google APIでGemma/Gemini系モデルを使う場合:
+
+```text
+OPENING_REVIEW_USE_LLM=1
+OPENING_REVIEW_PROVIDER=google
+OPENING_REVIEW_MODEL=<利用可能なGemma/Gemini系モデル名>
+```
 
 ---
 
@@ -188,12 +207,12 @@ for item in dialogue_items:
 
 | 種別 | スロット | 日程 |
 |---|---|---|
-| Shorts | 0:00 / 7:00 / 12:00 / 19:00 | 毎日 |
-| Long | 12:00 / 19:00 | 土日のみ |
+| Shorts | 7:00 / 12:00 / 19:00 | 毎日 |
+| Long | 12:00 / 21:00 | 土日のみ |
 
 - スケジュールは `output/upload_schedule_shorts.json` / `upload_schedule_long.json` に永続化
 - スロット割当範囲: 最大90日先まで探索
-- アップロード実行後: `upload_record.json` にスコア情報を保存
+- アップロード実行後: `_meta/upload_record.json` にスコア情報を保存
 
 ---
 
@@ -239,7 +258,6 @@ for item in dialogue_items:
 警告（ログのみ）:
 - サムネ文字が15文字超
 - 背景枚数が少ない
-- VOICEVOX手書きクレジット
 - 最初のセリフが8文字未満
 
 ### アップロード確認ダイアログ
@@ -268,6 +286,12 @@ for item in dialogue_items:
 | 四国めたん | セクシー | 4 |
 | 四国めたん | ささやき | 36 |
 
+### 音声タイミング
+
+Shorts / Long ともに、VOICEVOX の WAV 実長へテンプレートの `AdditionalTime` 0.3 秒を加え、さらに `VOICE_TAIL_SAFETY_FRAMES = 2` フレームを音声アイテム長に足します。次のセリフ開始までは `INTER_DIALOGUE_GAP_FRAMES = 6` フレーム空けます。
+
+WAV 末尾には `0.05 × speed_scale` 秒の無音を直接書き込みます（Shorts 冒頭 2.0x なら 0.1s）。高速音声で末尾フォネームが切れるのを防ぎます。
+
 ---
 
 ## 台本フォーマット
@@ -278,7 +302,7 @@ for item in dialogue_items:
 動画形式: Shorts
 動画タイトル: チョコは500年間ずっと飲み物だった
 サムネ文字: 飲み物
-説明文: #ずんだもん #ゆっくり解説 チョコレートの驚きの歴史を解説！
+説明文: チョコレートの驚きの歴史を解説！
 タグ: ずんだもん,ゆっくり解説,VOICEVOX,...
 固定コメント: チョコレートが飲み物だった時代、飲んでみたかった？
 
@@ -323,16 +347,16 @@ for item in dialogue_items:
 
 ### サムネイルA/Bテスト
 
-3バリアントのサムネイルを生成し `thumbnail_ab_test.json` で管理:
+3バリアントのサムネイルを生成し `_meta/thumbnail_ab_test.json` で管理:
 - **Variant A**: 食べ物クローズアップ（クリック重視）
 - **Variant B**: 古い歴史・驚き演出
 - **Variant C**: 昔と今の比較・ギャップ
 
-アップロード後にYouTube動画IDを `thumbnail_ab_test.json` に記録。
+YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案はPC版YouTube Studioで手動登録します。通常アップロードではA案だけを `thumbnail.png` としてAPI設定します。アップロード後は動画IDを `thumbnail_ab_test.json` に記録し、`<video_id>_thumbnail_A/B/C.png` 形式のコピーも保存します。
 
 ### タイトルA/Bテスト
 
-`title_ab_test.json` でタイトルバリアントを管理（手動切り替え）。
+`_meta/title_ab_test.json` でタイトルバリアントを管理（手動切り替え）。YouTube APIアップロード時はA案タイトルを既定として使い、B/C案はYouTube Studioで手動テスト。
 
 ### チャプターマーカー自動生成
 
@@ -345,22 +369,123 @@ Gemini AIがロング台本からYouTube概要欄用チャプターマーカー�
 ```
 output/{テーマ名}/
 ├── script.txt              # 台本
-├── opening_review.json     # 冒頭レビュー結果
-├── duration_review.json    # 尺レビュー結果
-├── final_review.json       # ChatGPT最終レビュー
-├── upload_record.json      # アップロード記録（スコア含む）
-├── thumbnail.png           # サムネイル
-├── thumbnail_ab_test.json  # Long: A/Bテスト管理
-├── title_ab_test.json      # Long: タイトルA/B管理
-├── bg/
-│   ├── bg_0001.png         # 背景画像（4桁連番）
-│   └── ...
-└── {テーマ名}.ymmp         # YMM4プロジェクト
+├── {テーマ名}.ymmp         # YMM4プロジェクト
+├── thumbnails/
+│   ├── thumbnail.png                       # サムネイル（UploadはこのA案を使用）
+│   ├── {テーマ名}_thumbnail_A.png          # Long: A案
+│   ├── {テーマ名}_thumbnail_B.png          # Long: B案
+│   └── {テーマ名}_thumbnail_C.png          # Long: C案
+├── _meta/
+│   ├── metadata.txt                        # タイトル・説明文・タグ
+│   ├── opening_review.json                 # 冒頭レビュー結果
+│   ├── opening_rewrite_suggestion.txt      # Ollamaリライト内容（発生時のみ）
+│   ├── duration_review.json                # 尺レビュー結果
+│   ├── final_review.json                   # ChatGPT最終レビュー結果
+│   ├── upload_record.json                  # アップロード記録（スコア含む）
+│   ├── thumbnail_ab_test.json              # Long: A/Bテスト管理
+│   └── title_ab_test.json                  # Long: タイトルA/B管理
+├── audio/
+│   └── *.wav
+└── backgrounds/
+    └── bg_*.png
+```
+
+アップロード済みの履歴は `output/000_uploaded/` に移動します。
+
+スケジュールは以下に保存されます（Git 管理外）:
+
+```text
+output/upload_schedule_shorts.json
+output/upload_schedule_long.json
 ```
 
 ---
 
-## 台本作成ルール要約
+## レイヤー構成
+
+| レイヤー | 用途 |
+|---:|---|
+| 0 | 背景画像 |
+| 1 | トランジション |
+| 2 | 固定 BGM |
+| 3-4 | 立ち絵 |
+| 6 | セリフ字幕 / 音声 |
+
+---
+
+## 立ち絵テンプレート
+
+四国めたんの既定ポーズは、`core/character_templates.json` で両手とも普通手に設定しています。YMM4のPSDレイヤーIDでは、右手が `n16`、左手が `n24` です。目レイヤーは感情・アクション適用時も基本レイヤーが残るよう `core/ymmp_editor.py` で保護しています。
+
+台本の感情指定に応じて、立ち絵へ表情レイヤーと軽いアクションを自動付与します。
+
+```text
+ずんだもん(あまあま): うれしいのだ！
+ずんだもん(ツンツン): それは違うのだ！
+ずんだもん(ささやき): ここだけの話なのだ。
+四国めたん(あまあま): いい感じね。
+四国めたん(ツンツン): ちょっと待ちなさい。
+四国めたん(ささやき): ここだけの話よ。
+```
+
+表情と動きの対応は `core/ymmp_editor.py` の `EXPRESSION_LAYER_PRESETS` / `ACTION_PRESETS` で調整できます。
+
+---
+
+## 操作手順
+
+### 生成
+
+1. `python gui.py` で起動
+2. `AIタイトル案` でタイトル案作成プロンプトをコピーし、候補を作成
+3. `AI台本作成` で食べ物雑学特化の台本作成プロンプトをコピー
+4. 作成した台本を台本欄に貼り付け
+5. 必要に応じて画風を選ぶ
+6. `🎬 生成` を押す
+
+生成中に止めたい場合は `作業中止` を押します。押した時点でGUIは中止扱いになり、後続処理へ進みません。外部API呼び出し（画像生成・VOICEVOX通信など）は裏で待つことがありますが、戻ってきた結果は成功扱いにしません。
+
+### 複数台本の一括生成
+
+次のどちらかで複数動画として扱われます。
+
+- `---` で区切る
+- `━━ 動画1：ショート版 ━━` のような見出しを付ける
+- `動画形式:` が複数回出てくる
+
+### 履歴から複数生成
+
+`履歴から複数生成` を押すと、`output/` 配下の履歴を複数選択できます。`script.txt` がない履歴は再生成対象にできません。
+
+### 画像確認
+
+`画像確認` を押すと、履歴を選んで以下の画像を確認・再生成できます。
+
+- `thumbnails/thumbnail.png`
+- Long動画の `thumbnail A` / `thumbnail B` / `thumbnail C`
+- `backgrounds/bg_*.png`
+
+確認画面で再生成したい画像だけ選ぶと、同じファイル名で上書きします。A案を個別再生成した場合は `thumbnail.png` もA案に同期します。
+
+### 動画出力
+
+`動画出力` は現在選択中または直近生成した `.ymmp` を YMM4 で開き、MP4 出力を自動操作します。YMM4 のUIが変わった場合は `core/ymm4_renderer.py` のボタン検出を見直してください。
+
+### YouTubeアップロード
+
+`YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。各履歴フォルダから最新の `.mp4` を探し、`_meta/metadata.txt` のタイトル・説明文・タグを使ってアップロードします。アップロード成功後は、その履歴フォルダを `output/000_uploaded/` に移動します。
+
+YouTube Studio 側で予約動画を手動公開した場合:
+
+1. `📅 スケジュール` を開く
+2. 手動公開した動画の行を選択
+3. `手動公開済みにする` を押す
+
+この操作でアプリ側の予約スケジュールから削除し、`output/uploaded_titles.txt` にタイトルを追記します。追記されたタイトルは `AIタイトル案` の重複回避にも使われます。
+
+---
+
+## 台本作成ルール
 
 ### 最優先ルール
 1. 冒頭1秒で衝撃事実を断言
@@ -374,11 +499,28 @@ output/{テーマ名}/
 - **四国めたん**: お嬢様口調。「〜ですわ」「〜よ」。鋭いツッコミ役。
 
 ### Shortsループ構成
+
 最後の1〜2セリフが冒頭の衝撃事実に自然につながる。視聴者が無意識にもう一周見たくなる構成。
 
 ### CTA優先順位
+
 コメント誘導 > 登録誘導 > 他動画誘導  
 お願い口調・事務的定型文禁止。オチの流れで自然に誘導。
+
+### 背景・テロップ
+
+- 背景は展開が変わる時に入れる。Shortsは理想3〜5秒ごと、ロングは基本5〜7秒ごとに見た目を変える。同じ背景を10秒以上続けない
+- 台本本編はシーンごとに作る。`# Scene 1: Opening hook` のような見出しを入れ、その下に `背景:`、必要なら `テロップ:`、会話をまとめる
+- `# Scene ...` 行は管理用で、アプリ側では無視される
+- YMM4字幕は常時表示されるため、追加テロップはセリフの丸写しにしない
+- 追加テロップは冒頭フック、重要ワード、章・場面転換、オチ・ツッコミだけに絞る
+- Shortsの追加テロップは6〜12個、多くても15個以内。0.8〜1.5秒で短く出す
+- Longの追加テロップは少なめにし、章タイトル・数字・年代・固有名詞・重要語を中心にする
+- 追加テロップは下に置かない。画面中央、画面上部、右上・左上を使う
+
+### NGワード
+
+NGワードは自動でマイルド表現へ変換されるが、タイトルや説明文は必要に応じて人間が確認する。
 
 ---
 
