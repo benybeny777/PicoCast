@@ -446,7 +446,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     if "description" in meta:
         from core.ng_words import apply_ng_word_replacements
-        meta["description"] = apply_ng_word_replacements(meta["description"].rstrip()) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+        import re as _re
+        _desc = meta["description"].rstrip()
+        _desc = _re.sub(r'#\S+', '', _desc).strip()
+        meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
 
     if meta:
         meta_path = os.path.join(theme_dir, "metadata.txt")
