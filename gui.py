@@ -524,9 +524,9 @@ class YMM4AutoGui:
                 abort = True
             for w in warns:
                 self.log(f"⚠ {prefix}{w}", "warning")
-            if is_shorts:
-                est, n, avg = self._estimate_shorts_duration(items)
-                if est is not None:
+            est, n, avg = self._estimate_duration(items, is_shorts)
+            if est is not None:
+                if is_shorts:
                     if est < 35:
                         verdict, tag = "⚠ 短すぎ", "warning"
                     elif est <= 52:
@@ -536,6 +536,9 @@ class YMM4AutoGui:
                     else:
                         verdict, tag = "🚨 長すぎ", "warning"
                     self.log(f"{prefix}📏 Shorts推定尺: {est:.0f}秒 {verdict}  （{n}行 / 平均{avg:.1f}文字）", tag)
+                else:
+                    m, s = divmod(int(est), 60)
+                    self.log(f"{prefix}📏 Long推定尺: {m}分{s}秒  （{n}行 / 平均{avg:.1f}文字）", "duration")
 
         if abort:
             self.log("❌ エラーがあるため処理を中止しました", "error")
@@ -642,8 +645,8 @@ class YMM4AutoGui:
         return errors, warnings
 
     @staticmethod
-    def _estimate_shorts_duration(items):
-        """Shortsの推定尺（秒）を返す。冒頭5秒は2.0倍速、以降は1.65倍速で計算。"""
+    def _estimate_duration(items, is_shorts: bool):
+        """推定尺（秒）を返す。Shorts: イントロ2.0x/本編1.65x、Long: イントロ1.6x/本編1.35x。"""
         dialogue_items = [it for it in items if it["type"] == "dialogue"]
         if not dialogue_items:
             return None, 0, 0
@@ -651,13 +654,11 @@ class YMM4AutoGui:
         total_chars = sum(len(it.get("text", "")) for it in dialogue_items)
         avg_chars = total_chars / n if n else 0
 
-        # 実測キャリブレーション: 予測56秒→実測58秒を繰り返し補正
         CHARS_PER_SEC_AT_1X = 5.4
-        INTRO_SPEED = 2.0
-        BODY_SPEED = 1.65
+        INTRO_SPEED = 2.0 if is_shorts else 1.6
+        BODY_SPEED = 1.65 if is_shorts else 1.35
         INTRO_FAST_SECONDS = 5.0
-        # オーバーヘッド: 末尾無音(0.1×speed) + AdditionalTime(0.3) + 安全余白(0.5) + ギャップ(0.2)
-        ADDITIONAL = 0.3 + 0.5 + 0.2  # 固定部分
+        ADDITIONAL = 0.3 + 0.5 + 0.2
 
         elapsed = 0.0
         for item in dialogue_items:
@@ -667,6 +668,10 @@ class YMM4AutoGui:
             elapsed += line_time
 
         return elapsed, n, avg_chars
+
+    @staticmethod
+    def _estimate_shorts_duration(items):
+        return AppGUI._estimate_duration(items, is_shorts=True)
 
     def start_generation(self):
         from core.parser import ScriptParser
@@ -698,9 +703,9 @@ class YMM4AutoGui:
                 abort = True
             for w in warns:
                 self.log(f"⚠ {prefix}{w}", "warning")
-            if is_shorts:
-                est, n, avg = self._estimate_shorts_duration(items)
-                if est is not None:
+            est, n, avg = self._estimate_duration(items, is_shorts)
+            if est is not None:
+                if is_shorts:
                     if est < 35:
                         verdict, tag = "⚠ 短すぎ", "warning"
                     elif est <= 52:
@@ -710,6 +715,9 @@ class YMM4AutoGui:
                     else:
                         verdict, tag = "🚨 長すぎ", "warning"
                     self.log(f"{prefix}📏 Shorts推定尺: {est:.0f}秒 {verdict}  （{n}行 / 平均{avg:.1f}文字）", tag)
+                else:
+                    m, s = divmod(int(est), 60)
+                    self.log(f"{prefix}📏 Long推定尺: {m}分{s}秒  （{n}行 / 平均{avg:.1f}文字）", "duration")
 
         if abort:
             self.log("❌ エラーがあるため処理を中止しました", "error")
