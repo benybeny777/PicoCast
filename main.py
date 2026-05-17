@@ -51,8 +51,8 @@ def _find_locking_process(path):
     return None
 
 TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
-VOICE_TAIL_SAFETY_SEC = 0.25
-INTER_DIALOGUE_GAP_SEC = 0.1
+VOICE_TAIL_SAFETY_SEC = 0.5
+INTER_DIALOGUE_GAP_SEC = 0.2
 
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
