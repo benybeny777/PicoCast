@@ -706,6 +706,9 @@ class YMM4AutoGui:
         self.cancel_event = threading.Event()
         self._gen_id += 1
         self.log(f"一括処理開始: 合計 {len(scripts)} 件")
+        for line in duration_lines:
+            tag = "success" if "✅" in line else "warning" if ("⚠" in line or "🚨" in line) else "info"
+            self.log(line, tag)
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
     def _run_batch(self, scripts, settings=None, cancel_event=None):
