@@ -51,6 +51,7 @@
 `画像確認` を押すと、履歴を選んで次の画像を確認できます。
 
 - `thumbnail.png`
+- ロング動画の `thumbnail A` / `thumbnail B` / `thumbnail C`
 - `backgrounds/bg_*.png`
 
 確認画面で再生成したい画像だけ選ぶと、同じファイル名で上書きします。既存の `.ymmp` 参照はそのまま使えます。
@@ -117,3 +118,16 @@ VOICEVOX音声は、Shorts本編は `1.65` 倍速、ロング本編は `1.35` �
 - 追加テロップは下に置かない。画面中央、画面上部、右上・左上を使う
 - NGワードは自動でマイルド表現へ変換されるが、タイトルや説明文は必要に応じて人間が確認する
 - ショートは短く、ロングは理由や比較を増やして展開を作る
+
+## ロング動画サムネA/Bテスト
+
+ロング動画ではサムネイルを3案生成します。
+
+- `<動画タイトル>_thumbnail_A.png`
+- `<動画タイトル>_thumbnail_B.png`
+- `<動画タイトル>_thumbnail_C.png`
+- `thumbnail_ab_test.json`
+
+YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案はPC版YouTube Studioで手動登録します。通常アップロードではA案だけを `thumbnail.png` としてAPI設定します。アップロード後は動画IDを `thumbnail_ab_test.json` に記録し、`<video_id>_thumbnail_A/B/C.png` 形式のコピーも保存します。
+
+`画像確認` では `thumbnail A` / `thumbnail B` / `thumbnail C` を個別に再生成できます。A案を再生成した場合は、YouTube APIアップロードで使う `thumbnail.png` もA案に同期されます。`script.txt` がない履歴は再生成用の選択一覧から除外されます。

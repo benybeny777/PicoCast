@@ -9,7 +9,14 @@ import traceback
 import time
 import shutil
 import queue
-from main import OutputDirectoryLockedError, run_pipeline, regenerate_thumbnail_only, normalize_background_order
+from main import (
+    OutputDirectoryLockedError,
+    run_pipeline,
+    regenerate_thumbnail_only,
+    normalize_background_order,
+    record_uploaded_video_id_for_thumbnail_ab_test,
+    LONG_THUMBNAIL_VARIANTS,
+)
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
 from core.parser import ScriptParser
@@ -427,7 +434,10 @@ class YMM4AutoGui:
 
     def open_history_batch_dialog(self):
         self.refresh_history()
-        histories = getattr(self, "history_items", [])
+        histories = [
+            name for name in getattr(self, "history_items", [])
+            if os.path.exists(os.path.join("output", name, "script.txt"))
+        ]
         if not histories:
             messagebox.showinfo("履歴なし", "実行できる履歴がありません。")
             return
@@ -515,9 +525,14 @@ class YMM4AutoGui:
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
-    def select_history_dialog(self, title, action_text, multi=False):
+    def select_history_dialog(self, title, action_text, multi=False, require_script=False):
         self.refresh_history()
         histories = getattr(self, "history_items", [])
+        if require_script:
+            histories = [
+                name for name in histories
+                if os.path.exists(os.path.join("output", name, "script.txt"))
+            ]
         if not histories:
             messagebox.showinfo("履歴なし", "選択できる履歴がありません。")
             return []
@@ -980,6 +995,10 @@ class YMM4AutoGui:
 
             if video_id:
                 self._studio_url = f"https://studio.youtube.com/video/{video_id}/edit"
+                if video_type == "long":
+                    ab_manifest = record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id)
+                    if ab_manifest:
+                        self.log(f"  thumbnail A/B manifest updated: {ab_manifest}", "success")
                 if publish_at:
                     mark_slot_used(publish_at, title, video_type)
                     self.log(f"📅 予約登録: {format_slot(publish_at)}", "success")
@@ -1091,6 +1110,21 @@ class YMM4AutoGui:
 
     def start_regen_thumbnail(self):
         output_dir = self.last_output_dir
+        if (
+            not output_dir
+            or not os.path.exists(output_dir)
+            or not os.path.exists(os.path.join(output_dir, "script.txt"))
+        ):
+            selected = self.select_history_dialog(
+                "サムネ再生成する履歴を選択",
+                "サムネ再生成",
+                multi=False,
+                require_script=True,
+            )
+            if not selected:
+                return
+            output_dir = os.path.join("output", selected[0])
+            self.last_output_dir = output_dir
         if not output_dir or not os.path.exists(output_dir):
             messagebox.showwarning("エラー", "対象フォルダが選択されていません。履歴から選択してください。")
             return
@@ -1143,7 +1177,7 @@ class YMM4AutoGui:
             with open(script_path, "r", encoding="utf-8") as f:
                 script_content = f.read()
             tmp_items = ScriptParser.parse(script_path)
-            meta_types = {"thumbnail", "video_title", "description", "tags", "video_format"}
+            meta_types = {"thumbnail", "video_title", "description", "tags", "video_format", "thumbnail_text"}
             meta = {it["type"]: it["text"] for it in tmp_items if it["type"] in meta_types}
             is_shorts = meta.get("video_format", "").strip().lower() in ("shorts", "ショート", "short")
             items = normalize_background_order([it for it in tmp_items if it["type"] not in meta_types])
@@ -1167,6 +1201,67 @@ class YMM4AutoGui:
                 "label": "サムネイル",
                 "is_shorts": is_shorts,
             })
+
+        if not is_shorts:
+            title = self._read_meta_from_dir(output_dir).get("title", os.path.basename(output_dir))
+            thumbnail_text = meta.get("thumbnail_text", "").strip() if "meta" in locals() else ""
+            base_prompt = (
+                "Aspect ratio: 16:9 landscape.\n"
+                "Generate a YouTube long-video thumbnail from the script below.\n\n"
+                f"{script_content or title}"
+            )
+            common_rules = (
+                "\n\nLong video thumbnail A/B test rules: 16:9 landscape. "
+                "Put the food large in the center. Place Zundamon at lower left and Shikoku Metan at lower right. "
+                "Characters must be smaller than the food. Put 2-8 Japanese characters at the top center. "
+                "Use white text, very thick black outline, drop shadow, bold gothic font, readable on smartphones."
+            )
+            if thumbnail_text:
+                common_rules += f' Use this exact thumbnail text at the top center: "{thumbnail_text}".'
+            variant_map = {v["variant"]: v for v in LONG_THUMBNAIL_VARIANTS}
+            variant_files = []
+            manifest_path = os.path.join(output_dir, "thumbnail_ab_test.json")
+            if os.path.exists(manifest_path):
+                try:
+                    import json
+                    with open(manifest_path, "r", encoding="utf-8") as f:
+                        manifest = json.load(f)
+                    for item in manifest.get("thumbnail_variants", []):
+                        filename = item.get("file")
+                        variant = item.get("variant")
+                        if filename and variant:
+                            variant_files.append((variant, filename))
+                except Exception:
+                    pass
+            if not variant_files:
+                import glob
+                for path in sorted(glob.glob(os.path.join(output_dir, "*_thumbnail_?.png"))):
+                    stem = os.path.splitext(os.path.basename(path))[0]
+                    variant = stem.rsplit("_", 1)[-1].upper()
+                    if variant in variant_map:
+                        variant_files.append((variant, os.path.basename(path)))
+            seen_variants = set()
+            for variant, filename in variant_files:
+                if variant in seen_variants:
+                    continue
+                seen_variants.add(variant)
+                path = os.path.join(output_dir, filename)
+                if not os.path.exists(path):
+                    continue
+                variant_info = variant_map.get(variant, {})
+                specs.append({
+                    "kind": "thumbnail_variant",
+                    "path": path,
+                    "prompt": f"{base_prompt}{common_rules}\n\n{variant_info.get('prompt', '')}",
+                    "label": f"thumbnail {variant}",
+                    "variant": variant,
+                    "is_shorts": False,
+                })
+            if seen_variants:
+                specs = [
+                    spec for spec in specs
+                    if not (spec.get("kind") == "thumbnail" and spec.get("path") == thumb_path)
+                ]
 
         if os.path.isdir(bg_dir):
             bg_files = sorted(
@@ -1208,7 +1303,7 @@ class YMM4AutoGui:
                         width, height = (1080, 1920) if spec.get("is_shorts") else (1920, 1080)
                         img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style)
                         target_dir = os.path.dirname(spec["path"])
-                        if spec["kind"] == "thumbnail":
+                        if spec["kind"] in ("thumbnail", "thumbnail_variant"):
                             char_refs = [p for p in THUMBNAIL_CHARACTER_PNGS.values() if os.path.exists(p)]
                             thumb_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style="nanobanana2")
                             generated = thumb_gen.generate_background(
@@ -1241,11 +1336,15 @@ class YMM4AutoGui:
                                     os.remove(src)
                                 except OSError:
                                     pass
+                            if spec["kind"] == "thumbnail_variant" and spec.get("variant") == "A":
+                                shutil.copy2(spec["path"], os.path.join(output_dir, "thumbnail.png"))
                             # プロンプトをファイルに保存
                             try:
                                 if spec["kind"] == "background":
                                     bg_stem = os.path.splitext(os.path.basename(spec["path"]))[0]
                                     prompt_file = os.path.join(target_dir, f"prompt_{bg_stem}.txt")
+                                elif spec["kind"] == "thumbnail_variant":
+                                    prompt_file = os.path.join(target_dir, f"thumbnail_{spec.get('variant', 'variant')}_prompt.txt")
                                 else:
                                     prompt_file = os.path.join(target_dir, "thumbnail_prompt.txt")
                                 with open(prompt_file, "w", encoding="utf-8") as pf:

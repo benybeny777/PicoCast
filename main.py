@@ -54,6 +54,99 @@ TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
 VOICE_TAIL_SAFETY_SEC = 0.5
 INTER_DIALOGUE_GAP_SEC = 0.2
 
+LONG_THUMBNAIL_VARIANTS = [
+    {
+        "variant": "A",
+        "concept": "food_closeup_click",
+        "text": "default thumbnail candidate",
+        "prompt": (
+            "Variant A: food close-up, click-focused composition. "
+            "Make the food very large in the center, bright, high contrast, glossy and appetizing. "
+            "The viewer should instantly understand this is food trivia."
+        ),
+    },
+    {
+        "variant": "B",
+        "concept": "old_history_surprise",
+        "text": "history/surprise candidate",
+        "prompt": (
+            "Variant B: old history and surprise composition. "
+            "Use an old dining table, vintage shop, old document, or historical atmosphere. "
+            "Prioritize unexpected food history and curiosity."
+        ),
+    },
+    {
+        "variant": "C",
+        "concept": "before_after_gap",
+        "text": "comparison/gap candidate",
+        "prompt": (
+            "Variant C: comparison gap composition. "
+            "Split the image left and right to compare past and present. "
+            "Show a clear contrast between old treatment and the modern food appearance."
+        ),
+    },
+]
+
+
+def _safe_thumbnail_prefix(theme_dir):
+    prefix = os.path.basename(os.path.normpath(theme_dir)) or "video"
+    return re.sub(r'[\\/:*?"<>|]', '_', prefix)
+
+
+def _thumbnail_variant_filename(theme_dir, variant):
+    return f"{_safe_thumbnail_prefix(theme_dir)}_thumbnail_{variant}.png"
+
+
+def _write_long_thumbnail_manifest(theme_dir, topic, variants, video_id=None):
+    manifest_path = os.path.join(theme_dir, "thumbnail_ab_test.json")
+    current = {}
+    if os.path.exists(manifest_path):
+        try:
+            with open(manifest_path, "r", encoding="utf-8") as f:
+                current = json.load(f)
+        except Exception:
+            current = {}
+
+    data = {
+        "video_title": current.get("video_title") or topic,
+        "video_id": video_id if video_id is not None else current.get("video_id"),
+        "thumbnail_variants": variants,
+        "ab_test_status": current.get("ab_test_status") or "manual_pending",
+        "winner": current.get("winner"),
+    }
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    return manifest_path
+
+
+def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
+    """Store uploaded YouTube video id in the long-thumbnail A/B manifest."""
+    if not output_dir or not video_id:
+        return None
+    manifest_path = os.path.join(output_dir, "thumbnail_ab_test.json")
+    if not os.path.exists(manifest_path):
+        return None
+    try:
+        with open(manifest_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        data["video_id"] = video_id
+        for item in data.get("thumbnail_variants", []):
+            variant = item.get("variant")
+            old_file = item.get("file")
+            if not variant or not old_file:
+                continue
+            old_path = os.path.join(output_dir, old_file)
+            new_file = f"{video_id}_thumbnail_{variant}.png"
+            new_path = os.path.join(output_dir, new_file)
+            if os.path.exists(old_path) and os.path.abspath(old_path) != os.path.abspath(new_path):
+                shutil.copy2(old_path, new_path)
+                item["file"] = new_file
+        with open(manifest_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return manifest_path
+    except Exception:
+        return None
+
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
 _CHANNEL_FOOTER = (
@@ -158,27 +251,87 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         debug=img_gen.debug, image_style="nanobanana2",
     )
 
-    _log("🖼  サムネイルを生成中...")
-    if debug_mode:
-        _log(f"  [DEBUG] サムネイルプロンプト保存: {prompt_path}")
+    def _generate_one(one_prompt, final_path, label):
+        _log(f"thumbnail generation: {label}")
+        if debug_mode:
+            _log(f"  [DEBUG] thumbnail prompt: {prompt_path}")
+        generated_name = thumb_img_gen.generate_background(
+            one_prompt,
+            target_dir=theme_bg_dir,
+            raw=True,
+            reference_image_paths=char_refs,
+        )
+        if not generated_name:
+            return None
+        src_path = os.path.join(theme_bg_dir, generated_name)
+        if os.path.exists(final_path):
+            os.remove(final_path)
+        shutil.copy2(src_path, final_path)
+        if os.path.abspath(src_path) != os.path.abspath(final_path):
+            os.remove(src_path)
+        return final_path
+
+    if is_shorts:
+        try:
+            saved_path = _generate_one(prompt, thumb_path, "thumbnail")
+        except Exception as e:
+            _log(f"  thumbnail generation failed: {e}")
+            return None
+        if not saved_path:
+            _log("  thumbnail generation skipped")
+            return None
+        _log(f"  thumbnail saved: {saved_path}")
+        return saved_path
+
+    manifest_variants = []
+    first_variant_path = None
+    thumbnail_text = ""
     try:
-        generated = thumb_img_gen.generate_background(prompt, target_dir=theme_bg_dir, raw=True,
-                                                      reference_image_paths=char_refs)
+        thumbnail_text = next(
+            (it["text"] for it in ScriptParser.parse_string(script_content or "") if it["type"] == "thumbnail_text"),
+            "",
+        ).strip()
+    except Exception:
+        thumbnail_text = ""
+    common_rules = (
+        "\n\nLong video thumbnail A/B test rules: 16:9 landscape. "
+        "Put the food large in the center. Place Zundamon at lower left and Shikoku Metan at lower right. "
+        "Characters must be smaller than the food. Put 2-8 Japanese characters at the top center. "
+        "Use white text, very thick black outline, drop shadow, bold gothic font, readable on smartphones."
+    )
+    if thumbnail_text:
+        common_rules += f' Use this exact thumbnail text at the top center: "{thumbnail_text}".'
+    try:
+        for variant in LONG_THUMBNAIL_VARIANTS:
+            variant_id = variant["variant"]
+            filename = _thumbnail_variant_filename(theme_dir, variant_id)
+            variant_path = os.path.join(theme_dir, filename)
+            variant_prompt = f"{prompt}{common_rules}\n\n{variant['prompt']}"
+            saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
+            if not saved_path:
+                _log(f"  thumbnail variant {variant_id} skipped")
+                return None
+            if first_variant_path is None:
+                first_variant_path = saved_path
+            manifest_variants.append({
+                "variant": variant_id,
+                "file": filename,
+                "concept": variant["concept"],
+                "text": thumbnail_text or variant["text"],
+            })
     except Exception as e:
-        _log(f"  ❌ サムネイル生成失敗: {e}")
+        _log(f"  thumbnail generation failed: {e}")
         return None
 
-    if not generated:
-        _log("  ⚠ サムネイル生成スキップ")
+    if not first_variant_path:
+        _log("  thumbnail generation skipped")
         return None
-
-    src = os.path.join(theme_bg_dir, generated)
     if os.path.exists(thumb_path):
         os.remove(thumb_path)
-    shutil.copy2(src, thumb_path)
-    os.remove(src)  # 背景フォルダに混入しないよう元ファイルを削除
-
-    _log(f"  ✅ サムネイル保存: {thumb_path}")
+    shutil.copy2(first_variant_path, thumb_path)
+    manifest_path = _write_long_thumbnail_manifest(theme_dir, topic, manifest_variants)
+    _log(f"  thumbnail A/B manifest saved: {manifest_path}")
+    _log(f"  thumbnail A saved for API upload: {thumb_path}")
     return thumb_path
 
 

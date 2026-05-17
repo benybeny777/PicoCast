@@ -292,3 +292,12 @@ uv run python -m py_compile config.py main.py gui.py core/parser.py core/voicevo
 ```
 
 必要なら `.uv-cache` は確認してから削除する。
+
+## 2026-05-17 ロング動画サムネA/Bテスト対応
+
+- `main.py`: ロング生成時に `thumbnail_A/B/C` の3案を生成し、A案を `thumbnail.png` に同期。
+- `main.py`: `thumbnail_ab_test.json` にA/B/Cの管理データを保存。
+- `gui.py`: YouTubeアップロード後に `video_id` をJSONへ追記し、`<video_id>_thumbnail_A/B/C.png` 形式のコピーを保存。
+- YouTube Data APIでは公式A/Bテスト開始APIを使わず、B/CはYouTube Studio手動登録用として保存のみ。
+- `gui.py`: `画像確認` で `thumbnail A` / `thumbnail B` / `thumbnail C` を個別再生成可能。A案再生成時は `thumbnail.png` も同期。
+- `gui.py`: `script.txt` がない履歴は再生成用の選択一覧から除外。

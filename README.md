@@ -102,9 +102,17 @@ output/<動画タイトル>/
 ├─ script.txt
 ├─ metadata.txt
 ├─ thumbnail.png
+├─ <動画タイトル>_thumbnail_A.png        # ロングのみ: YouTube Studio A/Bテスト用
+├─ <動画タイトル>_thumbnail_B.png        # ロングのみ: 保存のみ
+├─ <動画タイトル>_thumbnail_C.png        # ロングのみ: 保存のみ
+├─ thumbnail_ab_test.json               # ロングのみ: A/B/C管理データ
 ├─ audio/
 └─ backgrounds/
 ```
+
+ロング動画ではサムネイルを A/B/C の3案生成します。`thumbnail.png` はA案のコピーとして残るため、通常の YouTube API アップロードではA案だけが設定されます。B/C案はYouTube Studio公式A/Bテストへ手動登録するための保存用です。アップロード後に動画IDが分かった場合は、管理JSONの `video_id` を更新し、`<video_id>_thumbnail_A/B/C.png` 形式のコピーも作成します。
+
+`画像確認` ではロングの `thumbnail A` / `thumbnail B` / `thumbnail C` を個別に確認・再生成できます。A案を個別再生成した場合は `thumbnail.png` もA案に同期します。履歴選択で再生成対象にする処理では、`script.txt` がない履歴は候補から除外されます。
 
 アップロード済みの履歴は `output/000_uploaded/` に移動します。
 
