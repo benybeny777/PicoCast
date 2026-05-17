@@ -51,8 +51,8 @@ def _find_locking_process(path):
     return None
 
 TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
-VOICE_TAIL_SAFETY_FRAMES = 15
-INTER_DIALOGUE_GAP_FRAMES = 6
+VOICE_TAIL_SAFETY_SEC = 0.25
+INTER_DIALOGUE_GAP_SEC = 0.1
 
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
@@ -744,10 +744,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     report.voices_failed += 1
                     continue
 
-                voice_item_frames = duration_frames + VOICE_TAIL_SAFETY_FRAMES
+                voice_item_frames = duration_frames + math.ceil(VOICE_TAIL_SAFETY_SEC * editor.fps)
                 dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + voice_item_frames))
                 editor.add_voice_item(char_key, chunk_text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=voice_item_frames)
-                current_frame += voice_item_frames + INTER_DIALOGUE_GAP_FRAMES
+                current_frame += voice_item_frames + math.ceil(INTER_DIALOGUE_GAP_SEC * editor.fps)
 
     # 終了画面用に1秒延長
     if is_cancelled():
