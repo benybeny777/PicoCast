@@ -623,8 +623,7 @@ class YMM4AutoGui:
         """生成前危険チェック。(errors, warnings) のリストを返す。"""
         errors = []
         warnings = []
-        meta_types = {"thumbnail", "video_title", "description", "tags", "video_format", "thumbnail_text", "fixed_comment"}
-        meta = {it["type"]: it["text"] for it in items if it["type"] in meta_types}
+        meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
         dialogue_items = [it for it in items if it["type"] == "dialogue"]
         bg_items = [it for it in items if it["type"] == "background"]
 
@@ -671,9 +670,6 @@ class YMM4AutoGui:
 
         return elapsed, n, avg_chars
 
-    @staticmethod
-    def _estimate_shorts_duration(items):
-        return AppGUI._estimate_duration(items, is_shorts=True)
 
     def start_generation(self):
         from core.parser import ScriptParser
@@ -1418,10 +1414,9 @@ class YMM4AutoGui:
             with open(script_path, "r", encoding="utf-8") as f:
                 script_content = f.read()
             tmp_items = ScriptParser.parse(script_path)
-            meta_types = {"thumbnail", "video_title", "description", "tags", "video_format", "thumbnail_text"}
-            meta = {it["type"]: it["text"] for it in tmp_items if it["type"] in meta_types}
+            meta = {it["type"]: it["text"] for it in tmp_items if it["type"] in ScriptParser.META_TYPES}
             is_shorts = meta.get("video_format", "").strip().lower() in ("shorts", "ショート", "short")
-            items = normalize_background_order([it for it in tmp_items if it["type"] not in meta_types])
+            items = normalize_background_order([it for it in tmp_items if it["type"] not in ScriptParser.META_TYPES])
             bg_prompts = [it.get("text", "").strip() for it in items if it["type"] == "background"]
 
         if os.path.exists(thumb_path):

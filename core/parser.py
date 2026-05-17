@@ -42,8 +42,15 @@ class ScriptParser:
         re.compile(r'^\s*$'),
     ]
 
+    # main.py / gui.py で共通利用するメタタイプセット
+    META_TYPES = frozenset({
+        "thumbnail", "video_title", "description", "tags",
+        "video_format", "thumbnail_text", "fixed_comment",
+    })
+
     @staticmethod
-    def parse(file_path):
+    def _parse_lines(line_iter):
+        """行イテラブルから解析してアイテムリストを返す（parse/parse_string 共通コア）。"""
         bg_re = ScriptParser._bg_re
         dialogue_re = ScriptParser._dialogue_re
         telop_re = ScriptParser._telop_re
@@ -59,11 +66,9 @@ class ScriptParser:
 
         lines = []
         last_dialogue = None
-
         last_meta = None
 
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
+        for line in line_iter:
                 line = line.strip()
                 if not line:
                     continue
@@ -192,20 +197,17 @@ class ScriptParser:
                     if line:
                         separator = "" if last_dialogue["text"].endswith(('。', '！', '？', '.', '!', '?')) else " "
                         last_dialogue["text"] += separator + line
-        
+
         return lines
 
     @staticmethod
+    def parse(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            return ScriptParser._parse_lines(line.strip() for line in f)
+
+    @staticmethod
     def parse_string(text: str):
-        """文字列から直接パースする。"""
-        import tempfile, os
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', encoding='utf-8', delete=False) as f:
-            f.write(text)
-            tmp = f.name
-        try:
-            return ScriptParser.parse(tmp)
-        finally:
-            os.unlink(tmp)
+        return ScriptParser._parse_lines(line.strip() for line in text.splitlines())
 
     @staticmethod
     def validate(items):

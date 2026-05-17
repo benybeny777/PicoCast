@@ -661,9 +661,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     items = ScriptParser.parse(script_txt_path)
 
     # Extract and save metadata (thumbnail / title / description / tags)
-    meta_types = {"thumbnail", "video_title", "description", "tags", "video_format", "thumbnail_text", "fixed_comment"}
-    meta = {it["type"]: it["text"] for it in items if it["type"] in meta_types}
-    items = [it for it in items if it["type"] not in meta_types]
+    meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
+    items = [it for it in items if it["type"] not in ScriptParser.META_TYPES]
     items = normalize_background_order(items)
 
     ai_thumbnail_prompt = meta.get("thumbnail")
@@ -711,8 +710,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 with open(script_txt_path, "w", encoding="utf-8") as f:
                     f.write(script_content)
                 items = ScriptParser.parse(script_txt_path)
-                meta = {it["type"]: it["text"] for it in items if it["type"] in meta_types}
-                items = [it for it in items if it["type"] not in meta_types]
+                meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
+                items = [it for it in items if it["type"] not in ScriptParser.META_TYPES]
                 items = normalize_background_order(items)
                 ai_thumbnail_prompt = meta.get("thumbnail")
                 if "description" in meta:
