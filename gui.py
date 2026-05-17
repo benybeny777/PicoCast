@@ -507,66 +507,45 @@ class YMM4AutoGui:
             messagebox.showwarning("Error", "実行できる履歴台本がありません。")
             return
 
-        # 全スクリプトを処理開始前に一括バリデーション
-        errors = []
-        for i, script in enumerate(scripts, 1):
-            items = ScriptParser.parse_string(script)
-            is_valid, messages = ScriptParser.validate(items)
-            if not is_valid:
-                prefix = f"[台本{i}] " if len(scripts) > 1 else ""
-                errors.extend(f"{prefix}{m}" for m in messages if not m.startswith("⚠"))
-        if errors:
-            messagebox.showerror("台本形式エラー", "\n".join(errors))
-            return
+        self._toggle_ui(False)
+        self.cancel_event = threading.Event()
+        self._gen_id += 1
 
-        # 危険チェック & Shorts尺予測
-        all_errors = []
-        all_warnings = []
-        duration_lines = []
+        abort = False
         for i, script in enumerate(scripts, 1):
             prefix = f"[台本{i}] " if len(scripts) > 1 else ""
             items = ScriptParser.parse_string(script)
+            is_valid, messages = ScriptParser.validate(items)
+            for m in messages:
+                if not m.startswith("⚠"):
+                    self.log(f"❌ {prefix}{m}", "error")
+                    abort = True
             is_shorts = any(it.get("text", "").strip() == "Shorts" for it in items if it["type"] == "video_format")
             errs, warns = self._pre_generate_check(items, is_shorts)
-            all_errors.extend(f"{prefix}{e}" for e in errs)
-            all_warnings.extend(f"{prefix}{w}" for w in warns)
+            for e in errs:
+                self.log(f"❌ {prefix}{e}", "error")
+                abort = True
+            for w in warns:
+                self.log(f"⚠ {prefix}{w}", "warning")
             if is_shorts:
                 est, n, avg = self._estimate_shorts_duration(items)
                 if est is not None:
                     if est < 35:
-                        verdict = "⚠ 短すぎ"
+                        verdict, tag = "⚠ 短すぎ", "warning"
                     elif est <= 52:
-                        verdict = "✅ OK"
+                        verdict, tag = "✅ OK", "success"
                     elif est <= 58:
-                        verdict = "⚠ 長め"
+                        verdict, tag = "⚠ 長め", "warning"
                     else:
-                        verdict = "🚨 長すぎ"
-                    duration_lines.append(
-                        f"{prefix}📏 Shorts推定尺: {est:.0f}秒 {verdict}  "
-                        f"（{n}行 / 平均{avg:.1f}文字）"
-                    )
+                        verdict, tag = "🚨 長すぎ", "warning"
+                    self.log(f"{prefix}📏 Shorts推定尺: {est:.0f}秒 {verdict}  （{n}行 / 平均{avg:.1f}文字）", tag)
 
-        if all_errors:
-            messagebox.showerror("生成前エラー", "\n".join(all_errors))
+        if abort:
+            self.log("❌ エラーがあるため処理を中止しました", "error")
+            self._toggle_ui(True)
             return
 
-        if all_warnings or duration_lines:
-            msg_parts = []
-            if duration_lines:
-                msg_parts.append("\n".join(duration_lines))
-            if all_warnings:
-                msg_parts.append("⚠ 警告:\n" + "\n".join(f"  ・{w}" for w in all_warnings))
-            msg_parts.append("\nこのまま生成を続けますか？")
-            if not messagebox.askokcancel("生成前チェック", "\n".join(msg_parts)):
-                return
-
-        self._toggle_ui(False)
-        self.cancel_event = threading.Event()
-        self._gen_id += 1
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
-        for line in duration_lines:
-            tag = "success" if "✅" in line else "warning" if ("⚠" in line or "🚨" in line) else "info"
-            self.log(line, tag)
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
     def select_history_dialog(self, title, action_text, multi=False, require_script=False):
@@ -704,66 +683,46 @@ class YMM4AutoGui:
             messagebox.showwarning("Error", "台本を入力してください")
             return
 
-        # 全スクリプトを処理開始前に一括バリデーション
-        errors = []
-        for i, script in enumerate(scripts, 1):
-            items = ScriptParser.parse_string(script)
-            is_valid, messages = ScriptParser.validate(items)
-            if not is_valid:
-                prefix = f"[台本{i}] " if len(scripts) > 1 else ""
-                errors.extend(f"{prefix}{m}" for m in messages if not m.startswith("⚠"))
-        if errors:
-            messagebox.showerror("台本形式エラー", "\n".join(errors))
-            return
+        self._toggle_ui(False)
+        self.cancel_event = threading.Event()
+        self._gen_id += 1
 
-        # 危険チェック & Shorts尺予測
-        all_errors = []
-        all_warnings = []
-        duration_lines = []
+        # バリデーション・危険チェック・尺予測をログに出力
+        abort = False
         for i, script in enumerate(scripts, 1):
             prefix = f"[台本{i}] " if len(scripts) > 1 else ""
             items = ScriptParser.parse_string(script)
+            is_valid, messages = ScriptParser.validate(items)
+            for m in messages:
+                if not m.startswith("⚠"):
+                    self.log(f"❌ {prefix}{m}", "error")
+                    abort = True
             is_shorts = any(it.get("text", "").strip() == "Shorts" for it in items if it["type"] == "video_format")
             errs, warns = self._pre_generate_check(items, is_shorts)
-            all_errors.extend(f"{prefix}{e}" for e in errs)
-            all_warnings.extend(f"{prefix}{w}" for w in warns)
+            for e in errs:
+                self.log(f"❌ {prefix}{e}", "error")
+                abort = True
+            for w in warns:
+                self.log(f"⚠ {prefix}{w}", "warning")
             if is_shorts:
                 est, n, avg = self._estimate_shorts_duration(items)
                 if est is not None:
                     if est < 35:
-                        verdict = "⚠ 短すぎ"
+                        verdict, tag = "⚠ 短すぎ", "warning"
                     elif est <= 52:
-                        verdict = "✅ OK"
+                        verdict, tag = "✅ OK", "success"
                     elif est <= 58:
-                        verdict = "⚠ 長め"
+                        verdict, tag = "⚠ 長め", "warning"
                     else:
-                        verdict = "🚨 長すぎ"
-                    duration_lines.append(
-                        f"{prefix}📏 Shorts推定尺: {est:.0f}秒 {verdict}  "
-                        f"（{n}行 / 平均{avg:.1f}文字）"
-                    )
+                        verdict, tag = "🚨 長すぎ", "warning"
+                    self.log(f"{prefix}📏 Shorts推定尺: {est:.0f}秒 {verdict}  （{n}行 / 平均{avg:.1f}文字）", tag)
 
-        if all_errors:
-            messagebox.showerror("生成前エラー", "\n".join(all_errors))
+        if abort:
+            self.log("❌ エラーがあるため処理を中止しました", "error")
+            self._toggle_ui(True)
             return
 
-        if all_warnings or duration_lines:
-            msg_parts = []
-            if duration_lines:
-                msg_parts.append("\n".join(duration_lines))
-            if all_warnings:
-                msg_parts.append("⚠ 警告:\n" + "\n".join(f"  ・{w}" for w in all_warnings))
-            msg_parts.append("\nこのまま生成を続けますか？")
-            if not messagebox.askokcancel("生成前チェック", "\n".join(msg_parts)):
-                return
-
-        self._toggle_ui(False)
-        self.cancel_event = threading.Event()
-        self._gen_id += 1
         self.log(f"一括処理開始: 合計 {len(scripts)} 件")
-        for line in duration_lines:
-            tag = "success" if "✅" in line else "warning" if ("⚠" in line or "🚨" in line) else "info"
-            self.log(line, tag)
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
     def _run_batch(self, scripts, settings=None, cancel_event=None):
