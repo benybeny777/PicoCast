@@ -710,7 +710,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
                 # VOICEVOXのpostPhonemeが効かない場合があるため、生成後に無音を直接追加
                 # 速度が高いほど末尾フォネームが詰まるので比例して余白を増やす
-                _TAIL_SILENCE_SEC = max(0.05, 0.05 * speed_scale)
+                _TAIL_SILENCE_SEC = max(0.1, 0.1 * speed_scale)
                 try:
                     with wave.open(audio_path, 'rb') as wr:
                         sr = wr.getframerate()
