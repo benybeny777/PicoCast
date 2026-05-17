@@ -545,6 +545,7 @@ class YMM4AutoGui:
             self._toggle_ui(True)
             return
 
+        self.log("⚠ 問題がある場合は「作業中止」ボタンで止めてください", "warning")
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
@@ -722,6 +723,7 @@ class YMM4AutoGui:
             self._toggle_ui(True)
             return
 
+        self.log("⚠ 問題がある場合は「作業中止」ボタンで止めてください", "warning")
         self.log(f"一括処理開始: 合計 {len(scripts)} 件")
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
