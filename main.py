@@ -497,7 +497,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             if vv.check_connection(): break
             time.sleep(2)
 
-    editor = YmmpEditor(width=width, height=height, debug=debug_mode)
+    from config import VIDEO_FPS
+    editor = YmmpEditor(width=width, height=height, fps=VIDEO_FPS, debug=debug_mode)
 
     from config import ASSETS_DIR
     TEMPLATES_DIR = os.path.join(ASSETS_DIR, "templates")

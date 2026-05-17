@@ -41,6 +41,8 @@ CHARACTERS = {
     },
 }
 
+VIDEO_FPS = 30
+
 OUTPUT_DIR = "output"
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")
