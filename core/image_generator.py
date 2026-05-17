@@ -57,11 +57,11 @@ class ImageGenerator:
         from PIL import Image
         existing_nums = []
         for f in os.listdir(save_dir):
-            stem = f[3:-4] if f.startswith("bg_") and f.endswith(".png") else ""
-            if stem.isdigit():
+            stem = os.path.splitext(f)[0]
+            if f.lower().endswith(".png") and stem.isdigit():
                 existing_nums.append(int(stem))
         next_num = max(existing_nums, default=0) + 1
-        fname = f"bg_{next_num:04d}.png"
+        fname = f"{next_num:03d}.png"
         path = os.path.join(save_dir, fname)
         with open(path, "wb") as f:
             f.write(part.inline_data.data)

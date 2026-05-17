@@ -1162,7 +1162,7 @@ class YMM4AutoGui:
         if os.path.isdir(bg_dir):
             bg_files = sorted(
                 f for f in os.listdir(bg_dir)
-                if f.startswith("bg_") and f.lower().endswith(".png")
+                if os.path.splitext(f)[0].isdigit() and f.lower().endswith(".png")
             )
             for idx, filename in enumerate(bg_files):
                 bg_prompt = bg_prompts[idx] if idx < len(bg_prompts) else ""
@@ -1211,7 +1211,7 @@ class YMM4AutoGui:
                         else:
                             all_bgs = sorted(
                                 f for f in os.listdir(target_dir)
-                                if f.startswith("bg_") and f.lower().endswith(".png")
+                                if os.path.splitext(f)[0].isdigit() and f.lower().endswith(".png")
                             )
                             style_ref = next(
                                 (os.path.join(target_dir, b) for b in all_bgs
@@ -1236,8 +1236,7 @@ class YMM4AutoGui:
                             try:
                                 if spec["kind"] == "background":
                                     bg_stem = os.path.splitext(os.path.basename(spec["path"]))[0]
-                                    num = bg_stem.replace("bg_", "")
-                                    prompt_file = os.path.join(target_dir, f"prompt_bg_{num}.txt")
+                                    prompt_file = os.path.join(target_dir, f"prompt_bg_{bg_stem}.txt")
                                 else:
                                     prompt_file = os.path.join(target_dir, "thumbnail_prompt.txt")
                                 with open(prompt_file, "w", encoding="utf-8") as pf:

@@ -401,7 +401,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             if os.path.exists(_old_bg_dir):
                 reusable_bgs = [
                     f for f in os.listdir(_old_bg_dir)
-                    if f.startswith("bg_") and f.lower().endswith(".png")
+                    if os.path.splitext(f)[0].isdigit() and f.lower().endswith(".png")
                 ]
                 if reusable_bgs:
                     _saved_bg_dir = _old_bg_dir
@@ -420,7 +420,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if _saved_bg_dir:
         restored_bg_count = 0
         for f in os.listdir(_saved_bg_dir):
-            if f.startswith("bg_") and f.lower().endswith(".png"):
+            if os.path.splitext(f)[0].isdigit() and f.lower().endswith(".png"):
                 shutil.copy2(os.path.join(_saved_bg_dir, f), theme_bg_dir)
                 restored_bg_count += 1
         _has_saved_bgs = restored_bg_count > 0
@@ -613,7 +613,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 # 既存背景を順番に割り当て
                 existing_bgs = sorted(
                     f for f in os.listdir(theme_bg_dir)
-                    if f.startswith("bg_") and f.endswith(".png")
+                    if os.path.splitext(f)[0].isdigit() and f.lower().endswith(".png")
                 )
                 bg_idx = bg_num - 1
                 if bg_idx < len(existing_bgs):
