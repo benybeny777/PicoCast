@@ -607,9 +607,6 @@ class YMM4AutoGui:
         if not meta.get("video_title"):
             errors.append("video_titleがありません")
 
-        if is_shorts and len(dialogue_items) >= 26:
-            errors.append(f"Shortsでセリフ数が {len(dialogue_items)} 行（上限25行）")
-
         thumb_text = meta.get("thumbnail_text", "")
         if thumb_text and len(thumb_text) > 15:
             warnings.append(f"サムネイル文字が長い（{len(thumb_text)}文字）: 「{thumb_text[:20]}」")
