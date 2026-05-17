@@ -626,19 +626,30 @@ class YMM4AutoGui:
 
     @staticmethod
     def _estimate_shorts_duration(items):
-        """Shortsの推定尺（秒）を返す。"""
+        """Shortsの推定尺（秒）を返す。冒頭5秒は2.0倍速、以降は1.65倍速で計算。"""
         dialogue_items = [it for it in items if it["type"] == "dialogue"]
         if not dialogue_items:
             return None, 0, 0
         n = len(dialogue_items)
         total_chars = sum(len(it.get("text", "")) for it in dialogue_items)
         avg_chars = total_chars / n if n else 0
-        # VOICEVOX: ~7.5文字/秒@1.0x、Shorts本編: 1.65x → 12.4文字/秒
-        # オーバーヘッド（末尾無音+安全余白+ギャップ+AdditionalTime）: ~1.15秒/行
-        CHARS_PER_SEC = 7.5 * 1.65
-        OVERHEAD_PER_LINE = 1.15
-        estimated = total_chars / CHARS_PER_SEC + n * OVERHEAD_PER_LINE
-        return estimated, n, avg_chars
+
+        # 実測キャリブレーション: 予測51秒→実測58秒から逆算
+        CHARS_PER_SEC_AT_1X = 5.8
+        INTRO_SPEED = 2.0
+        BODY_SPEED = 1.65
+        INTRO_FAST_SECONDS = 5.0
+        # オーバーヘッド: 末尾無音(0.1×speed) + AdditionalTime(0.3) + 安全余白(0.5) + ギャップ(0.2)
+        ADDITIONAL = 0.3 + 0.5 + 0.2  # 固定部分
+
+        elapsed = 0.0
+        for item in dialogue_items:
+            chars = len(item.get("text", ""))
+            speed = INTRO_SPEED if elapsed < INTRO_FAST_SECONDS else BODY_SPEED
+            line_time = chars / (CHARS_PER_SEC_AT_1X * speed) + 0.1 * speed + ADDITIONAL
+            elapsed += line_time
+
+        return elapsed, n, avg_chars
 
     def start_generation(self):
         from core.parser import ScriptParser
