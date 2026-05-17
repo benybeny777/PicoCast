@@ -1001,6 +1001,14 @@ class YMM4AutoGui:
                         shutil.rmtree(dest)
                     shutil.move(output_dir, dest)
                     self.log(f"📦 アップロード済みフォルダへ移動: {folder_name}", "success")
+                    # MP4 を削除（容量節約）
+                    for f in os.listdir(dest):
+                        if f.lower().endswith(".mp4"):
+                            try:
+                                os.remove(os.path.join(dest, f))
+                                self.log(f"🗑 MP4 削除: {f}", "info")
+                            except Exception:
+                                pass
                     # タイトルログに追記（000_uploaded が消えても残るよう output/ 直下に保存）
                     try:
                         self._append_uploaded_titles([folder_name])
