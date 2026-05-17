@@ -637,10 +637,6 @@ class YMM4AutoGui:
         if len(bg_items) < min_bg:
             warnings.append(f"背景数が少ない（{len(bg_items)}箇所、推奨{min_bg}以上）")
 
-        desc = meta.get("description", "")
-        if "VOICEVOX" in desc or "ずんだもんの声" in desc:
-            warnings.append("説明文にVOICEVOXクレジットが手書きされています（自動追加されるため削除推奨）")
-
         if dialogue_items:
             first_text = dialogue_items[0].get("text", "")
             if len(first_text) < 8:
