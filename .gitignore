@@ -2,6 +2,7 @@
 client_secrets.json
 token.json
 token_analytics.json
+.claude/
 __pycache__/
 *.pyc
 *.pyo
