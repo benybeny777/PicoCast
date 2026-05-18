@@ -9,6 +9,7 @@ import traceback
 import time
 import shutil
 import queue
+import json
 from main import (
     OutputDirectoryLockedError,
     run_pipeline,
@@ -18,12 +19,40 @@ from main import (
 )
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
-from core.analytics_score import format_duration, format_duration_status, save_score_files, score_items, to_tsv
+from core.analytics_score import build_performance_summary, format_duration, format_duration_status, save_score_files, score_items, to_tsv
 from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
 from config import OPENING_SCORE_ABORT_THRESHOLD, OPENING_SCORE_HARD_ABORT_THRESHOLD, VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
 import requests
+
+APP_VERSION_BASE = "2026.05.19"
+
+
+def build_app_version() -> str:
+    try:
+        count = subprocess.check_output(
+            ["git", "rev-list", "--count", "HEAD"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        short_hash = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        dirty = subprocess.run(
+            ["git", "diff", "--quiet"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode != 0
+        version = f"{APP_VERSION_BASE}.{count}-{short_hash}"
+        return version + ("-dirty" if dirty else "")
+    except Exception:
+        return APP_VERSION_BASE
 
 try:
     from PIL import Image, ImageTk
@@ -163,7 +192,8 @@ class ToolTip:
 class YMM4AutoGui:
     def __init__(self, root):
         self.root = root
-        self.root.title("YMM4 Auto Video Factory")
+        self.app_version = build_app_version()
+        self.root.title(f"YMM4 Auto Video Factory v{self.app_version}")
         self.root.geometry("920x780")
         self.root.minsize(800, 620)
         self.root.configure(bg="#f5f7fa")
@@ -194,7 +224,6 @@ class YMM4AutoGui:
         # Header + script controls in one row
         top_frame = ttk.Frame(main_frame)
         top_frame.pack(fill=tk.X, pady=(0, 4))
-        ttk.Label(top_frame, text="🚀 YMM4 自動動画生成ファクトリー", style="Header.TLabel").pack(side=tk.LEFT)
         self.generate_btn = ttk.Button(top_frame, text="🎬 生成 🚀", style="Accent.TButton", command=self.start_generation)
         self.generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
         self._add_tooltip(self.generate_btn, "貼り付けた台本から音声・背景・サムネ・YMM4プロジェクトを生成します。")
@@ -207,9 +236,12 @@ class YMM4AutoGui:
         script_prompt_btn = ttk.Button(top_frame, text="AI台本作成", command=self.copy_script_generation_prompt)
         script_prompt_btn.pack(side=tk.RIGHT)
         self._add_tooltip(script_prompt_btn, "既存タイトル重複を避ける台本生成プロンプトをクリップボードにコピーします。")
-        title_prompt_btn = ttk.Button(top_frame, text="AIタイトル案", command=self.copy_title_prompt)
+        title_prompt_btn = ttk.Button(top_frame, text="AIタイトル案", width=12, command=self.copy_title_prompt)
         title_prompt_btn.pack(side=tk.RIGHT, padx=(4, 0))
-        self._add_tooltip(title_prompt_btn, "Analytics実績データと既存タイトルを反映したタイトル案プロンプトをコピーします。")
+        self._add_tooltip(title_prompt_btn, "Shorts寄りの通常タイトル案プロンプトをコピーします。Longも混ざる場合があります。")
+        long_title_prompt_btn = ttk.Button(top_frame, text="Longタイトル案", width=14, command=self.copy_long_title_prompt)
+        long_title_prompt_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        self._add_tooltip(long_title_prompt_btn, "Long候補だけを出すタイトル案プロンプトをコピーします。3幕構成と実績横展開を重視します。")
         clear_btn = ttk.Button(top_frame, text="クリア", width=6, command=self.clear_script)
         clear_btn.pack(side=tk.RIGHT, padx=4)
         self._add_tooltip(clear_btn, "台本入力欄を空にします。")
@@ -247,6 +279,9 @@ class YMM4AutoGui:
         self.upload_btn = ttk.Button(btn_frame, text="📤 YouTubeアップ", command=self.start_youtube_upload)
         self.upload_btn.pack(side=tk.LEFT, padx=(0, 4))
         self._add_tooltip(self.upload_btn, "生成済み動画を選び、予約枠を確認してYouTubeへアップロードします。")
+        self.comment_btn = ttk.Button(btn_frame, text="💬 固定コメント", command=self.start_post_fixed_comments)
+        self.comment_btn.pack(side=tk.LEFT, padx=(4, 4))
+        self._add_tooltip(self.comment_btn, "アップロード済み履歴のscript.txtにある固定コメントを、既存動画へ投稿します。")
         self.open_folder_btn = ttk.Button(btn_frame, text="📁 出力フォルダを開く", command=self.open_output_dir)
         self.open_folder_btn.pack(side=tk.LEFT)
         self._add_tooltip(self.open_folder_btn, "生成物が保存される output フォルダを開きます。")
@@ -333,19 +368,53 @@ class YMM4AutoGui:
         self.root.update()
         self.log(f"AI台本生成プロンプトをクリップボードにコピーしました（既存タイトル{len(food_titles)}件）✅", "success")
 
-    def copy_title_prompt(self):
+    def copy_title_prompt(self, long_only=False):
         active, uploaded = self.collect_existing_titles()
         all_titles = active + uploaded
         food_titles = [title for title in all_titles if self._is_food_title(title)]
         analytics_tsv, analytics_path, analytics_count = self._read_latest_analytics_tsv()
+        summary = self._read_latest_analytics_summary()
+        if analytics_tsv and summary:
+            analytics_tsv = f"{summary}\n\n【動画別TSV】\n{analytics_tsv}"
         title_prompt = build_title_prompt(food_titles, analytics_tsv=analytics_tsv)
+        if long_only:
+            title_prompt += "\n\n今回の生成条件:\n・ロング候補として20案を出す\n・Shorts候補は出さない\n・すべてLong候補の出力形式を使う\n・Long TOP5を出す\n"
         self.root.clipboard_clear()
         self.root.clipboard_append(title_prompt)
         self.root.update()
         analytics_msg = f" / 実績データ{analytics_count}件" if analytics_tsv else " / 実績データなし"
         if analytics_path:
             analytics_msg += f" ({os.path.basename(analytics_path)})"
-        self.log(f"動画タイトル作成プロンプトをコピーしました（食べ物系既存タイトル{len(food_titles)}件 / 全{len(all_titles)}件{analytics_msg}）✅", "success")
+        label = "Longタイトル案" if long_only else "動画タイトル作成"
+        self.log(f"{label}プロンプトをコピーしました（食べ物系既存タイトル{len(food_titles)}件 / 全{len(all_titles)}件{analytics_msg}）✅", "success")
+
+    def copy_long_title_prompt(self):
+        self.copy_title_prompt(long_only=True)
+
+    @staticmethod
+    def _read_latest_analytics_items():
+        output_dir = "output"
+        try:
+            paths = [
+                os.path.join(output_dir, name)
+                for name in os.listdir(output_dir)
+                if name.startswith("analytics_score_") and name.endswith(".json")
+            ]
+        except OSError:
+            return [], None
+        if not paths:
+            return [], None
+        latest = max(paths, key=lambda path: os.path.getmtime(path))
+        try:
+            with open(latest, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            return [], latest
+        return data.get("items") or [], latest
+
+    def _read_latest_analytics_summary(self):
+        items, _path = self._read_latest_analytics_items()
+        return build_performance_summary(items) if items else ""
 
     @staticmethod
     def _read_latest_analytics_tsv(max_rows=80):
@@ -1371,6 +1440,373 @@ class YMM4AutoGui:
             daemon=True
         ).start()
 
+    def _upload_record_path(self, output_dir):
+        candidates = [
+            os.path.join(output_dir, "_meta", "upload_record.json"),
+            os.path.join(output_dir, "upload_record.json"),
+        ]
+        return next((path for path in candidates if os.path.exists(path)), candidates[0])
+
+    def _read_upload_record(self, output_dir):
+        path = self._upload_record_path(output_dir)
+        if not os.path.exists(path):
+            return {}, path
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f), path
+        except Exception:
+            return {}, path
+
+    def _write_upload_record_data(self, path, data):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    def _collect_uploaded_comment_candidates(self):
+        uploaded_dir = os.path.join("output", "000_uploaded")
+        if not os.path.isdir(uploaded_dir):
+            return []
+
+        rows = []
+        folders = sorted(
+            (d for d in os.listdir(uploaded_dir) if os.path.isdir(os.path.join(uploaded_dir, d))),
+            key=lambda d: os.path.getmtime(os.path.join(uploaded_dir, d)),
+            reverse=True,
+        )
+        for name in folders:
+            output_dir = os.path.join(uploaded_dir, name)
+            meta = self._read_meta_from_dir(output_dir)
+            fixed_comment = (meta.get("fixed_comment") or "").strip()
+            if not fixed_comment:
+                continue
+            record, record_path = self._read_upload_record(output_dir)
+            video_id = (record.get("video_id") or "").strip()
+            if not video_id:
+                continue
+            rows.append({
+                "name": name,
+                "output_dir": output_dir,
+                "title": meta.get("title") or record.get("title") or self._folder_name_to_title(name),
+                "fixed_comment": fixed_comment,
+                "video_id": video_id,
+                "record": record,
+                "record_path": record_path,
+                "posted_id": record.get("fixed_comment_thread_id") or record.get("fixed_comment_id"),
+                "pinned_at": record.get("fixed_comment_pinned_at"),
+            })
+        return rows
+
+    def _enrich_comment_candidate_statuses(self, rows):
+        if not rows:
+            return rows
+        try:
+            from core.youtube_uploader import get_youtube_client
+            youtube = get_youtube_client()
+            ids = [row["video_id"] for row in rows if row.get("video_id")]
+            status_by_id = {}
+            for i in range(0, len(ids), 50):
+                resp = youtube.videos().list(
+                    part="snippet,status",
+                    id=",".join(ids[i:i + 50]),
+                ).execute()
+                for item in resp.get("items", []):
+                    status_by_id[item["id"]] = item
+            for row in rows:
+                item = status_by_id.get(row["video_id"])
+                if not item:
+                    row["video_status_label"] = "動画なし"
+                    row["is_public"] = False
+                    row["made_for_kids"] = False
+                    continue
+                status = item.get("status", {})
+                row["privacy_status"] = status.get("privacyStatus") or "不明"
+                row["made_for_kids"] = bool(status.get("madeForKids"))
+                row["is_public"] = row["privacy_status"] == "public"
+                if row["made_for_kids"]:
+                    row["video_status_label"] = "子ども向け"
+                elif row["is_public"]:
+                    row["video_status_label"] = "公開"
+                else:
+                    row["video_status_label"] = row["privacy_status"]
+        except Exception as e:
+            self.log(f"  ⚠ 固定コメント対象の動画状態確認に失敗: {e}", "warning")
+            for row in rows:
+                row.setdefault("video_status_label", "未確認")
+                row.setdefault("is_public", True)
+                row.setdefault("made_for_kids", False)
+        return rows
+
+    def select_uploaded_comments_dialog(self):
+        candidates = self._enrich_comment_candidate_statuses(self._collect_uploaded_comment_candidates())
+        if not candidates:
+            messagebox.showinfo(
+                "対象なし",
+                "固定コメントとvideo_idがあるアップロード済み履歴が見つかりません。",
+            )
+            return []
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("固定コメントを投稿する動画を選択")
+        dialog.geometry("720x420")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(
+            dialog,
+            text="script.txtの固定コメントを既存動画へ投稿します（Ctrl / Shift で複数選択）",
+        ).pack(anchor=tk.W, padx=10, pady=(10, 4))
+
+        filter_frame = ttk.Frame(dialog)
+        filter_frame.pack(fill=tk.X, padx=10, pady=(0, 4))
+        unposted_only_var = tk.BooleanVar(value=True)
+        public_only_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(filter_frame, text="未投稿だけ", variable=unposted_only_var).pack(side=tk.LEFT)
+        ttk.Checkbutton(filter_frame, text="公開済みだけ", variable=public_only_var).pack(side=tk.LEFT, padx=(12, 0))
+        count_var = tk.StringVar(value="")
+        ttk.Label(filter_frame, textvariable=count_var, font=("Meiryo", 8)).pack(side=tk.LEFT, padx=(12, 0))
+
+        list_frame = ttk.Frame(dialog)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        listbox = tk.Listbox(list_frame, selectmode=tk.EXTENDED, font=("Meiryo", 9))
+        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=listbox.yview)
+        listbox.config(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        visible_rows = []
+
+        def render_candidates():
+            listbox.delete(0, tk.END)
+            visible_rows.clear()
+            for row in candidates:
+                if unposted_only_var.get() and row.get("posted_id"):
+                    continue
+                if public_only_var.get() and (not row.get("is_public") or row.get("made_for_kids")):
+                    continue
+                visible_rows.append(row)
+                status_bits = [row.get("video_status_label") or "未確認"]
+                if row.get("posted_id"):
+                    status_bits.append("投稿済み")
+                if row.get("pinned_at"):
+                    status_bits.append("ピン留め済み")
+                preview = row["fixed_comment"].replace("\n", " / ")
+                if len(preview) > 42:
+                    preview = preview[:40] + "..."
+                listbox.insert(tk.END, f"{row['title']}  /  {preview}  ({' / '.join(status_bits)})")
+            count_var.set(f"表示 {len(visible_rows)} / 全 {len(candidates)} 件")
+
+        unposted_only_var.trace_add("write", lambda *_: render_candidates())
+        public_only_var.trace_add("write", lambda *_: render_candidates())
+        render_candidates()
+
+        selected = []
+
+        def do_ok():
+            indices = list(listbox.curselection())
+            if not indices:
+                messagebox.showwarning("未選択", "1件以上選択してください。", parent=dialog)
+                return
+            already = [visible_rows[i] for i in indices if visible_rows[i].get("posted_id")]
+            if already and not messagebox.askyesno(
+                "投稿済みを含みます",
+                f"投稿済み記録がある動画が{len(already)}件あります。\n未投稿のものだけ投稿しますか？",
+                parent=dialog,
+            ):
+                return
+            selected.extend(visible_rows[i] for i in indices)
+            dialog.destroy()
+
+        def mark_pinned():
+            indices = list(listbox.curselection())
+            if not indices:
+                messagebox.showwarning("未選択", "1件以上選択してください。", parent=dialog)
+                return
+            now = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            marked = 0
+            for i in indices:
+                row = visible_rows[i]
+                record = dict(row.get("record") or {})
+                record["fixed_comment_pinned_at"] = now
+                try:
+                    self._write_upload_record_data(row["record_path"], record)
+                    row["record"] = record
+                    row["pinned_at"] = now
+                    marked += 1
+                except Exception as e:
+                    self.log(f"  ⚠ ピン留め記録の保存に失敗: {row['title']}: {e}", "warning")
+            render_candidates()
+            self.log(f"📌 ピン留め済みとして記録: {marked}件", "success")
+
+        btns = ttk.Frame(dialog)
+        btns.pack(fill=tk.X, padx=10, pady=(4, 10))
+        ttk.Button(btns, text="キャンセル", command=dialog.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btns, text="投稿開始", command=do_ok).pack(side=tk.RIGHT, padx=(0, 8))
+        ttk.Button(btns, text="選択をピン留め済みにする", command=mark_pinned).pack(side=tk.RIGHT, padx=(0, 8))
+
+        self.root.wait_window(dialog)
+        return selected
+
+    def start_post_fixed_comments(self):
+        selected = self.select_uploaded_comments_dialog()
+        if not selected:
+            return
+        self.comment_btn.config(state=tk.DISABLED)
+        self.log(f"💬 固定コメント投稿開始: {len(selected)}件", "batch")
+        threading.Thread(target=self._run_post_fixed_comments, args=(selected,), daemon=True).start()
+
+    def _run_post_fixed_comments(self, rows):
+        try:
+            from core.youtube_uploader import get_youtube_client, post_comment
+            total = len(rows)
+            posted = 0
+            skipped = 0
+            failed = 0
+            posted_links = []
+            status_by_id = {}
+            try:
+                youtube = get_youtube_client()
+                ids = [row["video_id"] for row in rows if row.get("video_id")]
+                for i in range(0, len(ids), 50):
+                    resp = youtube.videos().list(
+                        part="snippet,status",
+                        id=",".join(ids[i:i + 50]),
+                    ).execute()
+                    for item in resp.get("items", []):
+                        status_by_id[item["id"]] = item
+            except Exception as e:
+                self.log(f"  ⚠ 動画状態の確認に失敗。投稿時に個別判定します: {e}", "warning")
+
+            for idx, row in enumerate(rows, 1):
+                title = row["title"]
+                if row.get("posted_id"):
+                    skipped += 1
+                    self.log(f"💬 [{idx}/{total}] 投稿済みのためスキップ: {title}", "warning")
+                    continue
+                video_status = status_by_id.get(row["video_id"])
+                if status_by_id and not video_status:
+                    skipped += 1
+                    self.log(f"💬 [{idx}/{total}] 動画が見つからないためスキップ: {title}", "warning")
+                    continue
+                if video_status:
+                    status = video_status.get("status", {})
+                    privacy = status.get("privacyStatus")
+                    made_for_kids = status.get("madeForKids")
+                    if made_for_kids:
+                        skipped += 1
+                        self.log(f"💬 [{idx}/{total}] 子ども向け設定のためスキップ: {title}", "warning")
+                        continue
+                    if privacy != "public":
+                        skipped += 1
+                        self.log(f"💬 [{idx}/{total}] {privacy or '不明'} のためスキップ: {title}", "warning")
+                        continue
+
+                self.log(f"💬 [{idx}/{total}] 固定コメント投稿中: {title}", "batch")
+                comment_id = post_comment(row["video_id"], row["fixed_comment"], progress_callback=self.log)
+                if comment_id:
+                    record = dict(row.get("record") or {})
+                    record["fixed_comment_thread_id"] = comment_id
+                    record["fixed_comment_posted_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+                    record["fixed_comment_text"] = row["fixed_comment"]
+                    try:
+                        self._write_upload_record_data(row["record_path"], record)
+                    except Exception as e:
+                        self.log(f"  ⚠ 投稿記録の保存に失敗: {e}", "warning")
+                    posted += 1
+                    posted_links.append({
+                        "title": title,
+                        "video_id": row["video_id"],
+                        "comment_id": comment_id,
+                        "record_path": row["record_path"],
+                        "record": record,
+                    })
+                    self.log("  ✅ コメント投稿完了（ピン留めはYouTube Studioで確認してください）", "success")
+                else:
+                    failed += 1
+                    self.log(f"  ❌ コメント投稿失敗: {title}", "error")
+
+            tag = "success" if failed == 0 else "warning"
+            self.log(f"💬 固定コメント投稿完了: 投稿 {posted} / スキップ {skipped} / 失敗 {failed}", tag)
+            if posted_links:
+                self.root.after(0, lambda links=posted_links: self.show_posted_comment_links_dialog(links))
+        finally:
+            self.root.after(0, lambda: self.comment_btn.config(state=tk.NORMAL))
+
+    def show_posted_comment_links_dialog(self, links):
+        import webbrowser
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("固定コメント投稿済みリンク")
+        dialog.geometry("780x360")
+        dialog.transient(self.root)
+
+        ttk.Label(
+            dialog,
+            text="投稿したコメントです。YouTube Studioで開いて、必要ならピン留めしてください。",
+            font=("Meiryo", 9),
+        ).pack(anchor=tk.W, padx=12, pady=(10, 4))
+
+        frame = ttk.Frame(dialog)
+        frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
+
+        cols = ("#", "タイトル", "動画ID")
+        tree = ttk.Treeview(frame, columns=cols, show="headings", height=10)
+        ysb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
+        tree.configure(yscrollcommand=ysb.set)
+        tree.heading("#", text="#", anchor=tk.CENTER)
+        tree.heading("タイトル", text="タイトル", anchor=tk.W)
+        tree.heading("動画ID", text="動画ID", anchor=tk.CENTER)
+        tree.column("#", width=40, stretch=False, anchor=tk.CENTER)
+        tree.column("タイトル", width=520, stretch=True, anchor=tk.W)
+        tree.column("動画ID", width=140, stretch=False, anchor=tk.CENTER)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        ysb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        for idx, item in enumerate(links, 1):
+            tree.insert("", tk.END, iid=str(idx - 1), values=(idx, item["title"], item["video_id"]))
+
+        if links:
+            tree.selection_set("0")
+
+        def selected_link():
+            sel = tree.selection()
+            if not sel:
+                return None
+            try:
+                return links[int(sel[0])]
+            except Exception:
+                return None
+
+        def open_studio():
+            item = selected_link()
+            if item:
+                webbrowser.open(f"https://studio.youtube.com/video/{item['video_id']}/comments")
+
+        def open_video():
+            item = selected_link()
+            if item:
+                webbrowser.open(f"https://youtu.be/{item['video_id']}")
+
+        def mark_selected_pinned():
+            item = selected_link()
+            if not item:
+                return
+            record = dict(item.get("record") or {})
+            record["fixed_comment_pinned_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+            try:
+                self._write_upload_record_data(item["record_path"], record)
+                item["record"] = record
+                self.log(f"📌 ピン留め済みとして記録: {item['title']}", "success")
+            except Exception as e:
+                self.log(f"  ⚠ ピン留め記録の保存に失敗: {e}", "warning")
+
+        btns = ttk.Frame(dialog)
+        btns.pack(fill=tk.X, padx=12, pady=(4, 10))
+        ttk.Label(btns, text=f"投稿済み {len(links)} 件", font=("Meiryo", 8)).pack(side=tk.LEFT)
+        ttk.Button(btns, text="閉じる", command=dialog.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btns, text="動画を開く", command=open_video).pack(side=tk.RIGHT, padx=(0, 8))
+        ttk.Button(btns, text="Studioコメントを開く", style="Accent.TButton", command=open_studio).pack(side=tk.RIGHT, padx=(0, 8))
+        ttk.Button(btns, text="ピン留め済みにする", command=mark_selected_pinned).pack(side=tk.RIGHT, padx=(0, 8))
+
     def open_analytics_window(self):
         win = tk.Toplevel(self.root)
         win.title("YouTube Analytics - 動画評価一覧")
@@ -1395,7 +1831,7 @@ class YMM4AutoGui:
 
         cols = (
             "title", "published_at", "video_type", "duration", "duration_status", "views", "impressions", "ctr",
-            "average_view_duration", "average_percentage_viewed", "likes",
+            "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
             "comments", "subscribers_net", "score", "action",
         )
         headings = {
@@ -1410,6 +1846,7 @@ class YMM4AutoGui:
             "average_view_duration": "平均視聴時間",
             "average_percentage_viewed": "平均視聴率",
             "likes": "高評価",
+            "like_rate": "高評価率",
             "comments": "コメント",
             "subscribers_net": "登録者増減",
             "score": "評価",
@@ -1440,6 +1877,7 @@ class YMM4AutoGui:
             "average_view_duration": 100,
             "average_percentage_viewed": 90,
             "likes": 70,
+            "like_rate": 80,
             "comments": 80,
             "subscribers_net": 90,
             "score": 55,
@@ -1498,6 +1936,7 @@ class YMM4AutoGui:
                     format_duration(item.get("average_view_duration")),
                     _fmt_percent(item.get("average_percentage_viewed")),
                     item.get("likes", 0),
+                    _fmt_ctr(item.get("like_rate")),
                     item.get("comments", 0),
                     item.get("subscribers_net", 0),
                     item.get("score", ""),
@@ -1553,8 +1992,11 @@ class YMM4AutoGui:
             self.log(f"📋 評価一覧をコピーしました: {len(state['items'])}件", "success")
 
         def copy_ai_analysis():
+            summary = build_performance_summary(state["items"])
             lines = [
                 "以下はYouTube Analyticsの動画別成績です。改善候補と横展開候補を分析してください。",
+                "",
+                summary,
                 "",
                 to_tsv(state["items"]),
             ]
@@ -2524,6 +2966,7 @@ class YMM4AutoGui:
         self.llm_check_btn.config(state=state)
         self.history_batch_btn.config(state=state)
         self.cancel_btn.config(state=tk.DISABLED if enabled else tk.NORMAL)
+        self.comment_btn.config(state=state)
         self.image_review_btn.config(state=state)
         self.ref_text.config(state=state)
         if enabled: self.progress.stop()

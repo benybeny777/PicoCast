@@ -219,7 +219,7 @@ def build_title_prompt(existing_titles=None, analytics_tsv=None) -> str:
     analytics_tsv = (analytics_tsv or "").strip()
     analytics_data_block = analytics_tsv if analytics_tsv else (
         "title\tpublished_at\tvideo_type\tduration\tduration_status\tviews\timpressions\tctr\t"
-        "average_view_duration\taverage_percentage_viewed\tlikes\tcomments\tsubscribers_net\tscore\taction\n"
+        "average_view_duration\taverage_percentage_viewed\tlikes\tlike_rate\tcomments\tsubscribers_net\tscore\taction\n"
         "（実績データ未取得。実績根拠がない案は「新規開拓枠」と書く）"
     )
     return f"""\
@@ -487,6 +487,7 @@ YouTube Analytics実績データ活用ルール
 ・average_view_duration
 ・average_percentage_viewed
 ・likes
+・like_rate
 ・comments
 ・subscribers_net
 ・score
@@ -503,6 +504,7 @@ ctr / impressions が 0 または空欄の場合は、評価に使わない。
 ・views が多い動画
 ・subscribers_net がプラスの動画
 ・likes / comments が多い動画
+・高評価率が高い動画
 ・同じ動画形式、同じ尺帯の中で相対的に強い動画
 
 低く評価する動画:
@@ -521,7 +523,7 @@ action は「動画の改善点」であり、「テーマの失敗」とは限�
 ━━━━━━━━━━━━━━━━━━
 
 views だけで判断しない。
-average_percentage_viewed、average_view_duration、subscribers_net、likes、comments を合わせて見る。
+average_percentage_viewed、average_view_duration、subscribers_net、likes、like_rate、comments を合わせて見る。
 
 判定目安:
 ・平均視聴率70%以上: 強い勝ちパターン
@@ -539,6 +541,7 @@ average_percentage_viewed、average_view_duration、subscribers_net、likes、co
 ・average_view_duration
 ・subscribers_net
 ・likes
+・like_rate
 ・comments
 
 悪い例:
@@ -933,6 +936,7 @@ Long候補の実績根拠には、必ず以下の数値を最低1つ以上入れ
 ・average_view_duration
 ・subscribers_net
 ・likes
+・like_rate
 ・comments
 
 Long候補で実績根拠が弱い場合は、
@@ -973,7 +977,7 @@ Long候補のTOP5は、
 ・横展開の中身には、同じ食材ではなく、どの勝ちパターンを別食材へ展開したかを書く
 ・通常の20案で動画形式がLongになった案は、横展開の中身にLong向き理由も短く含める
 ・Long向き理由は「誤解から普及まで描ける」「昔と今の価値逆転がある」「背景がある」「複数の驚きがある」など具体的に書く
-・実績根拠には、可能な限り views / average_percentage_viewed / average_view_duration / subscribers_net / likes / comments の数値を最低1つ以上入れる
+・実績根拠には、可能な限り views / average_percentage_viewed / average_view_duration / subscribers_net / likes / like_rate / comments の数値を最低1つ以上入れる
 ・実績根拠が弱い場合は「新規開拓枠」と書く
 ・全20案を実績横展開だけに寄せすぎない
 ・目安として、12〜15案は実績横展開、5〜8案は新規開拓枠にする

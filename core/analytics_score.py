@@ -84,6 +84,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     comments = _int(item.get("comments"))
     gained = _int(item.get("subscribers_gained"))
     lost = _int(item.get("subscribers_lost"))
+    like_rate = (likes / views * 100) if views > 0 else 0.0
 
     if video_type == "Shorts":
         if avg_percent >= 90 or avg_duration >= 45:
@@ -122,6 +123,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "average_view_duration": avg_duration,
         "average_percentage_viewed": avg_percent,
         "likes": likes,
+        "like_rate": like_rate,
         "comments": comments,
         "subscribers_gained": gained,
         "subscribers_lost": lost,
@@ -150,7 +152,7 @@ def format_duration(seconds) -> str:
 def to_tsv(items: list[dict[str, Any]]) -> str:
     cols = [
         "title", "published_at", "video_type", "duration", "duration_status", "views", "impressions", "ctr",
-        "average_view_duration", "average_percentage_viewed", "likes",
+        "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
         "comments", "subscribers_net", "score", "action",
     ]
     lines = ["\t".join(cols)]
@@ -162,6 +164,47 @@ def to_tsv(items: list[dict[str, Any]]) -> str:
                 value = f"{value:.2f}"
             values.append("" if value is None else str(value).replace("\t", " "))
         lines.append("\t".join(values))
+    return "\n".join(lines)
+
+
+def build_performance_summary(items: list[dict[str, Any]], limit: int = 5) -> str:
+    if not items:
+        return "実績データが空です。"
+
+    def _fmt_title(item):
+        title = str(item.get("title") or "").strip()
+        return title[:42] + ("..." if len(title) > 42 else "")
+
+    scored = list(items)
+    strong = [
+        item for item in scored
+        if item.get("score") in ("S", "A") or _num(item.get("average_percentage_viewed")) >= 70
+    ]
+    top_views = sorted(scored, key=lambda x: _int(x.get("views")), reverse=True)[:limit]
+    top_retention = sorted(scored, key=lambda x: _num(x.get("average_percentage_viewed")), reverse=True)[:limit]
+    top_like_rate = sorted(
+        [item for item in scored if _int(item.get("views")) >= 50],
+        key=lambda x: _num(x.get("like_rate")),
+        reverse=True,
+    )[:limit]
+
+    lines = [
+        "今回の実績データから見える優先横展開:",
+        f"・対象動画: {len(scored)}件 / 強い候補: {len(strong)}件",
+    ]
+    if top_views:
+        lines.append("・再生数上位: " + " / ".join(
+            f"{_fmt_title(item)} views{_int(item.get('views'))}" for item in top_views[:3]
+        ))
+    if top_retention:
+        lines.append("・平均視聴率上位: " + " / ".join(
+            f"{_fmt_title(item)} {_num(item.get('average_percentage_viewed')):.1f}%" for item in top_retention[:3]
+        ))
+    if top_like_rate:
+        lines.append("・高評価率上位: " + " / ".join(
+            f"{_fmt_title(item)} {_num(item.get('like_rate')):.2f}%" for item in top_like_rate[:3]
+        ))
+    lines.append("・viewsだけで判断せず、平均視聴率、平均視聴時間、登録者増減、高評価率を合わせて横展開する。")
     return "\n".join(lines)
 
 
