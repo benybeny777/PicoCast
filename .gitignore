@@ -1,6 +1,7 @@
 .env
 client_secrets.json
 token.json
+token_analytics.json
 __pycache__/
 *.pyc
 *.pyo

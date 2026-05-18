@@ -33,7 +33,11 @@ from config import (
     CHARACTERS,
     MAX_BACKGROUNDS_LONG,
     MAX_BACKGROUNDS_SHORTS,
+    OLLAMA_REWRITE_FALLBACK_MODEL,
+    OLLAMA_REWRITE_MODEL,
+    OPENING_SCORE_HARD_ABORT_THRESHOLD,
     OPENING_SCORE_ABORT_THRESHOLD,
+    OPENING_REWRITE_MAX_FALLBACKS,
     VOICEVOX_PATH,
     VOICE_INTRO_FAST_SECONDS,
     VOICE_INTRO_SPEED_SCALE_LONG,
@@ -190,8 +194,10 @@ def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
                 if not variant or not old_file:
                     continue
                 old_path = os.path.join(output_dir, old_file)
+                if not os.path.exists(old_path):
+                    old_path = os.path.join(_thumbs_dir(output_dir), old_file)
                 new_file = f"{video_id}_thumbnail_{variant}.png"
-                new_path = os.path.join(output_dir, new_file)
+                new_path = os.path.join(_thumbs_dir(output_dir), new_file)
                 if os.path.exists(old_path) and os.path.abspath(old_path) != os.path.abspath(new_path):
                     shutil.copy2(old_path, new_path)
                     item["file"] = new_file
@@ -281,6 +287,28 @@ class GenerationReport:
             f"🎤 音声: 生成={self.voices_generated} / 失敗={self.voices_failed}\n"
             f"🖼  背景: 生成={self.backgrounds_generated} / 失敗={self.backgrounds_failed}"
         )
+
+
+def _estimate_script_duration(items, is_shorts: bool):
+    """Estimate narration duration before VOICEVOX generation."""
+    dialogue_items = [it for it in items if it["type"] == "dialogue"]
+    if not dialogue_items:
+        return None, 0, 0.0
+    n = len(dialogue_items)
+    total_chars = sum(len(it.get("text", "")) for it in dialogue_items)
+    avg_chars = total_chars / n if n else 0.0
+
+    chars_per_sec_at_1x = 5.4
+    intro_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
+    body_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
+    additional = TRANSITION_SEC + VOICE_TAIL_SAFETY_SEC + INTER_DIALOGUE_GAP_SEC
+
+    elapsed = 0.0
+    for item in dialogue_items:
+        chars = len(item.get("text", ""))
+        speed = intro_speed if elapsed < VOICE_INTRO_FAST_SECONDS else body_speed
+        elapsed += chars / (chars_per_sec_at_1x * speed) + 0.1 * speed + additional
+    return elapsed, n, avg_chars
 
 
 
@@ -683,6 +711,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     target_duration = "38-50秒" if is_shorts else "5-8分"
     if opening_review.get("llm_review_required"):
         try:
+            update_status("  🤖 Ollamaで冒頭レビュー中...")
             llm_review = llm_opening_review(
                 opening_review,
                 opening_title,
@@ -690,63 +719,223 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "Shorts" if is_shorts else "Long",
                 target_duration,
             )
+            if llm_review:
+                update_status(
+                    f"  🤖 Ollama冒頭レビュー完了: {llm_review.get('score')}点 / {llm_review.get('status')}"
+                )
+            else:
+                update_status("  ⚠ Ollama冒頭レビューはスキップされました")
         except Exception as e:
             update_status(f"  ⚠ 冒頭Ollamaレビュー失敗: {e}")
     final_opening = llm_review or opening_review
 
     if should_auto_rewrite_opening(final_opening):
-        try:
-            rewrite_source = dict(opening_review)
-            rewrite_source["score"] = final_opening.get("score")
-            rewrite_source["issues"] = final_opening.get("issues", opening_review.get("issues", []))
-            rewrite_text = rewrite_opening_with_ollama(
-                rewrite_source,
-                opening_title,
-                opening_thumb_text,
-                "Shorts" if is_shorts else "Long",
-            )
-            if rewrite_text:
-                script_content = apply_opening_rewrite_to_script(script_content, rewrite_text, is_shorts)
-                with open(script_txt_path, "w", encoding="utf-8") as f:
-                    f.write(script_content)
-                items = ScriptParser.parse(script_txt_path)
-                meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
-                items = [it for it in items if it["type"] not in ScriptParser.META_TYPES]
-                items = normalize_background_order(items)
-                ai_thumbnail_prompt = meta.get("thumbnail")
-                if "description" in meta:
-                    from core.ng_words import apply_ng_word_replacements
-                    _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
-                    if _stripped:
-                        update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
-                    _desc = re.sub(r'#\S+', '', _desc).strip()
-                    meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
-                opening_title = meta.get("video_title", topic)
-                opening_thumb_text = meta.get("thumbnail_text", "")
-                opening_review = local_opening_review(items, opening_title, opening_thumb_text, is_shorts)
-                final_opening = opening_review
+        rewrite_source = dict(opening_review)
+        rewrite_source["score"] = final_opening.get("score")
+        rewrite_source["issues"] = final_opening.get("issues", opening_review.get("issues", []))
+        rewrite_attempts = []
+        rewrite_accepted = False
+        rewrite_models = [OLLAMA_REWRITE_MODEL]
+        if OPENING_REWRITE_MAX_FALLBACKS > 0 and OLLAMA_REWRITE_FALLBACK_MODEL not in rewrite_models:
+            rewrite_models.append(OLLAMA_REWRITE_FALLBACK_MODEL)
+        rewrite_models = rewrite_models[: 1 + max(0, OPENING_REWRITE_MAX_FALLBACKS)]
+
+        for attempt_index, rewrite_model in enumerate(rewrite_models):
+            try:
+                if attempt_index == 0:
+                    update_status(f"  ✍ Ollama({rewrite_model})で冒頭リライト中...")
+                else:
+                    update_status(f"  ✍ Ollama({rewrite_model})で冒頭を再リライト中...")
+                candidate_rewrite_text = rewrite_opening_with_ollama(
+                    rewrite_source,
+                    opening_title,
+                    opening_thumb_text,
+                    "Shorts" if is_shorts else "Long",
+                    model=rewrite_model,
+                )
+                if not candidate_rewrite_text:
+                    update_status(f"  ⚠ Ollama({rewrite_model})冒頭リライトは空でした", "warning")
+                    rewrite_attempts.append({"model": rewrite_model, "accepted": False, "reason": "empty"})
+                    continue
+
+                candidate_script_content = apply_opening_rewrite_to_script(
+                    script_content,
+                    candidate_rewrite_text,
+                    is_shorts,
+                )
+                candidate_items = ScriptParser.parse_string(candidate_script_content)
+                candidate_meta = {
+                    it["type"]: it["text"]
+                    for it in candidate_items
+                    if it["type"] in ScriptParser.META_TYPES
+                }
+                candidate_items = [
+                    it for it in candidate_items if it["type"] not in ScriptParser.META_TYPES
+                ]
+                candidate_items = normalize_background_order(candidate_items)
+                candidate_title = candidate_meta.get("video_title", topic)
+                candidate_thumb_text = candidate_meta.get("thumbnail_text", "")
+                candidate_review = local_opening_review(
+                    candidate_items,
+                    candidate_title,
+                    candidate_thumb_text,
+                    is_shorts,
+                )
+                candidate_score = int(candidate_review.get("score") or 0)
+                candidate_critical_errors = candidate_review.get("critical_errors") or []
+                rewrite_attempts.append(
+                    {
+                        "model": rewrite_model,
+                        "score": candidate_score,
+                        "status": candidate_review.get("status"),
+                        "accepted": candidate_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not candidate_critical_errors,
+                        "critical_errors": candidate_critical_errors,
+                    }
+                )
                 if llm_review:
                     llm_review["before_rewrite"] = True
-                    llm_review["final_status_after_rewrite"] = opening_review.get("status")
-                update_status("  ✍ 冒頭をOllamaで軽く修正しました")
-        except Exception as e:
-            update_status(f"  ⚠ 冒頭Ollamaリライト失敗: {e}")
+                    llm_review["rewrite_candidate_score"] = candidate_score
+                    llm_review["rewrite_candidate_status"] = candidate_review.get("status")
+
+                if candidate_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not candidate_critical_errors:
+                    rewrite_text = candidate_rewrite_text
+                    script_content = candidate_script_content
+                    with open(script_txt_path, "w", encoding="utf-8") as f:
+                        f.write(script_content)
+                    items = candidate_items
+                    meta = candidate_meta
+                    ai_thumbnail_prompt = meta.get("thumbnail")
+                    if "description" in meta:
+                        from core.ng_words import apply_ng_word_replacements
+                        _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
+                        if _stripped:
+                            update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
+                        _desc = re.sub(r'#\S+', '', _desc).strip()
+                        meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+                    opening_title = meta.get("video_title", topic)
+                    opening_thumb_text = meta.get("thumbnail_text", "")
+                    opening_review = candidate_review
+                    final_opening = opening_review
+                    if llm_review:
+                        llm_review["rewrite_accepted"] = True
+                        llm_review["rewrite_accepted_model"] = rewrite_model
+                        llm_review["final_status_after_rewrite"] = opening_review.get("status")
+                    rewrite_accepted = True
+                    update_status(
+                        f"  ✍ Ollama({rewrite_model})リライト採用: 再採点 {candidate_score}点 / 重大エラーなし"
+                    )
+                    break
+
+                update_status(
+                    f"  ⚠ Ollama({rewrite_model})リライト不採用: 再採点 {candidate_score}点 / 停止基準{OPENING_SCORE_HARD_ABORT_THRESHOLD}点未満またはmust_fixあり",
+                    "warning",
+                )
+                for issue in (candidate_review.get("issues") or [])[:3]:
+                    update_status(f"    - リライト候補: {issue}", "warning")
+                for issue in candidate_critical_errors[:3]:
+                    update_status(f"    - リライト候補must_fix: {issue}", "warning")
+            except Exception as e:
+                update_status(f"  ⚠ Ollama({rewrite_model})冒頭リライト失敗: {e}", "warning")
+                rewrite_attempts.append({"model": rewrite_model, "accepted": False, "error": str(e)})
+
+        if not rewrite_accepted and rewrite_attempts and llm_review:
+            llm_review["rewrite_accepted"] = False
+            llm_review["rewrite_reject_reason"] = f"全候補が停止基準に該当: {OPENING_SCORE_HARD_ABORT_THRESHOLD}点未満またはmust_fixあり"
+        if rewrite_attempts and llm_review:
+            llm_review["rewrite_attempts"] = rewrite_attempts
 
     opening_review_path = save_opening_review(theme_dir, opening_review, llm_review, rewrite_text)
     final_score = int(final_opening.get("score") or 0)
+    opening_critical_errors = final_opening.get("critical_errors") or []
+    score_tag = "score_ok" if final_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if final_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
     update_status(
-        f"━━━━━━━━ 冒頭スコア {final_score}点 / {final_opening.get('status')} ━━━━━━━━\n"
+        f"■■■ 冒頭スコア {final_score}点 / {final_opening.get('status')} ■■■\n"
         f"  保存先: {opening_review_path}",
-        "score",
+        score_tag,
     )
     for issue in (final_opening.get("issues") or [])[:3]:
         update_status(f"    - {issue}")
+    for issue in opening_critical_errors[:3]:
+        update_status(f"    must_fix: {issue}", "warning")
 
-    if final_score < OPENING_SCORE_ABORT_THRESHOLD:
+    if final_score < OPENING_SCORE_HARD_ABORT_THRESHOLD or opening_critical_errors:
         msg = (
-            f"❌ 冒頭スコアが低すぎるため処理を中止しました（{final_score}点 / 基準: {OPENING_SCORE_ABORT_THRESHOLD}点以上）\n"
+            f"❌ 冒頭チェックの重大エラーで処理を中止しました（{final_score}点 / 停止基準: {OPENING_SCORE_HARD_ABORT_THRESHOLD}点未満またはmust_fixあり）\n"
             "台本の冒頭を修正してから再実行してください。"
         )
+        update_status(msg, "error")
+        report.elapsed_sec = time.time() - pipeline_start
+        return msg, report
+
+    estimated_sec, estimated_lines, estimated_avg_chars = _estimate_script_duration(items, is_shorts)
+    estimated_sec = float(estimated_sec or 0.0)
+    estimated_duration_result = duration_review(estimated_sec, is_shorts)
+    estimated_duration_result["estimated"] = True
+    if is_shorts and (estimated_sec < 35 or estimated_sec > 55):
+        estimated_duration_path = save_duration_review(theme_dir, estimated_duration_result)
+        msg = (
+            f"❌ 推定尺が許容範囲外のため処理を中止しました"
+            f"（{estimated_sec:.1f}秒 / 許容: 35〜55秒）\n"
+            f"保存先: {estimated_duration_path}"
+        )
+        update_status(msg, "error")
+        report.elapsed_sec = time.time() - pipeline_start
+        return msg, report
+    update_status(
+        f"🧑‍⚖️ ChatGPTで生成前レビュー中... 推定尺 {estimated_sec:.1f}秒"
+        f"（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
+    )
+    try:
+        final_review = final_chatgpt_review(
+            title=meta.get("video_title", topic),
+            thumbnail_text=meta.get("thumbnail_text", ""),
+            fixed_comment=meta.get("fixed_comment", ""),
+            script_content=script_content,
+            items=items,
+            is_shorts=is_shorts,
+            estimated_duration=estimated_sec,
+            local_review=opening_review,
+            ollama_review=llm_review,
+            duration_result=estimated_duration_result,
+        )
+        final_review_path = save_final_review(theme_dir, final_review)
+        if final_review and final_review.get("skipped"):
+            msg = f"❌ ChatGPT生成前レビュー skipped: {final_review.get('reason')} ({final_review_path})"
+            update_status(msg, "error")
+            report.elapsed_sec = time.time() - pipeline_start
+            return msg, report
+        elif final_review:
+            pre_score = int(final_review.get("final_score") or 0)
+            pre_score_tag = "score_ok" if pre_score >= OPENING_SCORE_ABORT_THRESHOLD else "score_warn" if pre_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD else "score"
+            update_status(
+                f"■■■ ChatGPT生成前スコア {pre_score}点 "
+                f"/ publish_ok={final_review.get('publish_ok')} / risk={final_review.get('risk')} ■■■\n"
+                f"  保存先: {final_review_path}",
+                pre_score_tag,
+            )
+            for issue in (final_review.get("must_fix") or [])[:3]:
+                update_status(f"    must_fix: {issue}", "warning")
+
+            must_fix = final_review.get("must_fix") or []
+            if final_review.get("publish_ok") is False and not must_fix and pre_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD:
+                update_status("  ⚠ publish_ok=Falseですが、must_fixなしのため警告通過します", "warning")
+            if pre_score < OPENING_SCORE_HARD_ABORT_THRESHOLD or must_fix:
+                msg = (
+                    f"❌ ChatGPT生成前レビューで停止しました"
+                    f"（{pre_score}点 / publish_ok={final_review.get('publish_ok')} / 停止基準: {OPENING_SCORE_HARD_ABORT_THRESHOLD}点未満またはmust_fixあり）\n"
+                    "台本を修正してから再実行してください。"
+                )
+                update_status(msg, "error")
+                report.elapsed_sec = time.time() - pipeline_start
+                return msg, report
+        else:
+            msg = f"❌ ChatGPT生成前レビュー結果が空です ({final_review_path})"
+            update_status(msg, "error")
+            report.elapsed_sec = time.time() - pipeline_start
+            return msg, report
+    except Exception as e:
+        final_review_path = save_final_review(theme_dir, {"error": str(e), "stage": "pre_generation"})
+        msg = f"❌ ChatGPT生成前レビュー失敗: {e} ({final_review_path})"
         update_status(msg, "error")
         report.elapsed_sec = time.time() - pipeline_start
         return msg, report
@@ -1173,35 +1362,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         "duration",
     )
 
-    try:
-        final_review = final_chatgpt_review(
-            title=meta.get("video_title", topic),
-            thumbnail_text=meta.get("thumbnail_text", ""),
-            fixed_comment=meta.get("fixed_comment", ""),
-            script_content=script_content,
-            items=items,
-            is_shorts=is_shorts,
-            estimated_duration=total_sec,
-            local_review=opening_review,
-            ollama_review=llm_review,
-            duration_result=duration_result,
-        )
-        final_review_path = save_final_review(theme_dir, final_review)
-        if final_review and final_review.get("skipped"):
-            update_status(f"  ⚠ ChatGPT最終レビュー skipped: {final_review.get('reason')} ({final_review_path})")
-        elif final_review:
-            update_status(
-                f"━━━━━━━━ ChatGPT最終スコア {final_review.get('final_score')}点 "
-                f"/ publish_ok={final_review.get('publish_ok')} / risk={final_review.get('risk')} ━━━━━━━━\n"
-                f"  保存先: {final_review_path}",
-                "score",
-            )
-            for issue in (final_review.get("must_fix") or [])[:3]:
-                update_status(f"    must_fix: {issue}", "warning")
-    except Exception as e:
-        final_review_path = save_final_review(theme_dir, {"error": str(e)})
-        update_status(f"  ⚠ ChatGPT最終レビュー失敗: {e} ({final_review_path})", "warning")
-
     update_status("💾 YMM4プロジェクトを保存中...")
     editor.save(project_file_path)
     report.elapsed_sec = time.time() - pipeline_start
@@ -1211,12 +1371,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if is_shorts:
         if total_sec < 35:
             update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ 短すぎ（35秒未満）", "warning")
-        elif total_sec <= 45:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ 良い（35〜45秒）", "success")
-        elif total_sec <= 52:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ 理想（45〜52秒）", "success")
+        elif total_sec < 38:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ やや短いがOK（35〜37秒）", "success")
+        elif total_sec <= 50:
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ 理想（38〜50秒）", "success")
         elif total_sec <= 55:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ やや長いが許容（〜55秒）", "warning")
+            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ OKだけど長め（51〜55秒）", "warning")
         elif total_sec <= 58:
             update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠⚠ カット推奨（〜58秒）", "warning")
         else:

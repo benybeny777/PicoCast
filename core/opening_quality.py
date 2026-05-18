@@ -15,6 +15,7 @@ from config import (
     OLLAMA_REWRITE_MODEL,
     OPENING_REVIEW_MAX_LLM_RETRIES,
     OPENING_REVIEW_AUTO_REWRITE,
+    OPENING_SCORE_HARD_ABORT_THRESHOLD,
     SHORT_FULL_SCRIPT_REVIEW,
     LONG_FULL_SCRIPT_REVIEW,
 )
@@ -23,14 +24,16 @@ from config import (
 SURPRISE_WORDS = (
     "昔", "実は", "だった", "毒扱い", "日本生まれ", "禁止", "薬", "高級品",
     "貧乏飯", "真逆", "ヤバい", "意外", "知ら", "別物", "勘違い", "衝撃",
-    "もともと", "海外", "庶民", "贅沢", "偽物", "危険",
+    "もともと", "海外", "庶民", "贅沢", "偽物", "危険", "実の外", "薬屋",
+    "作戦", "代用品", "王族", "名前だけ", "外側", "手間", "メロンなし",
 )
 CONCLUSION_WORDS = ("つまり", "結論", "正体", "理由は", "答えは")
 FOOD_HINT_WORDS = (
     "パン", "米", "肉", "魚", "卵", "牛乳", "チーズ", "カレー", "ラーメン",
     "寿司", "そば", "うどん", "お菓子", "チョコ", "メロン", "じゃがいも",
     "トマト", "ナポリタン", "コーヒー", "コーラ", "マヨネーズ", "うなぎ",
-    "牛丼", "天ぷら", "餃子", "焼肉", "味噌", "醤油", "バター",
+    "牛丼", "天ぷら", "餃子", "焼肉", "味噌", "醤油", "バター", "ケチャップ",
+    "カシューナッツ", "紅茶", "アイス", "バナナ",
 )
 
 
@@ -49,12 +52,38 @@ def _dialogue_text(item: dict[str, Any]) -> str:
 def _extract_keywords(title: str, thumbnail_text: str = "") -> list[str]:
     source = f"{title} {thumbnail_text}"
     tokens = [word for word in FOOD_HINT_WORDS if word in source]
+    for candidate in _food_candidates(title):
+        if candidate not in tokens:
+            tokens.append(candidate)
     chunks = re.findall(r"[一-龯ぁ-んァ-ヶーA-Za-z0-9]{2,}", source)
     skip_words = ("動画", "タイトル", "サムネ", "文字", "Shorts", "Long", "雑学", "解説")
     for chunk in chunks:
         if chunk not in tokens and not any(skip in chunk for skip in skip_words):
             tokens.append(chunk)
     return tokens[:8]
+
+
+def _food_candidates(title: str) -> list[str]:
+    title = (title or "").strip()
+    candidates = []
+    for sep in ("は", "が", "に", "を", "も", "で"):
+        if sep in title:
+            head = title.split(sep, 1)[0].strip()
+            if 2 <= len(head) <= 12:
+                candidates.append(head)
+            break
+    if "の" in title:
+        head = title.split("の", 1)[0].strip()
+        if 2 <= len(head) <= 12 and head not in candidates:
+            candidates.append(head)
+    return candidates
+
+
+def _is_incomplete_opening_line(text: str) -> bool:
+    text = (text or "").strip()
+    if len(text) < 4:
+        return True
+    return bool(re.search(r"(?:は|が|を|に|で|と|の|も|へ|から|より)$", text))
 
 
 def _max_same_speaker_run(speakers: list[str]) -> int:
@@ -80,18 +109,27 @@ def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool
     opening = dialogue_items[:_opening_limit(is_shorts)]
     opening_text = "\n".join(_dialogue_text(item) for item in opening)
     speakers = [_speaker(item) for item in opening]
+    all_speakers = [_speaker(item) for item in dialogue_items]
     keywords = _extract_keywords(title, thumbnail_text)
+    food_keywords = [word for word in keywords if word in FOOD_HINT_WORDS or word in _food_candidates(title)]
+    first_line = _dialogue_text(opening[0]) if opening else ""
 
     score = 100
     issues = []
+    critical_errors = []
     checks = {}
 
     has_food = bool(keywords and any(keyword in opening_text for keyword in keywords))
+    first_line_has_food = bool(food_keywords and any(keyword in first_line for keyword in food_keywords))
     checks["food_keyword_in_opening"] = has_food
+    checks["food_keyword_in_first_line"] = first_line_has_food
     checks["keywords"] = keywords
+    checks["food_keywords"] = food_keywords
     if not has_food:
         score -= 20
         issues.append("冒頭にタイトル/食べ物名との接続が弱い")
+    if not first_line_has_food:
+        critical_errors.append("冒頭1行目に食べ物名がない")
 
     has_thumbnail_text = bool(thumbnail_text and thumbnail_text in opening_text)
     checks["thumbnail_text_in_opening"] = has_thumbnail_text
@@ -100,10 +138,14 @@ def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool
         issues.append("サムネ文字との接続が弱い")
 
     has_surprise = any(word in opening_text for word in SURPRISE_WORDS)
+    first_line_has_surprise = any(word in first_line for word in SURPRISE_WORDS)
     checks["surprise_word_in_opening"] = has_surprise
+    checks["surprise_word_in_first_line"] = first_line_has_surprise
     if not has_surprise:
         score -= 25
         issues.append("冒頭の意外性ワードが弱い")
+    if not first_line_has_surprise:
+        critical_errors.append("冒頭1行目に意外性がない")
 
     has_both_speakers = len({s for s in speakers if s}) >= 2
     checks["both_speakers_present"] = has_both_speakers
@@ -111,11 +153,22 @@ def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool
         score -= 12
         issues.append("掛け合いになっていない")
 
-    same_run = _max_same_speaker_run(speakers)
+    same_run = _max_same_speaker_run(all_speakers)
     checks["max_same_speaker_run"] = same_run
     if same_run >= 4:
         score -= 10
         issues.append("同じ話者が4連続以上")
+        critical_errors.append("同じ話者が4連続以上")
+
+    dialogue_count = len(dialogue_items)
+    checks["dialogue_count"] = dialogue_count
+    if is_shorts and dialogue_count >= 21:
+        critical_errors.append("Shortsのセリフ数が21行以上")
+
+    incomplete_first_line = _is_incomplete_opening_line(first_line)
+    checks["first_line_complete"] = not incomplete_first_line
+    if incomplete_first_line:
+        critical_errors.append("冒頭1行目だけで意味が完結していない")
 
     long_lines = [_dialogue_text(item) for item in opening if len(_dialogue_text(item)) > 15]
     checks["long_dialogue_count"] = len(long_lines)
@@ -146,15 +199,20 @@ def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool
                      - min(15, len(long_lines) * 3)),
         "clarity": max(0, 100 - min(20, len(long_lines) * 4)),
     }
-    # pass>=85 / warning>=75 / llm_review_required<75（ローカルLLMが甘いためしきい値を引き上げ）
-    status = "pass" if score >= 85 else "warning" if score >= 75 else "llm_review_required"
+    # 80点以上は通過、70-79点は重大エラーがなければ警告通過、69点以下はリライト対象。
+    status = (
+        "pass" if score >= 80 and not critical_errors
+        else "warning" if score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not critical_errors
+        else "llm_review_required"
+    )
     return {
         "mode": "local",
         "score": score,
         "status": status,
-        "llm_review_required": score < 75,
-        "rewrite_needed": score < 80,
+        "llm_review_required": score < OPENING_SCORE_HARD_ABORT_THRESHOLD or bool(critical_errors),
+        "rewrite_needed": score < OPENING_SCORE_HARD_ABORT_THRESHOLD or bool(critical_errors),
         "issues": issues,
+        "critical_errors": critical_errors,
         "checks": checks,
         "scores": local_scores,
         "opening_lines": [
@@ -213,8 +271,13 @@ def _build_opening_review_prompt(local_review: dict[str, Any], title: str, thumb
 以下を厳しく評価してください。問題がある場合は必ず warnings に入れてください:
 - 冒頭1秒で食べ物名と意外性が出るか
 - タイトルとサムネの期待に合うか
+- サムネ文字の衝撃ワードを冒頭5秒以内に回収しているか
+- タイトルは理由・経緯・疑問、サムネは一番強い事実という役割分担ができているか
+- タイトルとサムネが同じ文章の繰り返しになっていないか
+- 「衝撃の秘密」「知られざる真実」「意外な歴史」「ヤバすぎる理由」など抽象ワードだけに逃げていないか
 - 3秒以内に続きを見たくなるか
 - 15秒以内に理由が見えるか
+- Longの場合、冒頭30秒以内に「衝撃事実」「視聴者の疑問」「昔と今のギャップ」「答えの予告」が入っているか
 - 会話テンポが落ちていないか
 - 同じ情報を繰り返していないか
 - ラストが冒頭へ自然に戻るか（ループ構成か）
@@ -244,18 +307,19 @@ def _normalize_review_result(result: dict[str, Any], provider: str, model: str) 
         legacy_issues = [str(legacy_issues)]
     issues = [str(i) for i in (must_fix + warnings + legacy_issues)][:8]
     scores = result.get("scores") or {}
+    critical_errors = [str(i) for i in result.get("critical_errors", [])[:5]] if isinstance(result.get("critical_errors", []), list) else []
     return {
         "mode": "llm",
         "provider": provider,
         "model": model,
         "score": max(0, min(100, score)),
-        # pass>=85 / warning>=75（ローカルLLMが甘いためしきい値を引き上げ）
-        "status": "pass" if score >= 85 else "warning" if score >= 75 else "llm_review_required",
-        "rewrite_needed": bool(result.get("rewrite_recommended") or result.get("rewrite_needed")) or score < 80,
+        "status": "pass" if score >= 80 and not critical_errors else "warning" if score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not critical_errors else "llm_review_required",
+        "rewrite_needed": bool(result.get("rewrite_recommended") or result.get("rewrite_needed")) or score < OPENING_SCORE_HARD_ABORT_THRESHOLD or bool(critical_errors),
         "publish_ok": result.get("publish_ok"),
         "must_fix": [str(i) for i in must_fix[:5]],
         "warnings": [str(i) for i in warnings[:5]],
         "issues": issues,
+        "critical_errors": critical_errors,
         "scores": scores,
         "fix_target": result.get("fix_target"),
         "suggested_opening": result.get("suggested_opening"),
@@ -306,21 +370,28 @@ def should_auto_rewrite_opening(review: dict[str, Any]) -> bool:
         return False
     score = int(review.get("score", 0) or 0)
     must_fix = review.get("must_fix") or []
+    critical_errors = review.get("critical_errors") or []
     scores = review.get("scores") or {}
     hook_score = scores.get("hook", 100)
     loop_score = scores.get("loop", 100)
     cta_score = scores.get("cta", 100)
     # must_fix があれば点数に関係なく修正
-    if must_fix:
+    if must_fix or critical_errors:
         return True
     # 項目別しきい値
     if hook_score < 75 or loop_score < 70 or cta_score < 70:
         return True
-    # 総合スコアで80未満は修正候補（ローカルLLMは甘いため旧75→80に引き上げ）
-    return score < 80
+    # 69点以下はリライト。70-79点は重大エラーがなければ警告通過。
+    return score < OPENING_SCORE_HARD_ABORT_THRESHOLD
 
 
-def rewrite_opening_with_ollama(review: dict[str, Any], title: str, thumbnail_text: str, video_type: str) -> str | None:
+def rewrite_opening_with_ollama(
+    review: dict[str, Any],
+    title: str,
+    thumbnail_text: str,
+    video_type: str,
+    model: str | None = None,
+) -> str | None:
     opening_lines = "\n".join(
         f"{line.get('speaker', '')}: {line.get('text', '')}"
         for line in review.get("opening_lines", [])
@@ -345,9 +416,12 @@ def rewrite_opening_with_ollama(review: dict[str, Any], title: str, thumbnail_te
 - 食べ物名を冒頭に入れる
 - 意外性を1秒以内に出す
 - タイトルとサムネに一致させる
+- サムネ文字の衝撃ワードを冒頭5秒以内に回収する
+- タイトルとサムネの同じ文章を繰り返さない
+- 昔と今の価値観ギャップを前面に出す
 - ずんだもん/四国めたんの形式で返す
 """
-    text = _post_ollama(prompt, OLLAMA_REWRITE_MODEL, json_only=False)
+    text = _post_ollama(prompt, model or OLLAMA_REWRITE_MODEL, json_only=False)
     text = re.sub(r"^```(?:text)?\s*|\s*```$", "", text.strip(), flags=re.IGNORECASE | re.MULTILINE).strip()
     return text or None
 
@@ -419,9 +493,13 @@ def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review
 
 def duration_review(total_sec: float, is_shorts: bool) -> dict[str, Any]:
     if is_shorts:
-        if 35 <= total_sec <= 55:
-            status = "ok"
-        elif 32 <= total_sec <= 34 or 56 <= total_sec <= 58:
+        if 38 <= total_sec <= 50:
+            status = "ideal"
+        elif 35 <= total_sec < 38:
+            status = "ok_but_short"
+        elif 50 < total_sec <= 55:
+            status = "ok_but_long"
+        elif 32 <= total_sec < 35 or 55 < total_sec <= 58:
             status = "warning"
         else:
             status = "needs_review"
@@ -502,7 +580,7 @@ def _build_final_review_prompt(
         script_block = f"full_script:\n{script_content}"
     else:
         script_block = "scene_summaries:\n" + json.dumps(_scene_summaries(items), ensure_ascii=False)
-    return f"""You are the final reviewer for a Japanese YouTube food trivia script.
+    return f"""You are the pre-generation reviewer for a Japanese YouTube food trivia script.
 Return JSON only. No markdown. No explanation outside JSON. Do not rewrite the script.
 
 title: {title}
@@ -523,8 +601,30 @@ Check:
 - opening hook
 - title/thumbnail consistency
 - pacing
-- duration risk
+- estimated duration risk
 - serious mismatch only
+
+Stop the pipeline only for must_fix-level problems:
+- estimated Shorts duration under 35 seconds or over 55 seconds
+- Shorts dialogue count 21 or more
+- first dialogue lacks the food name
+- first dialogue is incomplete or split mid-phrase
+- factual error or risky unsupported assertion
+- unhandled YouTube NG wording
+- same speaker 4 times in a row
+
+Use nice_to_fix only for minor issues:
+- weak title
+- weak thumbnail connection
+- weak surprise wording
+- slightly weak CTA
+- slightly abstract telop
+
+Scoring policy:
+- 80 or higher: publish_ok should usually be true unless must_fix exists.
+- 70-79: publish_ok can be true if must_fix is empty.
+- 69 or lower: publish_ok should be false.
+- Do not fail a script only because the title/thumbnail/telop are not exact matches if the meaning is aligned.
 
 Return:
 {{"final_score":86,"publish_ok":true,"risk":"low","must_fix":[],"nice_to_fix":[]}}

@@ -78,3 +78,4 @@ python gui.py
 - `output/`, `.env`, `client_secrets.json`, `token.json` は Git 管理外です。
 - YouTube アップロードには Google OAuth 用の `client_secrets.json` が必要です。
 - 詳細仕様・操作手順は [SPEC.md](SPEC.md) を参照してください。
+- 大きめの変更履歴は [CHANGELOG.md](CHANGELOG.md) に残します。

@@ -18,9 +18,11 @@ from main import (
 )
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
+from core.analytics_score import format_duration, save_score_files, score_items, to_tsv
+from core.opening_quality import duration_review, llm_opening_review, local_opening_review
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
-from config import VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
+from config import OPENING_SCORE_ABORT_THRESHOLD, OPENING_SCORE_HARD_ABORT_THRESHOLD, VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
 import requests
 
 try:
@@ -97,6 +99,67 @@ for n, u, p in [("VOICEVOX", VOICEVOX_URL, VOICEVOX_PATH)]:
     print(f"{res['name']:<10}: {c_status:<35} {f_status}")
 print(f"------------------------------\n")
 
+
+class ToolTip:
+    def __init__(self, widget, text, delay=500, wraplength=320):
+        self.widget = widget
+        self.text = text
+        self.delay = delay
+        self.wraplength = wraplength
+        self._after_id = None
+        self._window = None
+        widget.bind("<Enter>", self._schedule, add="+")
+        widget.bind("<Leave>", self._hide, add="+")
+        widget.bind("<ButtonPress>", self._hide, add="+")
+
+    def _schedule(self, _event=None):
+        self._cancel()
+        self._after_id = self.widget.after(self.delay, self._show)
+
+    def _cancel(self):
+        if self._after_id:
+            try:
+                self.widget.after_cancel(self._after_id)
+            except Exception:
+                pass
+            self._after_id = None
+
+    def _show(self):
+        if self._window or not self.text:
+            return
+        try:
+            x = self.widget.winfo_rootx() + 12
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 8
+        except Exception:
+            return
+        self._window = tk.Toplevel(self.widget)
+        self._window.wm_overrideredirect(True)
+        self._window.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(
+            self._window,
+            text=self.text,
+            justify=tk.LEFT,
+            background="#1f2933",
+            foreground="#ffffff",
+            relief=tk.SOLID,
+            borderwidth=1,
+            padx=8,
+            pady=6,
+            wraplength=self.wraplength,
+            font=("Meiryo", 9),
+        )
+        label.pack()
+
+    def _hide(self, _event=None):
+        self._cancel()
+        if self._window:
+            try:
+                self._window.destroy()
+            except Exception:
+                pass
+            self._window = None
+
+
 class YMM4AutoGui:
     def __init__(self, root):
         self.root = root
@@ -134,11 +197,22 @@ class YMM4AutoGui:
         ttk.Label(top_frame, text="🚀 YMM4 自動動画生成ファクトリー", style="Header.TLabel").pack(side=tk.LEFT)
         self.generate_btn = ttk.Button(top_frame, text="🎬 生成 🚀", style="Accent.TButton", command=self.start_generation)
         self.generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
+        self._add_tooltip(self.generate_btn, "貼り付けた台本から音声・背景・サムネ・YMM4プロジェクトを生成します。")
         self.cancel_btn = ttk.Button(top_frame, text="作業中止", command=self.request_cancel, state=tk.DISABLED)
         self.cancel_btn.pack(side=tk.RIGHT, padx=(4, 0))
-        ttk.Button(top_frame, text="AI台本作成", command=self.copy_script_generation_prompt).pack(side=tk.RIGHT)
-        ttk.Button(top_frame, text="AIタイトル案", command=self.copy_title_prompt).pack(side=tk.RIGHT, padx=(4, 0))
-        ttk.Button(top_frame, text="クリア", width=6, command=self.clear_script).pack(side=tk.RIGHT, padx=4)
+        self._add_tooltip(self.cancel_btn, "実行中の生成処理に中止リクエストを送ります。")
+        self.llm_check_btn = ttk.Button(top_frame, text="LLM/尺チェック", command=self.start_bulk_llm_check)
+        self.llm_check_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        self._add_tooltip(self.llm_check_btn, "履歴の台本をまとめて冒頭品質・推定尺・最終品質レビューします。")
+        script_prompt_btn = ttk.Button(top_frame, text="AI台本作成", command=self.copy_script_generation_prompt)
+        script_prompt_btn.pack(side=tk.RIGHT)
+        self._add_tooltip(script_prompt_btn, "既存タイトル重複を避ける台本生成プロンプトをクリップボードにコピーします。")
+        title_prompt_btn = ttk.Button(top_frame, text="AIタイトル案", command=self.copy_title_prompt)
+        title_prompt_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        self._add_tooltip(title_prompt_btn, "Analytics実績データと既存タイトルを反映したタイトル案プロンプトをコピーします。")
+        clear_btn = ttk.Button(top_frame, text="クリア", width=6, command=self.clear_script)
+        clear_btn.pack(side=tk.RIGHT, padx=4)
+        self._add_tooltip(clear_btn, "台本入力欄を空にします。")
 
         # Script area
         self.ref_text = scrolledtext.ScrolledText(main_frame, height=6, font=("Consolas", 10), bg="#fdfdfd", borderwidth=1, relief="solid", highlightthickness=1, highlightbackground="#dfe6e9", highlightcolor="#0984e3")
@@ -165,21 +239,30 @@ class YMM4AutoGui:
 
         self.history_batch_btn = ttk.Button(opt_frame, text="履歴から複数生成", command=self.open_history_batch_dialog)
         self.history_batch_btn.pack(side=tk.LEFT, padx=(10, 0))
+        self._add_tooltip(self.history_batch_btn, "過去の生成履歴を複数選び、同じ設定でまとめて再生成します。")
 
         # Sub buttons row
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X, pady=(0, 4))
         self.upload_btn = ttk.Button(btn_frame, text="📤 YouTubeアップ", command=self.start_youtube_upload)
         self.upload_btn.pack(side=tk.LEFT, padx=(0, 4))
+        self._add_tooltip(self.upload_btn, "生成済み動画を選び、予約枠を確認してYouTubeへアップロードします。")
         self.open_folder_btn = ttk.Button(btn_frame, text="📁 出力フォルダを開く", command=self.open_output_dir)
         self.open_folder_btn.pack(side=tk.LEFT)
+        self._add_tooltip(self.open_folder_btn, "生成物が保存される output フォルダを開きます。")
         self.image_review_btn = ttk.Button(btn_frame, text="🔄 画像確認", command=self.start_image_review)
         self.image_review_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self._add_tooltip(self.image_review_btn, "サムネイル・背景画像を確認し、選んだ画像だけ再生成できます。")
         self._studio_url = None
         self.studio_btn = ttk.Button(btn_frame, text="🌐 YouTube Studio", command=self._open_studio)
         self.studio_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self._add_tooltip(self.studio_btn, "ブラウザでYouTube Studioを開きます。")
         self.schedule_btn = ttk.Button(btn_frame, text="📅 スケジュール", command=self.show_upload_schedule_dialog)
         self.schedule_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self._add_tooltip(self.schedule_btn, "予約済み・手動公開済みのアップロード予定を一覧確認します。")
+        self.analytics_btn = ttk.Button(btn_frame, text="📊 アナリティクス", command=self.open_analytics_window)
+        self.analytics_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self._add_tooltip(self.analytics_btn, "YouTube Analyticsを取得し、横展開候補や改善対象を評価します。")
         # Status + progress
         self.status_var = tk.StringVar(value="Ready")
         self.status_label = ttk.Label(main_frame, textvariable=self.status_var, font=("Meiryo", 8, "italic"), width=110)
@@ -196,7 +279,9 @@ class YMM4AutoGui:
         self.log_area.tag_config("success", foreground="#05c46b")
         self.log_area.tag_config("warning", foreground="#ffa502", font=("Meiryo", 9, "bold"))
         self.log_area.tag_config("batch", foreground="#ef57ff", font=("Meiryo", 9, "bold"))
-        self.log_area.tag_config("score", foreground="#ffd32a", font=("Meiryo", 11, "bold"))
+        self.log_area.tag_config("score", foreground="#ffffff", background="#b33939", font=("Meiryo", 12, "bold"))
+        self.log_area.tag_config("score_ok", foreground="#ffffff", background="#218c74", font=("Meiryo", 12, "bold"))
+        self.log_area.tag_config("score_warn", foreground="#111111", background="#ffda79", font=("Meiryo", 12, "bold"))
         self.log_area.tag_config("duration", foreground="#34ace0", font=("Meiryo", 11, "bold"))
 
         self.last_output_dir = None
@@ -207,6 +292,11 @@ class YMM4AutoGui:
         self.refresh_history()
         self.root.after(80, self._drain_log_queue)
         threading.Thread(target=self.check_engines_startup, args=(self.debug_var.get(),), daemon=True).start()
+
+    def _add_tooltip(self, widget, text):
+        tooltip = ToolTip(widget, text)
+        widget._tooltip = tooltip
+        return widget
 
     def check_engines_startup(self, debug_mode=False):
         self.log("--- システム接続確認 ---")
@@ -235,11 +325,39 @@ class YMM4AutoGui:
         active, uploaded = self.collect_existing_titles()
         all_titles = active + uploaded
         food_titles = [title for title in all_titles if self._is_food_title(title)]
-        title_prompt = build_title_prompt(food_titles)
+        analytics_tsv, analytics_path, analytics_count = self._read_latest_analytics_tsv()
+        title_prompt = build_title_prompt(food_titles, analytics_tsv=analytics_tsv)
         self.root.clipboard_clear()
         self.root.clipboard_append(title_prompt)
         self.root.update()
-        self.log(f"動画タイトル作成プロンプトをコピーしました（食べ物系既存タイトル{len(food_titles)}件 / 全{len(all_titles)}件）✅", "success")
+        analytics_msg = f" / 実績データ{analytics_count}件" if analytics_tsv else " / 実績データなし"
+        if analytics_path:
+            analytics_msg += f" ({os.path.basename(analytics_path)})"
+        self.log(f"動画タイトル作成プロンプトをコピーしました（食べ物系既存タイトル{len(food_titles)}件 / 全{len(all_titles)}件{analytics_msg}）✅", "success")
+
+    @staticmethod
+    def _read_latest_analytics_tsv(max_rows=80):
+        output_dir = "output"
+        try:
+            paths = [
+                os.path.join(output_dir, name)
+                for name in os.listdir(output_dir)
+                if name.startswith("analytics_score_") and name.endswith(".tsv")
+            ]
+        except OSError:
+            return "", None, 0
+        if not paths:
+            return "", None, 0
+        latest = max(paths, key=lambda path: os.path.getmtime(path))
+        try:
+            with open(latest, "r", encoding="utf-8") as f:
+                lines = [line.rstrip("\n") for line in f if line.strip()]
+        except OSError:
+            return "", latest, 0
+        if not lines:
+            return "", latest, 0
+        header, rows = lines[0], lines[1:max_rows + 1]
+        return "\n".join([header] + rows), latest, len(rows)
 
     def clear_script(self):
         self.ref_text.delete("1.0", tk.END)
@@ -349,6 +467,26 @@ class YMM4AutoGui:
             if name.startswith(prefix):
                 return name[len(prefix):].strip()
         return name
+
+    @staticmethod
+    def _strip_video_type_prefix(title):
+        title = str(title or "").strip()
+        for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+            if title.startswith(prefix):
+                return title[len(prefix):].strip()
+        return title
+
+    @staticmethod
+    def _preferred_long_thumbnail(output_dir):
+        candidates = [
+            os.path.join(output_dir, "thumbnail.png"),
+            os.path.join(output_dir, "thumbnails", "thumbnail.png"),
+        ]
+        existing = [path for path in candidates if os.path.exists(path)]
+        if not existing:
+            return candidates[1]
+        existing.sort(key=lambda path: os.path.getmtime(path), reverse=True)
+        return existing[0]
 
     def _collect_titles_from_folder(self, folder, exclude_uploaded=False):
         """フォルダ内のサブディレクトリ名からタイトルを収集（存在しない場合は空リスト）。"""
@@ -471,7 +609,8 @@ class YMM4AutoGui:
             except OSError:
                 edited_at = "----/--/-- --:--"
             suffix = "" if os.path.exists(script_path) else "  (script.txtなし)"
-            history_list.insert(tk.END, f"{edited_at}  {name}{suffix}")
+            display_name = self._folder_name_to_title(name)
+            history_list.insert(tk.END, f"{edited_at}  {display_name}{suffix}")
 
         def run_selected():
             indices = list(history_list.curselection())
@@ -531,8 +670,12 @@ class YMM4AutoGui:
                 if is_shorts:
                     if est < 35:
                         verdict, tag = "⚠ 短すぎ", "warning"
-                    elif est <= 52:
-                        verdict, tag = "✅ OK", "success"
+                    elif est < 38:
+                        verdict, tag = "✅ やや短い", "success"
+                    elif est <= 50:
+                        verdict, tag = "✅ 理想", "success"
+                    elif est <= 55:
+                        verdict, tag = "⚠ OKだけど長め", "warning"
                     elif est <= 58:
                         verdict, tag = "⚠ 長め", "warning"
                     else:
@@ -598,7 +741,8 @@ class YMM4AutoGui:
                 or os.path.isdir(os.path.join(output_dir, "backgrounds"))
             ) else "  (画像なし)"
             mp4_suffix = "" if any(f.lower().endswith(".mp4") for f in os.listdir(output_dir)) else "  (MP4なし)"
-            history_list.insert(tk.END, f"{edited_at}  {name}{script_suffix}{image_suffix}{mp4_suffix}")
+            display_name = self._folder_name_to_title(name)
+            history_list.insert(tk.END, f"{edited_at}  {display_name}{script_suffix}{image_suffix}{mp4_suffix}")
 
         result = {"selected": []}
 
@@ -670,6 +814,149 @@ class YMM4AutoGui:
 
         return elapsed, n, avg_chars
 
+    @staticmethod
+    def _duration_tag(status):
+        if status in ("ideal", "ok", "ok_but_short"):
+            return "success"
+        if status in ("ok_but_long", "warning"):
+            return "warning"
+        return "error"
+
+    def start_bulk_llm_check(self):
+        raw_scripts = self.ref_text.get("1.0", tk.END).strip()
+        scripts = split_input_scripts(raw_scripts)
+        if not scripts:
+            messagebox.showwarning("Error", "チェックする台本を入力してください")
+            return
+        self.llm_check_btn.config(state=tk.DISABLED)
+        self.log(f"🤖 LLM/尺チェック開始: 合計 {len(scripts)} 件", "batch")
+        threading.Thread(target=self._run_bulk_llm_check, args=(scripts,), daemon=True).start()
+
+    def _run_bulk_llm_check(self, scripts):
+        ok_count = 0
+        warn_count = 0
+        ng_count = 0
+        ai_report = [
+            "以下の台本チェック結果をもとに、問題がある台本だけ修正してください。",
+            "",
+            "修正方針:",
+            "- Shortsは38〜50秒を理想、35〜55秒を許容にする",
+            "- 51〜55秒は長めなので、可能なら短くする",
+            "- 冒頭スコアが低い台本は、冒頭1〜3セリフで食べ物名と意外性を強くする",
+            "- 1セリフ15文字以内を守る",
+            "- 台本全体の形式は元のフォーマットを維持する",
+            "- 問題がない台本は書き換えない",
+            "",
+            "チェック結果:",
+        ]
+        try:
+            for idx, script in enumerate(scripts, 1):
+                prefix = f"[台本{idx}] "
+                try:
+                    items = ScriptParser.parse_string(script)
+                    is_valid, messages = ScriptParser.validate(items)
+                    for m in messages:
+                        tag = "warning" if str(m).startswith("⚠") else "error"
+                        self.log(f"{prefix}{m}", tag)
+                    if not is_valid:
+                        ng_count += 1
+                        continue
+
+                    meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
+                    body_items = normalize_background_order([it for it in items if it["type"] not in ScriptParser.META_TYPES])
+                    video_format = meta.get("video_format", "")
+                    is_shorts = video_format.strip().lower() in ("shorts", "short", "ショート")
+                    title = meta.get("video_title", f"台本{idx}")
+                    thumb_text = meta.get("thumbnail_text", "")
+                    target_duration = "38-50秒" if is_shorts else "5-8分"
+                    ai_report.append("")
+                    ai_report.append(f"## 台本{idx}: {title}")
+                    ai_report.append(f"- 動画形式: {'Shorts' if is_shorts else 'Long'}")
+
+                    self.log(f"{prefix}🤖 Ollama冒頭レビュー中: {title}")
+                    local = local_opening_review(body_items, title, thumb_text, is_shorts)
+                    llm = None
+                    try:
+                        llm = llm_opening_review(
+                            local,
+                            title,
+                            thumb_text,
+                            "Shorts" if is_shorts else "Long",
+                            target_duration,
+                        )
+                    except Exception as e:
+                        self.log(f"{prefix}⚠ Ollamaレビュー失敗: {e}", "warning")
+
+                    opening = llm or local
+                    opening_score = int(opening.get("score") or 0)
+                    opening_status = opening.get("status", "")
+                    opening_critical_errors = opening.get("critical_errors") or []
+                    opening_tag = "score_ok" if opening_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if opening_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
+                    self.log(
+                        f"{prefix}■■■ 冒頭LLMスコア {opening_score}点 / {opening_status} ■■■",
+                        opening_tag,
+                    )
+                    ai_report.append(f"- 冒頭LLMスコア: {opening_score}点 / {opening_status}")
+                    for issue in (opening.get("issues") or opening.get("warnings") or [])[:3]:
+                        self.log(f"{prefix}  ・{issue}", "warning")
+                        ai_report.append(f"  - {issue}")
+                    for issue in opening_critical_errors[:3]:
+                        self.log(f"{prefix}  must_fix: {issue}", "warning")
+                        ai_report.append(f"  - must_fix: {issue}")
+
+                    est, n, avg = self._estimate_duration(items, is_shorts)
+                    duration_tag = "warning"
+                    if est is not None:
+                        dur = duration_review(est, is_shorts)
+                        duration_status = dur.get("status", "unknown")
+                        duration_tag = self._duration_tag(duration_status)
+                        ai_report.append(f"- 推定尺: {est:.1f}秒 / {duration_status}")
+                        ai_report.append(f"- セリフ数: {n}行 / 平均{avg:.1f}文字")
+                        if is_shorts:
+                            self.log(
+                                f"{prefix}━━━━━━━━ 推定尺 {est:.1f}秒 / {duration_status} ━━━━━━━━ "
+                                f"（{n}行 / 平均{avg:.1f}文字）",
+                                duration_tag,
+                            )
+                        else:
+                            m, s = divmod(int(est), 60)
+                            self.log(
+                                f"{prefix}━━━━━━━━ 推定尺 {m}分{s}秒 / {duration_status} ━━━━━━━━ "
+                                f"（{n}行 / 平均{avg:.1f}文字）",
+                                duration_tag,
+                            )
+
+                    if opening_tag == "score" or duration_tag == "error":
+                        ng_count += 1
+                        ai_report.append("- 判定: 要確認")
+                    elif opening_tag == "score_warn" or duration_tag == "warning":
+                        warn_count += 1
+                        ai_report.append("- 判定: 警告")
+                    else:
+                        ok_count += 1
+                        ai_report.append("- 判定: OK")
+                except Exception as e:
+                    ng_count += 1
+                    self.log(f"{prefix}❌ チェック失敗: {e}", "error")
+                    self.log(traceback.format_exc(), "error")
+                    ai_report.append("")
+                    ai_report.append(f"## 台本{idx}")
+                    ai_report.append(f"- 判定: チェック失敗")
+                    ai_report.append(f"- エラー: {e}")
+            self.log(f"🤖 LLM/尺チェック完了: OK {ok_count} / 警告 {warn_count} / 要確認 {ng_count}", "batch")
+            ai_report.append("")
+            ai_report.append(f"総合: OK {ok_count} / 警告 {warn_count} / 要確認 {ng_count}")
+            report_text = "\n".join(ai_report)
+            self.root.after(0, lambda text=report_text: self._copy_bulk_check_report(text))
+        finally:
+            self.root.after(0, lambda: self.llm_check_btn.config(state=tk.NORMAL))
+
+    def _copy_bulk_check_report(self, report_text):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(report_text)
+        self.root.update()
+        self.log("📋 AI修正依頼用チェック結果をクリップボードにコピーしました", "success")
+
 
     def start_generation(self):
         from core.parser import ScriptParser
@@ -706,8 +993,12 @@ class YMM4AutoGui:
                 if is_shorts:
                     if est < 35:
                         verdict, tag = "⚠ 短すぎ", "warning"
-                    elif est <= 52:
-                        verdict, tag = "✅ OK", "success"
+                    elif est < 38:
+                        verdict, tag = "✅ やや短い", "success"
+                    elif est <= 50:
+                        verdict, tag = "✅ 理想", "success"
+                    elif est <= 55:
+                        verdict, tag = "⚠ OKだけど長め", "warning"
                     elif est <= 58:
                         verdict, tag = "⚠ 長め", "warning"
                     else:
@@ -791,6 +1082,14 @@ class YMM4AutoGui:
                 if cancel_event.is_set():
                     self.log("⏹ 中止しました。残りの履歴/台本は処理しません。", "error")
                     break
+                pipeline_failed = msg.lstrip().startswith(("❌", "⏹"))
+                if pipeline_failed:
+                    self.log(f"要修正: {topic}", "error")
+                    if not is_batch:
+                        self.root.after(0, lambda m=msg, r=report, gid=gen_id:
+                            self.finish_generation(m, r, is_error=True) if gid == self._gen_id else None)
+                        return
+                    continue
                 self.log(f"成功: {topic}", "success")
                 if not is_batch:
                     self.root.after(0, lambda m=msg, r=report, gid=gen_id:
@@ -848,12 +1147,18 @@ class YMM4AutoGui:
             mp4_path = mp4_candidates[0]
 
             meta = self._read_meta_from_dir(output_dir)
-            title = meta.get("title", os.path.basename(output_dir))
+            title = meta.get("title") or self._folder_name_to_title(os.path.basename(output_dir))
             description = meta.get("description", "")
             tags = meta.get("tags", "")
             fixed_comment = meta.get("fixed_comment", "")
+            if not description:
+                self.log(f"⚠ 説明文が空です: {title}", "warning")
+            if not tags:
+                self.log(f"⚠ タグが空です: {title}", "warning")
             is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
-            thumb = None if is_shorts else os.path.join(output_dir, "thumbnails", "thumbnail.png")
+            thumb = None if is_shorts else self._preferred_long_thumbnail(output_dir)
+            if (not is_shorts) and (not thumb or not os.path.exists(thumb)):
+                self.log(f"⚠ ロング用サムネイルが見つかりません: {title}", "warning")
             base_jobs.append((mp4_path, title, description, tags, thumb, output_dir, fixed_comment))
 
         if skipped:
@@ -899,6 +1204,210 @@ class YMM4AutoGui:
             args=(jobs,),
             daemon=True
         ).start()
+
+    def open_analytics_window(self):
+        win = tk.Toplevel(self.root)
+        win.title("YouTube Analytics - 動画評価一覧")
+        win.geometry("1180x640")
+
+        state = {
+            "items": [],
+            "days": 28,
+        }
+
+        top = ttk.Frame(win, padding=8)
+        top.pack(fill=tk.X)
+        ttk.Label(top, text="期間:").pack(side=tk.LEFT)
+        days_var = tk.IntVar(value=28)
+        days_combo = ttk.Combobox(top, textvariable=days_var, values=[7, 28, 90], state="readonly", width=6)
+        days_combo.pack(side=tk.LEFT, padx=(4, 12))
+        summary_var = tk.StringVar(value="未取得")
+        ttk.Label(top, textvariable=summary_var).pack(side=tk.LEFT, padx=(0, 12))
+        error_var = tk.StringVar(value="")
+        error_label = ttk.Label(win, textvariable=error_var, foreground="#c0392b", wraplength=1120)
+        error_label.pack(fill=tk.X, padx=8, pady=(0, 6))
+
+        cols = (
+            "title", "published_at", "video_type", "duration", "duration_status", "views", "impressions", "ctr",
+            "average_view_duration", "average_percentage_viewed", "likes",
+            "comments", "subscribers_net", "score", "action",
+        )
+        headings = {
+            "title": "タイトル",
+            "published_at": "公開日時",
+            "video_type": "種別",
+            "duration": "尺",
+            "duration_status": "尺判定",
+            "views": "再生数",
+            "impressions": "インプレ",
+            "ctr": "CTR",
+            "average_view_duration": "平均視聴時間",
+            "average_percentage_viewed": "平均視聴率",
+            "likes": "高評価",
+            "comments": "コメント",
+            "subscribers_net": "登録者増減",
+            "score": "評価",
+            "action": "対応",
+        }
+
+        frame = ttk.Frame(win, padding=(8, 0, 8, 8))
+        frame.pack(fill=tk.BOTH, expand=True)
+        tree = ttk.Treeview(frame, columns=cols, show="headings", height=20)
+        ysb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
+        xsb = ttk.Scrollbar(frame, orient=tk.HORIZONTAL, command=tree.xview)
+        tree.configure(yscrollcommand=ysb.set, xscrollcommand=xsb.set)
+        tree.grid(row=0, column=0, sticky="nsew")
+        ysb.grid(row=0, column=1, sticky="ns")
+        xsb.grid(row=1, column=0, sticky="ew")
+        frame.rowconfigure(0, weight=1)
+        frame.columnconfigure(0, weight=1)
+
+        widths = {
+            "title": 260,
+            "published_at": 140,
+            "video_type": 70,
+            "duration": 70,
+            "duration_status": 90,
+            "views": 80,
+            "impressions": 90,
+            "ctr": 70,
+            "average_view_duration": 100,
+            "average_percentage_viewed": 90,
+            "likes": 70,
+            "comments": 80,
+            "subscribers_net": 90,
+            "score": 55,
+            "action": 130,
+        }
+        for col in cols:
+            tree.heading(col, text=headings[col])
+            tree.column(col, width=widths.get(col, 90), anchor=tk.W if col in ("title", "action") else tk.CENTER)
+
+        tree.tag_configure("score_S", background="#fff3bf")
+        tree.tag_configure("score_A", background="#d3f9d8")
+        tree.tag_configure("score_B", background="#d0ebff")
+        tree.tag_configure("score_C", background="#ffe8cc")
+        tree.tag_configure("score_D", background="#ffe3e3")
+
+        def _fmt_percent(value):
+            if value is None:
+                return ""
+            try:
+                return f"{float(value):.1f}%"
+            except Exception:
+                return ""
+
+        def _fmt_ctr(value):
+            if value is None:
+                return ""
+            try:
+                return f"{float(value):.2f}%"
+            except Exception:
+                return ""
+
+        def _fmt_published(value):
+            if not value:
+                return ""
+            try:
+                from datetime import datetime, timezone, timedelta
+                text = str(value).replace("Z", "+00:00")
+                dt = datetime.fromisoformat(text)
+                jst = timezone(timedelta(hours=9))
+                return dt.astimezone(jst).strftime("%Y/%m/%d %H:%M")
+            except Exception:
+                return str(value)[:16]
+
+        def render():
+            tree.delete(*tree.get_children())
+            for item in state["items"]:
+                values = (
+                    item.get("title", ""),
+                    _fmt_published(item.get("published_at")),
+                    item.get("video_type", ""),
+                    format_duration(item.get("duration")),
+                    item.get("duration_status", ""),
+                    item.get("views", 0),
+                    item.get("impressions", 0),
+                    _fmt_ctr(item.get("ctr")),
+                    format_duration(item.get("average_view_duration")),
+                    _fmt_percent(item.get("average_percentage_viewed")),
+                    item.get("likes", 0),
+                    item.get("comments", 0),
+                    item.get("subscribers_net", 0),
+                    item.get("score", ""),
+                    item.get("action", ""),
+                )
+                tree.insert("", tk.END, values=values, tags=(f"score_{item.get('score', 'D')}",))
+
+        def fetch():
+            days = int(days_var.get())
+            state["days"] = days
+            fetch_btn.config(state=tk.DISABLED)
+            summary_var.set("取得中...")
+            error_var.set("")
+
+            def worker():
+                try:
+                    from core.youtube_analytics import fetch_video_analytics
+                    data = fetch_video_analytics(days)
+                    items = score_items(data.get("items", []))
+                    json_path, tsv_path = save_score_files(items, days)
+
+                    def done():
+                        state["items"] = items
+                        summary = data.get("summary", {})
+                        summary_var.set(
+                            f"{days}日 / 動画 {len(items)}件 / 再生 {summary.get('views', 0)} / 保存: {os.path.basename(json_path)}"
+                        )
+                        render()
+                        self.log(f"📊 Analytics評価一覧を保存: {json_path} / {tsv_path}", "success")
+                        fetch_btn.config(state=tk.NORMAL)
+
+                    self.root.after(0, done)
+                except Exception as e:
+                    err_text = str(e)
+                    tb_text = traceback.format_exc()
+
+                    def failed(err_text=err_text, tb_text=tb_text):
+                        summary_var.set("取得失敗")
+                        error_var.set(err_text)
+                        self.log(f"❌ Analytics取得エラー: {err_text}", "error")
+                        if self.debug_var.get():
+                            self.log(tb_text, "error")
+                        fetch_btn.config(state=tk.NORMAL)
+                    self.root.after(0, failed)
+
+            threading.Thread(target=worker, daemon=True).start()
+
+        def copy_score_list():
+            text = to_tsv(state["items"])
+            win.clipboard_clear()
+            win.clipboard_append(text)
+            win.update()
+            self.log(f"📋 評価一覧をコピーしました: {len(state['items'])}件", "success")
+
+        def copy_ai_analysis():
+            lines = [
+                "以下はYouTube Analyticsの動画別成績です。改善候補と横展開候補を分析してください。",
+                "",
+                to_tsv(state["items"]),
+            ]
+            win.clipboard_clear()
+            win.clipboard_append("\n".join(lines))
+            win.update()
+            self.log(f"📋 AI分析用にコピーしました: {len(state['items'])}件", "success")
+
+        fetch_btn = ttk.Button(top, text="取得", style="Accent.TButton", command=fetch)
+        fetch_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        self._add_tooltip(fetch_btn, "YouTube Analyticsから指定期間の動画別成績を取得し、評価ファイルを保存します。")
+        copy_score_btn = ttk.Button(top, text="📋 評価一覧コピー", command=copy_score_list)
+        copy_score_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        self._add_tooltip(copy_score_btn, "表示中の評価一覧をTSV形式でクリップボードにコピーします。")
+        copy_ai_btn = ttk.Button(top, text="📋 AI分析用にコピー", command=copy_ai_analysis)
+        copy_ai_btn.pack(side=tk.RIGHT, padx=(4, 0))
+        self._add_tooltip(copy_ai_btn, "Analytics一覧にAI分析用の依頼文を添えてクリップボードにコピーします。")
+
+        fetch()
 
     def show_upload_schedule_dialog(self):
         from core.upload_scheduler import list_schedule, format_slot
@@ -1146,6 +1655,7 @@ class YMM4AutoGui:
         try:
             from core.youtube_uploader import upload_video, post_comment
             from core.upload_scheduler import mark_slot_used, format_slot
+            title = self._strip_video_type_prefix(title)
             video_id = upload_video(mp4_path, title, description, tags,
                                     thumbnail_path=thumb, privacy="private",
                                     publish_at=publish_at,
@@ -1207,8 +1717,12 @@ class YMM4AutoGui:
     def _read_meta_from_dir(self, output_dir):
         if not output_dir:
             return {}
-        meta_path = os.path.join(output_dir, "metadata.txt")
-        if not os.path.exists(meta_path):
+        meta_candidates = [
+            os.path.join(output_dir, "_meta", "metadata.txt"),
+            os.path.join(output_dir, "metadata.txt"),
+        ]
+        meta_path = next((path for path in meta_candidates if os.path.exists(path)), None)
+        if not meta_path:
             return {}
         with open(meta_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -1232,7 +1746,27 @@ class YMM4AutoGui:
                 if pos != -1 and pos < end:
                     end = pos
             data[key] = content[start:end].strip()
-        title_ab_path = os.path.join(output_dir, "title_ab_test.json")
+
+        script_path = os.path.join(output_dir, "script.txt")
+        if os.path.exists(script_path):
+            try:
+                script_items = ScriptParser.parse(script_path)
+                script_meta = {
+                    it["type"]: it["text"]
+                    for it in script_items
+                    if it["type"] in ScriptParser.META_TYPES
+                }
+                data.setdefault("title", script_meta.get("video_title", ""))
+                data.setdefault("thumbnail_text", script_meta.get("thumbnail_text", ""))
+                data.setdefault("description", script_meta.get("description", ""))
+                data.setdefault("tags", script_meta.get("tags", ""))
+                data.setdefault("thumbnail", script_meta.get("thumbnail", ""))
+                data.setdefault("fixed_comment", script_meta.get("fixed_comment", ""))
+            except Exception:
+                pass
+        title_ab_path = os.path.join(output_dir, "_meta", "title_ab_test.json")
+        if not os.path.exists(title_ab_path):
+            title_ab_path = os.path.join(output_dir, "title_ab_test.json")
         if os.path.exists(title_ab_path):
             try:
                 import json
@@ -1406,6 +1940,22 @@ class YMM4AutoGui:
         script_path = os.path.join(output_dir, "script.txt")
         bg_dir = os.path.join(output_dir, "backgrounds")
         thumb_path = os.path.join(output_dir, "thumbnail.png")
+        thumbs_dir = os.path.join(output_dir, "thumbnails")
+        thumbs_thumb_path = os.path.join(thumbs_dir, "thumbnail.png")
+        if not os.path.exists(thumb_path) and os.path.exists(thumbs_thumb_path):
+            thumb_path = thumbs_thumb_path
+
+        def _read_prompt_file(*paths):
+            for path in paths:
+                if path and os.path.exists(path):
+                    try:
+                        with open(path, "r", encoding="utf-8") as f:
+                            text = f.read().strip()
+                        if text:
+                            return text, path
+                    except Exception:
+                        pass
+            return "", paths[0] if paths else ""
 
         script_content = ""
         is_shorts = os.path.basename(output_dir).startswith("[Shorts]")
@@ -1420,7 +1970,7 @@ class YMM4AutoGui:
             bg_prompts = [it.get("text", "").strip() for it in items if it["type"] == "background"]
 
         if os.path.exists(thumb_path):
-            title = self._read_meta_from_dir(output_dir).get("title", os.path.basename(output_dir))
+            title = self._read_meta_from_dir(output_dir).get("title") or self._folder_name_to_title(os.path.basename(output_dir))
             ratio_tag = "縦9:16のショート動画" if is_shorts else "横16:9のワイドスクリーン"
             safe_zone = (
                 "\nセーフゾーン（厳守）: 上下左右30%の範囲にはテキスト・文字・重要な要素を一切配置しないこと。"
@@ -1430,16 +1980,22 @@ class YMM4AutoGui:
                 f"以下の台本を参考に、YouTubeサムネイル画像を生成してください。\n\n"
                 f"{script_content or title}"
             )
+            saved_prompt, prompt_file = _read_prompt_file(
+                os.path.join(os.path.dirname(thumb_path), "thumbnail_prompt.txt"),
+                os.path.join(output_dir, "thumbnail_prompt.txt"),
+                os.path.join(thumbs_dir, "thumbnail_prompt.txt"),
+            )
             specs.append({
                 "kind": "thumbnail",
                 "path": thumb_path,
-                "prompt": prompt,
+                "prompt": saved_prompt or prompt,
+                "prompt_file": prompt_file,
                 "label": "サムネイル",
                 "is_shorts": is_shorts,
             })
 
         if not is_shorts:
-            title = self._read_meta_from_dir(output_dir).get("title", os.path.basename(output_dir))
+            title = self._read_meta_from_dir(output_dir).get("title") or self._folder_name_to_title(os.path.basename(output_dir))
             thumbnail_text = meta.get("thumbnail_text", "").strip() if "meta" in locals() else ""
             base_prompt = (
                 "Aspect ratio: 16:9 landscape.\n"
@@ -1484,12 +2040,21 @@ class YMM4AutoGui:
                 seen_variants.add(variant)
                 path = os.path.join(output_dir, filename)
                 if not os.path.exists(path):
+                    path = os.path.join(thumbs_dir, filename)
+                if not os.path.exists(path):
                     continue
                 variant_info = variant_map.get(variant, {})
+                default_prompt = f"{base_prompt}{common_rules}\n\n{variant_info.get('prompt', '')}"
+                saved_prompt, prompt_file = _read_prompt_file(
+                    os.path.join(os.path.dirname(path), f"thumbnail_{variant}_prompt.txt"),
+                    os.path.join(output_dir, f"thumbnail_{variant}_prompt.txt"),
+                    os.path.join(thumbs_dir, f"thumbnail_{variant}_prompt.txt"),
+                )
                 specs.append({
                     "kind": "thumbnail_variant",
                     "path": path,
-                    "prompt": f"{base_prompt}{common_rules}\n\n{variant_info.get('prompt', '')}",
+                    "prompt": saved_prompt or default_prompt,
+                    "prompt_file": prompt_file,
                     "label": f"thumbnail {variant}",
                     "variant": variant,
                     "is_shorts": False,
@@ -1689,6 +2254,49 @@ class YMM4AutoGui:
                 ttk.Label(win, text=f"読込失敗: {e}").pack(padx=20, pady=20)
             ttk.Button(win, text="閉じる", command=win.destroy).pack(pady=6)
 
+        def edit_prompt(idx):
+            spec = specs[idx]
+            win = tk.Toplevel(dialog)
+            win.title(f"プロンプト編集 - {spec.get('label', idx + 1)}")
+            win.geometry("900x620")
+            win.transient(dialog)
+            win.grab_set()
+
+            ttk.Label(
+                win,
+                text="このプロンプトで再生成します。必要な部分だけ手で変更してください。",
+                font=("Meiryo", 9, "bold"),
+            ).pack(anchor=tk.W, padx=10, pady=(10, 4))
+
+            text = scrolledtext.ScrolledText(win, wrap=tk.WORD, font=("Meiryo", 9))
+            text.pack(fill=tk.BOTH, expand=True, padx=10, pady=6)
+            text.insert("1.0", spec.get("prompt", ""))
+
+            btn_frame = ttk.Frame(win)
+            btn_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+            def save_prompt():
+                new_prompt = text.get("1.0", tk.END).strip()
+                if not new_prompt:
+                    messagebox.showwarning("プロンプト空", "プロンプトが空です。")
+                    return
+                spec["prompt"] = new_prompt
+                prompt_file = spec.get("prompt_file")
+                if prompt_file:
+                    try:
+                        os.makedirs(os.path.dirname(prompt_file), exist_ok=True)
+                        with open(prompt_file, "w", encoding="utf-8") as f:
+                            f.write(new_prompt)
+                    except Exception as e:
+                        self.log(f"  ⚠ プロンプト保存失敗: {e}", "warning")
+                toggle_states[idx] = True
+                btn_refs[idx].config(text="🔄 再生成", style="Regen.TButton")
+                self.log(f"  ✏ サムネイルプロンプトを編集: {spec.get('label', idx + 1)}", "info")
+                win.destroy()
+
+            ttk.Button(btn_frame, text="キャンセル", command=win.destroy).pack(side=tk.RIGHT)
+            ttk.Button(btn_frame, text="保存して再生成対象にする", command=save_prompt).pack(side=tk.RIGHT, padx=(0, 8))
+
         for idx, spec in enumerate(specs):
             cell = ttk.Frame(inner, relief=tk.RIDGE, borderwidth=1)
             cell.grid(row=0, column=idx, padx=5, pady=5, sticky="n")
@@ -1717,6 +2325,8 @@ class YMM4AutoGui:
             btn = ttk.Button(cell, text="✅ OK", style="OK.TButton", command=lambda i=idx: toggle(i))
             btn.pack(pady=4)
             btn_refs[idx] = btn
+            if spec.get("kind") in ("thumbnail", "thumbnail_variant"):
+                ttk.Button(cell, text="✏ プロンプト編集", command=lambda i=idx: edit_prompt(i)).pack(pady=(0, 4))
 
         btn_frame = ttk.Frame(dialog)
         btn_frame.pack(pady=8)
@@ -1738,6 +2348,7 @@ class YMM4AutoGui:
     def _toggle_ui(self, enabled):
         state = tk.NORMAL if enabled else tk.DISABLED
         self.generate_btn.config(state=state)
+        self.llm_check_btn.config(state=state)
         self.history_batch_btn.config(state=state)
         self.cancel_btn.config(state=tk.DISABLED if enabled else tk.NORMAL)
         self.image_review_btn.config(state=state)

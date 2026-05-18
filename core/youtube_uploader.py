@@ -18,6 +18,14 @@ TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "token.jso
 THUMB_MAX_BYTES = 2 * 1024 * 1024  # YouTube 上限 2MB
 
 
+def _strip_video_type_prefix(title):
+    title = str(title or "").strip()
+    for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+        if title.startswith(prefix):
+            return title[len(prefix):].strip()
+    return title
+
+
 def _compress_thumbnail(path):
     """2MB を超えるサムネイルを JPEG に変換・圧縮して一時ファイルパスを返す。"""
     if os.path.getsize(path) <= THUMB_MAX_BYTES:
@@ -100,6 +108,8 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
             progress_callback(msg)
         else:
             print(msg, flush=True)
+
+    title = _strip_video_type_prefix(title)
 
     _log("🔑 YouTube 認証中...")
     youtube = get_youtube_client()
