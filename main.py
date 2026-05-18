@@ -723,10 +723,41 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 update_status(
                     f"  🤖 Ollama冒頭レビュー完了: {llm_review.get('score')}点 / {llm_review.get('status')}"
                 )
+                if llm_review.get("fallback_to_local"):
+                    opening_review_path = save_opening_review(theme_dir, opening_review, llm_review, None)
+                    msg = (
+                        "❌ Ollama冒頭レビューに失敗したため処理を中止しました。\n"
+                        "Ollamaを起動してから再実行してください。\n"
+                        f"保存先: {opening_review_path}"
+                    )
+                    update_status(msg, "error")
+                    report.elapsed_sec = time.time() - pipeline_start
+                    return msg, report
             else:
                 update_status("  ⚠ Ollama冒頭レビューはスキップされました")
         except Exception as e:
-            update_status(f"  ⚠ 冒頭Ollamaレビュー失敗: {e}")
+            opening_review_path = save_opening_review(
+                theme_dir,
+                opening_review,
+                {
+                    "mode": "llm",
+                    "provider": "ollama",
+                    "score": opening_review.get("score", 0),
+                    "status": "llm_review_error",
+                    "issues": [f"Ollamaレビュー失敗: {e}"],
+                    "warnings": [f"Ollamaレビュー失敗: {e}"],
+                    "fallback_to_local": True,
+                },
+                None,
+            )
+            msg = (
+                f"❌ Ollama冒頭レビューに失敗したため処理を中止しました: {e}\n"
+                "Ollamaを起動してから再実行してください。\n"
+                f"保存先: {opening_review_path}"
+            )
+            update_status(msg, "error")
+            report.elapsed_sec = time.time() - pipeline_start
+            return msg, report
     final_opening = llm_review or opening_review
 
     if should_auto_rewrite_opening(final_opening):

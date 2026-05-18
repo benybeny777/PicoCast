@@ -1,6 +1,8 @@
 import json
 import os
 import re
+import subprocess
+import time
 from typing import Any
 
 import requests
@@ -35,6 +37,8 @@ FOOD_HINT_WORDS = (
     "牛丼", "天ぷら", "餃子", "焼肉", "味噌", "醤油", "バター", "ケチャップ",
     "カシューナッツ", "紅茶", "アイス", "バナナ",
 )
+
+_OLLAMA_START_ATTEMPTED = False
 
 
 def _truthy_env(value: str) -> bool:
@@ -232,7 +236,49 @@ def _strip_json_text(text: str) -> str:
     return text
 
 
+def _ollama_is_ready(timeout=1.5) -> bool:
+    try:
+        response = requests.get(f"{OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=timeout)
+        return response.ok
+    except requests.RequestException:
+        return False
+
+
+def ensure_ollama_server(wait_seconds=10) -> None:
+    global _OLLAMA_START_ATTEMPTED
+    if _ollama_is_ready():
+        return
+
+    if not _OLLAMA_START_ATTEMPTED:
+        _OLLAMA_START_ATTEMPTED = True
+        creationflags = 0
+        startupinfo = None
+        if os.name == "nt":
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        try:
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL,
+                creationflags=creationflags,
+                startupinfo=startupinfo,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Ollama自動起動に失敗しました: {exc}") from exc
+
+    deadline = time.time() + max(1, wait_seconds)
+    while time.time() < deadline:
+        if _ollama_is_ready(timeout=1.0):
+            return
+        time.sleep(0.5)
+    raise RuntimeError("Ollamaを自動起動しましたが、APIが応答しませんでした")
+
+
 def _post_ollama(prompt: str, model: str, *, json_only: bool = False) -> str:
+    ensure_ollama_server()
     body: dict[str, Any] = {
         "model": model,
         "prompt": prompt,
