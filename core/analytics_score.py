@@ -6,6 +6,14 @@ from typing import Any
 
 
 SCORE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1}
+DURATION_STATUS_LABELS = {
+    "ideal": "理想",
+    "ok": "OK",
+    "ok_but_short": "やや短いがOK",
+    "ok_but_long": "OKだが長め",
+    "warning": "注意",
+    "needs_review": "要確認",
+}
 
 
 def _num(value, default=0.0):
@@ -58,6 +66,10 @@ def duration_status(item: dict[str, Any]) -> str:
     if 270 <= duration < 300 or 600 < duration <= 660:
         return "warning"
     return "needs_review"
+
+
+def format_duration_status(status: str) -> str:
+    return DURATION_STATUS_LABELS.get(str(status or ""), str(status or ""))
 
 
 def score_item(item: dict[str, Any]) -> dict[str, Any]:

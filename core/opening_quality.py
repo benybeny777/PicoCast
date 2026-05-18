@@ -571,6 +571,19 @@ def duration_review(total_sec: float, is_shorts: bool) -> dict[str, Any]:
     }
 
 
+def duration_status_label(status: str) -> str:
+    labels = {
+        "ideal": "理想",
+        "ok": "OK",
+        "ok_but_short": "やや短いがOK",
+        "ok_but_long": "OKだが長め",
+        "warning": "注意",
+        "needs_review": "要確認",
+        "unknown": "不明",
+    }
+    return labels.get(str(status or ""), str(status or ""))
+
+
 def save_duration_review(theme_dir: str, review: dict[str, Any]) -> str:
     path = os.path.join(_meta_dir(theme_dir), "duration_review.json")
     with open(path, "w", encoding="utf-8") as f:

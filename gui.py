@@ -18,8 +18,8 @@ from main import (
 )
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
-from core.analytics_score import format_duration, save_score_files, score_items, to_tsv
-from core.opening_quality import duration_review, llm_opening_review, local_opening_review
+from core.analytics_score import format_duration, format_duration_status, save_score_files, score_items, to_tsv
+from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
 from config import OPENING_SCORE_ABORT_THRESHOLD, OPENING_SCORE_HARD_ABORT_THRESHOLD, VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
@@ -271,7 +271,16 @@ class YMM4AutoGui:
         self.progress.pack(fill=tk.X, pady=(2, 4))
 
         # Log（最下部・残りスペースを埋める）
-        ttk.Label(main_frame, text="実行ログ:").pack(anchor=tk.W)
+        log_header = ttk.Frame(main_frame)
+        log_header.pack(anchor=tk.W, fill=tk.X)
+        ttk.Label(log_header, text="実行ログ:").pack(side=tk.LEFT)
+        self.batch_progress_var = tk.StringVar(value="")
+        ttk.Label(
+            log_header,
+            textvariable=self.batch_progress_var,
+            font=("Meiryo", 9, "bold"),
+            foreground="#ef57ff",
+        ).pack(side=tk.LEFT, padx=(10, 0))
         self.log_area = scrolledtext.ScrolledText(main_frame, height=6, font=("Meiryo", 9), bg="#1e272e", fg="#d2dae2")
         self.log_area.pack(fill=tk.BOTH, expand=True, pady=(2, 0))
         self.log_area.tag_config("info", foreground="#00d8d6")
@@ -297,6 +306,9 @@ class YMM4AutoGui:
         tooltip = ToolTip(widget, text)
         widget._tooltip = tooltip
         return widget
+
+    def _set_batch_progress_text(self, text):
+        self.root.after(0, lambda t=text: self.batch_progress_var.set(t))
 
     def check_engines_startup(self, debug_mode=False):
         self.log("--- システム接続確認 ---")
@@ -892,11 +904,13 @@ class YMM4AutoGui:
                     opening_status = opening.get("status", "")
                     opening_critical_errors = opening.get("critical_errors") or []
                     opening_tag = "score_ok" if opening_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if opening_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
+                    opening_model = opening.get("model")
+                    opening_model_text = f" / model {opening_model}" if opening_model else ""
                     self.log(
-                        f"{prefix}■■■ 冒頭LLMスコア {opening_score}点 / {opening_status} ■■■",
+                        f"{prefix}■■■ 冒頭LLMスコア {opening_score}点 / {opening_status}{opening_model_text} ■■■",
                         opening_tag,
                     )
-                    ai_report.append(f"- 冒頭LLMスコア: {opening_score}点 / {opening_status}")
+                    ai_report.append(f"- 冒頭LLMスコア: {opening_score}点 / {opening_status}{opening_model_text}")
                     for issue in (opening.get("issues") or opening.get("warnings") or [])[:3]:
                         self.log(f"{prefix}  ・{issue}", "warning")
                         ai_report.append(f"  - {issue}")
@@ -909,19 +923,20 @@ class YMM4AutoGui:
                     if est is not None:
                         dur = duration_review(est, is_shorts)
                         duration_status = dur.get("status", "unknown")
+                        duration_status_text = duration_status_label(duration_status)
                         duration_tag = self._duration_tag(duration_status)
-                        ai_report.append(f"- 推定尺: {est:.1f}秒 / {duration_status}")
+                        ai_report.append(f"- 推定尺: {est:.1f}秒 / {duration_status_text}")
                         ai_report.append(f"- セリフ数: {n}行 / 平均{avg:.1f}文字")
                         if is_shorts:
                             self.log(
-                                f"{prefix}━━━━━━━━ 推定尺 {est:.1f}秒 / {duration_status} ━━━━━━━━ "
+                                f"{prefix}━━━━━━━━ 推定尺 {est:.1f}秒 / {duration_status_text} ━━━━━━━━ "
                                 f"（{n}行 / 平均{avg:.1f}文字）",
                                 duration_tag,
                             )
                         else:
                             m, s = divmod(int(est), 60)
                             self.log(
-                                f"{prefix}━━━━━━━━ 推定尺 {m}分{s}秒 / {duration_status} ━━━━━━━━ "
+                                f"{prefix}━━━━━━━━ 推定尺 {m}分{s}秒 / {duration_status_text} ━━━━━━━━ "
                                 f"（{n}行 / 平均{avg:.1f}文字）",
                                 duration_tag,
                             )
@@ -957,6 +972,131 @@ class YMM4AutoGui:
         self.root.update()
         self.log("📋 AI修正依頼用チェック結果をクリップボードにコピーしました", "success")
 
+    def _run_generation_score_gate(self, scripts, cancel_event):
+        ok_count = 0
+        warn_count = 0
+        ng_count = 0
+        ai_report = [
+            "生成前スコアリング結果です。要確認の台本がある場合は、生成前に修正してください。",
+            "",
+            "チェック結果:",
+        ]
+        total = len(scripts)
+        self.log(f"🤖 生成前スコアリング開始: 合計 {total} 件", "batch")
+        self._set_batch_progress_text(f"スコアリング: 0/{total} 完了")
+
+        for idx, script in enumerate(scripts, 1):
+            if cancel_event.is_set():
+                ng_count += 1
+                self.log("⏹ 生成前スコアリングを中止しました。", "error")
+                self._set_batch_progress_text(f"スコアリング中止: {idx - 1}/{total} 完了")
+                break
+
+            prefix = f"[台本{idx}] "
+            self._set_batch_progress_text(f"スコアリング中: {idx}/{total}")
+            try:
+                items = ScriptParser.parse_string(script)
+                is_valid, messages = ScriptParser.validate(items)
+                for m in messages:
+                    tag = "warning" if str(m).startswith("⚠") else "error"
+                    self.log(f"{prefix}{m}", tag)
+                if not is_valid:
+                    ng_count += 1
+                    ai_report.extend(["", f"## 台本{idx}", "- 判定: 要確認", "- 理由: フォーマットエラー"])
+                    self.root.after(0, lambda v=int((idx / max(total, 1)) * 20): self.progress.config(value=v))
+                    self._set_batch_progress_text(f"スコアリング: {idx}/{total} 完了")
+                    continue
+
+                meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
+                body_items = normalize_background_order([it for it in items if it["type"] not in ScriptParser.META_TYPES])
+                video_format = meta.get("video_format", "")
+                is_shorts = video_format.strip().lower() in ("shorts", "short", "ショート")
+                title = meta.get("video_title", f"台本{idx}")
+                thumb_text = meta.get("thumbnail_text", "")
+                target_duration = "38-50秒" if is_shorts else "5-8分"
+
+                ai_report.extend(["", f"## 台本{idx}: {title}", f"- 動画形式: {'Shorts' if is_shorts else 'Long'}"])
+                self.log(f"{prefix}🤖 生成前Ollama冒頭レビュー中: {title}")
+                local = local_opening_review(body_items, title, thumb_text, is_shorts)
+                llm = llm_opening_review(
+                    local,
+                    title,
+                    thumb_text,
+                    "Shorts" if is_shorts else "Long",
+                    target_duration,
+                )
+                opening = llm or local
+                opening_score = int(opening.get("score") or 0)
+                opening_status = opening.get("status", "")
+                opening_critical_errors = opening.get("critical_errors") or []
+                opening_model = opening.get("model")
+                opening_model_text = f" / model {opening_model}" if opening_model else ""
+                opening_tag = "score_ok" if opening_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if opening_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
+                self.log(
+                    f"{prefix}■■■ 生成前冒頭スコア {opening_score}点 / {opening_status}{opening_model_text} ■■■",
+                    opening_tag,
+                )
+                ai_report.append(f"- 冒頭スコア: {opening_score}点 / {opening_status}{opening_model_text}")
+
+                for issue in (opening.get("issues") or opening.get("warnings") or [])[:3]:
+                    self.log(f"{prefix}  ・{issue}", "warning")
+                    ai_report.append(f"  - {issue}")
+                for issue in opening_critical_errors[:3]:
+                    self.log(f"{prefix}  must_fix: {issue}", "warning")
+                    ai_report.append(f"  - must_fix: {issue}")
+
+                est, n, avg = self._estimate_duration(items, is_shorts)
+                duration_tag = "warning"
+                if est is not None:
+                    dur = duration_review(est, is_shorts)
+                    duration_status = dur.get("status", "unknown")
+                    duration_status_text = duration_status_label(duration_status)
+                    duration_tag = self._duration_tag(duration_status)
+                    ai_report.append(f"- 推定尺: {est:.1f}秒 / {duration_status_text}")
+                    ai_report.append(f"- セリフ数: {n}行 / 平均{avg:.1f}文字")
+                    if is_shorts:
+                        self.log(
+                            f"{prefix}━━━━━━━━ 生成前推定尺 {est:.1f}秒 / {duration_status_text} ━━━━━━━━ "
+                            f"（{n}行 / 平均{avg:.1f}文字）",
+                            duration_tag,
+                        )
+                    else:
+                        m, s = divmod(int(est), 60)
+                        self.log(
+                            f"{prefix}━━━━━━━━ 生成前推定尺 {m}分{s}秒 / {duration_status_text} ━━━━━━━━ "
+                            f"（{n}行 / 平均{avg:.1f}文字）",
+                            duration_tag,
+                        )
+
+                if opening.get("fallback_to_local"):
+                    ng_count += 1
+                    ai_report.append("- 判定: 要確認")
+                    ai_report.append("- 理由: Ollamaレビュー失敗")
+                elif opening_tag == "score" or duration_tag == "error":
+                    ng_count += 1
+                    ai_report.append("- 判定: 要確認")
+                elif opening_tag == "score_warn" or duration_tag == "warning":
+                    warn_count += 1
+                    ai_report.append("- 判定: 警告")
+                else:
+                    ok_count += 1
+                    ai_report.append("- 判定: OK")
+            except Exception as e:
+                ng_count += 1
+                self.log(f"{prefix}❌ 生成前チェック失敗: {e}", "error")
+                self.log(traceback.format_exc(), "error")
+                ai_report.extend(["", f"## 台本{idx}", "- 判定: チェック失敗", f"- エラー: {e}"])
+
+            self.root.after(0, lambda v=int((idx / max(total, 1)) * 20): self.progress.config(value=v))
+            self._set_batch_progress_text(f"スコアリング: {idx}/{total} 完了")
+
+        self.log(f"🤖 生成前スコアリング完了: OK {ok_count} / 警告 {warn_count} / 要確認 {ng_count}", "batch")
+        self._set_batch_progress_text(f"スコアリング完了: {ok_count} OK / {warn_count} 警告 / {ng_count} 要確認")
+        ai_report.extend(["", f"総合: OK {ok_count} / 警告 {warn_count} / 要確認 {ng_count}"])
+        report_text = "\n".join(ai_report)
+        self.root.after(0, lambda text=report_text: self._copy_bulk_check_report(text))
+        return ng_count == 0 and not cancel_event.is_set()
+
 
     def start_generation(self):
         from core.parser import ScriptParser
@@ -970,6 +1110,7 @@ class YMM4AutoGui:
         self._toggle_ui(False)
         self.cancel_event = threading.Event()
         self._gen_id += 1
+        self.batch_progress_var.set("" if len(scripts) <= 1 else f"一括生成準備中: 0/{len(scripts)} 完了")
 
         # バリデーション・危険チェック・尺予測をログに出力
         abort = False
@@ -1010,6 +1151,8 @@ class YMM4AutoGui:
 
         if abort:
             self.log("❌ エラーがあるため処理を中止しました", "error")
+            if len(scripts) > 1:
+                self.batch_progress_var.set("一括生成準備エラー")
             self._toggle_ui(True)
             return
 
@@ -1026,6 +1169,20 @@ class YMM4AutoGui:
         _all_titles = _active + _uploaded
         existing_titles = [t for t in _all_titles if self._is_food_title(t)]
         is_batch = count > 1
+
+        if is_batch:
+            self._set_batch_progress_text(f"一括生成: 0/{count} 完了")
+            if not self._run_generation_score_gate(scripts, cancel_event):
+                if cancel_event.is_set():
+                    self.log("\n⏹ 生成前スコアリング中に中止しました。", "error")
+                    self.root.after(0, lambda: self.status_var.set("Canceled"))
+                else:
+                    self.log("\n❌ 生成前スコアリングで要確認の台本があるため、一括生成を開始しません。", "error")
+                    self.root.after(0, lambda: self.status_var.set("Score check failed"))
+                self.root.after(0, lambda: self._toggle_ui(True))
+                return
+            self.log("✅ 生成前スコアリングOK。全台本の生成を開始します。", "success")
+            self._set_batch_progress_text(f"一括生成: 0/{count} 完了")
 
         for idx, script in enumerate(scripts):
             if cancel_event.is_set():
@@ -1047,6 +1204,7 @@ class YMM4AutoGui:
 
                 if is_batch:
                     self.log(f"\n>>> 処理中 ({idx+1}/{count}): {topic}", "batch")
+                    self._set_batch_progress_text(f"一括生成中: {idx+1}/{count}（完了 {idx}/{count}）")
                     self.root.after(0, lambda v=int((idx/count)*100): self.progress.config(value=v))
 
                 while True:
@@ -1089,8 +1247,11 @@ class YMM4AutoGui:
                         self.root.after(0, lambda m=msg, r=report, gid=gen_id:
                             self.finish_generation(m, r, is_error=True) if gid == self._gen_id else None)
                         return
+                    self._set_batch_progress_text(f"一括生成: {idx+1}/{count} 完了")
                     continue
                 self.log(f"成功: {topic}", "success")
+                if is_batch:
+                    self._set_batch_progress_text(f"一括生成: {idx+1}/{count} 完了")
                 if not is_batch:
                     self.root.after(0, lambda m=msg, r=report, gid=gen_id:
                         self.finish_generation(m, r) if gid == self._gen_id else None)
@@ -1104,6 +1265,8 @@ class YMM4AutoGui:
                 if settings["debug_mode"]:
                     self.log(traceback.format_exc(), "error")
                 self.log(f"❌ エラー: {err_msg}", "error")
+                if is_batch:
+                    self._set_batch_progress_text(f"一括生成: {idx+1}/{count} 完了")
                 if not is_batch:
                     self.root.after(0, lambda m=err_msg, gid=gen_id:
                         self.finish_generation(m, None, is_error=True) if gid == self._gen_id else None)
@@ -1111,11 +1274,14 @@ class YMM4AutoGui:
 
         if cancel_event.is_set():
             self.log("\n⏹ 処理を中止しました。", "error")
+            if is_batch:
+                self._set_batch_progress_text("一括生成中止")
             if cancel_event is self.cancel_event:
                 self.root.after(0, lambda: self.status_var.set("Canceled"))
                 self.root.after(0, lambda: self._toggle_ui(True))
         elif is_batch:
             self.root.after(0, lambda: self.progress.config(value=100))
+            self._set_batch_progress_text(f"一括生成完了: {count}/{count}")
             self.log("\n✅ 全ての一括処理が完了しました！", "success")
             self.root.after(0, lambda c=count: messagebox.showinfo("一括完了", f"{c}件の処理が完了しました。"))
             self.root.after(0, lambda: self._toggle_ui(True))
@@ -1325,7 +1491,7 @@ class YMM4AutoGui:
                     _fmt_published(item.get("published_at")),
                     item.get("video_type", ""),
                     format_duration(item.get("duration")),
-                    item.get("duration_status", ""),
+                    format_duration_status(item.get("duration_status")),
                     item.get("views", 0),
                     item.get("impressions", 0),
                     _fmt_ctr(item.get("ctr")),
@@ -1854,14 +2020,21 @@ class YMM4AutoGui:
         if opening:
             score = opening.get("final_score", "?")
             status = opening.get("final_status", "")
-            lines.append(f"冒頭スコア : {score}点 / {status}")
+            llm = opening.get("llm_review") or {}
+            model_parts = []
+            if llm.get("model"):
+                model_parts.append(f"review:{llm.get('model')}")
+            if llm.get("rewrite_accepted_model"):
+                model_parts.append(f"rewrite:{llm.get('rewrite_accepted_model')}")
+            model_text = f" / model {', '.join(model_parts)}" if model_parts else ""
+            lines.append(f"冒頭スコア : {score}点 / {status}{model_text}")
             local = opening.get("local_review") or {}
             for iss in (local.get("issues") or [])[:2]:
                 lines.append(f"  ・{iss}")
 
         if duration:
             sec = duration.get("seconds", "?")
-            dur_status = duration.get("status", "")
+            dur_status = duration_status_label(duration.get("status", ""))
             lines.append(f"尺         : {sec}秒 / {dur_status}")
 
         if final and not final.get("skipped") and not final.get("error"):

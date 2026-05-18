@@ -17,6 +17,7 @@ from core.image_generator import ImageGenerator
 from core.opening_quality import (
     apply_opening_rewrite_to_script,
     duration_review,
+    duration_status_label,
     final_chatgpt_review,
     llm_opening_review,
     local_opening_review,
@@ -879,8 +880,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     final_score = int(final_opening.get("score") or 0)
     opening_critical_errors = final_opening.get("critical_errors") or []
     score_tag = "score_ok" if final_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if final_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
+    opening_model_parts = []
+    if llm_review and llm_review.get("model"):
+        opening_model_parts.append(f"review:{llm_review.get('model')}")
+    if llm_review and llm_review.get("rewrite_accepted_model"):
+        opening_model_parts.append(f"rewrite:{llm_review.get('rewrite_accepted_model')}")
+    opening_model_text = f" / model {', '.join(opening_model_parts)}" if opening_model_parts else ""
     update_status(
-        f"■■■ 冒頭スコア {final_score}点 / {final_opening.get('status')} ■■■\n"
+        f"■■■ 冒頭スコア {final_score}点 / {final_opening.get('status')}{opening_model_text} ■■■\n"
         f"  保存先: {opening_review_path}",
         score_tag,
     )
@@ -1386,8 +1393,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if not is_shorts:
         _m, _s = divmod(int(total_sec), 60)
         _dur_label = f"{_m}分{_s}秒 ({total_sec:.1f}秒)"
+    duration_status_text = duration_status_label(duration_result.get("status"))
     update_status(
-        f"━━━━━━━━ 尺チェック {_dur_label} / {duration_result.get('status')} ━━━━━━━━\n"
+        f"━━━━━━━━ 尺チェック {_dur_label} / {duration_status_text} ━━━━━━━━\n"
         f"  理想: {duration_result.get('ideal')} / 許容: {duration_result.get('acceptable')}\n"
         f"  保存先: {duration_review_path}",
         "duration",
