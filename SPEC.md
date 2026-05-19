@@ -627,8 +627,16 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 
 補正ルール（ベーススコア算出後に適用）：
 
-- `subscribers_net >= 2` → スコアが B 未満なら B に引き上げ・action を `登録者増・改善候補` に変更
-- `like_rate >= 1.5%` かつ `score in (C, D)` → action を `テーマ有望・冒頭/構成改善` に変更
+| 条件 | 効果 |
+|---|---|
+| `subscribers_net >= 2` かつスコアが B 未満 | スコアを B に引き上げ・action `登録者増・改善候補` |
+| `subscribers_net >= 2` かつ `avg_percent >= 60` | action `横展開` |
+| `like_rate >= 1.5%` かつ `score in (C, D)` | action `テーマ有望・冒頭/構成改善` |
+
+views 上位20% ルール（`score_items` でまとめて適用）：
+
+- analyzable 動画の views 80パーセンタイル以上 かつ `avg_percent >= 65` → action `横展開・微改善`
+- ただし action が `横展開` の場合は維持
 
 TSVには `publish_status` / `analysis_status` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複を防止できます。
 
