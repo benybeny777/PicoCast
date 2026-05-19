@@ -199,10 +199,13 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         else:
             score, action = "D", "要見直し"
 
-    # Rule 3: 登録者純増 >= 2 は最低でも B
-    if subscribers_net >= 2 and SCORE_ORDER.get(score, 0) < SCORE_ORDER["B"]:
-        score = "B"
-        action = "登録者増・改善候補"
+    # Rule 3: 登録者純増 >= 2 は最低でも B、視聴率 >= 60 なら横展開
+    if subscribers_net >= 2:
+        if SCORE_ORDER.get(score, 0) < SCORE_ORDER["B"]:
+            score = "B"
+            action = "登録者増・改善候補"
+        if avg_percent >= 60:
+            action = "横展開"
 
     # Rule 4: like率 >= 1.5% かつ視聴率が低い → テーマは有望
     if like_rate >= 1.5 and score in ("C", "D"):
@@ -238,6 +241,24 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
 
 def score_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     scored = [score_item(item) for item in items]
+
+    # views 上位20% かつ avg_percent >= 65 → action = 横展開・微改善
+    # （"横展開" はそのまま維持）
+    analyzable_views = sorted(
+        _int(item.get("views")) for item in scored
+        if item.get("analysis_status") == "analyzable"
+    )
+    if analyzable_views:
+        top20_threshold = analyzable_views[max(0, int(len(analyzable_views) * 0.8))]
+        for item in scored:
+            if (
+                item.get("analysis_status") == "analyzable"
+                and _int(item.get("views")) >= top20_threshold
+                and _num(item.get("average_percentage_viewed")) >= 65
+                and item.get("action") != "横展開"
+            ):
+                item["action"] = "横展開・微改善"
+
     scored.sort(key=lambda x: (SCORE_ORDER.get(x.get("score"), 0), _int(x.get("views"))), reverse=True)
     return scored
 
