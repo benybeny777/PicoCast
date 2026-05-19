@@ -33,6 +33,7 @@ from config import (
     BGM_VOLUME,
     CHARACTERS,
     MAX_BACKGROUNDS_LONG,
+    MAX_BACKGROUNDS_LONG_BUDGET,
     MAX_BACKGROUNDS_SHORTS,
     OLLAMA_REWRITE_FALLBACK_MODEL,
     OLLAMA_REWRITE_MODEL,
@@ -555,7 +556,8 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
 def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
-                 cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None):
+                 cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
+                 long_budget_mode=None):
     report = GenerationReport()
     pipeline_start = time.time()
 
@@ -610,7 +612,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # Step 2: 動画形式を検出
     is_shorts = _detect_is_shorts(script_content)
-    max_backgrounds = MAX_BACKGROUNDS_SHORTS if is_shorts else MAX_BACKGROUNDS_LONG
+    if is_shorts:
+        max_backgrounds = MAX_BACKGROUNDS_SHORTS
+    elif long_budget_mode:
+        max_backgrounds = MAX_BACKGROUNDS_LONG_BUDGET
+    else:
+        max_backgrounds = MAX_BACKGROUNDS_LONG
     intro_voice_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
     body_voice_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
     update_status(f"📐 動画形式: {'Shorts' if is_shorts else 'ロング'}")
@@ -1178,6 +1185,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     if first_bg_placed:
                         editor.add_transition_item(current_frame, transition_frames)
                     first_bg_placed = True
+
+            # 明示的再利用マーカーの検出（「背景: 前と同じ」など）
+            _bg_raw = item.get("text", item.get("file", "")).strip()
+            _REUSE_MARKERS = ("前と同じ", "[前と同じ]", "[再利用]", "再利用")
+            if any(_bg_raw == m or _bg_raw.startswith(m) for m in _REUSE_MARKERS):
+                update_status(f"🖼  背景 再利用指定 — 前の背景を継続")
+                bg_start_frame = current_frame
+                continue
 
             bg_num += 1
             if bg_num > max_backgrounds:

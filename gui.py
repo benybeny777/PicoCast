@@ -266,6 +266,8 @@ class YMM4AutoGui:
 
         self.long_thumbnail_ab_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(opt_frame, text="LongサムネAB", variable=self.long_thumbnail_ab_var).pack(side=tk.LEFT, padx=4)
+        self.long_budget_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opt_frame, text="Long節約", variable=self.long_budget_var).pack(side=tk.LEFT, padx=4)
 
         ttk.Label(opt_frame, text="画風:").pack(side=tk.LEFT, padx=(12, 2))
         self.style_var = tk.StringVar(value="nanobanana2")
@@ -536,6 +538,7 @@ class YMM4AutoGui:
             "reuse_backgrounds": self.reuse_bg_var.get(),
             "use_batch_api": self.batch_api_var.get(),
             "long_thumbnail_ab_test": self.long_thumbnail_ab_var.get(),
+            "long_budget_mode": self.long_budget_var.get(),
         }
 
     def refresh_history(self):
@@ -1301,6 +1304,7 @@ class YMM4AutoGui:
                             cancel_event=cancel_event,
                             existing_titles=existing_titles,
                             long_thumbnail_ab_test=settings.get("long_thumbnail_ab_test", False),
+                            long_budget_mode=settings.get("long_budget_mode", False),
                         )
                         break
                     except OutputDirectoryLockedError as e:

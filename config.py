@@ -86,8 +86,11 @@ LONG_THUMBNAIL_AB_TEST = os.environ.get("LONG_THUMBNAIL_AB_TEST", "0").strip().l
 # Cost control: max unique background images generated per video (thumbnail excluded).
 # Shorts: ideal visual change every 3-5 seconds.
 # Long: ideal visual change every 5-7 seconds; avoid holding the same image for 10+ seconds.
+# Long budget mode: limits new image generation to ~16. Use "背景: 前と同じ" in the script to
+# explicitly mark scenes that reuse the preceding background (not counted toward the budget).
 MAX_BACKGROUNDS_SHORTS = 9
 MAX_BACKGROUNDS_LONG = 90
+MAX_BACKGROUNDS_LONG_BUDGET = 16
 MAX_BACKGROUNDS = MAX_BACKGROUNDS_SHORTS
 
 
