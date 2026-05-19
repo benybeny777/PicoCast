@@ -2,6 +2,13 @@
 
 from pathlib import Path
 
+TITLE_ANALYTICS_TSV_HEADER = (
+    "title\tpublished_at\tvideo_type\tduration\tduration_status\tviews\timpressions\tctr\t"
+    "average_view_duration\taverage_percentage_viewed\tlikes\tlike_rate\tcomments\tsubscribers_net\tscore\taction"
+)
+
+PROMPT_PARTS_DIR = Path(__file__).with_name("prompt_parts")
+
 CHANNEL_CONTEXT = (
     "チャンネル: https://www.youtube.com/@zunkami"
     "（チャンネル名: ずんだもんとめたんの食べ物雑学堂。食べ物雑学に特化したゆっくり解説チャンネル）"
@@ -213,20 +220,47 @@ def build_vidiq_prompt() -> str:
     return build_script_generation_prompt()
 
 
+def _format_existing_title_lines(existing_titles) -> str:
+    return "\n".join(f"・{title}" for title in existing_titles) if existing_titles else "・既存タイトルなし"
+
+
+def _format_title_analytics_block(analytics_tsv=None) -> str:
+    analytics_tsv = (analytics_tsv or "").strip()
+    if analytics_tsv:
+        return analytics_tsv
+    return (
+        f"{TITLE_ANALYTICS_TSV_HEADER}\n"
+        "（実績データ未取得。実績根拠がない案は「新規開拓枠」と書く）"
+    )
+
+
+def _format_prompt_part(filename: str, **values) -> str:
+    template = (PROMPT_PARTS_DIR / filename).read_text(encoding="utf-8").strip()
+    return template.format(**values)
+
+
 def build_title_prompt(existing_titles=None, analytics_tsv=None) -> str:
     existing_titles = existing_titles or []
-    existing_title_lines = "\n".join(f"・{title}" for title in existing_titles) if existing_titles else "・既存タイトルなし"
-    analytics_tsv = (analytics_tsv or "").strip()
-    analytics_data_block = analytics_tsv if analytics_tsv else (
-        "title\tpublished_at\tvideo_type\tduration\tduration_status\tviews\timpressions\tctr\t"
-        "average_view_duration\taverage_percentage_viewed\tlikes\tlike_rate\tcomments\tsubscribers_net\tscore\taction\n"
-        "（実績データ未取得。実績根拠がない案は「新規開拓枠」と書く）"
+    existing_title_lines = _format_existing_title_lines(existing_titles)
+    analytics_data_block = _format_title_analytics_block(analytics_tsv)
+    title_dynamic_context = _format_prompt_part(
+        "title_dynamic_context_food.md",
+        analytics_data_block=analytics_data_block,
+    )
+    title_duplicate_context = _format_prompt_part(
+        "title_duplicate_context_food.md",
+        existing_title_lines=existing_title_lines,
+        used_food_text=_format_prompt_part("title_used_foods_food.txt"),
     )
     return f"""\
 食べ物雑学専門のYouTube動画タイトル案を20個出してください。
 
 チャンネル:
 ずんだもんとめたんの食べ物雑学堂
+
+━━━━━━━━━━━━━━━━━━
+固定プロンプト（ネタが変わっても使うルール）
+━━━━━━━━━━━━━━━━━━
 
 ━━━━━━━━━━━━━━━━━━
 最重要ルール
@@ -641,15 +675,7 @@ average_percentage_viewed、average_view_duration、subscribers_net、likes、li
 ただし、保存理由系でも、
 外食・加工食品・身近さが強い場合は例外的に採用候補にする。
 
-━━━━━━━━━━━━━━━━━━
-既存動画の実績データ
-━━━━━━━━━━━━━━━━━━
-
-以下はYouTube Analyticsの動画別成績です。
-新規タイトル案とTOP5選定では、このデータを必ず参照してください。
-
-【実績データ】
-{analytics_data_block}
+{title_dynamic_context}
 
 ━━━━━━━━━━━━━━━━━━
 既知ネタ除外ルール
@@ -769,82 +795,7 @@ average_percentage_viewed、average_view_duration、subscribers_net、likes、li
 トニックウォーターが薬用だった理由
 → 既知度 低。一般には知られにくく採用優先。
 
-━━━━━━━━━━━━━━━━━━
-既存タイトル重複禁止ルール
-━━━━━━━━━━━━━━━━━━
-
-以下の既存動画タイトルと同じ、またはほぼ同じテーマの案は出さない。
-
-【既存の食べ物系タイトル】
-{existing_title_lines}
-
-※ 食べ物以外の既存タイトルは今回の重複判定では無視してよい。
-
-━━━━━━━━━━━━━━━━━━
-既存タイトルの扱い
-━━━━━━━━━━━━━━━━━━
-
-既存タイトルは重複回避のためだけに使う。
-既存タイトルの文体・記号・体言止め・長すぎる構成は真似しない。
-新規タイトルは必ず現在のタイトルルールに従う。
-
-【既に扱った食べ物・重複禁止食材】
-人参、にんじん、ニンジン、ハチミツ、蜂蜜、タピオカ、フグ、クロワッサン、かき氷シロップ、カレー、コンニャク、メロンパン、マックのポテト、フライドポテト、ポテトフライ、ポテチ、ポテトチップス、ケチャップ、トマトケチャップ、トマト、サーモン寿司、サーモン、鮭、ロブスター、オマール海老、コーラ、コカ・コーラ、ポップコーン、チョコ、チョコレート、塩
-
-既存食材は原則出さない。
-どうしても強い別角度がある場合のみ、以下をすべて満たす場合に限って使用可。
-・既存動画と時代が違う
-・既存動画と主張が違う
-・既存動画とオチが違う
-・タイトルの見え方が明確に違う
-
-既存食材を使う場合でも、20案中最大2案まで。
-ただし、TOP5には原則入れない。
-TOP5に入れる場合は、既存動画と時代・主張・オチ・見え方が完全に違う理由を明記する。
-
-20案の中で、同じ勝ちパターンを連続させない。
-同じカテゴリの食べ物を連続させない。
-20案の中で同じ語尾や同じタイトル型を連続させない。
-飲み物、お菓子、野菜、肉、魚、調味料、外食、保存食、発酵食品をバランスよく混ぜる。
-
-━━━━━━━━━━━━━━━━━━
-表記ゆれ重複対策
-━━━━━━━━━━━━━━━━━━
-
-以下は同じ食べ物として扱い、重複禁止にする。
-
-・チョコ、チョコレート
-・マックのポテト、フライドポテト、ポテトフライ
-・ポテチ、ポテトチップス
-・コーラ、コカ・コーラ
-・サーモン寿司、サーモン、鮭
-・ロブスター、オマール海老
-・人参、にんじん、ニンジン
-・ハチミツ、蜂蜜
-・ケチャップ、トマトケチャップ
-
-表記が違っても、同じ食べ物・同じ切り口なら禁止。
-
-禁止:
-・既存タイトルと完全一致
-・食べ物名だけ同じで内容も近い案
-・言い換えただけの案
-・同じオチになる案
-・同じ勝ちパターンで同じ食べ物を扱う案
-
-例:
-既存: トマトは昔毒扱いだった
-禁止: トマトは昔ヤバかった
-禁止: トマトは毒だと思われていた
-禁止: 昔のトマトが怖すぎた
-
-既存: チョコは昔薬だった
-禁止: チョコレートは薬だった
-禁止: チョコは昔飲み物だった
-禁止: 昔のチョコがヤバすぎた
-
-既存テーマと被りそうな場合は、
-別の食べ物・別の時代・別の勝ちパターンに変更すること。
+{title_duplicate_context}
 
 Shorts向き:
 ・1つの驚きで完結

@@ -474,6 +474,19 @@ output/upload_schedule_long.json
 
 `ctr` / `impressions` が 0 または空欄の場合は評価に使わず、views・平均視聴時間・平均視聴率・登録者増減を優先します。
 
+プロンプト文章は、固定部分と差し込み部分を分けて扱います。
+
+- 固定部分: チャンネル方針、タイトル・サムネルール、既知ネタ除外、採点、Shorts / Long判定、出力形式、最終チェック
+- 差し込み部分: 既存タイトル一覧、既存食材リスト、YouTube Analytics実績データ、実績サマリー、今回の生成条件
+
+コード上では `core/script_prompts.py` の `build_title_prompt()` が固定ルールに差し込みデータを合成します。ネタ固有の差し替え部分は `core/prompt_parts/` に分離しています。
+
+- `title_dynamic_context_food.md`: 実績データ差し込み欄
+- `title_duplicate_context_food.md`: 既存タイトル・既存食材・表記ゆれの重複チェック
+- `title_used_foods_food.txt`: 既に扱った食材リスト
+
+別ジャンルへ差し替える場合は、上記ファイルを別名で追加し、`build_title_prompt()` が読むファイル名を切り替えます。実績データ未取得時のTSV見出しは `TITLE_ANALYTICS_TSV_HEADER` で管理します。
+
 タイトル・サムネの基本方針:
 
 - タイトルは理由・経緯を伝える
