@@ -80,6 +80,9 @@ BGM_PATH = os.path.join(ASSETS_DIR, "bgm", "nohohon_long_BPM97.mp3")
 BGM_VOLUME = 15.0
 BGM_LAYER = 2
 
+# Long サムネイル A/B テスト。False にすると variant A のみ生成し thumbnail_ab_test.json を書かない。
+LONG_THUMBNAIL_AB_TEST = os.environ.get("LONG_THUMBNAIL_AB_TEST", "0").strip().lower() in ("1", "true", "yes", "on")
+
 # Cost control: max unique background images generated per video (thumbnail excluded).
 # Shorts: ideal visual change every 3-5 seconds.
 # Long: ideal visual change every 5-7 seconds; avoid holding the same image for 10+ seconds.

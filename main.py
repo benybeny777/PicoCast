@@ -39,6 +39,7 @@ from config import (
     OPENING_SCORE_HARD_ABORT_THRESHOLD,
     OPENING_SCORE_ABORT_THRESHOLD,
     OPENING_REWRITE_MAX_FALLBACKS,
+    LONG_THUMBNAIL_AB_TEST,
     VOICEVOX_PATH,
     VOICE_INTRO_FAST_SECONDS,
     VOICE_INTRO_SPEED_SCALE_LONG,
@@ -401,8 +402,9 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     )
     if thumbnail_text:
         common_rules += f' Use this exact thumbnail text at the top center: "{thumbnail_text}".'
+    variants_to_generate = LONG_THUMBNAIL_VARIANTS if LONG_THUMBNAIL_AB_TEST else LONG_THUMBNAIL_VARIANTS[:1]
     try:
-        for variant in LONG_THUMBNAIL_VARIANTS:
+        for variant in variants_to_generate:
             variant_id = variant["variant"]
             filename = _thumbnail_variant_filename(theme_dir, variant_id)
             variant_path = os.path.join(thumbs, filename)
@@ -429,9 +431,10 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     if os.path.exists(thumb_path):
         os.remove(thumb_path)
     shutil.copy2(first_variant_path, thumb_path)
-    manifest_path = _write_long_thumbnail_manifest(theme_dir, topic, manifest_variants)
-    _log(f"  サムネイルA/B管理ファイル保存: {manifest_path}")
-    _log(f"  アップロード用サムネイルA保存: {thumb_path}")
+    if LONG_THUMBNAIL_AB_TEST:
+        manifest_path = _write_long_thumbnail_manifest(theme_dir, topic, manifest_variants)
+        _log(f"  サムネイルA/B管理ファイル保存: {manifest_path}")
+    _log(f"  アップロード用サムネイル保存: {thumb_path}")
     return thumb_path
 
 

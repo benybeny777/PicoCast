@@ -378,10 +378,13 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 
 ### サムネイルA/Bテスト
 
-3バリアントのサムネイルを生成し `_meta/thumbnail_ab_test.json` で管理:
-- **Variant A**: 食べ物クローズアップ（クリック重視）
-- **Variant B**: 古い歴史・驚き演出
-- **Variant C**: 昔と今の比較・ギャップ
+`config.py` の `LONG_THUMBNAIL_AB_TEST`（デフォルト `False`）で制御。
+
+- **`False`（デフォルト）**: Variant A のみ生成。`thumbnail_ab_test.json` は書かない。
+- **`True`**: 3バリアントを生成し `_meta/thumbnail_ab_test.json` で管理。
+  - **Variant A**: 食べ物クローズアップ（クリック重視）
+  - **Variant B**: 古い歴史・驚き演出
+  - **Variant C**: 昔と今の比較・ギャップ
 
 YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案はPC版YouTube Studioで手動登録します。通常アップロードではA案だけを `thumbnail.png` としてAPI設定します。アップロード後は動画IDを `thumbnail_ab_test.json` に記録し、`<video_id>_thumbnail_A/B/C.png` 形式のコピーも保存します。
 
