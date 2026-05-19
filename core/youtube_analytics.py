@@ -55,6 +55,14 @@ def _chunks(values, size=50):
 
 def _local_upload_records_by_video_id() -> dict:
     records = {}
+    try:
+        from core.upload_records import load_upload_records
+        for record in load_upload_records():
+            video_id = record.get("video_id")
+            if video_id:
+                records[video_id] = dict(record)
+    except Exception:
+        pass
     uploaded_dir = os.path.join(ROOT_DIR, "output", "000_uploaded")
     if not os.path.isdir(uploaded_dir):
         return records
@@ -84,7 +92,9 @@ def _local_upload_records_by_video_id() -> dict:
                     record.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
                 except Exception:
                     pass
-            records[video_id] = record
+            merged = dict(records.get(video_id, {}))
+            merged.update(record)
+            records[video_id] = merged
     return records
 
 

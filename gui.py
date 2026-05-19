@@ -339,6 +339,7 @@ class YMM4AutoGui:
         self._log_queue = queue.Queue()
 
         self.refresh_history()
+        self._migrate_upload_records_once()
         self.root.after(80, self._drain_log_queue)
         threading.Thread(target=self.check_engines_startup, args=(self.debug_var.get(),), daemon=True).start()
 
@@ -346,6 +347,15 @@ class YMM4AutoGui:
         tooltip = ToolTip(widget, text)
         widget._tooltip = tooltip
         return widget
+
+    def _migrate_upload_records_once(self):
+        try:
+            from core.upload_records import migrate_from_uploaded_dir
+            migrated = migrate_from_uploaded_dir()
+            if migrated:
+                self.log(f"📚 アップロード中央台帳を更新: {migrated}件", "info")
+        except Exception as e:
+            self.log(f"  ⚠ アップロード中央台帳の更新に失敗: {e}", "warning")
 
     def _set_batch_progress_text(self, text):
         self.root.after(0, lambda t=text: self.batch_progress_var.set(t))
@@ -1475,9 +1485,15 @@ class YMM4AutoGui:
             return {}, path
 
     def _write_upload_record_data(self, path, data):
+        from core.upload_records import UPLOAD_RECORDS_FILE, upsert_upload_record
+        if os.path.abspath(path) == os.path.abspath(UPLOAD_RECORDS_FILE):
+            upsert_upload_record(data)
+            return
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
+        if data.get("video_id"):
+            upsert_upload_record(data)
 
     def _update_upload_record_fields(self, path, fields):
         if not path:
@@ -1513,6 +1529,10 @@ class YMM4AutoGui:
 
     def _find_upload_record_for_schedule(self, title, video_type, publish_at):
         from datetime import datetime
+        from core.upload_records import UPLOAD_RECORDS_FILE, find_upload_record
+        central_record = find_upload_record(title=title, video_type=video_type, publish_at=publish_at)
+        if central_record and central_record.get("video_id"):
+            return central_record, UPLOAD_RECORDS_FILE
         uploaded_dir = os.path.join("output", "000_uploaded")
         if not os.path.isdir(uploaded_dir):
             return None, None
@@ -1541,11 +1561,30 @@ class YMM4AutoGui:
         return None, None
 
     def _collect_uploaded_comment_candidates(self):
+        from core.upload_records import UPLOAD_RECORDS_FILE, load_upload_records
         uploaded_dir = os.path.join("output", "000_uploaded")
-        if not os.path.isdir(uploaded_dir):
-            return []
-
         rows = []
+        seen_video_ids = set()
+        if not os.path.isdir(uploaded_dir):
+            for record in sorted(load_upload_records(), key=lambda r: r.get("uploaded_at") or "", reverse=True):
+                fixed_comment = (record.get("fixed_comment_text") or "").strip()
+                video_id = (record.get("video_id") or "").strip()
+                if not fixed_comment or not video_id:
+                    continue
+                seen_video_ids.add(video_id)
+                rows.append({
+                    "name": record.get("title") or video_id,
+                    "output_dir": "",
+                    "title": record.get("title") or video_id,
+                    "fixed_comment": fixed_comment,
+                    "video_id": video_id,
+                    "record": dict(record),
+                    "record_path": UPLOAD_RECORDS_FILE,
+                    "posted_id": record.get("fixed_comment_thread_id") or record.get("fixed_comment_id"),
+                    "pinned_at": record.get("fixed_comment_pinned_at"),
+                })
+            return rows
+
         folders = sorted(
             (d for d in os.listdir(uploaded_dir) if os.path.isdir(os.path.join(uploaded_dir, d))),
             key=lambda d: os.path.getmtime(os.path.join(uploaded_dir, d)),
@@ -1561,6 +1600,7 @@ class YMM4AutoGui:
             video_id = (record.get("video_id") or "").strip()
             if not video_id:
                 continue
+            seen_video_ids.add(video_id)
             rows.append({
                 "name": name,
                 "output_dir": output_dir,
@@ -1569,6 +1609,24 @@ class YMM4AutoGui:
                 "video_id": video_id,
                 "record": record,
                 "record_path": record_path,
+                "posted_id": record.get("fixed_comment_thread_id") or record.get("fixed_comment_id"),
+                "pinned_at": record.get("fixed_comment_pinned_at"),
+            })
+        for record in sorted(load_upload_records(), key=lambda r: r.get("uploaded_at") or "", reverse=True):
+            video_id = (record.get("video_id") or "").strip()
+            if not video_id or video_id in seen_video_ids:
+                continue
+            fixed_comment = (record.get("fixed_comment_text") or "").strip()
+            if not fixed_comment:
+                continue
+            rows.append({
+                "name": record.get("title") or video_id,
+                "output_dir": "",
+                "title": record.get("title") or video_id,
+                "fixed_comment": fixed_comment,
+                "video_id": video_id,
+                "record": dict(record),
+                "record_path": UPLOAD_RECORDS_FILE,
                 "posted_id": record.get("fixed_comment_thread_id") or record.get("fixed_comment_id"),
                 "pinned_at": record.get("fixed_comment_pinned_at"),
             })
@@ -2506,8 +2564,12 @@ class YMM4AutoGui:
                 import json as _json
                 from core.upload_scheduler import rebalance_slots
                 from core.youtube_uploader import update_video_publish_time
+                from core.upload_records import UPLOAD_RECORDS_FILE, load_upload_records
 
                 def find_record_by_publish_at(iso_key):
+                    for data in load_upload_records():
+                        if data.get("publish_at") == iso_key:
+                            return data.get("video_id"), UPLOAD_RECORDS_FILE
                     uploaded_dir = os.path.join("output", "000_uploaded")
                     if not os.path.exists(uploaded_dir):
                         return None, None
@@ -2560,8 +2622,11 @@ class YMM4AutoGui:
                         if ok:
                             if record_path:
                                 try:
-                                    with open(record_path, "r", encoding="utf-8") as f:
-                                        rec = _json.load(f)
+                                    if os.path.abspath(record_path) == os.path.abspath(UPLOAD_RECORDS_FILE):
+                                        rec = next((dict(r) for r in load_upload_records() if r.get("video_id") == video_id), {"video_id": video_id})
+                                    else:
+                                        with open(record_path, "r", encoding="utf-8") as f:
+                                            rec = _json.load(f)
                                     rec["publish_at"] = new_iso
                                     self._write_upload_record_data(record_path, rec)
                                 except Exception as e:
@@ -2849,6 +2914,7 @@ class YMM4AutoGui:
                 "generation_kind": script_meta.get("generation_kind", ""),
                 "source_video_title": script_meta.get("source_video_title", ""),
                 "generation_purpose": script_meta.get("generation_purpose", ""),
+                "fixed_comment_text": script_meta.get("fixed_comment", ""),
             })
         except Exception:
             pass
@@ -2856,6 +2922,11 @@ class YMM4AutoGui:
         path = os.path.join(meta_dir, "upload_record.json")
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(record, f, ensure_ascii=False, indent=2)
+        try:
+            from core.upload_records import upsert_upload_record
+            upsert_upload_record(record)
+        except Exception:
+            pass
         return path
 
     def _run_upload(self, mp4_path, title, description, tags, thumb, output_dir,

@@ -119,6 +119,7 @@ python gui.py
 ## 注意
 
 - `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
+- アップロード記録は `output/upload_records.json` に残します。`output/000_uploaded/` はアップロード済み生成物の保管場所なので、容量整理で削除しても運用上の台帳は残ります。
 - `output/000_backups/` は再生成時の退避先です。同一テーマは最新1世代だけ残し、アップロード成功後はそのテーマのバックアップを自動削除します。
 - `core/prompt_parts/local/` は個人用プロンプト差し替え欄です。Git管理外なので、別ジャンル担当者のネタ設定と混ざりません。
 - 初回セットアップではプロンプト設定を必ず確認します。食べ物用ならGit管理側の設定でそのまま動き、別ジャンルで使う人は必ず `local/` に差し替えファイルを置きます。
