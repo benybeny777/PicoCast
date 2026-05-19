@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 
-SCORE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "未計測": 0}
+SCORE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "未計測": 0, "対象外": -1}
 DURATION_STATUS_LABELS = {
     "ideal": "理想",
     "ok": "OK",
@@ -97,7 +97,51 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     subscribers_net = gained - lost
     like_rate = (likes / views * 100) if views > 0 else 0.0
 
-    # Rule 1: views == 0 はデータ未計測として別扱い
+    publish_status = str(item.get("publish_status") or "published")
+
+    # 非公開・限定公開 → 対象外
+    if publish_status in ("private", "unlisted", "unknown"):
+        result = dict(item)
+        result.update({
+            "title": item.get("title") or "",
+            "video_id": item.get("video_id") or "",
+            "published_at": item.get("published_at"),
+            "duration": _num(item.get("duration") or item.get("duration_sec"), None),
+            "duration_status": duration_status(item),
+            "video_type": video_type,
+            "publish_status": publish_status,
+            "analysis_status": "excluded",
+            "is_topic_exclusion_target": False,
+            "views": views, "impressions": impressions, "ctr": None,
+            "average_view_duration": avg_duration, "average_percentage_viewed": avg_percent,
+            "likes": likes, "like_rate": like_rate, "comments": comments,
+            "subscribers_gained": gained, "subscribers_lost": lost, "subscribers_net": subscribers_net,
+            "score": "対象外", "action": "対象外",
+        })
+        return result
+
+    # 予約投稿 → 重複除外対象だが分析対象外
+    if publish_status == "scheduled":
+        result = dict(item)
+        result.update({
+            "title": item.get("title") or "",
+            "video_id": item.get("video_id") or "",
+            "published_at": item.get("published_at"),
+            "duration": _num(item.get("duration") or item.get("duration_sec"), None),
+            "duration_status": duration_status(item),
+            "video_type": video_type,
+            "publish_status": publish_status,
+            "analysis_status": "scheduled",
+            "is_topic_exclusion_target": True,
+            "views": 0, "impressions": 0, "ctr": None,
+            "average_view_duration": 0, "average_percentage_viewed": 0,
+            "likes": 0, "like_rate": 0.0, "comments": 0,
+            "subscribers_gained": 0, "subscribers_lost": 0, "subscribers_net": 0,
+            "score": "未計測", "action": "予約中",
+        })
+        return result
+
+    # Rule 1: views == 0 はデータ待ち
     if views == 0:
         result = dict(item)
         result.update({
@@ -107,19 +151,14 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "duration": _num(item.get("duration") or item.get("duration_sec"), None),
             "duration_status": duration_status(item),
             "video_type": video_type,
-            "views": 0,
-            "impressions": 0,
-            "ctr": None,
-            "average_view_duration": 0,
-            "average_percentage_viewed": 0,
-            "likes": 0,
-            "like_rate": 0.0,
-            "comments": 0,
-            "subscribers_gained": gained,
-            "subscribers_lost": lost,
-            "subscribers_net": subscribers_net,
-            "score": "未計測",
-            "action": "データ待ち",
+            "publish_status": publish_status,
+            "analysis_status": "data_wait",
+            "is_topic_exclusion_target": True,
+            "views": 0, "impressions": 0, "ctr": None,
+            "average_view_duration": 0, "average_percentage_viewed": 0,
+            "likes": 0, "like_rate": 0.0, "comments": 0,
+            "subscribers_gained": gained, "subscribers_lost": lost, "subscribers_net": subscribers_net,
+            "score": "未計測", "action": "データ待ち",
         })
         return result
 
@@ -177,6 +216,9 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "duration": _num(item.get("duration") or item.get("duration_sec"), None),
         "duration_status": duration_status(item),
         "video_type": video_type,
+        "publish_status": publish_status,
+        "analysis_status": "analyzable",
+        "is_topic_exclusion_target": True,
         "views": views,
         "impressions": impressions,
         "ctr": None if ctr is None else ctr_value,
@@ -211,7 +253,9 @@ def format_duration(seconds) -> str:
 
 def to_tsv(items: list[dict[str, Any]]) -> str:
     cols = [
-        "title", "published_at", "video_type", "duration", "duration_status", "views", "impressions", "ctr",
+        "title", "published_at", "video_type", "duration", "duration_status",
+        "publish_status", "analysis_status",
+        "views", "impressions", "ctr",
         "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
         "comments", "subscribers_net", "score", "action",
     ]
@@ -235,8 +279,8 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5) -> st
         title = str(item.get("title") or "").strip()
         return title[:42] + ("..." if len(title) > 42 else "")
 
-    # 未計測（views=0）は集計から除外
-    scored = [item for item in items if item.get("score") != "未計測"]
+    # 実績ありのみ分析対象（予約中・データ待ち・対象外は除外）
+    scored = [item for item in items if item.get("analysis_status") == "analyzable"]
     strong = [
         item for item in scored
         if item.get("score") in ("S", "A") or _num(item.get("average_percentage_viewed")) >= 70

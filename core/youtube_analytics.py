@@ -55,9 +55,10 @@ def _chunks(values, size=50):
 
 def _video_metadata(youtube, video_ids):
     result = {}
+    now_utc = datetime.now(timezone.utc)
     for ids in _chunks(video_ids):
         response = youtube.videos().list(
-            part="snippet,contentDetails",
+            part="snippet,contentDetails,status",
             id=",".join(ids),
             maxResults=50,
         ).execute()
@@ -65,13 +66,30 @@ def _video_metadata(youtube, video_ids):
             vid = item.get("id")
             snippet = item.get("snippet", {})
             details = item.get("contentDetails", {})
+            status = item.get("status", {})
             duration = _parse_iso_duration(details.get("duration"))
-            title = snippet.get("title", "")
+            privacy = status.get("privacyStatus", "unknown")
+            publish_at_str = status.get("publishAt")
+
+            if privacy == "public":
+                publish_status = "published"
+            elif privacy == "private" and publish_at_str:
+                try:
+                    scheduled_dt = datetime.fromisoformat(publish_at_str.replace("Z", "+00:00"))
+                    publish_status = "scheduled" if scheduled_dt > now_utc else "published"
+                except Exception:
+                    publish_status = "private"
+            elif privacy == "unlisted":
+                publish_status = "unlisted"
+            else:
+                publish_status = privacy  # "private" / "unknown"
+
             result[vid] = {
-                "title": title,
+                "title": snippet.get("title", ""),
                 "published_at": snippet.get("publishedAt"),
                 "duration": duration,
                 "video_type": "Shorts" if duration is not None and duration <= 60 else "Long",
+                "publish_status": publish_status,
             }
     return result
 
@@ -187,6 +205,7 @@ def fetch_video_analytics(days=28):
             "published_at": m.get("published_at"),
             "duration": m.get("duration"),
             "video_type": m.get("video_type"),
+            "publish_status": m.get("publish_status", "published"),
             "views": data.get("views", 0),
             "impressions": data.get("impressions", 0),
             "ctr": ctr,

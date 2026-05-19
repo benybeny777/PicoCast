@@ -600,9 +600,27 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 | ShortLong | 61〜120秒 |
 | Long | 121秒以上 |
 
-スコアは `S / A / B / C / D / 未計測` の6段階です。
+各動画には `publish_status` と `analysis_status` が付与されます。
 
-- **views == 0**: `未計測 / データ待ち` として固定（ベーススコア計算なし）
+| publish_status | 意味 |
+|---|---|
+| published | 公開済み |
+| scheduled | 公開予約中 |
+| private | 非公開 |
+| unlisted | 限定公開 |
+
+| analysis_status | score | action | 重複除外対象 |
+|---|---|---|---|
+| analyzable | S〜D | 通常判定 | ✅ |
+| data_wait | 未計測 | データ待ち | ✅ |
+| scheduled | 未計測 | 予約中 | ✅ |
+| excluded | 対象外 | 対象外 | ❌ |
+
+- 公開予約中・データ待ちは **分析（横展開判定）には使わない** が、タイトル案生成の重複除外には使う
+- `build_performance_summary` は `analysis_status == "analyzable"` の動画のみ対象
+
+スコアは `S / A / B / C / D / 未計測 / 対象外` の7段階です。
+
 - **Shorts**: 平均視聴率・平均視聴時間でS〜D判定
 - **ShortLong**: Shortsより緩いしきい値でS〜D判定（Long扱いを避ける）
 - **Long**: CTR + 平均視聴率でS〜D判定
@@ -611,6 +629,8 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 
 - `subscribers_net >= 2` → スコアが B 未満なら B に引き上げ・action を `登録者増・改善候補` に変更
 - `like_rate >= 1.5%` かつ `score in (C, D)` → action を `テーマ有望・冒頭/構成改善` に変更
+
+TSVには `publish_status` / `analysis_status` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複を防止できます。
 
 YouTube Studio 側で予約動画を手動公開した場合:
 
