@@ -527,9 +527,11 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 - 直近の `output/analytics_score_*.tsv` がある場合、最大80件をプロンプトへ自動差し込み
 - 実績データがない場合は、実績根拠のない案を `新規開拓枠` として扱う指示を追加
-- 20案の表には `横展開元` / `実績根拠` / `冒頭1秒の一言` を含める
+- 20案の表には `優先度` / `型` / `横展開元` / `実績根拠` / `想定フック` / `冒頭1秒の一言` を含める
+- 勘違い破壊型・損回避型・日常の理由型・名前の罠型など、視聴者が自分ごと化しやすい攻略帳型タイトルを20案中5〜7案混ぜる
 - TOP5は、タイトル単体ではなく実績データを加味して選定
 - 実績根拠には、可能な限り `views`、`average_percentage_viewed`、`average_view_duration`、`subscribers_net`、`likes`、`comments` の数値を入れる
+- `analysis_status=data_wait` でも views / likes / like_rate / comments が強い動画は暫定横展開候補として扱う。ただし平均視聴率未取得のため、実績根拠には `暫定` と明記する
 - 既存食材は原則出さず、例外でも最大2案まで。TOP5には原則入れない
 - 同じ横展開元からの案は20案中最大4案、TOP5中最大2案まで
 
