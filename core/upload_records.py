@@ -70,30 +70,51 @@ def _norm_title(value: str) -> str:
     return value
 
 
+def _to_timestamp(value) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value.timestamp())
+    except Exception:
+        pass
+    try:
+        text = str(value).strip()
+        if not text:
+            return None
+        return int(datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp())
+    except Exception:
+        return None
+
+
 def find_upload_record(title: str | None = None, video_type: str | None = None, publish_at=None, tolerance_sec: int = 60):
     target_title = _norm_title(title or "")
     target_type = str(video_type or "").lower()
-    target_ts = None
-    if publish_at is not None:
-        try:
-            target_ts = int(publish_at.timestamp())
-        except Exception:
-            target_ts = None
+    target_ts = _to_timestamp(publish_at)
 
-    for record in load_upload_records():
+    records = load_upload_records()
+    if target_ts is not None:
+        best_match = None
+        best_delta = None
+        for record in records:
+            if target_type:
+                rec_type = str(record.get("video_type") or "").lower()
+                if rec_type and rec_type != target_type:
+                    continue
+            rec_ts = _to_timestamp(record.get("publish_at"))
+            if rec_ts is None:
+                continue
+            delta = abs(rec_ts - target_ts)
+            if delta <= tolerance_sec and (best_delta is None or delta < best_delta):
+                best_match = record
+                best_delta = delta
+        if best_match is not None:
+            return dict(best_match)
+
+    for record in records:
         if target_type:
             rec_type = str(record.get("video_type") or "").lower()
             if rec_type and rec_type != target_type:
                 continue
-        if target_ts is not None:
-            rec_publish = record.get("publish_at")
-            if rec_publish:
-                try:
-                    rec_dt = datetime.fromisoformat(str(rec_publish))
-                    if abs(int(rec_dt.timestamp()) - target_ts) <= tolerance_sec:
-                        return dict(record)
-                except Exception:
-                    pass
         if target_title and _norm_title(record.get("title") or "") == target_title:
             return dict(record)
     return None
