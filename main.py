@@ -885,6 +885,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         opening_model_parts.append(f"review:{llm_review.get('model')}")
     if llm_review and llm_review.get("rewrite_accepted_model"):
         opening_model_parts.append(f"rewrite:{llm_review.get('rewrite_accepted_model')}")
+    if not opening_model_parts:
+        opening_model_parts.append("review:local-rule")
     opening_model_text = f" / model {', '.join(opening_model_parts)}" if opening_model_parts else ""
     update_status(
         f"■■■ 冒頭スコア {final_score}点 / {final_opening.get('status')}{opening_model_text} ■■■\n"
@@ -945,9 +947,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         elif final_review:
             pre_score = int(final_review.get("final_score") or 0)
             pre_score_tag = "score_ok" if pre_score >= OPENING_SCORE_ABORT_THRESHOLD else "score_warn" if pre_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD else "score"
+            final_model = final_review.get("model")
+            final_model_text = f" / model {final_model}" if final_model else ""
             update_status(
                 f"■■■ ChatGPT生成前スコア {pre_score}点 "
-                f"/ publish_ok={final_review.get('publish_ok')} / risk={final_review.get('risk')} ■■■\n"
+                f"/ publish_ok={final_review.get('publish_ok')} / risk={final_review.get('risk')}{final_model_text} ■■■\n"
                 f"  保存先: {final_review_path}",
                 pre_score_tag,
             )

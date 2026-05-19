@@ -236,7 +236,7 @@ class YMM4AutoGui:
         script_prompt_btn = ttk.Button(top_frame, text="AI台本作成", command=self.copy_script_generation_prompt)
         script_prompt_btn.pack(side=tk.RIGHT)
         self._add_tooltip(script_prompt_btn, "既存タイトル重複を避ける台本生成プロンプトをクリップボードにコピーします。")
-        title_prompt_btn = ttk.Button(top_frame, text="AIタイトル案", width=12, command=self.copy_title_prompt)
+        title_prompt_btn = ttk.Button(top_frame, text="Shortsタイトル案", width=16, command=self.copy_title_prompt)
         title_prompt_btn.pack(side=tk.RIGHT, padx=(4, 0))
         self._add_tooltip(title_prompt_btn, "Shorts寄りの通常タイトル案プロンプトをコピーします。Longも混ざる場合があります。")
         long_title_prompt_btn = ttk.Button(top_frame, text="Longタイトル案", width=14, command=self.copy_long_title_prompt)
@@ -918,7 +918,9 @@ class YMM4AutoGui:
         warn_count = 0
         ng_count = 0
         ai_report = [
-            "以下の台本チェック結果をもとに、問題がある台本だけ修正してください。",
+            "以下の台本チェック結果をもとに、全台本を出力してください。",
+            "問題がある台本は修正し、問題がない台本は元の内容をそのまま出力してください。",
+            "一部の台本だけではなく、修正不要の台本も含めて全本分を返してください。",
             "",
             "修正方針:",
             "- Shortsは38〜50秒を理想、35〜55秒を許容にする",
@@ -926,7 +928,8 @@ class YMM4AutoGui:
             "- 冒頭スコアが低い台本は、冒頭1〜3セリフで食べ物名と意外性を強くする",
             "- 1セリフ15文字以内を守る",
             "- 台本全体の形式は元のフォーマットを維持する",
-            "- 問題がない台本は書き換えない",
+            "- 問題がない台本は書き換えず、そのまま再掲する",
+            "- 出力は台本ごとに分け、元の順番を維持する",
             "",
             "チェック結果:",
         ]
@@ -953,6 +956,11 @@ class YMM4AutoGui:
                     ai_report.append("")
                     ai_report.append(f"## 台本{idx}: {title}")
                     ai_report.append(f"- 動画形式: {'Shorts' if is_shorts else 'Long'}")
+                    ai_report.append("")
+                    ai_report.append("元台本:")
+                    ai_report.append("```text")
+                    ai_report.append(script.strip())
+                    ai_report.append("```")
 
                     self.log(f"{prefix}🤖 Ollama冒頭レビュー中: {title}")
                     local = local_opening_review(body_items, title, thumb_text, is_shorts)
@@ -974,7 +982,7 @@ class YMM4AutoGui:
                     opening_critical_errors = opening.get("critical_errors") or []
                     opening_tag = "score_ok" if opening_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if opening_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
                     opening_model = opening.get("model")
-                    opening_model_text = f" / model {opening_model}" if opening_model else ""
+                    opening_model_text = f" / model {opening_model or 'local-rule'}"
                     self.log(
                         f"{prefix}■■■ 冒頭LLMスコア {opening_score}点 / {opening_status}{opening_model_text} ■■■",
                         opening_tag,
@@ -1099,7 +1107,7 @@ class YMM4AutoGui:
                 opening_status = opening.get("status", "")
                 opening_critical_errors = opening.get("critical_errors") or []
                 opening_model = opening.get("model")
-                opening_model_text = f" / model {opening_model}" if opening_model else ""
+                opening_model_text = f" / model {opening_model or 'local-rule'}"
                 opening_tag = "score_ok" if opening_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if opening_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
                 self.log(
                     f"{prefix}■■■ 生成前冒頭スコア {opening_score}点 / {opening_status}{opening_model_text} ■■■",
@@ -1462,6 +1470,35 @@ class YMM4AutoGui:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
+    def _find_upload_record_for_schedule(self, title, video_type, publish_at):
+        from datetime import datetime
+        uploaded_dir = os.path.join("output", "000_uploaded")
+        if not os.path.isdir(uploaded_dir):
+            return None, None
+        target_ts = int(publish_at.timestamp())
+        for name in os.listdir(uploaded_dir):
+            output_dir = os.path.join(uploaded_dir, name)
+            if not os.path.isdir(output_dir):
+                continue
+            record, record_path = self._read_upload_record(output_dir)
+            if not record.get("video_id"):
+                continue
+            rec_type = str(record.get("video_type") or "").lower()
+            if rec_type and rec_type != video_type:
+                continue
+            rec_publish = record.get("publish_at")
+            if rec_publish:
+                try:
+                    rec_dt = datetime.fromisoformat(str(rec_publish))
+                    if abs(int(rec_dt.timestamp()) - target_ts) <= 60:
+                        return record, record_path
+                except Exception:
+                    pass
+            rec_title = self._strip_video_type_prefix(record.get("title") or self._folder_name_to_title(name))
+            if rec_title == self._strip_video_type_prefix(title):
+                return record, record_path
+        return None, None
+
     def _collect_uploaded_comment_candidates(self):
         uploaded_dir = os.path.join("output", "000_uploaded")
         if not os.path.isdir(uploaded_dir):
@@ -1674,7 +1711,9 @@ class YMM4AutoGui:
                     for item in resp.get("items", []):
                         status_by_id[item["id"]] = item
             except Exception as e:
-                self.log(f"  ⚠ 動画状態の確認に失敗。投稿時に個別判定します: {e}", "warning")
+                self.log(f"  ⚠ 動画状態の確認に失敗したため、固定コメント投稿を中止します: {e}", "warning")
+                self.log(f"💬 固定コメント投稿完了: 投稿 0 / スキップ {total} / 失敗 0", "warning")
+                return
 
             for idx, row in enumerate(rows, 1):
                 title = row["title"]
@@ -1741,7 +1780,7 @@ class YMM4AutoGui:
 
         ttk.Label(
             dialog,
-            text="投稿したコメントです。YouTube Studioで開いて、必要ならピン留めしてください。",
+            text="投稿したコメントです。動画を開いて内容を確認できます。",
             font=("Meiryo", 9),
         ).pack(anchor=tk.W, padx=12, pady=(10, 4))
 
@@ -1776,11 +1815,6 @@ class YMM4AutoGui:
             except Exception:
                 return None
 
-        def open_studio():
-            item = selected_link()
-            if item:
-                webbrowser.open(f"https://studio.youtube.com/video/{item['video_id']}/comments")
-
         def open_video():
             item = selected_link()
             if item:
@@ -1803,8 +1837,7 @@ class YMM4AutoGui:
         btns.pack(fill=tk.X, padx=12, pady=(4, 10))
         ttk.Label(btns, text=f"投稿済み {len(links)} 件", font=("Meiryo", 8)).pack(side=tk.LEFT)
         ttk.Button(btns, text="閉じる", command=dialog.destroy).pack(side=tk.RIGHT)
-        ttk.Button(btns, text="動画を開く", command=open_video).pack(side=tk.RIGHT, padx=(0, 8))
-        ttk.Button(btns, text="Studioコメントを開く", style="Accent.TButton", command=open_studio).pack(side=tk.RIGHT, padx=(0, 8))
+        ttk.Button(btns, text="動画を開く", style="Accent.TButton", command=open_video).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btns, text="ピン留め済みにする", command=mark_selected_pinned).pack(side=tk.RIGHT, padx=(0, 8))
 
     def open_analytics_window(self):
@@ -2034,7 +2067,7 @@ class YMM4AutoGui:
                 except ValueError:
                     continue
                 status = "済" if dt < now else "予定"
-                rows.append((dt, label, title.split("\n")[0], status))
+                rows.append((dt, label, title.split("\n")[0], status, vt, iso))
         rows.sort(key=lambda r: r[0])
 
         dialog = tk.Toplevel(self.root)
@@ -2068,10 +2101,20 @@ class YMM4AutoGui:
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
 
-        for dt, label, title, status in rows:
+        row_by_iid = {}
+        for idx, (dt, label, title, status, vt, iso) in enumerate(rows):
             dt_str = dt.strftime("%Y/%m/%d %H:%M")
             tag = "done" if status == "済" else "upcoming"
-            tree.insert("", tk.END, values=(dt_str, label, title, status), tags=(tag,))
+            iid = str(idx)
+            row_by_iid[iid] = {
+                "dt": dt,
+                "label": label,
+                "title": title,
+                "status": status,
+                "video_type": vt,
+                "iso": iso,
+            }
+            tree.insert("", tk.END, iid=iid, values=(dt_str, label, title, status), tags=(tag,))
 
         # 削除・手動公開済みボタン
         def delete_selected():
@@ -2132,6 +2175,175 @@ class YMM4AutoGui:
             self.refresh_history()
             self.log(f"✅ 手動公開済みとして処理しました: {len(sel)}件（履歴追記 {added}件）", "success")
 
+        def change_publish_time():
+            def allowed_schedule_hours(video_type, dt):
+                if video_type == "long":
+                    return [12, 21] if dt.weekday() in (5, 6) else [21]
+                return [7, 12, 19]
+
+            def allowed_schedule_label(video_type, dt):
+                hours = allowed_schedule_hours(video_type, dt)
+                return " / ".join(f"{h}:00" for h in hours)
+
+            sel = tree.selection()
+            if len(sel) != 1:
+                messagebox.showwarning("選択エラー", "公開予定を変更する動画を1件だけ選択してください。", parent=dialog)
+                return
+            row = row_by_iid.get(sel[0])
+            if not row:
+                return
+            if row["status"] != "予定":
+                messagebox.showwarning("変更不可", "過去のスケジュールは変更できません。", parent=dialog)
+                return
+
+            edit = tk.Toplevel(dialog)
+            edit.title("公開予定を変更")
+            edit.geometry("440x210")
+            edit.transient(dialog)
+            edit.grab_set()
+
+            ttk.Label(edit, text=row["title"], wraplength=380, font=("Meiryo", 9, "bold")).pack(anchor=tk.W, padx=12, pady=(12, 6))
+            ttk.Label(edit, text="新しい公開予定日時 (JST)").pack(anchor=tk.W, padx=12)
+            ttk.Label(
+                edit,
+                text="指定できる時刻: Shorts 7:00/12:00/19:00、Long 平日21:00・土日12:00/21:00",
+                font=("Meiryo", 8),
+                foreground="#636e72",
+                wraplength=380,
+            ).pack(anchor=tk.W, padx=12, pady=(2, 0))
+
+            picker = ttk.Frame(edit)
+            picker.pack(anchor=tk.W, padx=12, pady=(8, 8))
+            ttk.Label(picker, text="日付").pack(side=tk.LEFT)
+            date_values = [
+                (now.date() + timedelta(days=i)).strftime("%Y/%m/%d")
+                for i in range(90)
+            ]
+            date_var = tk.StringVar(value=row["dt"].strftime("%Y/%m/%d"))
+            date_combo = ttk.Combobox(picker, textvariable=date_var, values=date_values, state="readonly", width=12)
+            date_combo.pack(side=tk.LEFT, padx=(4, 12))
+            ttk.Label(picker, text="時間").pack(side=tk.LEFT)
+            time_var = tk.StringVar()
+            time_combo = ttk.Combobox(picker, textvariable=time_var, state="readonly", width=8)
+            time_combo.pack(side=tk.LEFT, padx=(4, 0))
+
+            def selected_date():
+                return datetime.strptime(date_var.get(), "%Y/%m/%d").date()
+
+            def refresh_time_values(*_):
+                date = selected_date()
+                sample_dt = datetime(date.year, date.month, date.day, 0, 0, 0, tzinfo=JST)
+                values = [f"{h:02d}:00" for h in allowed_schedule_hours(row["video_type"], sample_dt)]
+                time_combo.config(values=values)
+                current = time_var.get()
+                preferred = row["dt"].strftime("%H:%M") if date == row["dt"].date() else values[0]
+                time_var.set(current if current in values else preferred if preferred in values else values[0])
+
+            date_combo.bind("<<ComboboxSelected>>", refresh_time_values)
+            refresh_time_values()
+            if row["dt"].strftime("%H:%M") in time_combo.cget("values"):
+                time_var.set(row["dt"].strftime("%H:%M"))
+
+            def apply_change():
+                try:
+                    new_dt = datetime.strptime(f"{date_var.get()} {time_var.get()}", "%Y/%m/%d %H:%M").replace(tzinfo=JST)
+                except ValueError:
+                    messagebox.showerror("日時エラー", "日付と時間を選択してください。", parent=edit)
+                    return
+                if new_dt <= now + timedelta(minutes=5):
+                    messagebox.showerror("日時エラー", "現在時刻の5分後より先を指定してください。", parent=edit)
+                    return
+                allowed_hours = allowed_schedule_hours(row["video_type"], new_dt)
+                if new_dt.minute != 0 or new_dt.hour not in allowed_hours:
+                    messagebox.showerror(
+                        "予約枠エラー",
+                        f"この種別・曜日で指定できる時刻は {allowed_schedule_label(row['video_type'], new_dt)} だけです。",
+                        parent=edit,
+                    )
+                    return
+
+                from core.upload_scheduler import _load, _save, format_slot
+                schedules = {vt: _load(vt) for vt in ("shorts", "long")}
+                new_key = new_dt.isoformat()
+                vt = row["video_type"]
+                conflict_title = schedules[vt].get(new_key) if new_key != row["iso"] else None
+
+                record, record_path = self._find_upload_record_for_schedule(row["title"], vt, row["dt"])
+                if not record:
+                    messagebox.showerror("動画IDなし", "対応するupload_record.json/video_idが見つかりません。", parent=edit)
+                    return
+                video_id = record.get("video_id")
+                swap_record = None
+                swap_record_path = None
+                if conflict_title:
+                    swap_record, swap_record_path = self._find_upload_record_for_schedule(conflict_title, vt, new_dt)
+                    if not swap_record:
+                        messagebox.showerror(
+                            "入れ替え不可",
+                            "変更先の枠に既存動画がありますが、その動画のupload_record.json/video_idが見つかりません。",
+                            parent=edit,
+                        )
+                        return
+                    confirm_text = (
+                        "変更先の枠には既存動画があります。\n"
+                        "2本の公開予定を入れ替えますか？\n\n"
+                        f"移動する動画:\n{row['title']}\n{format_slot(row['dt'])} → {format_slot(new_dt)}\n\n"
+                        f"入れ替え先の動画:\n{conflict_title}\n{format_slot(new_dt)} → {format_slot(row['dt'])}"
+                    )
+                    if not messagebox.askyesno("公開予定を入れ替え", confirm_text, parent=edit):
+                        return
+                else:
+                    if not messagebox.askyesno(
+                        "公開予定を変更",
+                        f"YouTube側の公開予定も変更します。\n\n{row['title']}\n{format_slot(row['dt'])} → {format_slot(new_dt)}",
+                        parent=edit,
+                    ):
+                        return
+
+                def worker():
+                    from core.youtube_uploader import update_video_publish_time
+                    if conflict_title:
+                        ok_swap = update_video_publish_time(swap_record.get("video_id"), row["dt"], progress_callback=self.log)
+                        ok = update_video_publish_time(video_id, new_dt, progress_callback=self.log) if ok_swap else False
+                    else:
+                        ok_swap = True
+                        ok = update_video_publish_time(video_id, new_dt, progress_callback=self.log)
+
+                    def done():
+                        if not ok_swap or not ok:
+                            messagebox.showerror("変更失敗", "YouTube側の公開予定変更に失敗しました。ログを確認してください。", parent=edit)
+                            return
+                        title = schedules[vt].pop(row["iso"], row["title"])
+                        if conflict_title:
+                            schedules[vt][row["iso"]] = conflict_title
+                        schedules[vt][new_key] = title
+                        _save(schedules[vt], vt)
+                        record["publish_at"] = new_dt.isoformat()
+                        if conflict_title:
+                            swap_record["publish_at"] = row["dt"].isoformat()
+                        try:
+                            self._write_upload_record_data(record_path, record)
+                            if conflict_title:
+                                self._write_upload_record_data(swap_record_path, swap_record)
+                        except Exception as e:
+                            self.log(f"  ⚠ upload_record.json更新失敗: {e}", "warning")
+                        if conflict_title:
+                            self.log(f"✅ 公開予定を入れ替え: {row['title']} ⇄ {conflict_title}", "success")
+                        else:
+                            self.log(f"✅ 公開予定を変更: {row['title']} → {format_slot(new_dt)}", "success")
+                        edit.destroy()
+                        dialog.destroy()
+                        self.show_upload_schedule_dialog()
+
+                    self.root.after(0, done)
+
+                threading.Thread(target=worker, daemon=True).start()
+
+            btns2 = ttk.Frame(edit)
+            btns2.pack(fill=tk.X, padx=12, pady=(0, 10))
+            ttk.Button(btns2, text="キャンセル", command=edit.destroy).pack(side=tk.RIGHT)
+            ttk.Button(btns2, text="変更する", style="Accent.TButton", command=apply_change).pack(side=tk.RIGHT, padx=(0, 8))
+
         btn_frame = ttk.Frame(dialog)
         btn_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
         ttk.Label(btn_frame, text=f"合計 {len(rows)} 件  /  予定 {sum(1 for r in rows if r[3]=='予定')} 件  /  済 {sum(1 for r in rows if r[3]=='済')} 件",
@@ -2139,6 +2351,7 @@ class YMM4AutoGui:
         ttk.Button(btn_frame, text="閉じる", command=dialog.destroy).pack(side=tk.RIGHT)
         ttk.Button(btn_frame, text="選択を削除", command=delete_selected).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btn_frame, text="手動公開済みにする", command=mark_manual_published).pack(side=tk.RIGHT, padx=(0, 8))
+        ttk.Button(btn_frame, text="公開予定を変更", command=change_publish_time).pack(side=tk.RIGHT, padx=(0, 8))
 
     def _confirm_upload_schedule(self, rows):
         """rows: [(type_label, title, slot_str, score_label), ...] — True で確定、False でキャンセル。"""

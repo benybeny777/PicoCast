@@ -97,6 +97,46 @@ def post_comment(video_id: str, comment_text: str, progress_callback=None) -> st
         return None
 
 
+def update_video_publish_time(video_id: str, publish_at, progress_callback=None) -> bool:
+    """予約投稿済み動画の公開予定日時を変更する。publish_at は timezone 付き datetime 推奨。"""
+    def _log(msg):
+        if progress_callback:
+            progress_callback(msg)
+        else:
+            print(msg, flush=True)
+
+    try:
+        from datetime import datetime
+        publish_at_str = publish_at.isoformat() if isinstance(publish_at, datetime) else str(publish_at)
+        youtube = get_youtube_client()
+        current = youtube.videos().list(part="status", id=video_id).execute()
+        items = current.get("items", [])
+        if not items:
+            _log(f"  ⚠ 動画が見つかりません: {video_id}")
+            return False
+        status = items[0].get("status", {})
+        if status.get("privacyStatus") != "private":
+            _log(f"  ⚠ private動画ではないため予約変更できません: {status.get('privacyStatus')}")
+            return False
+
+        body = {
+            "id": video_id,
+            "status": {
+                "privacyStatus": "private",
+                "publishAt": publish_at_str,
+                "selfDeclaredMadeForKids": bool(status.get("selfDeclaredMadeForKids", False)),
+            },
+        }
+        youtube.videos().update(part="status", body=body).execute()
+        _log(f"  ✅ YouTube公開予定を変更: {publish_at_str}")
+        return True
+    except Exception as e:
+        _log(f"  ⚠ 公開予定変更エラー: {e}")
+        if "forbidden" in str(e).lower() or "403" in str(e):
+            _log("  💡 token.json を削除して再認証すると解決する場合があります")
+        return False
+
+
 def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
                  privacy="private", publish_at=None, progress_callback=None):
     """
