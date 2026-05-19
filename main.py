@@ -70,6 +70,34 @@ def _find_locking_process(path):
         pass
     return None
 
+
+def _cleanup_old_theme_backups(backup_base: str, safe_topic: str, keep: str | None = None, keep_count: int = 1) -> int:
+    """同一テーマのバックアップを新しい順に keep_count 件だけ残す。"""
+    if not backup_base or not safe_topic or not os.path.isdir(backup_base):
+        return 0
+    backup_base_abs = os.path.abspath(backup_base)
+    keep_abs = os.path.abspath(keep) if keep else None
+    prefix = f"{safe_topic}_"
+    candidates = []
+    for name in os.listdir(backup_base_abs):
+        path = os.path.abspath(os.path.join(backup_base_abs, name))
+        if not path.startswith(backup_base_abs + os.sep):
+            continue
+        if not os.path.isdir(path):
+            continue
+        if name == safe_topic or name.startswith(prefix):
+            candidates.append(path)
+    candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+    if keep_abs and keep_abs in candidates:
+        candidates.remove(keep_abs)
+        candidates.insert(0, keep_abs)
+    removed = 0
+    for path in candidates[keep_count:]:
+        shutil.rmtree(path)
+        removed += 1
+    return removed
+
+
 TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
 VOICE_TAIL_SAFETY_SEC = 0.5
 INTER_DIALOGUE_GAP_SEC = 0.2
@@ -649,6 +677,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             os.replace(theme_dir, backup_dir)
             _existing_theme_backup = backup_dir
             update_status(f"📦 既存フォルダをバックアップへ退避しました: {backup_dir}")
+            removed_old_backups = _cleanup_old_theme_backups(backup_base, safe_topic, keep=backup_dir, keep_count=1)
+            if removed_old_backups:
+                update_status(f"🧹 古い同一テーマのバックアップを削除しました: {removed_old_backups}件")
         except PermissionError as e:
             locker = _find_locking_process(theme_dir)
             locker_info = f"\nロック中のプロセス: {locker}" if locker else ""
