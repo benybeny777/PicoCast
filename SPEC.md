@@ -505,6 +505,14 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 初回クローン直後は `core/prompt_parts/` 側の食べ物用設定でそのまま動きます。別ジャンル担当者はGit管理ファイルを直接編集せず、自分の環境の `core/prompt_parts/local/` に差し替えファイルを置きます。
 
+AI編集者向けルール:
+
+- ネタ固有のプロンプト、既存食材リスト、別ジャンル用設定を編集する場合は、Git管理されている `core/prompt_parts/*.md` / `*.txt` を直接編集しない。
+- 必ず `core/prompt_parts/local/` の同名ファイルを編集する。
+- `local/` に同名ファイルがない場合は、`core/prompt_parts/` からコピーして作成してから編集する。
+- 例: `core/prompt_parts/title_used_foods_food.txt` を変えたい場合は、`core/prompt_parts/local/title_used_foods_food.txt` を編集する。
+- 共有サンプルを更新したい場合だけ、明示的に指示されたうえで `samples/prompt_parts/` または `core/prompt_parts/` を編集する。
+
 例:
 
 - `core/prompt_parts/local/title_used_foods_food.txt`
