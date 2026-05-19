@@ -77,15 +77,28 @@ def _video_metadata(youtube, video_ids):
 
 
 def _query_report(analytics, start_date, end_date, metrics):
-    return analytics.reports().query(
-        ids="channel==MINE",
-        startDate=start_date,
-        endDate=end_date,
-        metrics=",".join(metrics),
-        dimensions="video",
-        sort="-views",
-        maxResults=200,
-    ).execute()
+    all_rows = []
+    headers = None
+    start_index = 1
+    while True:
+        response = analytics.reports().query(
+            ids="channel==MINE",
+            startDate=start_date,
+            endDate=end_date,
+            metrics=",".join(metrics),
+            dimensions="video",
+            sort="-views",
+            maxResults=200,
+            startIndex=start_index,
+        ).execute()
+        if headers is None:
+            headers = response.get("columnHeaders", [])
+        rows = response.get("rows", [])
+        all_rows.extend(rows)
+        if len(rows) < 200:
+            break
+        start_index += 200
+    return {"columnHeaders": headers, "rows": all_rows}
 
 
 def fetch_video_analytics(days=28):
