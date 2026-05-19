@@ -1892,6 +1892,8 @@ class YMM4AutoGui:
         state = {
             "items": [],
             "days": 28,
+            "sort_col": None,
+            "sort_reverse": False,
         }
 
         top = ttk.Frame(win, padding=8)
@@ -1965,7 +1967,7 @@ class YMM4AutoGui:
             "action": 130,
         }
         for col in cols:
-            tree.heading(col, text=headings[col])
+            tree.heading(col, text=headings[col], command=lambda c=col: sort_by(c))
             tree.column(col, width=widths.get(col, 90), anchor=tk.W if col in ("title", "action") else tk.CENTER)
 
         tree.tag_configure("score_S", background="#fff3bf")
@@ -2001,6 +2003,56 @@ class YMM4AutoGui:
                 return dt.astimezone(jst).strftime("%Y/%m/%d %H:%M")
             except Exception:
                 return str(value)[:16]
+
+        def _sort_value(item, col):
+            from datetime import datetime
+            if col == "published_at":
+                value = item.get(col)
+                if not value:
+                    return 0
+                try:
+                    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    return 0
+            if col == "duration_status":
+                order = {"ideal": 5, "ok": 4, "ok_but_short": 3, "ok_but_long": 3, "warning": 2, "needs_review": 1}
+                return order.get(str(item.get(col) or ""), 0)
+            if col == "score":
+                order = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "未計測": 0, "対象外": -1}
+                return order.get(str(item.get(col) or ""), -2)
+            if col == "is_provisional":
+                return 1 if item.get(col) else 0
+            if col in {
+                "duration", "views", "impressions", "ctr", "average_view_duration",
+                "average_percentage_viewed", "likes", "like_rate", "comments", "subscribers_net",
+            }:
+                try:
+                    value = item.get(col)
+                    return float(value) if value not in (None, "") else -1
+                except Exception:
+                    return -1
+            return str(item.get(col) or "")
+
+        def _refresh_headings():
+            for col in cols:
+                label = headings[col]
+                if state["sort_col"] == col:
+                    label += " ▼" if state["sort_reverse"] else " ▲"
+                tree.heading(col, text=label, command=lambda c=col: sort_by(c))
+
+        def sort_by(col):
+            if state["sort_col"] == col:
+                state["sort_reverse"] = not state["sort_reverse"]
+            else:
+                state["sort_col"] = col
+                state["sort_reverse"] = col in {
+                    "published_at", "duration", "views", "impressions", "ctr",
+                    "average_view_duration", "average_percentage_viewed", "likes",
+                    "like_rate", "comments", "subscribers_net", "score",
+                }
+            state["items"].sort(key=lambda item: _sort_value(item, col), reverse=state["sort_reverse"])
+            _refresh_headings()
+            render()
 
         def render():
             tree.delete(*tree.get_children())
