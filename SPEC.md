@@ -657,6 +657,13 @@ YouTube Studio 側で予約動画を手動公開した場合:
 
 この操作でYouTube側の `publishAt`、アプリ側の `upload_schedule_*.json`、該当履歴の `upload_record.json` をまとめて更新します。対象動画は `output/000_uploaded/` 内の `upload_record.json` に `video_id` が残っている必要があります。変更先は既存のアップロード時刻ルールに限定します。Shortsは `7:00 / 12:00 / 19:00`、Longは平日 `21:00`、土日は `12:00 / 21:00` のみ指定できます。変更先の枠に同じ種別の既存予定がある場合は、2本の公開予定を入れ替えます。
 
+予約スロットを前詰めしたい場合:
+
+1. `📅 スケジュール` を開く
+2. `スロット詰め直し` を押す
+
+未来の予約スロット全件を現在から最速の空きスロットに詰め直します。`upload_record.json` の `publish_at` を使って video_id を特定し、YouTube側の公開予定時刻・`upload_schedule_*.json`・`upload_record.json` を一括更新します。video_id が見つからない場合はスケジュールJSONのみ更新してログに警告を出します。処理は `core/upload_scheduler.py` の `rebalance_slots()` が担います。
+
 ---
 
 ## 台本作成ルール
