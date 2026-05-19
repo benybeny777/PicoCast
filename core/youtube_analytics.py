@@ -53,6 +53,41 @@ def _chunks(values, size=50):
         yield values[i:i + size]
 
 
+def _local_upload_records_by_video_id() -> dict:
+    records = {}
+    uploaded_dir = os.path.join(ROOT_DIR, "output", "000_uploaded")
+    if not os.path.isdir(uploaded_dir):
+        return records
+    for root, _dirs, files in os.walk(uploaded_dir):
+        if "upload_record.json" not in files:
+            continue
+        path = os.path.join(root, "upload_record.json")
+        try:
+            import json
+            with open(path, "r", encoding="utf-8") as f:
+                record = json.load(f)
+        except Exception:
+            continue
+        video_id = record.get("video_id")
+        if video_id:
+            script_path = os.path.join(os.path.dirname(root), "script.txt") if os.path.basename(root) == "_meta" else os.path.join(root, "script.txt")
+            if os.path.exists(script_path):
+                try:
+                    from core.parser import ScriptParser
+                    script_meta = {
+                        it["type"]: it["text"]
+                        for it in ScriptParser.parse(script_path)
+                        if it["type"] in ScriptParser.META_TYPES
+                    }
+                    record.setdefault("generation_kind", script_meta.get("generation_kind", ""))
+                    record.setdefault("source_video_title", script_meta.get("source_video_title", ""))
+                    record.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
+                except Exception:
+                    pass
+            records[video_id] = record
+    return records
+
+
 def _video_metadata(youtube, video_ids):
     result = {}
     now_utc = datetime.now(timezone.utc)
@@ -197,11 +232,13 @@ def fetch_video_analytics(days=28):
     # analyticsにあるがall_idsにないIDも含める（削除済み等の例外対応）
     combined_ids = list(dict.fromkeys(all_ids + list(analytics_map.keys())))
     meta = _video_metadata(youtube, combined_ids)
+    local_records = _local_upload_records_by_video_id()
 
     items = []
     for video_id in combined_ids:
         m = meta.get(video_id, {})
         data = analytics_map.get(video_id, {})
+        local_record = local_records.get(video_id, {})
         analytics_available = video_id in analytics_map
         ctr = data.get("impressionClickThroughRate")
         items.append({
@@ -221,6 +258,9 @@ def fetch_video_analytics(days=28):
             "comments": data.get("comments", m.get("stats_comments", 0)),
             "subscribers_gained": data.get("subscribersGained", 0),
             "subscribers_lost": data.get("subscribersLost", 0),
+            "generation_kind": local_record.get("generation_kind", ""),
+            "source_video_title": local_record.get("source_video_title", ""),
+            "generation_purpose": local_record.get("generation_purpose", ""),
         })
 
     summary = {

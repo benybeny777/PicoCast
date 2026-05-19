@@ -1050,6 +1050,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             lines += ["【説明文】", meta["description"], ""]
         if "tags" in meta:
             lines += ["【タグ】", meta["tags"], ""]
+        if "generation_kind" in meta:
+            lines += ["【生成区分】", meta["generation_kind"], ""]
+        if "source_video_title" in meta:
+            lines += ["【元動画】", meta["source_video_title"], ""]
+        if "generation_purpose" in meta:
+            lines += ["【目的】", meta["generation_purpose"], ""]
         if "thumbnail" in meta:
             lines += ["【サムネイルプロンプト】", meta["thumbnail"], ""]
         # 台本に固定コメントがなければAIで生成

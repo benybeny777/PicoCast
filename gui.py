@@ -1912,6 +1912,7 @@ class YMM4AutoGui:
             "title", "published_at", "video_type", "duration", "duration_status", "analysis_status", "is_provisional", "views", "impressions", "ctr",
             "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
             "comments", "subscribers_net", "score", "action",
+            "generation_kind", "source_video_title", "generation_purpose",
         )
         headings = {
             "title": "タイトル",
@@ -1932,6 +1933,9 @@ class YMM4AutoGui:
             "subscribers_net": "登録者増減",
             "score": "評価",
             "action": "対応",
+            "generation_kind": "生成区分",
+            "source_video_title": "元動画",
+            "generation_purpose": "目的",
         }
 
         frame = ttk.Frame(win, padding=(8, 0, 8, 8))
@@ -1965,10 +1969,13 @@ class YMM4AutoGui:
             "subscribers_net": 90,
             "score": 55,
             "action": 130,
+            "generation_kind": 90,
+            "source_video_title": 220,
+            "generation_purpose": 160,
         }
         for col in cols:
             tree.heading(col, text=headings[col], command=lambda c=col: sort_by(c))
-            tree.column(col, width=widths.get(col, 90), anchor=tk.W if col in ("title", "action") else tk.CENTER)
+            tree.column(col, width=widths.get(col, 90), anchor=tk.W if col in ("title", "action", "source_video_title", "generation_purpose") else tk.CENTER)
 
         tree.tag_configure("score_S", background="#fff3bf")
         tree.tag_configure("score_A", background="#d3f9d8")
@@ -2076,6 +2083,9 @@ class YMM4AutoGui:
                     item.get("subscribers_net", 0),
                     item.get("score", ""),
                     item.get("action", ""),
+                    item.get("generation_kind", ""),
+                    item.get("source_video_title", ""),
+                    item.get("generation_purpose", ""),
                 )
                 tree.insert("", tk.END, values=values, tags=(f"score_{item.get('score', 'D')}",))
 
@@ -2828,6 +2838,20 @@ class YMM4AutoGui:
             "risk": final.get("risk") if not final.get("skipped") and not final.get("error") else None,
             "must_fix": (final.get("must_fix") or []) if not final.get("skipped") and not final.get("error") else [],
         }
+        try:
+            parser_items = ScriptParser.parse(os.path.join(output_dir, "script.txt"))
+            script_meta = {
+                it["type"]: it["text"]
+                for it in parser_items
+                if it["type"] in ScriptParser.META_TYPES
+            }
+            record.update({
+                "generation_kind": script_meta.get("generation_kind", ""),
+                "source_video_title": script_meta.get("source_video_title", ""),
+                "generation_purpose": script_meta.get("generation_purpose", ""),
+            })
+        except Exception:
+            pass
         os.makedirs(meta_dir, exist_ok=True)
         path = os.path.join(meta_dir, "upload_record.json")
         with open(path, "w", encoding="utf-8") as f:
@@ -2951,6 +2975,9 @@ class YMM4AutoGui:
             ("thumbnail_text", "【サムネ文字】"),
             ("description", "【説明文】"),
             ("tags", "【タグ】"),
+            ("generation_kind", "【生成区分】"),
+            ("source_video_title", "【元動画】"),
+            ("generation_purpose", "【目的】"),
             ("thumbnail", "【サムネイルプロンプト】"),
             ("fixed_comment", "【固定コメント】"),
         ]
@@ -2980,6 +3007,9 @@ class YMM4AutoGui:
                 data.setdefault("thumbnail_text", script_meta.get("thumbnail_text", ""))
                 data.setdefault("description", script_meta.get("description", ""))
                 data.setdefault("tags", script_meta.get("tags", ""))
+                data.setdefault("generation_kind", script_meta.get("generation_kind", ""))
+                data.setdefault("source_video_title", script_meta.get("source_video_title", ""))
+                data.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
                 data.setdefault("thumbnail", script_meta.get("thumbnail", ""))
                 data.setdefault("fixed_comment", script_meta.get("fixed_comment", ""))
             except Exception:

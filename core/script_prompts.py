@@ -3,7 +3,7 @@
 from pathlib import Path
 
 TITLE_ANALYTICS_TSV_HEADER = (
-    "title\tpublished_at\tvideo_type\tduration\tduration_status\tpublish_status\tanalysis_status\tis_provisional\tviews\timpressions\tctr\t"
+    "title\tpublished_at\tvideo_type\tduration\tduration_status\tpublish_status\tanalysis_status\tis_provisional\tgeneration_kind\tsource_video_title\tgeneration_purpose\tviews\timpressions\tctr\t"
     "average_view_duration\taverage_percentage_viewed\tlikes\tlike_rate\tcomments\tsubscribers_net\tscore\taction"
 )
 
@@ -21,6 +21,9 @@ METADATA_FORMAT = """\
 サムネ文字: （サムネイル用テキスト。Shortsは4〜10文字程度の一撃ワード。Longは8〜16文字を基本に最大20文字まで、1〜2行まで。抽象ワードだけは禁止し、食材名・料理名・飲み物名＋逆転ワードを基本にする。タイトルと同じ文章にしない）
 説明文: （YouTube概要欄にそのまま使える文章。検索キーワードを含む150文字程度。【絶対禁止】#を含むハッシュタグは一切書かない（固定ハッシュタグは後処理で自動付与）。VOICEVOXクレジット・使用音声・チャンネル登録URLは書かない）
 タグ: （YouTubeタグ欄にそのまま使えるカンマ区切り。必ず先頭3つを「ずんだもん,ゆっくり解説,VOICEVOX」にする。合計10〜15個）
+生成区分: （任意。「新規」「横展開」「品質改善版」「再挑戦」のいずれか。実績データや既存動画から横展開・改善して作る場合は必ず記載）
+元動画: （任意。横展開元・品質改善元の動画タイトル。新規の場合は空でよい）
+目的: （任意。「薬だった飲み物系」「毒扱い系」「冒頭改善」「サムネ改善」など、横展開や改善の狙いを短く記載）
 固定コメント: （省略可。動画の主テーマに関連した視聴者への問いかけ。2〜3文以内。絵文字を適度に使う。【重要】アウトロCTAでキャラが「コメントで教えて！」と呼びかける内容と連動させること。例:「昔と今、どっちが食べたい？🍫 コメントで教えてね！」）
 """
 
