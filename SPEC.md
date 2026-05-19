@@ -588,7 +588,7 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 Analytics画面には `高評価率` を表示します。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、再生数上位・平均視聴率上位・高評価率上位をまとめた実績サマリーを付けます。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
 
-YouTube Analytics APIは1リクエスト最大200件のため、200件を超える場合は `startIndex` を使ったページネーションで全件取得します。
+Analytics APIは期間内に再生のある動画しか返さないため、YouTube Data API でチャンネルのアップロード済み全動画を取得してマージします。期間外の動画は再生数0で一覧に表示されます。200件を超える場合は `startIndex` によるページネーションで全件取得します。
 
 YouTube Studio 側で予約動画を手動公開した場合:
 
