@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 
-SCORE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1}
+SCORE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "未計測": 0}
 DURATION_STATUS_LABELS = {
     "ideal": "理想",
     "ok": "OK",
@@ -30,16 +30,19 @@ def _int(value, default=0):
 
 
 def detect_video_type(item: dict[str, Any]) -> str:
-    video_type = str(item.get("video_type") or "").strip()
-    if video_type.lower() in ("shorts", "short", "ショート"):
-        return "Shorts"
-    if video_type.lower() in ("long", "ロング"):
+    # duration が取得できている場合は秒数で分類（API側の video_type より優先）
+    duration = _num(item.get("duration") or item.get("duration_sec"), None)
+    if duration is not None:
+        if duration <= 60:
+            return "Shorts"
+        if duration <= 120:
+            return "ShortLong"
         return "Long"
 
-    duration = _num(item.get("duration") or item.get("duration_sec"), None)
-    if duration is not None and duration <= 60:
+    # duration なし → フィールドとタイトルで判定
+    video_type = str(item.get("video_type") or "").strip().lower()
+    if video_type in ("shorts", "short", "ショート"):
         return "Shorts"
-
     title = str(item.get("title") or "")
     if "[Shorts]" in title or "#shorts" in title.lower() or "ショート" in title:
         return "Shorts"
@@ -61,6 +64,13 @@ def duration_status(item: dict[str, Any]) -> str:
         if 32 <= duration < 35 or 55 < duration <= 58:
             return "warning"
         return "needs_review"
+    if video_type == "ShortLong":
+        if 90 <= duration <= 120:
+            return "ideal"
+        if 61 <= duration < 90:
+            return "ok_but_short"
+        return "needs_review"
+    # Long
     if 300 <= duration <= 600:
         return "ideal"
     if 270 <= duration < 300 or 600 < duration <= 660:
@@ -84,8 +94,36 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     comments = _int(item.get("comments"))
     gained = _int(item.get("subscribers_gained"))
     lost = _int(item.get("subscribers_lost"))
+    subscribers_net = gained - lost
     like_rate = (likes / views * 100) if views > 0 else 0.0
 
+    # Rule 1: views == 0 はデータ未計測として別扱い
+    if views == 0:
+        result = dict(item)
+        result.update({
+            "title": item.get("title") or "",
+            "video_id": item.get("video_id") or "",
+            "published_at": item.get("published_at"),
+            "duration": _num(item.get("duration") or item.get("duration_sec"), None),
+            "duration_status": duration_status(item),
+            "video_type": video_type,
+            "views": 0,
+            "impressions": 0,
+            "ctr": None,
+            "average_view_duration": 0,
+            "average_percentage_viewed": 0,
+            "likes": 0,
+            "like_rate": 0.0,
+            "comments": 0,
+            "subscribers_gained": gained,
+            "subscribers_lost": lost,
+            "subscribers_net": subscribers_net,
+            "score": "未計測",
+            "action": "データ待ち",
+        })
+        return result
+
+    # Rule 2: 動画種別ごとのベーススコア
     if video_type == "Shorts":
         if avg_percent >= 90 or avg_duration >= 45:
             score, action = "S", "横展開"
@@ -97,7 +135,20 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             score, action = "C", "弱い"
         else:
             score, action = "D", "要見直し"
+    elif video_type == "ShortLong":
+        # 61〜120秒の短尺Long。Shortsより長いのでしきい値を緩める
+        if avg_percent >= 75 or avg_duration >= 70:
+            score, action = "S", "横展開"
+        elif avg_percent >= 60 or avg_duration >= 50:
+            score, action = "A", "継続"
+        elif avg_percent >= 40 or avg_duration >= 35:
+            score, action = "B", "改善して再挑戦"
+        elif avg_percent >= 25:
+            score, action = "C", "弱い"
+        else:
+            score, action = "D", "要見直し"
     else:
+        # Long (180秒+)
         if ctr_value >= 8 and avg_percent >= 40:
             score, action = "S", "横展開"
         elif ctr_value >= 5 and avg_percent >= 30:
@@ -108,6 +159,15 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             score, action = "C", "サムネ/冒頭改善"
         else:
             score, action = "D", "要見直し"
+
+    # Rule 3: 登録者純増 >= 2 は最低でも B
+    if subscribers_net >= 2 and SCORE_ORDER.get(score, 0) < SCORE_ORDER["B"]:
+        score = "B"
+        action = "登録者増・改善候補"
+
+    # Rule 4: like率 >= 1.5% かつ視聴率が低い → テーマは有望
+    if like_rate >= 1.5 and score in ("C", "D"):
+        action = "テーマ有望・冒頭/構成改善"
 
     result = dict(item)
     result.update({
@@ -127,7 +187,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "comments": comments,
         "subscribers_gained": gained,
         "subscribers_lost": lost,
-        "subscribers_net": gained - lost,
+        "subscribers_net": subscribers_net,
         "score": score,
         "action": action,
     })
@@ -175,7 +235,8 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5) -> st
         title = str(item.get("title") or "").strip()
         return title[:42] + ("..." if len(title) > 42 else "")
 
-    scored = list(items)
+    # 未計測（views=0）は集計から除外
+    scored = [item for item in items if item.get("score") != "未計測"]
     strong = [
         item for item in scored
         if item.get("score") in ("S", "A") or _num(item.get("average_percentage_viewed")) >= 70
