@@ -27,7 +27,14 @@
 1. VOICEVOX をインストール
 2. YukkuriMovieMaker v4 をインストール
 3. APIキーとOAuth設定を用意
-4. Python 依存を入れる
+4. 別ジャンルで使う場合だけ、個人用プロンプト設定を `core/prompt_parts/local/` に置く
+   - 食べ物用のまま使う場合は不要です
+   - 食べ物用設定を復元したい場合:
+     ```powershell
+     New-Item -ItemType Directory -Force -Path core\prompt_parts\local
+     Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
+     ```
+5. Python 依存を入れる
 
 ```bash
 pip install requests google-genai python-dotenv pywinauto Pillow google-api-python-client google-auth-oauthlib

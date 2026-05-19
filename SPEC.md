@@ -446,6 +446,19 @@ output/upload_schedule_long.json
 
 ## 操作手順
 
+### 初回セットアップ時のプロンプト設定
+
+初回クローン直後は、Git管理されている食べ物用プロンプト設定でそのまま動きます。
+
+別ジャンルで使う場合だけ、Git管理ファイルを直接編集せず、`core/prompt_parts/local/` に同名の差し替えファイルを置きます。`local/` はGit管理外なので、他人の設定を上書きしません。
+
+食べ物用設定を復元する場合:
+
+```powershell
+New-Item -ItemType Directory -Force -Path core\prompt_parts\local
+Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
+```
+
 ### 生成
 
 1. `python gui.py` で起動
