@@ -55,13 +55,13 @@ def duration_status(item: dict[str, Any]) -> str:
         return ""
     video_type = detect_video_type(item)
     if video_type == "Shorts":
-        if 38 <= duration <= 50:
+        if 42 <= duration <= 48:
             return "ideal"
-        if 35 <= duration < 38:
+        if 39 <= duration < 42:
             return "ok_but_short"
-        if 50 < duration <= 55:
+        if 48 < duration <= 50:
             return "ok_but_long"
-        if 32 <= duration < 35 or 55 < duration <= 58:
+        if 51 <= duration <= 52:
             return "warning"
         return "needs_review"
     if video_type == "ShortLong":
@@ -337,6 +337,7 @@ def to_tsv(items: list[dict[str, Any]]) -> str:
         "title", "published_at", "video_type", "duration", "duration_status",
         "publish_status", "analysis_status", "is_provisional",
         "generation_kind", "source_video_title", "generation_purpose",
+        "character_pattern", "genre_group",
         "views", "impressions", "ctr",
         "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
         "comments", "subscribers_net", "score", "action",

@@ -15,6 +15,8 @@ class ScriptParser:
     _generation_kind_re = re.compile(r'^(?:生成区分|GenerationKind)[:：](.*)$', re.IGNORECASE)
     _source_video_re = re.compile(r'^(?:元動画|派生元|SourceVideo)[:：](.*)$', re.IGNORECASE)
     _generation_purpose_re = re.compile(r'^(?:目的|生成目的|GenerationPurpose)[:：](.*)$', re.IGNORECASE)
+    _character_pattern_re = re.compile(r'^(?:キャラパターン|CharacterPattern)[:：](.*)$', re.IGNORECASE)
+    _genre_group_re = re.compile(r'^(?:ジャンル|Genre(?:Group)?)[:：](.*)$', re.IGNORECASE)
     _chapter_re = re.compile(r'^(?:チャプター|チャプター一覧|Chapter(?:s|List)?)[:：]', re.IGNORECASE)
     _bracket_meta_re = re.compile(
         r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?|固定コメント|PinnedComment|生成区分|GenerationKind|元動画|派生元|SourceVideo|目的|生成目的|GenerationPurpose)\s*】\s*(.*)$',
@@ -43,6 +45,11 @@ class ScriptParser:
         "目的": "generation_purpose",
         "生成目的": "generation_purpose",
         "generationpurpose": "generation_purpose",
+        "キャラパターン": "character_pattern",
+        "characterpattern": "character_pattern",
+        "ジャンル": "genre_group",
+        "genre": "genre_group",
+        "genregroup": "genre_group",
     }
     _ignore_patterns = [
         re.compile(r'^```.*$'),
@@ -60,6 +67,7 @@ class ScriptParser:
         "thumbnail", "video_title", "description", "tags",
         "video_format", "thumbnail_text", "fixed_comment",
         "generation_kind", "source_video_title", "generation_purpose",
+        "character_pattern", "genre_group",
     })
 
     @staticmethod
@@ -78,6 +86,8 @@ class ScriptParser:
         generation_kind_re = ScriptParser._generation_kind_re
         source_video_re = ScriptParser._source_video_re
         generation_purpose_re = ScriptParser._generation_purpose_re
+        character_pattern_re = ScriptParser._character_pattern_re
+        genre_group_re = ScriptParser._genre_group_re
         bracket_meta_re = ScriptParser._bracket_meta_re
         ignore_patterns = ScriptParser._ignore_patterns
 
@@ -109,7 +119,7 @@ class ScriptParser:
 
                 # Continuation of metadata (description=multi-line, others=next-line-only)
                 if last_meta:
-                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, bracket_meta_re])
+                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
                     is_ignore = any(p.match(line) for p in ignore_patterns)
                     if not is_keyword and not is_dialogue and (not is_ignore or last_meta["type"] == "description"):
@@ -159,6 +169,8 @@ class ScriptParser:
                     (generation_kind_re, "generation_kind"),
                     (source_video_re, "source_video_title"),
                     (generation_purpose_re, "generation_purpose"),
+                    (character_pattern_re, "character_pattern"),
+                    (genre_group_re, "genre_group"),
                 ]:
                     m = meta_re.match(line)
                     if m:

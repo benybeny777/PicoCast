@@ -148,6 +148,8 @@ def migrate_from_uploaded_dir() -> int:
                 record.setdefault("generation_kind", script_meta.get("generation_kind", ""))
                 record.setdefault("source_video_title", script_meta.get("source_video_title", ""))
                 record.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
+                record.setdefault("character_pattern", script_meta.get("character_pattern", ""))
+                record.setdefault("genre_group", script_meta.get("genre_group", ""))
                 record.setdefault("fixed_comment_text", script_meta.get("fixed_comment", ""))
             except Exception:
                 pass

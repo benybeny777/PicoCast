@@ -90,6 +90,8 @@ def _local_upload_records_by_video_id() -> dict:
                     record.setdefault("generation_kind", script_meta.get("generation_kind", ""))
                     record.setdefault("source_video_title", script_meta.get("source_video_title", ""))
                     record.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
+                    record.setdefault("character_pattern", script_meta.get("character_pattern", ""))
+                    record.setdefault("genre_group", script_meta.get("genre_group", ""))
                 except Exception:
                     pass
             merged = dict(records.get(video_id, {}))
@@ -271,6 +273,8 @@ def fetch_video_analytics(days=28):
             "generation_kind": local_record.get("generation_kind", ""),
             "source_video_title": local_record.get("source_video_title", ""),
             "generation_purpose": local_record.get("generation_purpose", ""),
+            "character_pattern": local_record.get("character_pattern", ""),
+            "genre_group": local_record.get("genre_group", ""),
         })
 
     summary = {

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 TITLE_ANALYTICS_TSV_HEADER = (
-    "title\tpublished_at\tvideo_type\tduration\tduration_status\tpublish_status\tanalysis_status\tis_provisional\tgeneration_kind\tsource_video_title\tgeneration_purpose\tviews\timpressions\tctr\t"
+    "title\tpublished_at\tvideo_type\tduration\tduration_status\tpublish_status\tanalysis_status\tis_provisional\tgeneration_kind\tsource_video_title\tgeneration_purpose\tcharacter_pattern\tgenre_group\tviews\timpressions\tctr\t"
     "average_view_duration\taverage_percentage_viewed\tlikes\tlike_rate\tcomments\tsubscribers_net\tscore\taction"
 )
 

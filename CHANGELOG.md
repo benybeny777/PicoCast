@@ -12,6 +12,28 @@
 
 ---
 
+## 2026-05-20（続き5）
+
+### キャラ設定強化・冒頭パターン・尺判定更新・character_pattern/genre_group 追加
+
+**台本生成プロンプト** (`core/script_generation_prompt.txt` および `local/` 版):
+- キャラクタールール更新: ずんだもん=視聴者代表（驚き・疑問役）、めたん=食べ物裏側オタク気質として定義を追加
+- 新セクション「冒頭話者パターン」: 外食チェーン/コンビニ/ファストフード/ファミレス/スイーツ/商品開発ではめたん冒頭を許可
+- 新セクション「ギャグ制限ルール」: ギャグ・ツッコミは最大2回、冒頭の引き or ラストのオチのみ
+- Shorts尺ルール更新: 理想42-48秒 / 許容39-50秒 / 51秒以上は警告 / 53秒以上は出し直し
+- タイトルルール強化: 伝統/由来/歴史/本当の理由を避けるワードとして追記、感情動詞型（嫌われていた/出せなかった等）を追加
+- フォーマットにキャラパターン/ジャンルフィールドを追加（local/はGit管理外）
+
+**コード変更**:
+- `core/parser.py`: キャラパターン/ジャンル の正規表現・META_TYPES・パース処理追加
+- `core/analytics_score.py`: Shorts尺判定を42-48s理想/39-50s許容/51-52s警告/53s+needs_reviewに更新。to_tsvにcharacter_pattern/genre_group列追加
+- `core/opening_quality.py`: 尺判定閾値を同様に更新。ChatGPT事前チェックの停止閾値を39s未満または53s超に変更
+- `core/script_prompts.py`: TSVヘッダーにcharacter_pattern/genre_group追加
+- `core/upload_records.py`, `core/youtube_analytics.py`: character_pattern/genre_group の記録・参照を追加
+- `gui.py`: アップロード時・metadata.txt読み込み時にcharacter_pattern/genre_group保存。アナリティクスウィンドウにキャラパターン/ジャンル列追加。スケジュールウィンドウに生成区分/キャラ列追加
+
+---
+
 ## 2026-05-20（続き4）
 
 ### 台本生成プロンプト: 冒頭3秒ルール（知的好奇心型）追加

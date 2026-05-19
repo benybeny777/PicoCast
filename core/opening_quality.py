@@ -539,21 +539,21 @@ def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review
 
 def duration_review(total_sec: float, is_shorts: bool) -> dict[str, Any]:
     if is_shorts:
-        if 38 <= total_sec <= 50:
+        if 42 <= total_sec <= 48:
             status = "ideal"
-        elif 35 <= total_sec < 38:
+        elif 39 <= total_sec < 42:
             status = "ok_but_short"
-        elif 50 < total_sec <= 55:
+        elif 48 < total_sec <= 50:
             status = "ok_but_long"
-        elif 32 <= total_sec < 35 or 55 < total_sec <= 58:
+        elif 51 <= total_sec <= 52:
             status = "warning"
         else:
             status = "needs_review"
         return {
             "video_type": "Shorts",
             "seconds": round(total_sec, 2),
-            "ideal": "38-50秒",
-            "acceptable": "35-55秒",
+            "ideal": "42-48秒",
+            "acceptable": "39-50秒",
             "status": status,
         }
     if 270 <= total_sec <= 600:
@@ -664,7 +664,7 @@ Check:
 - serious mismatch only
 
 Stop the pipeline only for must_fix-level problems:
-- estimated Shorts duration under 35 seconds or over 55 seconds
+- estimated Shorts duration under 39 seconds or over 52 seconds (53s or more is error-level)
 - Shorts dialogue count 21 or more
 - first dialogue lacks the food name
 - first dialogue is incomplete or split mid-phrase

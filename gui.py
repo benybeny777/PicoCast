@@ -1971,6 +1971,7 @@ class YMM4AutoGui:
             "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
             "comments", "subscribers_net", "score", "action",
             "generation_kind", "source_video_title", "generation_purpose",
+            "character_pattern", "genre_group",
         )
         headings = {
             "title": "タイトル",
@@ -1994,6 +1995,8 @@ class YMM4AutoGui:
             "generation_kind": "生成区分",
             "source_video_title": "元動画",
             "generation_purpose": "目的",
+            "character_pattern": "キャラパターン",
+            "genre_group": "ジャンル",
         }
 
         frame = ttk.Frame(win, padding=(8, 0, 8, 8))
@@ -2030,6 +2033,8 @@ class YMM4AutoGui:
             "generation_kind": 90,
             "source_video_title": 220,
             "generation_purpose": 160,
+            "character_pattern": 110,
+            "genre_group": 100,
         }
         for col in cols:
             tree.heading(col, text=headings[col], command=lambda c=col: sort_by(c))
@@ -2144,6 +2149,8 @@ class YMM4AutoGui:
                     item.get("generation_kind", ""),
                     item.get("source_video_title", ""),
                     item.get("generation_purpose", ""),
+                    item.get("character_pattern", ""),
+                    item.get("genre_group", ""),
                 )
                 tree.insert("", tk.END, values=values, tags=(f"score_{item.get('score', 'D')}",))
 
@@ -2233,6 +2240,19 @@ class YMM4AutoGui:
 
         # Shorts / Long を統合してソート
         schedule = list_schedule()
+
+        # upload_records から生成区分・キャラパターンを引く（title+iso[:16] でキー）
+        try:
+            from core.upload_records import load_upload_records
+            _rec_lookup = {}
+            for rec in load_upload_records():
+                t = str(rec.get("title") or "").strip().lower()
+                pa = str(rec.get("publish_at") or "")
+                if t and pa:
+                    _rec_lookup[(t, pa[:16])] = rec
+        except Exception:
+            _rec_lookup = {}
+
         rows = []
         for vt, entries in schedule.items():
             label = "Shorts" if vt == "shorts" else "Long"
@@ -2242,12 +2262,16 @@ class YMM4AutoGui:
                 except ValueError:
                     continue
                 status = "済" if dt < now else "予定"
-                rows.append((dt, label, title.split("\n")[0], status, vt, iso))
+                clean_title = title.split("\n")[0]
+                meta_rec = _rec_lookup.get((clean_title.lower(), iso[:16]), {})
+                gen_kind = meta_rec.get("generation_kind", "") or ""
+                char_pat = meta_rec.get("character_pattern", "") or ""
+                rows.append((dt, label, clean_title, status, vt, iso, gen_kind, char_pat))
         rows.sort(key=lambda r: r[0])
 
         dialog = tk.Toplevel(self.root)
         dialog.title("アップロードスケジュール")
-        dialog.geometry("780x420")
+        dialog.geometry("1020x420")
         dialog.resizable(True, True)
         dialog.transient(self.root)
 
@@ -2268,16 +2292,20 @@ class YMM4AutoGui:
         frame = ttk.Frame(dialog)
         frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
-        cols = ("日時", "種別", "タイトル", "状態")
+        cols = ("日時", "種別", "タイトル", "状態", "区分", "パターン")
         tree = ttk.Treeview(frame, columns=cols, show="headings", height=14)
         tree.heading("日時",   text="予約日時 (JST)", anchor=tk.CENTER)
         tree.heading("種別",   text="種別",           anchor=tk.CENTER)
         tree.heading("タイトル", text="タイトル",     anchor=tk.W)
         tree.heading("状態",   text="状態",           anchor=tk.CENTER)
+        tree.heading("区分",   text="生成区分",       anchor=tk.CENTER)
+        tree.heading("パターン", text="キャラ",       anchor=tk.CENTER)
         tree.column("日時",    width=160, stretch=False, anchor=tk.CENTER)
         tree.column("種別",    width=60,  stretch=False, anchor=tk.CENTER)
-        tree.column("タイトル", width=440, stretch=True,  anchor=tk.W)
+        tree.column("タイトル", width=380, stretch=True,  anchor=tk.W)
         tree.column("状態",    width=48,  stretch=False, anchor=tk.CENTER)
+        tree.column("区分",    width=90,  stretch=False, anchor=tk.CENTER)
+        tree.column("パターン", width=110, stretch=False, anchor=tk.CENTER)
 
         tree.tag_configure("done",     foreground="#aaaaaa", background="#f5f5f5")
         tree.tag_configure("upcoming", foreground="#0984e3", font=("Meiryo", 9, "bold"))
@@ -2295,7 +2323,7 @@ class YMM4AutoGui:
             row_by_iid.clear()
             filt = filter_var.get()
             show_done = show_done_var.get()
-            for idx, (dt, label, title, status, vt, iso) in enumerate(rows):
+            for idx, (dt, label, title, status, vt, iso, gen_kind, char_pat) in enumerate(rows):
                 if filt != "すべて" and label != filt:
                     continue
                 if not show_done and status == "済":
@@ -2311,7 +2339,7 @@ class YMM4AutoGui:
                     "video_type": vt,
                     "iso": iso,
                 }
-                tree.insert("", tk.END, iid=iid, values=(dt_str, label, title, status), tags=(tag,))
+                tree.insert("", tk.END, iid=iid, values=(dt_str, label, title, status, gen_kind, char_pat), tags=(tag,))
             visible = list(row_by_iid.values())
             count_var.set(
                 f"合計 {len(visible)} 件  /  予定 {sum(1 for r in visible if r['status']=='予定')} 件  /  済 {sum(1 for r in visible if r['status']=='済')} 件"
@@ -2675,7 +2703,7 @@ class YMM4AutoGui:
                 # 予定スロットの video_id と record_path を取得
                 id_to_info = {}  # video_id → {row, record, record_path}
                 no_id_titles = []
-                for dt, label, title, status, vt, iso in scheduled_rows_all:
+                for dt, label, title, status, vt, iso, *_meta in scheduled_rows_all:
                     row_dict = {"dt": dt, "label": label, "title": title, "status": status, "video_type": vt, "iso": iso}
                     record, record_path = self._find_upload_record_for_schedule(title, vt, dt)
                     vid = record.get("video_id") if record else None
@@ -2914,6 +2942,8 @@ class YMM4AutoGui:
                 "generation_kind": script_meta.get("generation_kind", ""),
                 "source_video_title": script_meta.get("source_video_title", ""),
                 "generation_purpose": script_meta.get("generation_purpose", ""),
+                "character_pattern": script_meta.get("character_pattern", ""),
+                "genre_group": script_meta.get("genre_group", ""),
                 "fixed_comment_text": script_meta.get("fixed_comment", ""),
             })
         except Exception:
@@ -3081,6 +3111,8 @@ class YMM4AutoGui:
                 data.setdefault("generation_kind", script_meta.get("generation_kind", ""))
                 data.setdefault("source_video_title", script_meta.get("source_video_title", ""))
                 data.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
+                data.setdefault("character_pattern", script_meta.get("character_pattern", ""))
+                data.setdefault("genre_group", script_meta.get("genre_group", ""))
                 data.setdefault("thumbnail", script_meta.get("thumbnail", ""))
                 data.setdefault("fixed_comment", script_meta.get("fixed_comment", ""))
             except Exception:
