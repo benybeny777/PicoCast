@@ -44,6 +44,9 @@
 - README / SPEC にAPIキー・YouTube OAuthの取得手順と、`config.py` / `.env` で変更できる主な設定一覧を追記。
 - タイトル案プロンプトを、固定ルールと既存タイトル・実績データなどの差し込み情報が分かる構造に整理。
 - タイトル案プロンプトのネタ固有部分を `core/prompt_parts/` に分離し、実績データ欄・重複チェック・既存食材リストを差し替えやすく変更。
+- 個人用プロンプト差し替え欄 `core/prompt_parts/local/` をGit管理外にし、同名ファイルがあればローカル側を優先して読み込むように変更。
+- `core/prompt_parts/local/script_generation_prompt.txt` がある場合は、台本生成プロンプト本体もローカル側を優先するように変更。
+- 共有用のサンプル台本 `samples/scripts/food_shorts_sample.txt` を追加。
 
 ### AIタイトル案プロンプトを実績データ横展開型に変更
 

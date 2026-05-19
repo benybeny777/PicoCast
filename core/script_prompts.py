@@ -8,6 +8,7 @@ TITLE_ANALYTICS_TSV_HEADER = (
 )
 
 PROMPT_PARTS_DIR = Path(__file__).with_name("prompt_parts")
+PROMPT_PARTS_LOCAL_DIR = PROMPT_PARTS_DIR / "local"
 
 CHANNEL_CONTEXT = (
     "チャンネル: https://www.youtube.com/@zunkami"
@@ -208,7 +209,9 @@ MULTI_SCRIPT_RULES = """\
 
 
 def build_script_generation_prompt(existing_titles=None) -> str:
-    base = Path(__file__).with_name("script_generation_prompt.txt").read_text(encoding="utf-8").strip()
+    local_prompt = PROMPT_PARTS_LOCAL_DIR / "script_generation_prompt.txt"
+    prompt_path = local_prompt if local_prompt.exists() else Path(__file__).with_name("script_generation_prompt.txt")
+    base = prompt_path.read_text(encoding="utf-8").strip()
     if existing_titles:
         lines = "\n".join(f"・{t}" for t in existing_titles)
         base += f"\n\n━━━━━━━━━━━━━━━━━━\n既存タイトル重複禁止（台本生成時も適用）\n━━━━━━━━━━━━━━━━━━\n\n以下と同じ、またはほぼ同じテーマの台本を作らないこと。\n\n{lines}\n"
@@ -234,8 +237,15 @@ def _format_title_analytics_block(analytics_tsv=None) -> str:
     )
 
 
+def _prompt_part_path(filename: str) -> Path:
+    local_path = PROMPT_PARTS_LOCAL_DIR / filename
+    if local_path.exists():
+        return local_path
+    return PROMPT_PARTS_DIR / filename
+
+
 def _format_prompt_part(filename: str, **values) -> str:
-    template = (PROMPT_PARTS_DIR / filename).read_text(encoding="utf-8").strip()
+    template = _prompt_part_path(filename).read_text(encoding="utf-8").strip()
     return template.format(**values)
 
 

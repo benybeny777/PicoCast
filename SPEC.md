@@ -484,8 +484,20 @@ output/upload_schedule_long.json
 - `title_dynamic_context_food.md`: 実績データ差し込み欄
 - `title_duplicate_context_food.md`: 既存タイトル・既存食材・表記ゆれの重複チェック
 - `title_used_foods_food.txt`: 既に扱った食材リスト
+- `script_generation_prompt.txt`: 台本生成プロンプト全体の個人用差し替え
 
 別ジャンルへ差し替える場合は、上記ファイルを別名で追加し、`build_title_prompt()` が読むファイル名を切り替えます。実績データ未取得時のTSV見出しは `TITLE_ANALYTICS_TSV_HEADER` で管理します。
+
+個人用のネタ設定は `core/prompt_parts/local/` に置きます。このフォルダはGit管理外です。読み込み時は `local/` 側の同名ファイルを優先し、なければGit管理されている `core/prompt_parts/` 側のサンプルを使います。
+
+例:
+
+- `core/prompt_parts/local/title_used_foods_food.txt`
+- `core/prompt_parts/local/title_dynamic_context_food.md`
+- `core/prompt_parts/local/title_duplicate_context_food.md`
+- `core/prompt_parts/local/script_generation_prompt.txt`
+
+別ジャンル担当者は自分の環境の `local/` に差し替え用ファイルを置けば、Git pull / push で他人のネタ設定を上書きしません。共有用の見本台本は `samples/scripts/` に置きます。
 
 タイトル・サムネの基本方針:
 

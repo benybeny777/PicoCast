@@ -105,6 +105,8 @@ python gui.py
 ## 注意
 
 - `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
+- `core/prompt_parts/local/` は個人用プロンプト差し替え欄です。Git管理外なので、別ジャンル担当者のネタ設定と混ざりません。
+- サンプル台本は `samples/scripts/` にあります。
 - YouTube アップロードには Google OAuth 用の `client_secrets.json` が必要です。
 - 詳細仕様・操作手順は [SPEC.md](SPEC.md) を参照してください。
 - 大きめの変更履歴は [CHANGELOG.md](CHANGELOG.md) に残します。
