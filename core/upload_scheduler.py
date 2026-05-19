@@ -87,6 +87,45 @@ def mark_slot_used(slot_dt: datetime, title: str, video_type: str):
     _save(schedule, video_type)
 
 
+def rebalance_slots(video_type: str) -> list[tuple[str, str, str]]:
+    """未来スロットを現在から最速で前詰めし直す。
+    Returns [(old_iso, new_iso, title), ...] for changed entries only.
+    """
+    schedule = _load(video_type)
+    now = datetime.now(JST)
+    cutoff = now + timedelta(minutes=5)
+
+    past = {iso: title for iso, title in schedule.items()
+            if datetime.fromisoformat(iso) <= cutoff}
+    future_sorted = sorted(
+        ((iso, title) for iso, title in schedule.items()
+         if datetime.fromisoformat(iso) > cutoff),
+        key=lambda x: x[0],
+    )
+
+    if not future_sorted:
+        return []
+
+    # future を一時的に外してから assign_slots で最速スロットを確保
+    _save(past, video_type)
+    try:
+        new_slots = assign_slots(len(future_sorted), video_type)
+    except Exception:
+        _save(schedule, video_type)  # rollback
+        raise
+
+    new_schedule = dict(past)
+    changes = []
+    for (old_iso, title), new_dt in zip(future_sorted, new_slots):
+        new_iso = new_dt.isoformat()
+        new_schedule[new_iso] = title
+        if old_iso != new_iso:
+            changes.append((old_iso, new_iso, title))
+
+    _save(new_schedule, video_type)
+    return changes
+
+
 def list_schedule() -> dict:
     """{"shorts": {...}, "long": {...}} で返す。"""
     return {vt: _load(vt) for vt in _SCHEDULE_FILES}

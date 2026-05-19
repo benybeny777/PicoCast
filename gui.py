@@ -2347,6 +2347,105 @@ class YMM4AutoGui:
             ttk.Button(btns2, text="キャンセル", command=edit.destroy).pack(side=tk.RIGHT)
             ttk.Button(btns2, text="変更する", style="Accent.TButton", command=apply_change).pack(side=tk.RIGHT, padx=(0, 8))
 
+        def rebalance():
+            future_count = sum(1 for r in rows if r[3] == "予定")
+            if future_count == 0:
+                messagebox.showinfo("スロット詰め直し", "詰め直し対象の予約スロットがありません。", parent=dialog)
+                return
+            if not messagebox.askyesno(
+                "スロット詰め直し",
+                f"未来の予約スロット {future_count} 件を現在から最速で詰め直します。\n\n"
+                "YouTube側の公開予定時刻も自動で更新します。\nよろしいですか？",
+                parent=dialog,
+            ):
+                return
+
+            def worker():
+                import json as _json
+                from core.upload_scheduler import rebalance_slots
+                from core.youtube_uploader import update_video_publish_time
+
+                def find_record_by_publish_at(iso_key):
+                    uploaded_dir = os.path.join("output", "000_uploaded")
+                    if not os.path.exists(uploaded_dir):
+                        return None, None
+                    for root_dir, _dirs, files in os.walk(uploaded_dir):
+                        if "upload_record.json" in files:
+                            path = os.path.join(root_dir, "upload_record.json")
+                            try:
+                                with open(path, "r", encoding="utf-8") as f:
+                                    data = _json.load(f)
+                                if data.get("publish_at") == iso_key:
+                                    return data.get("video_id"), path
+                            except Exception:
+                                pass
+                    return None, None
+
+                all_changes = []
+                try:
+                    for vt in ("shorts", "long"):
+                        changes = rebalance_slots(vt)
+                        all_changes.extend([(vt, *c) for c in changes])
+                except Exception as e:
+                    self.root.after(0, lambda e=e: (
+                        self.log(f"❌ スロット詰め直し失敗: {e}", "error"),
+                        messagebox.showerror("エラー", str(e), parent=dialog),
+                    ))
+                    return
+
+                if not all_changes:
+                    self.root.after(0, lambda: messagebox.showinfo(
+                        "スロット詰め直し", "すでに最速スロットに詰まっています。変更なし。", parent=dialog,
+                    ))
+                    return
+
+                updated_yt = 0
+                no_id = []
+                for vt, old_iso, new_iso, title in all_changes:
+                    video_id, record_path = find_record_by_publish_at(old_iso)
+                    short_title = title[:30]
+                    old_dt_str = old_iso[:16].replace("T", " ")
+                    new_dt_str = new_iso[:16].replace("T", " ")
+                    if not video_id:
+                        no_id.append(short_title)
+                        self.root.after(0, lambda t=short_title, o=old_dt_str, n=new_dt_str: self.log(
+                            f"  ⚠ video_id未発見・スケジュールのみ更新: {t} ({o} → {n})", "warning",
+                        ))
+                        continue
+                    try:
+                        new_dt = datetime.fromisoformat(new_iso)
+                        ok = update_video_publish_time(video_id, new_dt, progress_callback=self.log)
+                        if ok:
+                            if record_path:
+                                try:
+                                    with open(record_path, "r", encoding="utf-8") as f:
+                                        rec = _json.load(f)
+                                    rec["publish_at"] = new_iso
+                                    self._write_upload_record_data(record_path, rec)
+                                except Exception as e:
+                                    self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
+                            updated_yt += 1
+                            self.root.after(0, lambda t=short_title, o=old_dt_str, n=new_dt_str: self.log(
+                                f"  ✅ {t}: {o} → {n}", "success",
+                            ))
+                        else:
+                            no_id.append(short_title)
+                    except Exception as e:
+                        no_id.append(short_title)
+                        self.root.after(0, lambda e=e: self.log(f"  ❌ YouTube更新失敗: {e}", "error"))
+
+                def done():
+                    msg = f"✅ {len(all_changes)}件を詰め直しました（YouTube更新: {updated_yt}件）"
+                    if no_id:
+                        msg += f"\n⚠ YouTube未更新: {', '.join(no_id[:3])}"
+                    self.log(msg, "success")
+                    dialog.destroy()
+                    self.show_upload_schedule_dialog()
+
+                self.root.after(0, done)
+
+            threading.Thread(target=worker, daemon=True).start()
+
         btn_frame = ttk.Frame(dialog)
         btn_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
         ttk.Label(btn_frame, text=f"合計 {len(rows)} 件  /  予定 {sum(1 for r in rows if r[3]=='予定')} 件  /  済 {sum(1 for r in rows if r[3]=='済')} 件",
@@ -2355,6 +2454,7 @@ class YMM4AutoGui:
         ttk.Button(btn_frame, text="選択を削除", command=delete_selected).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btn_frame, text="手動公開済みにする", command=mark_manual_published).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btn_frame, text="公開予定を変更", command=change_publish_time).pack(side=tk.RIGHT, padx=(0, 8))
+        ttk.Button(btn_frame, text="スロット詰め直し", command=rebalance).pack(side=tk.RIGHT, padx=(0, 8))
 
     def _confirm_upload_schedule(self, rows):
         """rows: [(type_label, title, slot_str, score_label), ...] — True で確定、False でキャンセル。"""
