@@ -76,6 +76,35 @@ def _video_metadata(youtube, video_ids):
     return result
 
 
+def _all_channel_video_ids(youtube) -> list:
+    """チャンネルのアップロード済み全動画IDを返す。"""
+    ch_resp = youtube.channels().list(part="contentDetails", mine=True).execute()
+    uploads_id = (
+        ch_resp.get("items", [{}])[0]
+        .get("contentDetails", {})
+        .get("relatedPlaylists", {})
+        .get("uploads")
+    )
+    if not uploads_id:
+        return []
+
+    video_ids = []
+    next_page = None
+    while True:
+        kwargs = dict(part="contentDetails", playlistId=uploads_id, maxResults=50)
+        if next_page:
+            kwargs["pageToken"] = next_page
+        resp = youtube.playlistItems().list(**kwargs).execute()
+        for item in resp.get("items", []):
+            vid = item.get("contentDetails", {}).get("videoId")
+            if vid:
+                video_ids.append(vid)
+        next_page = resp.get("nextPageToken")
+        if not next_page:
+            break
+    return video_ids
+
+
 def _query_report(analytics, start_date, end_date, metrics):
     all_rows = []
     headers = None
@@ -132,14 +161,25 @@ def fetch_video_analytics(days=28):
 
     headers = [h.get("name") for h in report.get("columnHeaders", [])]
     rows = report.get("rows", [])
-    video_ids = [row[0] for row in rows if row]
-    meta = _video_metadata(youtube, video_ids)
 
-    items = []
+    # Analytics期間内にアクティブだった動画のデータを組み立て
+    analytics_map = {}
     for row in rows:
         data = dict(zip(headers, row))
         video_id = data.get("video")
+        if video_id:
+            analytics_map[video_id] = data
+
+    # チャンネルの全動画IDを取得してメタデータを補完
+    all_ids = _all_channel_video_ids(youtube)
+    # analyticsにあるがall_idsにないIDも含める（削除済み等の例外対応）
+    combined_ids = list(dict.fromkeys(all_ids + list(analytics_map.keys())))
+    meta = _video_metadata(youtube, combined_ids)
+
+    items = []
+    for video_id in combined_ids:
         m = meta.get(video_id, {})
+        data = analytics_map.get(video_id, {})
         ctr = data.get("impressionClickThroughRate")
         items.append({
             "video_id": video_id,
@@ -166,4 +206,3 @@ def fetch_video_analytics(days=28):
         "views": sum(int(float(item.get("views") or 0)) for item in items),
     }
     return {"summary": summary, "items": items}
-
