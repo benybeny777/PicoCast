@@ -112,6 +112,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "publish_status": publish_status,
             "analysis_status": "excluded",
             "is_topic_exclusion_target": False,
+            "is_provisional": False,
             "views": views, "impressions": impressions, "ctr": None,
             "average_view_duration": avg_duration, "average_percentage_viewed": avg_percent,
             "likes": likes, "like_rate": like_rate, "comments": comments,
@@ -133,6 +134,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "publish_status": publish_status,
             "analysis_status": "scheduled",
             "is_topic_exclusion_target": True,
+            "is_provisional": False,
             "views": 0, "impressions": 0, "ctr": None,
             "average_view_duration": 0, "average_percentage_viewed": 0,
             "likes": 0, "like_rate": 0.0, "comments": 0,
@@ -154,6 +156,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "publish_status": publish_status,
             "analysis_status": "data_wait",
             "is_topic_exclusion_target": True,
+            "is_provisional": False,
             "views": 0, "impressions": 0, "ctr": None,
             "average_view_duration": 0, "average_percentage_viewed": 0,
             "likes": 0, "like_rate": 0.0, "comments": 0,
@@ -161,6 +164,31 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "score": "未計測", "action": "データ待ち",
         })
         return result
+
+    # 本判定の最低要件: views >= 500 かつ公開後24時間経過
+    # どちらか一方でも満たせば本判定可
+    is_provisional = False
+    if views < 500:
+        pub_val = item.get("published_at")
+        if pub_val:
+            try:
+                pub_dt = datetime.fromisoformat(str(pub_val).replace("Z", "+00:00"))
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                hours_since = (datetime.now(timezone.utc) - pub_dt).total_seconds() / 3600
+                if hours_since < 24:
+                    is_provisional = True
+            except Exception:
+                pass
+
+    # 横展開の最低視聴率ライン（viewsだけ・avg_percentだけで横展開しない）
+    if video_type == "Shorts":
+        min_pct_expansion = 45.0
+    elif video_type == "ShortLong":
+        min_pct_expansion = 50.0
+    else:
+        min_pct_expansion = 0.0  # Long は CTR + avg_percent の組み合わせで判定
+    above_expansion_min = avg_percent >= min_pct_expansion
 
     # Rule 2: 動画種別ごとのベーススコア
     if video_type == "Shorts":
@@ -199,17 +227,36 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         else:
             score, action = "D", "要見直し"
 
-    # Rule 3: 登録者純増 >= 2 は最低でも B、視聴率 >= 60 なら横展開
+    # Rule 3: 最低視聴率ラインを下回る横展開を抑制
+    if action == "横展開" and not above_expansion_min:
+        action = "テーマ有望・構成改善"
+
+    # Rule 4: 登録者純増 >= 2 → 強い横展開候補（最低でも B）
     if subscribers_net >= 2:
         if SCORE_ORDER.get(score, 0) < SCORE_ORDER["B"]:
             score = "B"
             action = "登録者増・改善候補"
-        if avg_percent >= 60:
+        if above_expansion_min and action != "横展開":
             action = "横展開"
+    # 登録者純増 >= 1 → 登録導線あり（弱いスコアへの補足）
+    elif subscribers_net >= 1 and action in ("弱い", "要見直し", "改善して再挑戦"):
+        action = f"{action}・登録導線あり"
 
-    # Rule 4: like率 >= 1.5% かつ視聴率が低い → テーマは有望
-    if like_rate >= 1.5 and score in ("C", "D"):
-        action = "テーマ有望・冒頭/構成改善"
+    # Rule 5: like率 >= 1.5% → テーマ有望（視聴率ライン未達または C/D スコア）
+    if like_rate >= 1.5 and action != "横展開":
+        if not above_expansion_min:
+            # 高エンゲージメントだが低視聴率 → テーマ有望・構成改善
+            action = "テーマ有望・構成改善"
+        elif score in ("C", "D"):
+            action = "テーマ有望・冒頭/構成改善"
+
+    # Rule 6: コメント反応あり（弱いスコアの補足）
+    if comments >= 1 and action in ("弱い", "要見直し"):
+        action = f"{action}・反応あり"
+
+    # Rule 7: 本判定保留（views < 500 かつ公開24時間未満）
+    if is_provisional and "横展開" in action:
+        action = f"{action}(判定保留)"
 
     result = dict(item)
     result.update({
@@ -222,6 +269,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "publish_status": publish_status,
         "analysis_status": "analyzable",
         "is_topic_exclusion_target": True,
+        "is_provisional": is_provisional,
         "views": views,
         "impressions": impressions,
         "ctr": None if ctr is None else ctr_value,
@@ -243,18 +291,23 @@ def score_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     scored = [score_item(item) for item in items]
 
     # views 上位20% かつ avg_percent >= 65 → action = 横展開・微改善
-    # （"横展開" はそのまま維持）
+    # viewsだけで横展開しない: 最低視聴率ライン(Shorts:45% / ShortLong:50%)も必須
+    # 判定保留(is_provisional)は昇格しない
     analyzable_views = sorted(
         _int(item.get("views")) for item in scored
         if item.get("analysis_status") == "analyzable"
     )
+    _EXPANSION_MIN = {"Shorts": 45.0, "ShortLong": 50.0}
     if analyzable_views:
         top20_threshold = analyzable_views[max(0, int(len(analyzable_views) * 0.8))]
         for item in scored:
+            vtype = item.get("video_type", "Long")
+            min_pct = _EXPANSION_MIN.get(vtype, 0.0)
             if (
                 item.get("analysis_status") == "analyzable"
+                and not item.get("is_provisional")
                 and _int(item.get("views")) >= top20_threshold
-                and _num(item.get("average_percentage_viewed")) >= 65
+                and _num(item.get("average_percentage_viewed")) >= max(65, min_pct)
                 and item.get("action") != "横展開"
             ):
                 item["action"] = "横展開・微改善"
@@ -275,7 +328,7 @@ def format_duration(seconds) -> str:
 def to_tsv(items: list[dict[str, Any]]) -> str:
     cols = [
         "title", "published_at", "video_type", "duration", "duration_status",
-        "publish_status", "analysis_status",
+        "publish_status", "analysis_status", "is_provisional",
         "views", "impressions", "ctr",
         "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
         "comments", "subscribers_net", "score", "action",
