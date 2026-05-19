@@ -53,6 +53,7 @@
 - 初回セットアップのプロンプト設定確認を必須手順として明記。
 - SPEC にAI編集者向けルールを追加し、ネタ固有プロンプト変更は `core/prompt_parts/local/` を編集するよう明記。
 - SPEC のシステム構成に `core/prompt_parts/`、`core/prompt_parts/local/`、`samples/` を追記。
+- SPEC 全体を実装に合わせて見直し、パイプライン順、Shorts尺判定、冒頭レビュー停止条件、Ollama設定、VOICEVOX末尾処理、GUI主要機能の記述を更新。
 
 ### AIタイトル案プロンプトを実績データ横展開型に変更
 

@@ -70,7 +70,7 @@ yukkurijidou/
 ## 動画フォーマット
 
 ### Shorts
-- 尺: **45〜52秒（理想）/ 35〜55秒（許容）**
+- 尺: **38〜50秒（理想）/ 35〜55秒（許容）**
 - セリフ数: **17〜20行（21行以上禁止）**
 - 尺計算式: `総文字数 × 0.11秒 + 行数 × 1.2秒 = 推定尺`
 - 背景枚数: 6〜9枚
@@ -97,19 +97,20 @@ yukkurijidou/
 4. メタデータ抽出 (タイトル / サムネ文字 / 説明文 / タグ / 固定コメント)
 5. 冒頭品質レビュー
    ├── ローカルルールベース
-   ├── Ollamaレビュー（スコア<75の場合）
+   ├── Ollamaレビュー（スコア<70または重大エラーありの場合）
    └── 必要に応じてOllamaリライト → 再パース
-6. スコアが閾値未満なら処理中止 (デフォルト80点)
-7. VOICEVOX音声生成（セリフ1行ずつ）
-8. 背景画像生成（Nano Banana）
+6. 冒頭スコアが重大エラー基準未満、または `must_fix` ありなら処理中止 (デフォルト70点)
+7. 生成前の尺推定 + 尺レビュー
+8. ChatGPT生成前レビュー（評価のみ、修正なし）
+   └── `must_fix` あり、または重大エラー基準未満なら処理中止
+9. VOICEVOX音声生成（セリフ1行ずつ）
+10. 背景画像生成（Nano Banana）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
-9. サムネイル生成（Nano Banana）
-10. YMM4プロジェクト組立 (.ymmp)
-11. BGM追加
-12. YMM4プロジェクト保存
-13. 尺推定 + 尺レビュー
-14. ChatGPT最終レビュー（評価のみ、修正なし）
-15. 完了レポート
+11. サムネイル生成（Nano Banana）
+12. YMM4プロジェクト組立 (.ymmp)
+13. BGM追加
+14. YMM4プロジェクト保存
+15. 実尺レビュー + 完了レポート
 ```
 
 ### 尺推定 (gui.py: `_estimate_duration`)
@@ -142,25 +143,28 @@ for item in dialogue_items:
 | ステップ | 内容 | 条件 |
 |---|---|---|
 | ローカルルールベース | 意外性ワード・食べ物名・掛け合い・セリフ長チェック | 常時実行 |
-| Ollamaレビュー | `qwen3:8b` でLLMスコアリング | ローカルスコア < 75 |
+| Ollamaレビュー | `qwen3:8b` でLLMスコアリング | ローカルスコア < 70 または重大エラーあり |
 | Ollamaリライト | 冒頭セリフを自動修正 | `should_auto_rewrite_opening` = True |
 
 ### `should_auto_rewrite_opening` の条件（いずれか）
 
 - `must_fix` に項目がある
 - `hook < 75` / `loop < 70` / `cta < 70`
-- 総合スコア < 80
+- 総合スコア < `OPENING_SCORE_HARD_ABORT_THRESHOLD`（デフォルト70）
 
 ### 処理中止条件
 
-リライト後のスコアが `OPENING_SCORE_ABORT_THRESHOLD`（デフォルト80）未満 → パイプライン中止
+冒頭スコアが `OPENING_SCORE_HARD_ABORT_THRESHOLD`（デフォルト70）未満、または `must_fix` / 重大エラーあり → パイプライン中止。
 
-### ChatGPT最終レビュー
+`OPENING_SCORE_ABORT_THRESHOLD`（デフォルト80）は、ログ表示上の「pass / warning」判定の目安として使う。70〜79点は警告扱いだが、重大エラーがなければ処理を続行する。
+
+### ChatGPT生成前レビュー
 
 - モデル: `OPENAI_FINAL_REVIEW_MODEL`（デフォルト `gpt-5.4-mini`）
 - 入力: タイトル / サムネ文字 / 固定コメント / 台本 / 各レビュー結果 / 推定尺
 - 出力: `final_score` / `publish_ok` / `risk` / `must_fix` / `nice_to_fix`
 - **自動修正なし** — ログ表示と `_meta/final_review.json` 保存のみ
+- `must_fix` がある場合、または `final_score` が `OPENING_SCORE_HARD_ABORT_THRESHOLD` 未満の場合は、音声・画像生成へ進まず中止する
 
 ### 保存ファイル（`_meta/` 配下）
 
@@ -169,26 +173,21 @@ for item in dialogue_items:
 | `opening_review.json` | ローカル・Ollamaレビュー結果、final_score、final_status |
 | `opening_rewrite_suggestion.txt` | Ollamaリライト内容（リライトが発生した場合） |
 | `duration_review.json` | 尺レビュー結果（seconds / status / ideal） |
-| `final_review.json` | ChatGPT最終レビュー結果 |
+| `final_review.json` | ChatGPT生成前レビュー結果 |
 
 ### LLMレビューの有効化
 
-デフォルトはLLMレビュー有効（`OPENING_REVIEW_USE_LLM=1`）。無効化する場合は `.env` で `OPENING_REVIEW_USE_LLM=0` を設定する。
+デフォルトはLLMレビュー有効（`OPENING_REVIEW_USE_LLM=1`）。冒頭LLMレビューと冒頭リライトはローカルの Ollama を使う。無効化する場合は `.env` で `OPENING_REVIEW_USE_LLM=0` を設定する。
 
 ```text
 OPENING_REVIEW_USE_LLM=1
-OPENING_REVIEW_PROVIDER=openai
-OPENAI_API_KEY=...
-OPENING_REVIEW_MODEL=gpt-5-mini
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_REVIEW_MODEL=qwen3:8b
+OLLAMA_REWRITE_MODEL=qwen3:8b
+OLLAMA_REWRITE_FALLBACK_MODEL=gemma4:e4b
 ```
 
-Google APIでGemma/Gemini系モデルを使う場合:
-
-```text
-OPENING_REVIEW_USE_LLM=1
-OPENING_REVIEW_PROVIDER=google
-OPENING_REVIEW_MODEL=<利用可能なGemma/Gemini系モデル名>
-```
+Ollamaに接続できない場合、誤通過防止のため冒頭レビュー段階で処理を中止する。ChatGPT生成前レビューは別系統で、`OPENAI_FINAL_REVIEW_ENABLED` / `OPENAI_FINAL_REVIEW_MODEL` を使う。
 
 ---
 
@@ -244,9 +243,17 @@ OPENING_REVIEW_MODEL=<利用可能なGemma/Gemini系モデル名>
 
 | 機能 | 説明 |
 |---|---|
-| 台本生成 | Gemini AIによる台本生成（テーマ入力 or 台本直接入力） |
-| 履歴から生成 | 過去生成済みテーマを選択して再生成 |
-| アップロード | 複数動画の一括スケジュールアップロード |
+| 生成 | 貼り付けた台本から音声・背景・サムネ・YMM4プロジェクトを生成 |
+| 作業中止 | 実行中の生成処理に中止リクエストを送る |
+| LLM/尺チェック | 複数台本を先に冒頭品質・推定尺・最終品質レビューする |
+| AI台本作成 | 既存タイトル重複を避ける台本生成プロンプトをコピー |
+| Shortsタイトル案 / Longタイトル案 | 既存タイトル・Analytics実績データを反映したタイトル案プロンプトをコピー |
+| 履歴から複数生成 | 過去生成済みテーマを複数選択して再生成 |
+| 画像確認 | サムネイル・背景画像を確認し、選択した画像だけ再生成 |
+| YouTubeアップ | 複数動画の一括スケジュールアップロード |
+| 固定コメント | アップロード済み動画へ固定コメント用コメントを投稿し、動画URLを表示 |
+| スケジュール | 予約済み・手動公開済みの一覧確認、削除、公開予定変更 |
+| アナリティクス | YouTube Analytics取得、横展開候補や改善対象を評価 |
 | サービス確認 | VOICEVOX / Nano Banana 起動状態チェック |
 
 ### ログカラー
@@ -266,9 +273,9 @@ OPENING_REVIEW_MODEL=<利用可能なGemma/Gemini系モデル名>
 | 推定尺 | 色 |
 |---|---|
 | < 35秒 | 赤 (error) |
-| 35〜44秒 | 黄 (warning) |
-| 45〜52秒 | 緑 (success) ← 理想 |
-| 52〜55秒 | 黄 (warning) |
+| 35〜38秒未満 | 緑 (success) ← やや短いがOK |
+| 38〜50秒 | 緑 (success) ← 理想 |
+| 50〜55秒 | 黄 (warning) |
 | 55〜58秒 | 橙 (warning) |
 | > 58秒 | 赤 (error) |
 
@@ -292,7 +299,8 @@ OPENING_REVIEW_MODEL=<利用可能なGemma/Gemini系モデル名>
 ## VOICEVOX音声生成 (`core/voicevox.py`)
 
 - API: `/audio_query` → `/synthesis` を1行ずつ個別呼び出し
-- 末尾無音: 0.5秒をWAVに直接追加（`postPhonemeLength` APIは使用しない）
+- `postPhonemeLength`: `VOICE_POST_PHONEME_LENGTH`（デフォルト0.0）を VOICEVOX API に渡す
+- 末尾無音: 生成後のWAVへ `max(0.1, 0.1 × speed_scale)` 秒の無音を直接追加
 - キャラクター・スピーカーID:
 
 | キャラ | スタイル | ID |
@@ -310,9 +318,9 @@ OPENING_REVIEW_MODEL=<利用可能なGemma/Gemini系モデル名>
 
 ### 音声タイミング
 
-Shorts / Long ともに、VOICEVOX の WAV 実長へテンプレートの `AdditionalTime` 0.3 秒を加え、さらに `VOICE_TAIL_SAFETY_FRAMES = 2` フレームを音声アイテム長に足します。次のセリフ開始までは `INTER_DIALOGUE_GAP_FRAMES = 6` フレーム空けます。
+Shorts / Long ともに、VOICEVOX の WAV 実長へテンプレートの `AdditionalTime` 0.3 秒を加え、さらに `VOICE_TAIL_SAFETY_SEC = 0.5` 秒を音声アイテム長に足します。次のセリフ開始までは `INTER_DIALOGUE_GAP_SEC = 0.2` 秒空けます。
 
-WAV 末尾には `0.05 × speed_scale` 秒の無音を直接書き込みます（Shorts 冒頭 2.0x なら 0.1s）。高速音声で末尾フォネームが切れるのを防ぎます。
+WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込みます（Shorts 冒頭 2.0x なら 0.2秒）。高速音声で末尾フォネームが切れるのを防ぎます。
 
 ---
 
@@ -357,8 +365,9 @@ WAV 末尾には `0.05 × speed_scale` 秒の無音を直接書き込みます�
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
-| `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.4-mini` | 最終レビューモデル |
-| `OPENING_SCORE_ABORT_THRESHOLD` | 80 | 中止スコア閾値 |
+| `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.4-mini` | ChatGPT生成前レビューモデル |
+| `OPENING_SCORE_ABORT_THRESHOLD` | 80 | pass / warning 表示の目安 |
+| `OPENING_SCORE_HARD_ABORT_THRESHOLD` | 70 | 処理中止スコア閾値 |
 | `MAX_BACKGROUNDS_SHORTS` | 9 | Shorts最大背景枚数 |
 | `MAX_BACKGROUNDS_LONG` | 90 | Long最大背景枚数 |
 | `BGM_VOLUME` | 15.0 | BGM音量(%) |
@@ -402,7 +411,7 @@ output/{テーマ名}/
 │   ├── opening_review.json                 # 冒頭レビュー結果
 │   ├── opening_rewrite_suggestion.txt      # Ollamaリライト内容（発生時のみ）
 │   ├── duration_review.json                # 尺レビュー結果
-│   ├── final_review.json                   # ChatGPT最終レビュー結果
+│   ├── final_review.json                   # ChatGPT生成前レビュー結果
 │   ├── upload_record.json                  # アップロード記録（スコア含む）
 │   ├── thumbnail_ab_test.json              # Long: A/Bテスト管理
 │   └── title_ab_test.json                  # Long: タイトルA/B管理
@@ -645,7 +654,7 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 | Google Gemini API | 台本生成・台本チェック | `GOOGLE_API_KEY` |
 | Nano Banana (Gemini) | 背景・サムネ画像生成 | `GOOGLE_API_KEY` |
 | Ollama (qwen3:8b) | 冒頭品質レビュー・リライト | ローカル起動 |
-| OpenAI API | 最終レビュー | `OPENAI_API_KEY` |
+| OpenAI API | ChatGPT生成前レビュー | `OPENAI_API_KEY` |
 | YouTube Data API v3 | 動画アップロード | OAuth2 (`client_secrets.json`) |
 | YMM4 | 動画組立・レンダリング | ローカルインストール |
 
@@ -665,7 +674,7 @@ OPENAI_API_KEY=...
 `OPENAI_API_KEY`:
 - 取得先: https://platform.openai.com/api-keys
 - 用途: ChatGPT生成前レビュー
-- `OPENAI_FINAL_REVIEW_ENABLED=0` にすると最終レビューを無効化できます。
+- `OPENAI_FINAL_REVIEW_ENABLED=0` にするとChatGPT生成前レビューを無効化できます。
 
 YouTube OAuth:
 - Google Cloud Console でプロジェクトを作成または選択します。
@@ -701,12 +710,13 @@ YouTube OAuth:
 | `VOICE_SPEED_SCALE_LONG` | `config.py` | Long本編の音声速度 |
 | `VOICE_INTRO_SPEED_SCALE_LONG` | `config.py` | Long冒頭の音声速度 |
 | `VOICE_INTRO_FAST_SECONDS` | `config.py` | 冒頭高速化する秒数 |
-| `VOICE_POST_PHONEME_LENGTH` | `config.py` | 各音声末尾に足す無音秒数 |
+| `VOICE_POST_PHONEME_LENGTH` | `config.py` | VOICEVOX API に渡す `postPhonemeLength` |
 | `OPENING_REVIEW_USE_LLM` | `.env` | Ollama冒頭レビューを使うか |
-| `OPENING_REVIEW_MODEL` / `OLLAMA_REVIEW_MODEL` | `.env` | 冒頭レビュー用Ollamaモデル |
+| `OLLAMA_REVIEW_MODEL` | `.env` | 冒頭レビュー用Ollamaモデル |
 | `OPENING_REVIEW_AUTO_REWRITE` | `.env` | 冒頭リライトを自動実行するか |
 | `OLLAMA_REWRITE_MODEL` | `.env` | 冒頭リライト用Ollamaモデル |
-| `OPENING_SCORE_ABORT_THRESHOLD` | `.env` | 冒頭スコアがこの点未満なら生成停止 |
+| `OLLAMA_REWRITE_FALLBACK_MODEL` | `.env` | 冒頭リライトのフォールバックモデル |
+| `OPENING_SCORE_ABORT_THRESHOLD` | `.env` | 冒頭スコアのpass / warning表示目安 |
 | `OPENING_SCORE_HARD_ABORT_THRESHOLD` | `.env` | 重大エラー扱いにするスコア |
 | `OPENAI_FINAL_REVIEW_ENABLED` | `.env` | ChatGPT生成前レビューを使うか |
 | `OPENAI_FINAL_REVIEW_MODEL` | `.env` | ChatGPT生成前レビューのモデル |
