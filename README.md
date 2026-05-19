@@ -27,9 +27,10 @@
 1. VOICEVOX をインストール
 2. YukkuriMovieMaker v4 をインストール
 3. APIキーとOAuth設定を用意
-4. 別ジャンルで使う場合だけ、個人用プロンプト設定を `core/prompt_parts/local/` に置く
-   - 食べ物用のまま使う場合は不要です
-   - 食べ物用設定を復元したい場合:
+4. プロンプト設定を確認する
+   - 初期状態は食べ物用設定でそのまま動きます
+   - 別ジャンルで使う場合は、必ず `core/prompt_parts/local/` に個人用プロンプト設定を置きます
+   - 食べ物用設定を明示的に復元する場合:
      ```powershell
      New-Item -ItemType Directory -Force -Path core\prompt_parts\local
      Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
@@ -113,7 +114,7 @@ python gui.py
 
 - `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
 - `core/prompt_parts/local/` は個人用プロンプト差し替え欄です。Git管理外なので、別ジャンル担当者のネタ設定と混ざりません。
-- 初回クローン時は、Git管理されている食べ物用プロンプト設定でそのまま動きます。別ジャンルで使う人だけ `local/` に差し替えファイルを置きます。
+- 初回セットアップではプロンプト設定を必ず確認します。食べ物用ならGit管理側の設定でそのまま動き、別ジャンルで使う人は必ず `local/` に差し替えファイルを置きます。
 - 食べ物用の復元サンプルは `samples/prompt_parts/food/`、サンプル台本は `samples/scripts/` にあります。
 - `local/` を消した場合は、`samples/prompt_parts/food/` の中身を `core/prompt_parts/local/` へコピーすると食べ物用設定を戻せます。
 - YouTube アップロードには Google OAuth 用の `client_secrets.json` が必要です。
