@@ -584,3 +584,89 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 | OpenAI API | 最終レビュー | `OPENAI_API_KEY` |
 | YouTube Data API v3 | 動画アップロード | OAuth2 (`client_secrets.json`) |
 | YMM4 | 動画組立・レンダリング | ローカルインストール |
+
+### APIキー・OAuth取得
+
+リポジトリ直下に `.env` を作り、必要なキーを設定します。
+
+```env
+GOOGLE_API_KEY=...
+OPENAI_API_KEY=...
+```
+
+`GOOGLE_API_KEY`:
+- 取得先: https://aistudio.google.com/apikey
+- 用途: Gemini台本生成、Nano Banana系の背景・サムネ画像生成
+
+`OPENAI_API_KEY`:
+- 取得先: https://platform.openai.com/api-keys
+- 用途: ChatGPT生成前レビュー
+- `OPENAI_FINAL_REVIEW_ENABLED=0` にすると最終レビューを無効化できます。
+
+YouTube OAuth:
+- Google Cloud Console でプロジェクトを作成または選択します。
+- APIライブラリで `YouTube Data API v3` と `YouTube Analytics API` を有効化します。
+- 認証情報で OAuthクライアントIDを作成します。
+- アプリケーションの種類は「デスクトップアプリ」を選びます。
+- JSONをダウンロードし、ファイル名を `client_secrets.json` にしてリポジトリ直下へ置きます。
+- 初回の `YouTubeアップ` 実行時に `token.json`、`📊 アナリティクス` 実行時に `token_analytics.json` が自動作成されます。
+- スコープ変更や認証エラーが出た場合は、該当する `token*.json` を削除して再認証します。
+
+取得先:
+- Google Cloud APIライブラリ: https://console.cloud.google.com/apis/library
+- Google Cloud 認証情報: https://console.cloud.google.com/apis/credentials
+
+秘密情報:
+- `.env`
+- `client_secrets.json`
+- `token.json`
+- `token_analytics.json`
+
+これらはGit管理外です。コミットしないでください。
+
+### 設定ファイルで変えられること
+
+主な設定は [config.py](config.py) と `.env` で変更します。
+
+| 設定 | 場所 | 内容 |
+|---|---|---|
+| `VOICEVOX_URL` | `config.py` | VOICEVOX API のURL |
+| `VOICEVOX_PATH` | `config.py` | VOICEVOX実行ファイルの場所 |
+| `VOICE_SPEED_SCALE_SHORTS` | `config.py` | Shorts本編の音声速度 |
+| `VOICE_INTRO_SPEED_SCALE_SHORTS` | `config.py` | Shorts冒頭の音声速度 |
+| `VOICE_SPEED_SCALE_LONG` | `config.py` | Long本編の音声速度 |
+| `VOICE_INTRO_SPEED_SCALE_LONG` | `config.py` | Long冒頭の音声速度 |
+| `VOICE_INTRO_FAST_SECONDS` | `config.py` | 冒頭高速化する秒数 |
+| `VOICE_POST_PHONEME_LENGTH` | `config.py` | 各音声末尾に足す無音秒数 |
+| `OPENING_REVIEW_USE_LLM` | `.env` | Ollama冒頭レビューを使うか |
+| `OPENING_REVIEW_MODEL` / `OLLAMA_REVIEW_MODEL` | `.env` | 冒頭レビュー用Ollamaモデル |
+| `OPENING_REVIEW_AUTO_REWRITE` | `.env` | 冒頭リライトを自動実行するか |
+| `OLLAMA_REWRITE_MODEL` | `.env` | 冒頭リライト用Ollamaモデル |
+| `OPENING_SCORE_ABORT_THRESHOLD` | `.env` | 冒頭スコアがこの点未満なら生成停止 |
+| `OPENING_SCORE_HARD_ABORT_THRESHOLD` | `.env` | 重大エラー扱いにするスコア |
+| `OPENAI_FINAL_REVIEW_ENABLED` | `.env` | ChatGPT生成前レビューを使うか |
+| `OPENAI_FINAL_REVIEW_MODEL` | `.env` | ChatGPT生成前レビューのモデル |
+| `SHORT_FULL_SCRIPT_REVIEW` | `.env` | Shortsの全文レビューを行うか |
+| `LONG_FULL_SCRIPT_REVIEW` | `.env` | Longの全文レビューを行うか |
+| `AUTO_FULL_REWRITE_ENABLED` | `.env` | 全文自動リライトを有効化するか |
+| `GEMINI_MODEL` | `config.py` | 台本生成で使うGeminiモデル |
+| `NANOBANANA_PRO_MODEL` | `config.py` | 高品質画像生成モデル |
+| `NANOBANANA_FLASH_MODEL` | `config.py` | 速い画像生成モデル |
+| `CHARACTERS` | `config.py` | VOICEVOX話者ID・スタイルID |
+| `CHARACTER_PNGS` | `config.py` | YMM4キャラ立ち絵 |
+| `THUMBNAIL_CHARACTER_PNGS` | `config.py` | サムネ生成用参照画像 |
+| `BGM_PATH` | `config.py` | 固定BGMファイル |
+| `BGM_VOLUME` | `config.py` | BGM音量 |
+| `MAX_BACKGROUNDS_SHORTS` | `config.py` | Shortsの最大背景生成枚数 |
+| `MAX_BACKGROUNDS_LONG` | `config.py` | Longの最大背景生成枚数 |
+
+`.env` の例:
+
+```env
+OPENING_REVIEW_USE_LLM=1
+OLLAMA_REVIEW_MODEL=qwen3:8b
+OPENING_SCORE_ABORT_THRESHOLD=80
+OPENAI_FINAL_REVIEW_ENABLED=1
+OPENAI_FINAL_REVIEW_MODEL=gpt-5.4-mini
+LONG_FULL_SCRIPT_REVIEW=0
+```

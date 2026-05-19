@@ -26,12 +26,34 @@
 
 1. VOICEVOX をインストール
 2. YukkuriMovieMaker v4 をインストール
-3. `.env` に `GOOGLE_API_KEY=...` を設定
+3. APIキーとOAuth設定を用意
 4. Python 依存を入れる
 
 ```bash
 pip install requests google-genai python-dotenv pywinauto Pillow google-api-python-client google-auth-oauthlib
 ```
+
+### APIキー・OAuth
+
+`.env` をリポジトリ直下に作り、必要なキーを入れます。
+
+```env
+GOOGLE_API_KEY=...
+OPENAI_API_KEY=...
+```
+
+- `GOOGLE_API_KEY`: Google AI Studio の API keys で作成します。台本生成・画像生成で使います。
+- `OPENAI_API_KEY`: OpenAI Platform の API keys で作成します。ChatGPT生成前レビューで使います。
+- `client_secrets.json`: Google Cloud Console で YouTube Data API v3 / YouTube Analytics API を有効化し、OAuthクライアントID（デスクトップアプリ）を作成してJSONをダウンロードします。ファイル名を `client_secrets.json` にしてリポジトリ直下へ置きます。
+- 初回の `YouTubeアップ` / `📊 アナリティクス` 実行時にブラウザ認証が開き、`token.json` / `token_analytics.json` が自動作成されます。
+
+取得先:
+- Google AI Studio API key: https://aistudio.google.com/apikey
+- OpenAI API key: https://platform.openai.com/api-keys
+- Google Cloud APIライブラリ: https://console.cloud.google.com/apis/library
+- Google Cloud 認証情報: https://console.cloud.google.com/apis/credentials
+
+`client_secrets.json`、`token.json`、`token_analytics.json`、`.env` はGit管理外です。
 
 ## 起動
 
@@ -82,7 +104,7 @@ python gui.py
 
 ## 注意
 
-- `output/`, `.env`, `client_secrets.json`, `token.json` は Git 管理外です。
+- `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
 - YouTube アップロードには Google OAuth 用の `client_secrets.json` が必要です。
 - 詳細仕様・操作手順は [SPEC.md](SPEC.md) を参照してください。
 - 大きめの変更履歴は [CHANGELOG.md](CHANGELOG.md) に残します。
