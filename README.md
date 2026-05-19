@@ -106,6 +106,7 @@ python gui.py
 
 - `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
 - `core/prompt_parts/local/` は個人用プロンプト差し替え欄です。Git管理外なので、別ジャンル担当者のネタ設定と混ざりません。
+- 初回クローン時は、Git管理されている食べ物用プロンプト設定でそのまま動きます。別ジャンルで使う人だけ `local/` に差し替えファイルを置きます。
 - 食べ物用の復元サンプルは `samples/prompt_parts/food/`、サンプル台本は `samples/scripts/` にあります。
 - `local/` を消した場合は、`samples/prompt_parts/food/` の中身を `core/prompt_parts/local/` へコピーすると食べ物用設定を戻せます。
 - YouTube アップロードには Google OAuth 用の `client_secrets.json` が必要です。

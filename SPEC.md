@@ -490,6 +490,8 @@ output/upload_schedule_long.json
 
 個人用のネタ設定は `core/prompt_parts/local/` に置きます。このフォルダはGit管理外です。読み込み時は `local/` 側の同名ファイルを優先し、なければGit管理されている `core/prompt_parts/` 側のサンプルを使います。
 
+初回クローン直後は `core/prompt_parts/` 側の食べ物用設定でそのまま動きます。別ジャンル担当者はGit管理ファイルを直接編集せず、自分の環境の `core/prompt_parts/local/` に差し替えファイルを置きます。
+
 例:
 
 - `core/prompt_parts/local/title_used_foods_food.txt`
