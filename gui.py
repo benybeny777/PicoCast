@@ -1621,7 +1621,7 @@ class YMM4AutoGui:
             listbox.delete(0, tk.END)
             visible_rows.clear()
             for row in candidates:
-                if unposted_only_var.get() and row.get("posted_id"):
+                if unposted_only_var.get() and (row.get("posted_id") or row.get("pinned_at")):
                     continue
                 if public_only_var.get() and (not row.get("is_public") or row.get("made_for_kids")):
                     continue
