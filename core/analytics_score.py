@@ -98,6 +98,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     like_rate = (likes / views * 100) if views > 0 else 0.0
 
     publish_status = str(item.get("publish_status") or "published")
+    analytics_available = bool(item.get("analytics_available", True))
 
     # 非公開・限定公開 → 対象外
     if publish_status in ("private", "unlisted", "unknown"):
@@ -143,8 +144,8 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         })
         return result
 
-    # Rule 1: views == 0 はデータ待ち
-    if views == 0:
+    # Rule 1: Analyticsの平均視聴率などが未取得、または views == 0 はデータ待ち
+    if not analytics_available or views == 0:
         result = dict(item)
         result.update({
             "title": item.get("title") or "",
@@ -157,9 +158,10 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "analysis_status": "data_wait",
             "is_topic_exclusion_target": True,
             "is_provisional": False,
-            "views": 0, "impressions": 0, "ctr": None,
+            "analytics_available": analytics_available,
+            "views": views, "impressions": impressions, "ctr": None,
             "average_view_duration": 0, "average_percentage_viewed": 0,
-            "likes": 0, "like_rate": 0.0, "comments": 0,
+            "likes": likes, "like_rate": like_rate, "comments": comments,
             "subscribers_gained": gained, "subscribers_lost": lost, "subscribers_net": subscribers_net,
             "score": "未計測", "action": "データ待ち",
         })

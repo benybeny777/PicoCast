@@ -2044,8 +2044,13 @@ class YMM4AutoGui:
                     def done():
                         state["items"] = items
                         summary = data.get("summary", {})
+                        published_count = sum(1 for item in items if item.get("publish_status") == "published")
+                        scheduled_count = sum(1 for item in items if item.get("publish_status") == "scheduled")
+                        analyzable_count = sum(1 for item in items if item.get("analysis_status") == "analyzable")
+                        data_wait_count = sum(1 for item in items if item.get("analysis_status") == "data_wait")
                         summary_var.set(
-                            f"{days}日 / 動画 {len(items)}件 / 再生 {summary.get('views', 0)} / 保存: {os.path.basename(json_path)}"
+                            f"{days}日 / 全{len(items)}件（公開{published_count} / 予約{scheduled_count} / 分析{analyzable_count} / 待ち{data_wait_count}）"
+                            f" / 再生 {summary.get('views', 0)} / 保存: {os.path.basename(json_path)}"
                         )
                         render()
                         self.log(f"📊 Analytics評価一覧を保存: {json_path} / {tsv_path}", "success")

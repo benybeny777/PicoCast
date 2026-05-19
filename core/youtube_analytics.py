@@ -58,7 +58,7 @@ def _video_metadata(youtube, video_ids):
     now_utc = datetime.now(timezone.utc)
     for ids in _chunks(video_ids):
         response = youtube.videos().list(
-            part="snippet,contentDetails,status",
+            part="snippet,contentDetails,status,statistics",
             id=",".join(ids),
             maxResults=50,
         ).execute()
@@ -67,6 +67,7 @@ def _video_metadata(youtube, video_ids):
             snippet = item.get("snippet", {})
             details = item.get("contentDetails", {})
             status = item.get("status", {})
+            stats = item.get("statistics", {})
             duration = _parse_iso_duration(details.get("duration"))
             privacy = status.get("privacyStatus", "unknown")
             publish_at_str = status.get("publishAt")
@@ -90,6 +91,9 @@ def _video_metadata(youtube, video_ids):
                 "duration": duration,
                 "video_type": "Shorts" if duration is not None and duration <= 60 else "Long",
                 "publish_status": publish_status,
+                "stats_views": int(stats.get("viewCount", 0) or 0),
+                "stats_likes": int(stats.get("likeCount", 0) or 0),
+                "stats_comments": int(stats.get("commentCount", 0) or 0),
             }
     return result
 
@@ -198,6 +202,7 @@ def fetch_video_analytics(days=28):
     for video_id in combined_ids:
         m = meta.get(video_id, {})
         data = analytics_map.get(video_id, {})
+        analytics_available = video_id in analytics_map
         ctr = data.get("impressionClickThroughRate")
         items.append({
             "video_id": video_id,
@@ -206,13 +211,14 @@ def fetch_video_analytics(days=28):
             "duration": m.get("duration"),
             "video_type": m.get("video_type"),
             "publish_status": m.get("publish_status", "published"),
-            "views": data.get("views", 0),
+            "analytics_available": analytics_available,
+            "views": data.get("views", m.get("stats_views", 0)),
             "impressions": data.get("impressions", 0),
             "ctr": ctr,
             "average_view_duration": data.get("averageViewDuration", 0),
             "average_percentage_viewed": data.get("averageViewPercentage", 0),
-            "likes": data.get("likes", 0),
-            "comments": data.get("comments", 0),
+            "likes": data.get("likes", m.get("stats_likes", 0)),
+            "comments": data.get("comments", m.get("stats_comments", 0)),
             "subscribers_gained": data.get("subscribersGained", 0),
             "subscribers_lost": data.get("subscribersLost", 0),
         })
