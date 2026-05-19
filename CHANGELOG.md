@@ -19,6 +19,7 @@
 - `config.py` に `LONG_THUMBNAIL_AB_TEST`（デフォルト `False`）を追加。
 - `False` のときは Variant A のみ生成し、`thumbnail_ab_test.json` を書かないように変更。
 - `True` にすると従来どおり A/B/C 3バリアント生成・マニフェスト保存。
+- GUI のオプション行に「LongサムネAB」チェックボックスを追加（デフォルト OFF）。チェックすると A/B/C 3枚生成に切り替わる。
 
 ---
 

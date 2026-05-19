@@ -264,6 +264,9 @@ class YMM4AutoGui:
         self.batch_api_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(opt_frame, text="Batch API", variable=self.batch_api_var).pack(side=tk.LEFT, padx=4)
 
+        self.long_thumbnail_ab_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opt_frame, text="LongサムネAB", variable=self.long_thumbnail_ab_var).pack(side=tk.LEFT, padx=4)
+
         ttk.Label(opt_frame, text="画風:").pack(side=tk.LEFT, padx=(12, 2))
         self.style_var = tk.StringVar(value="nanobanana2")
         self.style_combo = ttk.Combobox(opt_frame, textvariable=self.style_var, values=["nanobanana2", "nanobanana pro"], state="readonly", width=14)
@@ -532,6 +535,7 @@ class YMM4AutoGui:
             "image_style": self.style_var.get(),
             "reuse_backgrounds": self.reuse_bg_var.get(),
             "use_batch_api": self.batch_api_var.get(),
+            "long_thumbnail_ab_test": self.long_thumbnail_ab_var.get(),
         }
 
     def refresh_history(self):
@@ -1296,6 +1300,7 @@ class YMM4AutoGui:
                             use_batch_api=settings["use_batch_api"],
                             cancel_event=cancel_event,
                             existing_titles=existing_titles,
+                            long_thumbnail_ab_test=settings.get("long_thumbnail_ab_test", False),
                         )
                         break
                     except OutputDirectoryLockedError as e:

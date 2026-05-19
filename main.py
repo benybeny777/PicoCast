@@ -316,7 +316,7 @@ def _estimate_script_duration(items, is_shorts: bool):
 
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
-                       script_content=None, debug_mode=False):
+                       script_content=None, debug_mode=False, long_thumbnail_ab_test=None):
     """Generate thumbnail image via Nano Banana using script content."""
     def _log(msg):
         if update_status: update_status(msg)
@@ -402,7 +402,8 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     )
     if thumbnail_text:
         common_rules += f' Use this exact thumbnail text at the top center: "{thumbnail_text}".'
-    variants_to_generate = LONG_THUMBNAIL_VARIANTS if LONG_THUMBNAIL_AB_TEST else LONG_THUMBNAIL_VARIANTS[:1]
+    ab_test = LONG_THUMBNAIL_AB_TEST if long_thumbnail_ab_test is None else long_thumbnail_ab_test
+    variants_to_generate = LONG_THUMBNAIL_VARIANTS if ab_test else LONG_THUMBNAIL_VARIANTS[:1]
     try:
         for variant in variants_to_generate:
             variant_id = variant["variant"]
@@ -431,7 +432,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     if os.path.exists(thumb_path):
         os.remove(thumb_path)
     shutil.copy2(first_variant_path, thumb_path)
-    if LONG_THUMBNAIL_AB_TEST:
+    if ab_test:
         manifest_path = _write_long_thumbnail_manifest(theme_dir, topic, manifest_variants)
         _log(f"  サムネイルA/B管理ファイル保存: {manifest_path}")
     _log(f"  アップロード用サムネイル保存: {thumb_path}")
@@ -544,7 +545,8 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
 
     img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style)
     thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
-                                    update_status, script_content=script_content, debug_mode=debug)
+                                    update_status, script_content=script_content, debug_mode=debug,
+                                    long_thumbnail_ab_test=long_thumbnail_ab_test)
     if not thumb_path:
         raise Exception("サムネイル生成に失敗しました")
     return thumb_path
@@ -553,7 +555,7 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
 def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
-                 cancel_event=None, existing_titles=None):
+                 cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None):
     report = GenerationReport()
     pipeline_start = time.time()
 
