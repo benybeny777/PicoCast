@@ -1492,6 +1492,25 @@ class YMM4AutoGui:
         data.update(fields)
         self._write_upload_record_data(path, data)
 
+    def _cleanup_uploaded_backups(self, folder_name):
+        if not folder_name:
+            return 0
+        backup_base = os.path.abspath(os.path.join("output", "000_backups"))
+        if not os.path.isdir(backup_base):
+            return 0
+        prefix = f"{folder_name}_"
+        removed = 0
+        for name in os.listdir(backup_base):
+            path = os.path.abspath(os.path.join(backup_base, name))
+            if not path.startswith(backup_base + os.sep):
+                continue
+            if not os.path.isdir(path):
+                continue
+            if name == folder_name or name.startswith(prefix):
+                shutil.rmtree(path)
+                removed += 1
+        return removed
+
     def _find_upload_record_for_schedule(self, title, video_type, publish_at):
         from datetime import datetime
         uploaded_dir = os.path.join("output", "000_uploaded")
@@ -2845,6 +2864,12 @@ class YMM4AutoGui:
                         self._append_uploaded_titles([folder_name])
                     except Exception:
                         pass
+                    try:
+                        removed_backups = self._cleanup_uploaded_backups(folder_name)
+                        if removed_backups:
+                            self.log(f"🧹 アップロード済みバックアップ削除: {removed_backups}件", "info")
+                    except Exception as e:
+                        self.log(f"  ⚠ バックアップ削除失敗: {e}", "warning")
                 self.root.after(0, self.refresh_history)
         except Exception as e:
             self.log(f"❌ アップロードエラー: {e}", "error")
