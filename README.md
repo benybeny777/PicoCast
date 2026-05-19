@@ -49,12 +49,12 @@ pip install requests google-genai python-dotenv pywinauto Pillow google-api-pyth
 ```env
 GOOGLE_API_KEY=...
 OPENAI_API_KEY=...
-LONG_UPLOAD_PLAYLIST_NAME=食べ物雑学ロング
+LONG_UPLOAD_PLAYLIST_NAME=ロング動画
 ```
 
 - `GOOGLE_API_KEY`: Google AI Studio の API keys で作成します。台本生成・画像生成で使います。
 - `OPENAI_API_KEY`: OpenAI Platform の API keys で作成します。ChatGPT生成前レビューで使います。
-- `LONG_UPLOAD_PLAYLIST_NAME`: 任意。設定するとLongアップロード成功後、名前が完全一致する自チャンネルの再生リストへ自動追加します。空なら無効です。
+- `LONG_UPLOAD_PLAYLIST_NAME`: 任意。Longアップロード成功後、名前が完全一致する自チャンネルの再生リストへ自動追加します。未設定時は `ロング動画` を使います。空にすると無効です。
 - `client_secrets.json`: Google Cloud Console で YouTube Data API v3 / YouTube Analytics API を有効化し、OAuthクライアントID（デスクトップアプリ）を作成してJSONをダウンロードします。ファイル名を `client_secrets.json` にしてリポジトリ直下へ置きます。
 - 初回の `YouTubeアップ` / `📊 アナリティクス` 実行時にブラウザ認証が開き、`token.json` / `token_analytics.json` が自動作成されます。
 

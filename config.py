@@ -82,7 +82,7 @@ BGM_LAYER = 2
 
 # Long サムネイル A/B テスト。False にすると variant A のみ生成し thumbnail_ab_test.json を書かない。
 LONG_THUMBNAIL_AB_TEST = os.environ.get("LONG_THUMBNAIL_AB_TEST", "0").strip().lower() in ("1", "true", "yes", "on")
-LONG_UPLOAD_PLAYLIST_NAME = os.environ.get("LONG_UPLOAD_PLAYLIST_NAME", "").strip()
+LONG_UPLOAD_PLAYLIST_NAME = os.environ.get("LONG_UPLOAD_PLAYLIST_NAME", "ロング動画").strip()
 
 # Cost control: max unique background images generated per video (thumbnail excluded).
 # Shorts: ideal visual change every 3-5 seconds.
