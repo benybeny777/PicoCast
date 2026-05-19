@@ -378,10 +378,10 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 
 ### サムネイルA/Bテスト
 
-`config.py` の `LONG_THUMBNAIL_AB_TEST`（デフォルト `False`）で制御。
+GUI オプション行の **「LongサムネAB」チェックボックス**（デフォルト OFF）または `config.py` の `LONG_THUMBNAIL_AB_TEST` で制御。GUI の設定が優先される。
 
-- **`False`（デフォルト）**: Variant A のみ生成。`thumbnail_ab_test.json` は書かない。
-- **`True`**: 3バリアントを生成し `_meta/thumbnail_ab_test.json` で管理。
+- **OFF（デフォルト）**: Variant A のみ生成。`thumbnail_ab_test.json` は書かない。
+- **ON**: 3バリアントを生成し `_meta/thumbnail_ab_test.json` で管理。
   - **Variant A**: 食べ物クローズアップ（クリック重視）
   - **Variant B**: 古い歴史・驚き演出
   - **Variant C**: 昔と今の比較・ギャップ
