@@ -2559,50 +2559,29 @@ class YMM4AutoGui:
                     self.root.after(0, lambda: self.log("✅ スケジュール同期チェック完了: 差異なし", "info"))
                     return
 
-                # 確認メッセージ組み立て
-                lines = []
-                if published_rows:
-                    lines.append(f"【手動公開済み: {len(published_rows)}件】")
-                    for info in published_rows[:3]:
-                        lines.append(f"  ・{info['row']['title'][:35]}")
-                    if len(published_rows) > 3:
-                        lines.append(f"  … 他 {len(published_rows) - 3} 件")
-                if time_mismatch:
-                    lines.append(f"【スケジュール時刻ズレ: {len(time_mismatch)}件】")
-                    for vid, yt_dt, row, _, _ in time_mismatch[:3]:
-                        lines.append(f"  ・{row['title'][:25]}  {row['dt'].strftime('%m/%d %H:%M')} → {yt_dt.strftime('%m/%d %H:%M')}")
-                    if len(time_mismatch) > 3:
-                        lines.append(f"  … 他 {len(time_mismatch) - 3} 件")
-                lines.append("\nローカルをYouTube側に合わせますか？")
-
-                def confirm_and_process():
-                    if not messagebox.askyesno("手動公開を検出・同期", "\n".join(lines), parent=dialog):
-                        return
-
+                def apply_sync():
                     schedules = {vt: _load(vt) for vt in ("shorts", "long")}
                     published_titles = []
 
-                    # 手動公開済み処理
                     for info in published_rows:
                         row = info["row"]
                         schedules[row["video_type"]].pop(row["iso"], None)
                         if row["title"]:
                             published_titles.append(row["title"].strip())
+                        self.log(f"  📢 手動公開済み検出: {row['title'][:35]}", "info")
 
-                    # 時刻ズレ修正：ローカルスケジュールのキーを YouTube の時刻に差し替え
                     for vid, yt_dt, row, record, record_path in time_mismatch:
                         vt = row["video_type"]
                         old_iso = row["iso"]
                         new_iso = yt_dt.isoformat()
                         title = schedules[vt].pop(old_iso, row["title"])
                         schedules[vt][new_iso] = title
-                        # upload_record.json の publish_at も更新
                         if record and record_path:
                             try:
                                 record["publish_at"] = new_iso
                                 self._write_upload_record_data(record_path, record)
                             except Exception as e:
-                                self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
+                                self.log(f"  ⚠ upload_record更新失敗: {e}", "warning")
                         self.log(f"  🔄 スロット時刻修正: {row['title'][:25]} {old_iso[:16]} → {new_iso[:16]}", "info")
 
                     for vt, data in schedules.items():
@@ -2622,7 +2601,7 @@ class YMM4AutoGui:
                     dialog.destroy()
                     self.show_upload_schedule_dialog()
 
-                self.root.after(0, confirm_and_process)
+                self.root.after(0, apply_sync)
 
             threading.Thread(target=worker, daemon=True).start()
 
