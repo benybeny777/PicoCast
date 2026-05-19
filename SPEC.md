@@ -45,15 +45,25 @@ yukkurijidou/
 │   ├── opening_quality.py  # 冒頭品質レビュー
 │   ├── script_prompts.py   # 台本生成プロンプト (Python)
 │   ├── script_generation_prompt.txt  # 台本生成プロンプト (テキスト)
+│   ├── prompt_parts/       # タイトル/台本プロンプトの差し込み部品
+│   │   ├── title_dynamic_context_food.md    # 実績データ差し込み欄
+│   │   ├── title_duplicate_context_food.md  # 既存タイトル・既存食材の重複チェック
+│   │   ├── title_used_foods_food.txt        # 初期食べ物用の既存食材リスト
+│   │   └── local/           # 個人用差し替え欄（Git管理外・同名ファイル優先）
 │   ├── analytics_score.py  # YouTube Analytics評価・TSV保存
 │   ├── youtube_analytics.py # YouTube Analytics API取得
 │   ├── upload_scheduler.py # アップロードスケジュール管理
 │   ├── youtube_uploader.py # YouTube APIアップロード
 │   └── ng_words.py         # NGワード置換
+├── samples/
+│   ├── prompt_parts/food/   # 食べ物用プロンプト設定の復元サンプル
+│   └── scripts/             # 共有用サンプル台本
 └── output/                 # 生成物出力先
     ├── upload_schedule_shorts.json
     └── upload_schedule_long.json
 ```
+
+`core/script_prompts.py` は `core/prompt_parts/local/` に同名ファイルがある場合、Git管理側の `core/prompt_parts/` より `local/` を優先して読み込む。これにより初期状態は食べ物用設定で動き、別ジャンル担当者は自分の `local/` だけを編集できる。
 
 ---
 

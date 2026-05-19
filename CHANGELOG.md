@@ -52,6 +52,7 @@
 - README / SPEC の初回セットアップ手順に、別ジャンル用 `local/` 差し替えと食べ物用設定の復元手順を追加。
 - 初回セットアップのプロンプト設定確認を必須手順として明記。
 - SPEC にAI編集者向けルールを追加し、ネタ固有プロンプト変更は `core/prompt_parts/local/` を編集するよう明記。
+- SPEC のシステム構成に `core/prompt_parts/`、`core/prompt_parts/local/`、`samples/` を追記。
 
 ### AIタイトル案プロンプトを実績データ横展開型に変更
 
