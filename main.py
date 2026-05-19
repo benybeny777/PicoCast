@@ -1097,7 +1097,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if is_cancelled():
             return cancel_result()
         thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
-                                        script_content=script_content, debug_mode=debug_mode)
+                                        script_content=script_content, debug_mode=debug_mode,
+                                        long_thumbnail_ab_test=long_thumbnail_ab_test)
         if is_cancelled():
             return cancel_result()
 
