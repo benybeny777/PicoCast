@@ -371,6 +371,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `MAX_BACKGROUNDS_SHORTS` | 9 | Shorts最大背景枚数 |
 | `MAX_BACKGROUNDS_LONG` | 90 | Long最大背景枚数（通常モード） |
 | `MAX_BACKGROUNDS_LONG_BUDGET` | 16 | Long節約モードの最大背景生成枚数 |
+| `LONG_UPLOAD_PLAYLIST_NAME` | 空 | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 | `BGM_VOLUME` | 15.0 | BGM音量(%) |
 
 ---
@@ -612,6 +613,8 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 `YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。各履歴フォルダから最新の `.mp4` を探し、`_meta/metadata.txt` のタイトル・説明文・タグを使ってアップロードします。アップロード成功後は、その履歴フォルダを `output/000_uploaded/` に移動します。
 
+`.env` の `LONG_UPLOAD_PLAYLIST_NAME` に再生リスト名を設定すると、Long動画のアップロード成功後に、その名前と完全一致する自チャンネルの再生リストへ動画を自動追加します。既に同じ動画が入っている場合は重複追加せず、結果を `_meta/upload_record.json` の `playlist_*` フィールドに保存します。Shortsには適用しません。再生リストが見つからない場合、アップロード自体は成功扱いのまま警告ログを出します。
+
 `💬 固定コメント` は、`output/000_uploaded/` 配下のアップロード済み履歴から、`script.txt` に固定コメントがあり、`upload_record.json` に `video_id` がある動画を選んでコメント投稿します。投稿成功後は `upload_record.json` に `fixed_comment_thread_id` を保存し、二重投稿を避けます。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
 
 Analytics画面には `高評価率` を表示します。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、再生数上位・平均視聴率上位・高評価率上位をまとめた実績サマリーを付けます。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
@@ -831,6 +834,7 @@ YouTube OAuth:
 | `BGM_VOLUME` | `config.py` | BGM音量 |
 | `MAX_BACKGROUNDS_SHORTS` | `config.py` | Shortsの最大背景生成枚数 |
 | `MAX_BACKGROUNDS_LONG` | `config.py` | Longの最大背景生成枚数 |
+| `LONG_UPLOAD_PLAYLIST_NAME` | `.env` | Longアップロード後に自動追加する再生リスト名。完全一致で検索 |
 
 `.env` の例:
 
@@ -841,4 +845,5 @@ OPENING_SCORE_ABORT_THRESHOLD=80
 OPENAI_FINAL_REVIEW_ENABLED=1
 OPENAI_FINAL_REVIEW_MODEL=gpt-5.4-mini
 LONG_FULL_SCRIPT_REVIEW=0
+LONG_UPLOAD_PLAYLIST_NAME=食べ物雑学ロング
 ```

@@ -159,6 +159,107 @@ def update_video_publish_time(video_id: str, publish_at, progress_callback=None)
         return False
 
 
+def _find_playlist_id_by_name(youtube, playlist_name: str) -> str | None:
+    target = str(playlist_name or "").strip()
+    if not target:
+        return None
+
+    page_token = None
+    while True:
+        kwargs = dict(part="snippet", mine=True, maxResults=50)
+        if page_token:
+            kwargs["pageToken"] = page_token
+        resp = youtube.playlists().list(**kwargs).execute()
+        for item in resp.get("items", []):
+            title = (item.get("snippet", {}).get("title") or "").strip()
+            if title == target:
+                return item.get("id")
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            return None
+
+
+def _playlist_contains_video(youtube, playlist_id: str, video_id: str) -> bool:
+    page_token = None
+    while True:
+        kwargs = dict(part="contentDetails", playlistId=playlist_id, maxResults=50)
+        if page_token:
+            kwargs["pageToken"] = page_token
+        resp = youtube.playlistItems().list(**kwargs).execute()
+        for item in resp.get("items", []):
+            if item.get("contentDetails", {}).get("videoId") == video_id:
+                return True
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            return False
+
+
+def add_video_to_playlist_by_name(video_id: str, playlist_name: str, progress_callback=None) -> dict:
+    """再生リスト名の完全一致で動画を追加する。既に入っている場合は追加しない。"""
+    def _log(msg):
+        if progress_callback:
+            progress_callback(msg)
+        else:
+            print(msg, flush=True)
+
+    playlist_name = str(playlist_name or "").strip()
+    result = {
+        "ok": False,
+        "skipped": False,
+        "playlist_name": playlist_name,
+        "playlist_id": None,
+        "playlist_item_id": None,
+        "reason": "",
+    }
+    if not video_id:
+        result["reason"] = "video_id が空です"
+        return result
+    if not playlist_name:
+        result["skipped"] = True
+        result["reason"] = "再生リスト名が未設定です"
+        return result
+
+    try:
+        youtube = get_youtube_client()
+        playlist_id = _find_playlist_id_by_name(youtube, playlist_name)
+        if not playlist_id:
+            result["reason"] = f"再生リストが見つかりません: {playlist_name}"
+            _log(f"  ⚠ 再生リストが見つかりません: {playlist_name}")
+            return result
+
+        result["playlist_id"] = playlist_id
+        if _playlist_contains_video(youtube, playlist_id, video_id):
+            result["ok"] = True
+            result["skipped"] = True
+            result["reason"] = "既に再生リストへ登録済みです"
+            _log(f"  ✅ 再生リスト登録済み: {playlist_name}")
+            return result
+
+        resp = youtube.playlistItems().insert(
+            part="snippet",
+            body={
+                "snippet": {
+                    "playlistId": playlist_id,
+                    "resourceId": {
+                        "kind": "youtube#video",
+                        "videoId": video_id,
+                    },
+                }
+            },
+        ).execute()
+        result["ok"] = True
+        result["playlist_item_id"] = resp.get("id")
+        result["reason"] = "追加しました"
+        _log(f"  ✅ 再生リストへ追加: {playlist_name}")
+        return result
+    except Exception as e:
+        result["reason"] = str(e)
+        _log(f"  ⚠ 再生リスト追加エラー: {e}")
+        if "forbidden" in str(e).lower() or "403" in str(e):
+            _log("  💡 token.json を削除して再認証すると解決する場合があります。")
+        return result
+
+
 def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
                  privacy="private", publish_at=None, progress_callback=None):
     """

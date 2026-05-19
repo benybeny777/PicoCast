@@ -1479,6 +1479,19 @@ class YMM4AutoGui:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
+    def _update_upload_record_fields(self, path, fields):
+        if not path:
+            return
+        data = {}
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                data = {}
+        data.update(fields)
+        self._write_upload_record_data(path, data)
+
     def _find_upload_record_for_schedule(self, title, video_type, publish_at):
         from datetime import datetime
         uploaded_dir = os.path.join("output", "000_uploaded")
@@ -2748,7 +2761,8 @@ class YMM4AutoGui:
     def _run_upload(self, mp4_path, title, description, tags, thumb, output_dir,
                     publish_at=None, video_type="long", fixed_comment="", restore_button=True):
         try:
-            from core.youtube_uploader import upload_video, post_comment
+            from config import LONG_UPLOAD_PLAYLIST_NAME
+            from core.youtube_uploader import add_video_to_playlist_by_name, upload_video, post_comment
             from core.upload_scheduler import mark_slot_used, format_slot
             title = self._strip_video_type_prefix(title)
             video_id = upload_video(mp4_path, title, description, tags,
@@ -2769,7 +2783,26 @@ class YMM4AutoGui:
                     rec_path = self._write_upload_record(output_dir, video_id, title, video_type, publish_at)
                     self.log(f"  📋 アップロード記録: {os.path.basename(rec_path)}", "info")
                 except Exception as e:
+                    rec_path = None
                     self.log(f"  ⚠ upload_record.json 書き込み失敗(無視): {e}")
+                if video_type == "long" and LONG_UPLOAD_PLAYLIST_NAME:
+                    self.log(f"  📚 再生リスト登録中: {LONG_UPLOAD_PLAYLIST_NAME}", "info")
+                    playlist_result = add_video_to_playlist_by_name(
+                        video_id,
+                        LONG_UPLOAD_PLAYLIST_NAME,
+                        progress_callback=self.log,
+                    )
+                    try:
+                        self._update_upload_record_fields(rec_path, {
+                            "playlist_name": playlist_result.get("playlist_name"),
+                            "playlist_id": playlist_result.get("playlist_id"),
+                            "playlist_item_id": playlist_result.get("playlist_item_id"),
+                            "playlist_added": bool(playlist_result.get("ok")),
+                            "playlist_skipped": bool(playlist_result.get("skipped")),
+                            "playlist_result": playlist_result.get("reason"),
+                        })
+                    except Exception as e:
+                        self.log(f"  ⚠ 再生リスト結果の記録に失敗: {e}", "warning")
                 # 固定コメント投稿は現在無効（APIエラーのため）
                 # if fixed_comment:
                 #     self.log("💬 固定コメントを投稿中...")
