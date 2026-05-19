@@ -2792,6 +2792,16 @@ class YMM4AutoGui:
                         LONG_UPLOAD_PLAYLIST_NAME,
                         progress_callback=self.log,
                     )
+                    if playlist_result.get("ok"):
+                        if playlist_result.get("skipped"):
+                            self.log(f"  📚 再生リスト登録済み: {LONG_UPLOAD_PLAYLIST_NAME}", "info")
+                        else:
+                            self.log(f"  📚 再生リスト登録完了: {LONG_UPLOAD_PLAYLIST_NAME}", "success")
+                    else:
+                        self.log(
+                            f"  ⚠ 再生リスト登録失敗: {LONG_UPLOAD_PLAYLIST_NAME} / {playlist_result.get('reason', '')}",
+                            "warning",
+                        )
                     try:
                         self._update_upload_record_fields(rec_path, {
                             "playlist_name": playlist_result.get("playlist_name"),
