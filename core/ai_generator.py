@@ -6,6 +6,8 @@ from config import GOOGLE_API_KEY, GEMINI_MODEL
 from core.ng_words import apply_ng_word_replacements
 from core.script_prompts import build_gemini_system_prompt
 
+# NOTE: generate_script() はデッドコード。GUIからは常に pregenerated_script が渡されるため呼ばれない。
+# __init__ / client は gui.py の接続確認チェックでのみ使用。
 class AIGenerator:
     def __init__(self, debug=False):
         self.debug = debug

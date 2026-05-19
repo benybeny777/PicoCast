@@ -610,6 +610,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         script_content = pregenerated_script
         update_status("台本を読み込み中...")
     else:
+        # NOTE: GUIからは常に pregenerated_script が渡されるためここには到達しない（CLIのみ）
         update_status(f"AI台本を生成中: {topic}...")
         script_content = ai.generate_script(topic, reference_script=reference_script, existing_titles=existing_titles)
         if script_content.startswith("Error"):
