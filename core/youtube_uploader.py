@@ -97,6 +97,28 @@ def post_comment(video_id: str, comment_text: str, progress_callback=None) -> st
         return None
 
 
+def get_video_statuses(video_ids: list[str]) -> dict[str, dict]:
+    """video_id のリストを渡し、{video_id: {"privacyStatus": ..., "publishAt": ...}} を返す。
+    見つからない動画は結果に含まれない。50件ずつバッチ処理。
+    """
+    if not video_ids:
+        return {}
+    youtube = get_youtube_client()
+    result = {}
+    for i in range(0, len(video_ids), 50):
+        chunk = video_ids[i:i + 50]
+        resp = youtube.videos().list(part="status", id=",".join(chunk)).execute()
+        for item in resp.get("items", []):
+            vid = item.get("id")
+            st = item.get("status", {})
+            if vid:
+                result[vid] = {
+                    "privacyStatus": st.get("privacyStatus"),
+                    "publishAt": st.get("publishAt"),
+                }
+    return result
+
+
 def update_video_publish_time(video_id: str, publish_at, progress_callback=None) -> bool:
     """予約投稿済み動画の公開予定日時を変更する。publish_at は timezone 付き datetime 推奨。"""
     def _log(msg):

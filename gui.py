@@ -2479,6 +2479,153 @@ class YMM4AutoGui:
 
             threading.Thread(target=worker, daemon=True).start()
 
+        def detect_manual_published():
+            """予定スロットをYouTube APIで確認し、ローカルをYouTube側に同期する。
+            ・public になっていた → 手動公開済みとして処理
+            ・publishAt がローカルと異なる → ローカルスケジュールを YouTube 側に合わせる
+            """
+            # 全予定スロット（フィルター前の rows を使う）
+            scheduled_rows_all = [r for r in rows if r[3] == "予定"]
+            if not scheduled_rows_all:
+                messagebox.showinfo("手動公開を検出", "確認対象の予約スロットがありません。", parent=dialog)
+                return
+
+            def worker():
+                import json as _json
+                from datetime import datetime, timedelta, timezone
+                from core.youtube_uploader import get_video_statuses
+                from core.upload_scheduler import _load, _save
+
+                JST = timezone(timedelta(hours=9))
+
+                # 予定スロットの video_id と record_path を取得
+                id_to_info = {}  # video_id → {row, record, record_path}
+                no_id_titles = []
+                for dt, label, title, status, vt, iso in scheduled_rows_all:
+                    row_dict = {"dt": dt, "label": label, "title": title, "status": status, "video_type": vt, "iso": iso}
+                    record, record_path = self._find_upload_record_for_schedule(title, vt, dt)
+                    vid = record.get("video_id") if record else None
+                    if vid:
+                        id_to_info[vid] = {"row": row_dict, "record": record, "record_path": record_path}
+                    else:
+                        no_id_titles.append(title[:30])
+
+                if no_id_titles:
+                    self.root.after(0, lambda t=no_id_titles: self.log(
+                        f"  ⚠ video_id未取得のスロット {len(t)}件をスキップ: {', '.join(t[:3])}", "warning"
+                    ))
+
+                if not id_to_info:
+                    self.root.after(0, lambda: messagebox.showinfo(
+                        "手動公開を検出", "video_idが取得できたスロットがありません。\nアップロード履歴を確認してください。", parent=dialog,
+                    ))
+                    return
+
+                self.root.after(0, lambda: self.log(f"🔍 YouTube APIでステータス確認中... ({len(id_to_info)}件)", "info"))
+                try:
+                    statuses = get_video_statuses(list(id_to_info.keys()))
+                except Exception as e:
+                    self.root.after(0, lambda e=e: (
+                        self.log(f"❌ YouTube API エラー: {e}", "error"),
+                        messagebox.showerror("エラー", str(e), parent=dialog),
+                    ))
+                    return
+
+                published_rows = []   # 手動公開済み
+                time_mismatch = []    # publishAt がズレている (video_id, yt_iso, local_iso, title)
+
+                for vid, st in statuses.items():
+                    if vid not in id_to_info:
+                        continue
+                    info = id_to_info[vid]
+                    row = info["row"]
+                    privacy = st.get("privacyStatus")
+                    yt_publish_at = st.get("publishAt")  # ISO8601 UTC 文字列 or None
+
+                    if privacy == "public":
+                        published_rows.append(info)
+                    elif privacy == "private" and yt_publish_at:
+                        # YouTube 側の publishAt を JST に変換して比較
+                        try:
+                            yt_dt = datetime.fromisoformat(yt_publish_at.replace("Z", "+00:00")).astimezone(JST)
+                            local_dt = row["dt"]
+                            # 1分以上ズレていたら不一致とみなす
+                            if abs((yt_dt - local_dt).total_seconds()) >= 60:
+                                time_mismatch.append((vid, yt_dt, row, info["record"], info["record_path"]))
+                        except Exception:
+                            pass
+
+                if not published_rows and not time_mismatch:
+                    self.root.after(0, lambda: self.log("✅ スケジュール同期チェック完了: 差異なし", "info"))
+                    return
+
+                # 確認メッセージ組み立て
+                lines = []
+                if published_rows:
+                    lines.append(f"【手動公開済み: {len(published_rows)}件】")
+                    for info in published_rows[:3]:
+                        lines.append(f"  ・{info['row']['title'][:35]}")
+                    if len(published_rows) > 3:
+                        lines.append(f"  … 他 {len(published_rows) - 3} 件")
+                if time_mismatch:
+                    lines.append(f"【スケジュール時刻ズレ: {len(time_mismatch)}件】")
+                    for vid, yt_dt, row, _, _ in time_mismatch[:3]:
+                        lines.append(f"  ・{row['title'][:25]}  {row['dt'].strftime('%m/%d %H:%M')} → {yt_dt.strftime('%m/%d %H:%M')}")
+                    if len(time_mismatch) > 3:
+                        lines.append(f"  … 他 {len(time_mismatch) - 3} 件")
+                lines.append("\nローカルをYouTube側に合わせますか？")
+
+                def confirm_and_process():
+                    if not messagebox.askyesno("手動公開を検出・同期", "\n".join(lines), parent=dialog):
+                        return
+
+                    schedules = {vt: _load(vt) for vt in ("shorts", "long")}
+                    published_titles = []
+
+                    # 手動公開済み処理
+                    for info in published_rows:
+                        row = info["row"]
+                        schedules[row["video_type"]].pop(row["iso"], None)
+                        if row["title"]:
+                            published_titles.append(row["title"].strip())
+
+                    # 時刻ズレ修正：ローカルスケジュールのキーを YouTube の時刻に差し替え
+                    for vid, yt_dt, row, record, record_path in time_mismatch:
+                        vt = row["video_type"]
+                        old_iso = row["iso"]
+                        new_iso = yt_dt.isoformat()
+                        title = schedules[vt].pop(old_iso, row["title"])
+                        schedules[vt][new_iso] = title
+                        # upload_record.json の publish_at も更新
+                        if record and record_path:
+                            try:
+                                record["publish_at"] = new_iso
+                                self._write_upload_record_data(record_path, record)
+                            except Exception as e:
+                                self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
+                        self.log(f"  🔄 スロット時刻修正: {row['title'][:25]} {old_iso[:16]} → {new_iso[:16]}", "info")
+
+                    for vt, data in schedules.items():
+                        _save(data, vt)
+
+                    added = 0
+                    if published_titles:
+                        added = self._append_uploaded_titles(published_titles)
+                        self.refresh_history()
+
+                    msgs = []
+                    if published_rows:
+                        msgs.append(f"手動公開済み処理: {len(published_rows)}件（履歴追記 {added}件）")
+                    if time_mismatch:
+                        msgs.append(f"スロット時刻修正: {len(time_mismatch)}件")
+                    self.log("✅ " + " / ".join(msgs), "success")
+                    dialog.destroy()
+                    self.show_upload_schedule_dialog()
+
+                self.root.after(0, confirm_and_process)
+
+            threading.Thread(target=worker, daemon=True).start()
+
         btn_frame = ttk.Frame(dialog)
         btn_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
         ttk.Label(btn_frame, textvariable=count_var, font=("Meiryo", 8)).pack(side=tk.LEFT)
@@ -2487,6 +2634,9 @@ class YMM4AutoGui:
         ttk.Button(btn_frame, text="手動公開済みにする", command=mark_manual_published).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btn_frame, text="公開予定を変更", command=change_publish_time).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btn_frame, text="スロット詰め直し", command=rebalance).pack(side=tk.RIGHT, padx=(0, 8))
+
+        # ダイアログを開いたときにYouTubeと自動同期
+        dialog.after(300, detect_manual_published)
 
     def _confirm_upload_schedule(self, rows):
         """rows: [(type_label, title, slot_str, score_label), ...] — True で確定、False でキャンセル。"""

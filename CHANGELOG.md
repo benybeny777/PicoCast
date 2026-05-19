@@ -12,6 +12,18 @@
 
 ---
 
+## 2026-05-19（続き②）
+
+### スケジュールダイアログを開くたびにYouTubeと自動同期
+
+- `📅 スケジュール` を開くと自動的に YouTube API でステータスを確認し、ローカルとの差異があれば確認ダイアログを表示するように変更。
+- `public` になっていた動画は手動公開済みとして処理（予約スロット削除・`uploaded_titles.txt` 追記）。
+- ローカルと YouTube の `publishAt` が 1 分以上ズレている場合はローカルスケジュールと `upload_record.json` を YouTube 側に合わせて更新。
+- 差異がない場合はログに「差異なし」とだけ表示して静かに完了。
+- `core/youtube_uploader.py` に `get_video_statuses()` 関数を追加（50件バッチ、privacyStatus + publishAt を返す）。
+
+---
+
 ## 2026-05-19（続き）
 
 ### Long サムネイル A/B テストを無効化オプションに変更
