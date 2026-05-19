@@ -1875,7 +1875,7 @@ class YMM4AutoGui:
         error_label.pack(fill=tk.X, padx=8, pady=(0, 6))
 
         cols = (
-            "title", "published_at", "video_type", "duration", "duration_status", "views", "impressions", "ctr",
+            "title", "published_at", "video_type", "duration", "duration_status", "analysis_status", "is_provisional", "views", "impressions", "ctr",
             "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
             "comments", "subscribers_net", "score", "action",
         )
@@ -1885,6 +1885,8 @@ class YMM4AutoGui:
             "video_type": "種別",
             "duration": "尺",
             "duration_status": "尺判定",
+            "analysis_status": "分析状態",
+            "is_provisional": "判定保留",
             "views": "再生数",
             "impressions": "インプレ",
             "ctr": "CTR",
@@ -1916,6 +1918,8 @@ class YMM4AutoGui:
             "video_type": 70,
             "duration": 70,
             "duration_status": 90,
+            "analysis_status": 90,
+            "is_provisional": 80,
             "views": 80,
             "impressions": 90,
             "ctr": 70,
@@ -1975,6 +1979,8 @@ class YMM4AutoGui:
                     item.get("video_type", ""),
                     format_duration(item.get("duration")),
                     format_duration_status(item.get("duration_status")),
+                    item.get("analysis_status", ""),
+                    "保留" if item.get("is_provisional") else "",
                     item.get("views", 0),
                     item.get("impressions", 0),
                     _fmt_ctr(item.get("ctr")),

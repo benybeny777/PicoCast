@@ -187,8 +187,9 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     elif video_type == "ShortLong":
         min_pct_expansion = 50.0
     else:
-        min_pct_expansion = 0.0  # Long は CTR + avg_percent の組み合わせで判定
+        min_pct_expansion = 40.0  # Long は CTR >= 8 と平均視聴率 40%以上で横展開
     above_expansion_min = avg_percent >= min_pct_expansion
+    long_expansion_ready = video_type == "Long" and ctr_value >= 8 and avg_percent >= 40
 
     # Rule 2: 動画種別ごとのベーススコア
     if video_type == "Shorts":
@@ -236,8 +237,12 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         if SCORE_ORDER.get(score, 0) < SCORE_ORDER["B"]:
             score = "B"
             action = "登録者増・改善候補"
-        if above_expansion_min and action != "横展開":
+        if video_type != "Long" and above_expansion_min and action != "横展開":
             action = "横展開"
+        elif video_type == "Long" and long_expansion_ready and action != "横展開":
+            action = "横展開"
+        elif video_type == "Long" and action != "横展開":
+            action = "登録者増・構成改善"
     # 登録者純増 >= 1 → 登録導線あり（弱いスコアへの補足）
     elif subscribers_net >= 1 and action in ("弱い", "要見直し", "改善して再挑戦"):
         action = f"{action}・登録導線あり"

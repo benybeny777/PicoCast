@@ -657,16 +657,25 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 
 | 条件 | 効果 |
 |---|---|
+| Shorts `avg_percent < 45` / ShortLong `avg_percent < 50` | `横展開` に昇格させず `テーマ有望・構成改善` にする |
+| Long `ctr < 8` または `avg_percent < 40` | 登録者増だけでは `横展開` にしない |
 | `subscribers_net >= 2` かつスコアが B 未満 | スコアを B に引き上げ・action `登録者増・改善候補` |
-| `subscribers_net >= 2` かつ `avg_percent >= 60` | action `横展開` |
+| `subscribers_net >= 2` かつ最低視聴率ライン以上 | Shorts / ShortLong は action `横展開` |
+| `subscribers_net >= 2` かつ Long の横展開条件未達 | action `登録者増・構成改善` |
+| `subscribers_net >= 1` かつ弱いスコア | action に `登録導線あり` を補足 |
+| `like_rate >= 1.5%` かつ最低視聴率ライン未達 | action `テーマ有望・構成改善` |
 | `like_rate >= 1.5%` かつ `score in (C, D)` | action `テーマ有望・冒頭/構成改善` |
+| `comments >= 1` かつ弱いスコア | action に `反応あり` を補足 |
+| `views < 500` かつ公開後24時間未満 | `is_provisional = true`。横展開系actionには `(判定保留)` を付ける |
 
 views 上位20% ルール（`score_items` でまとめて適用）：
 
 - analyzable 動画の views 80パーセンタイル以上 かつ `avg_percent >= 65` → action `横展開・微改善`
+- ただし `is_provisional = true` の動画は昇格しない
+- Shorts / ShortLong は最低視聴率ライン未満なら昇格しない
 - ただし action が `横展開` の場合は維持
 
-TSVには `publish_status` / `analysis_status` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複を防止できます。
+TSVには `publish_status` / `analysis_status` / `is_provisional` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複や判定保留を考慮できます。
 
 YouTube Studio 側で予約動画を手動公開した場合:
 
