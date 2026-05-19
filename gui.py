@@ -2080,7 +2080,14 @@ class YMM4AutoGui:
         dialog.transient(self.root)
 
         ttk.Label(dialog, text="アップロード済み・予約中のスケジュール一覧",
-                  font=("Meiryo", 9, "bold")).pack(anchor=tk.W, padx=12, pady=(10, 4))
+                  font=("Meiryo", 9, "bold")).pack(anchor=tk.W, padx=12, pady=(10, 2))
+
+        filter_frame = ttk.Frame(dialog)
+        filter_frame.pack(anchor=tk.W, padx=12, pady=(0, 4))
+        filter_var = tk.StringVar(value="すべて")
+        for _txt in ("すべて", "Shorts", "Long"):
+            ttk.Radiobutton(filter_frame, text=_txt, variable=filter_var, value=_txt,
+                            command=lambda: refresh_tree()).pack(side=tk.LEFT, padx=(0, 16))
 
         frame = ttk.Frame(dialog)
         frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
@@ -2105,19 +2112,33 @@ class YMM4AutoGui:
         sb.pack(side=tk.RIGHT, fill=tk.Y)
 
         row_by_iid = {}
-        for idx, (dt, label, title, status, vt, iso) in enumerate(rows):
-            dt_str = dt.strftime("%Y/%m/%d %H:%M")
-            tag = "done" if status == "済" else "upcoming"
-            iid = str(idx)
-            row_by_iid[iid] = {
-                "dt": dt,
-                "label": label,
-                "title": title,
-                "status": status,
-                "video_type": vt,
-                "iso": iso,
-            }
-            tree.insert("", tk.END, iid=iid, values=(dt_str, label, title, status), tags=(tag,))
+        count_var = tk.StringVar()
+
+        def refresh_tree():
+            tree.delete(*tree.get_children())
+            row_by_iid.clear()
+            filt = filter_var.get()
+            for idx, (dt, label, title, status, vt, iso) in enumerate(rows):
+                if filt != "すべて" and label != filt:
+                    continue
+                dt_str = dt.strftime("%Y/%m/%d %H:%M")
+                tag = "done" if status == "済" else "upcoming"
+                iid = str(idx)
+                row_by_iid[iid] = {
+                    "dt": dt,
+                    "label": label,
+                    "title": title,
+                    "status": status,
+                    "video_type": vt,
+                    "iso": iso,
+                }
+                tree.insert("", tk.END, iid=iid, values=(dt_str, label, title, status), tags=(tag,))
+            visible = list(row_by_iid.values())
+            count_var.set(
+                f"合計 {len(visible)} 件  /  予定 {sum(1 for r in visible if r['status']=='予定')} 件  /  済 {sum(1 for r in visible if r['status']=='済')} 件"
+            )
+
+        refresh_tree()
 
         # 削除・手動公開済みボタン
         def delete_selected():
@@ -2448,8 +2469,7 @@ class YMM4AutoGui:
 
         btn_frame = ttk.Frame(dialog)
         btn_frame.pack(fill=tk.X, padx=12, pady=(4, 10))
-        ttk.Label(btn_frame, text=f"合計 {len(rows)} 件  /  予定 {sum(1 for r in rows if r[3]=='予定')} 件  /  済 {sum(1 for r in rows if r[3]=='済')} 件",
-                  font=("Meiryo", 8)).pack(side=tk.LEFT)
+        ttk.Label(btn_frame, textvariable=count_var, font=("Meiryo", 8)).pack(side=tk.LEFT)
         ttk.Button(btn_frame, text="閉じる", command=dialog.destroy).pack(side=tk.RIGHT)
         ttk.Button(btn_frame, text="選択を削除", command=delete_selected).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btn_frame, text="手動公開済みにする", command=mark_manual_published).pack(side=tk.RIGHT, padx=(0, 8))
