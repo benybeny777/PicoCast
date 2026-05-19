@@ -1717,6 +1717,7 @@ class YMM4AutoGui:
 
             for idx, row in enumerate(rows, 1):
                 title = row["title"]
+                video_url = f"https://youtu.be/{row['video_id']}"
                 if row.get("posted_id"):
                     skipped += 1
                     self.log(f"💬 [{idx}/{total}] 投稿済みのためスキップ: {title}", "warning")
@@ -1740,6 +1741,7 @@ class YMM4AutoGui:
                         continue
 
                 self.log(f"💬 [{idx}/{total}] 固定コメント投稿中: {title}", "batch")
+                self.log(f"  動画URL: {video_url}", "batch")
                 comment_id = post_comment(row["video_id"], row["fixed_comment"], progress_callback=self.log)
                 if comment_id:
                     record = dict(row.get("record") or {})
@@ -1758,7 +1760,8 @@ class YMM4AutoGui:
                         "record_path": row["record_path"],
                         "record": record,
                     })
-                    self.log("  ✅ コメント投稿完了（ピン留めはYouTube Studioで確認してください）", "success")
+                    self.log(f"  ✅ コメント投稿完了: {video_url}", "success")
+                    self.log("     ピン留めはYouTube側で確認してください", "success")
                 else:
                     failed += 1
                     self.log(f"  ❌ コメント投稿失敗: {title}", "error")
