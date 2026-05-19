@@ -2088,6 +2088,10 @@ class YMM4AutoGui:
         for _txt in ("すべて", "Shorts", "Long"):
             ttk.Radiobutton(filter_frame, text=_txt, variable=filter_var, value=_txt,
                             command=lambda: refresh_tree()).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Separator(filter_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=(4, 12))
+        show_done_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(filter_frame, text="済みも表示", variable=show_done_var,
+                        command=lambda: refresh_tree()).pack(side=tk.LEFT)
 
         frame = ttk.Frame(dialog)
         frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
@@ -2118,8 +2122,11 @@ class YMM4AutoGui:
             tree.delete(*tree.get_children())
             row_by_iid.clear()
             filt = filter_var.get()
+            show_done = show_done_var.get()
             for idx, (dt, label, title, status, vt, iso) in enumerate(rows):
                 if filt != "すべて" and label != filt:
+                    continue
+                if not show_done and status == "済":
                     continue
                 dt_str = dt.strftime("%Y/%m/%d %H:%M")
                 tag = "done" if status == "済" else "upcoming"
