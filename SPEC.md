@@ -499,6 +499,12 @@ output/upload_schedule_long.json
 
 別ジャンル担当者は自分の環境の `local/` に差し替え用ファイルを置けば、Git pull / push で他人のネタ設定を上書きしません。共有用の見本台本は `samples/scripts/` に置きます。
 
+食べ物用の復元サンプルは `samples/prompt_parts/food/` に置きます。`core/prompt_parts/local/` を消してしまった場合は、以下をコピーすれば食べ物用設定を戻せます。
+
+```powershell
+Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
+```
+
 タイトル・サムネの基本方針:
 
 - タイトルは理由・経緯を伝える

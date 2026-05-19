@@ -47,6 +47,7 @@
 - 個人用プロンプト差し替え欄 `core/prompt_parts/local/` をGit管理外にし、同名ファイルがあればローカル側を優先して読み込むように変更。
 - `core/prompt_parts/local/script_generation_prompt.txt` がある場合は、台本生成プロンプト本体もローカル側を優先するように変更。
 - 共有用のサンプル台本 `samples/scripts/food_shorts_sample.txt` を追加。
+- 食べ物用プロンプト設定の復元サンプルを `samples/prompt_parts/food/` に追加。
 
 ### AIタイトル案プロンプトを実績データ横展開型に変更
 
