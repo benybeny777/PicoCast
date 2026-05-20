@@ -228,6 +228,9 @@ class YMM4AutoGui:
         self.generate_btn = ttk.Button(top_frame, text="🎬 生成 🚀", style="Accent.TButton", command=self.start_generation)
         self.generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
         self._add_tooltip(self.generate_btn, "貼り付けた台本から音声・背景・サムネ・YMM4プロジェクトを生成します。")
+        self.native_generate_btn = ttk.Button(top_frame, text="YMMなし生成(test)", command=self.start_native_generation)
+        self.native_generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
+        self._add_tooltip(self.native_generate_btn, "貼り付けた台本から素材を生成し、YMM4を使わずffmpegで簡易MP4を出力します。")
         self.cancel_btn = ttk.Button(top_frame, text="作業中止", command=self.request_cancel, state=tk.DISABLED)
         self.cancel_btn.pack(side=tk.RIGHT, padx=(4, 0))
         self._add_tooltip(self.cancel_btn, "実行中の生成処理に中止リクエストを送ります。")
@@ -535,6 +538,7 @@ class YMM4AutoGui:
             "use_batch_api": self.batch_api_var.get(),
             "long_thumbnail_ab_test": self.long_thumbnail_ab_var.get(),
             "long_budget_mode": self.long_budget_var.get(),
+            "native_render": False,
         }
 
     def refresh_history(self):
@@ -1212,6 +1216,12 @@ class YMM4AutoGui:
 
 
     def start_generation(self):
+        self._start_generation(native_render=False)
+
+    def start_native_generation(self):
+        self._start_generation(native_render=True)
+
+    def _start_generation(self, native_render=False):
         from core.parser import ScriptParser
         raw_scripts = self.ref_text.get("1.0", tk.END).strip()
         scripts = split_input_scripts(raw_scripts)
@@ -1270,8 +1280,18 @@ class YMM4AutoGui:
             return
 
         self.log("⚠ 問題がある場合は「作業中止」ボタンで止めてください", "warning")
-        self.log(f"一括処理開始: 合計 {len(scripts)} 件")
-        threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
+        settings = self._generation_settings()
+        settings["native_render"] = bool(native_render)
+        mode = "YMMなし(test)生成" if native_render else "一括処理"
+        self.log(f"{mode}開始: 合計 {len(scripts)} 件")
+        threading.Thread(target=self._run_batch, args=(scripts, settings, self.cancel_event), daemon=True).start()
+
+    @staticmethod
+    def _project_path_from_message(message):
+        marker = "プロジェクト保存済み: "
+        if marker not in str(message):
+            return None
+        return str(message).split(marker, 1)[1].strip().splitlines()[0].strip()
 
     def _run_batch(self, scripts, settings=None, cancel_event=None):
         settings = settings or self._generation_settings()
@@ -1364,6 +1384,20 @@ class YMM4AutoGui:
                         return
                     self._set_batch_progress_text(f"一括生成: {idx+1}/{count} 完了")
                     continue
+                if settings.get("native_render"):
+                    project_path = self._project_path_from_message(msg)
+                    output_dir = os.path.dirname(project_path) if project_path else None
+                    if not output_dir or not os.path.isdir(output_dir):
+                        raise Exception("YMMなし(test)の出力先フォルダを特定できませんでした")
+                    from core.native_renderer import render_native_test
+                    self.log(f"🎞 YMMなし(test) MP4出力開始: {os.path.basename(output_dir)}", "batch")
+                    native_result = render_native_test(output_dir, progress_callback=self.log)
+                    msg = (
+                        f"{msg}\n"
+                        f"✅ YMMなし(test) MP4出力済み: {native_result.output_path}"
+                    )
+                    if report:
+                        report.elapsed_sec = getattr(report, "elapsed_sec", 0) or 0
                 self.log(f"成功: {topic}", "success")
                 if is_batch:
                     self._set_batch_progress_text(f"一括生成: {idx+1}/{count} 完了")
@@ -2417,31 +2451,32 @@ class YMM4AutoGui:
         refresh_tree()
 
         if auto_sync:
-            def sync_worker():
-                if self._schedule_sync_running:
-                    self.root.after(0, lambda: self.log("YouTube同期はすでに実行中です。", "info"))
-                    return
+            if self._schedule_sync_running:
+                self.log("YouTube同期はすでに実行中です。", "info")
+            else:
                 self._schedule_sync_running = True
-                try:
-                    sync_result = sync_schedule_from_youtube(
-                        progress_callback=lambda msg: self.root.after(0, lambda m=msg: self.log(m, "info"))
-                    )
-                    def done():
-                        if sync_result.get("checked"):
-                            self.log(
-                                f"YouTube同期: 確認 {sync_result.get('checked', 0)} / 予約 {sync_result.get('scheduled', 0)} / 公開済み {sync_result.get('published', 0)}",
-                                "info",
-                            )
-                        if dialog.winfo_exists():
-                            dialog.destroy()
-                            self.show_upload_schedule_dialog(auto_sync=False)
-                    self.root.after(0, done)
-                except Exception as e:
-                    self.root.after(0, lambda e=e: self.log(f"YouTube同期に失敗したためローカル表示のまま続行: {e}", "warning"))
-                finally:
-                    self._schedule_sync_running = False
 
-            threading.Thread(target=sync_worker, daemon=True).start()
+                def sync_worker():
+                    try:
+                        sync_result = sync_schedule_from_youtube(
+                            progress_callback=lambda msg: self.root.after(0, lambda m=msg: self.log(m, "info"))
+                        )
+                        def done():
+                            if sync_result.get("checked"):
+                                self.log(
+                                    f"YouTube同期: 確認 {sync_result.get('checked', 0)} / 予約 {sync_result.get('scheduled', 0)} / 公開済み {sync_result.get('published', 0)}",
+                                    "info",
+                                )
+                            if dialog.winfo_exists():
+                                dialog.destroy()
+                                self.show_upload_schedule_dialog(auto_sync=False)
+                        self.root.after(0, done)
+                    except Exception as e:
+                        self.root.after(0, lambda e=e: self.log(f"YouTube同期に失敗したためローカル表示のまま続行: {e}", "warning"))
+                    finally:
+                        self._schedule_sync_running = False
+
+                threading.Thread(target=sync_worker, daemon=True).start()
 
         # 削除・手動公開済みボタン
         def delete_selected():
@@ -2850,8 +2885,9 @@ class YMM4AutoGui:
                 messagebox.showinfo("手動公開を検出", "確認対象の予約スロットがありません。", parent=dialog)
                 return
 
+            self._schedule_sync_running = True
+
             def worker():
-                self._schedule_sync_running = True
                 import json as _json
                 from datetime import datetime, timedelta, timezone
                 from core.youtube_uploader import get_video_statuses
@@ -3871,6 +3907,7 @@ class YMM4AutoGui:
     def _toggle_ui(self, enabled):
         state = tk.NORMAL if enabled else tk.DISABLED
         self.generate_btn.config(state=state)
+        self.native_generate_btn.config(state=state)
         self.llm_check_btn.config(state=state)
         self.history_batch_btn.config(state=state)
         self.cancel_btn.config(state=tk.DISABLED if enabled else tk.NORMAL)

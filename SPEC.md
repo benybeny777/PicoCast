@@ -52,7 +52,9 @@ yukkurijidou/
 │   │   └── local/           # 個人用差し替え欄（Git管理外・同名ファイル優先）
 │   ├── analytics_score.py  # YouTube Analytics評価・TSV保存
 │   ├── youtube_analytics.py # YouTube Analytics API取得
-│   ├── upload_scheduler.py # アップロードスケジュール管理
+│   ├── upload_scheduler.py # アップロードスケジュール管理（schedule_from_recordsで台帳から派生）
+│   ├── upload_records.py   # アップロード台帳の読み書き・upsert
+│   ├── output_paths.py     # 出力パスの集約・マイグレーション
 │   ├── youtube_uploader.py # YouTube APIアップロード
 │   └── ng_words.py         # NGワード置換
 ├── samples/
@@ -230,7 +232,21 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 | Long | 21:00（毎日）/ 12:00（土日のみ） | 毎日 |
 
 - スロット割当範囲: 最大90日先まで探索
-- アップロード実行後: `_meta/upload_record.json` にスコア情報を保存
+- アップロード実行後: `_meta/upload_record.json` と `output/000_data/upload_records.json` に記録
+- スケジュールの正は `upload_records.json` の `publish_status == "scheduled"` レコード。`schedule_from_records()` で派生ビューを生成する。旧 `upload_schedule_*.json` は廃止
+- `sync_schedule_from_youtube()`: YouTube API を正としてローカル台帳を更新。チャンネル全件取得（`get_channel_upload_video_statuses`）に失敗した場合は既知 video_id のみでフォールバック
+- `infer_video_type()`: タイトルプレフィックス優先。タイトルなしの場合は duration ≤ 60s を shorts と推定
+
+### 出力データディレクトリ
+
+| パス | 用途 |
+|---|---|
+| `output/000_data/upload_records.json` | アップロード台帳（video_id・公開予定・スコアなど） |
+| `output/000_data/uploaded_titles.txt` | 公開済みタイトル一覧 |
+| `output/000_analytics/` | Analytics スコア JSON / TSV |
+| `output/000_legacy/` | 旧 `upload_schedule_*.json` の退避先 |
+
+パスは `config.py` の `OUTPUT_DATA_DIR` / `OUTPUT_ANALYTICS_DIR` / `OUTPUT_LEGACY_DIR` で変更可能。`core/output_paths.py` がこれらを絶対パスに解決して各モジュールへ提供する。
 
 ---
 
@@ -449,10 +465,7 @@ output/{テーマ名}/
 
 アップロード済みの履歴は `output/000_uploaded/` に移動します。アップロード記録の永続台帳は `output/000_data/upload_records.json` に保存するため、`output/000_uploaded/` は削除しても運用上必要な `video_id`、公開予定、固定コメント状態、再生リスト登録結果、生成区分情報は残ります。生成時に既存フォルダを退避した `output/000_backups/` の同一テーマバックアップは最新1世代だけ残し、アップロード成功後に削除します。
 
-スケジュールは以下に保存されます（Git 管理外）:
-
-```text
-```
+スケジュール状態は `output/000_data/upload_records.json` の `publish_status` フィールドで管理します（Git 管理外）。
 
 ---
 

@@ -83,6 +83,8 @@ def schedule_from_records(records: list[dict] | None = None) -> dict[str, dict]:
 
         records = load_upload_records()
 
+    import logging
+
     schedules = {vt: {} for vt in VIDEO_TYPES}
     for record in records:
         vt = str(record.get("video_type") or "").lower()
@@ -100,7 +102,13 @@ def schedule_from_records(records: list[dict] | None = None) -> dict[str, dict]:
         title = str(record.get("title") or "").split("\n")[0].strip()
         if not title:
             continue
-        schedules[vt].setdefault(iso, title)
+        if iso in schedules[vt]:
+            logging.warning(
+                "schedule_from_records: duplicate slot %s for %s (keeping %r, ignoring %r)",
+                iso, vt, schedules[vt][iso], title,
+            )
+        else:
+            schedules[vt][iso] = title
     return schedules
 
 
@@ -147,7 +155,8 @@ def build_rebalanced_schedule(
 
 
 def rebalance_slots(video_type: str) -> list[tuple[str, str, str]]:
-    """Repack future slots from the earliest available slot."""
+    """Compute changes needed to repack future slots. Does not write anything.
+    The caller is responsible for applying each change to YouTube and upload_records."""
     schedule = schedule_from_records().get(video_type, {})
     _new_schedule, changes = build_rebalanced_schedule(schedule, video_type)
     return changes
@@ -195,7 +204,8 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
     }
     try:
         statuses = get_channel_upload_video_statuses()
-    except Exception:
+    except Exception as _e:
+        _log(f"チャンネル全件取得失敗、既知IDのみでフォールバック: {_e}")
         statuses = get_video_statuses(list(id_to_record.keys()))
     now = datetime.now(JST)
     changed_records = 0

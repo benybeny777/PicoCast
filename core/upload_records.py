@@ -26,7 +26,6 @@ def load_upload_records() -> list[dict[str, Any]]:
 
 def save_upload_records(records: list[dict[str, Any]]) -> str:
     migrate_root_file("upload_records.json", os.path.dirname(UPLOAD_RECORDS_FILE))
-    os.makedirs(os.path.dirname(UPLOAD_RECORDS_FILE), exist_ok=True)
     payload = {
         "updated_at": datetime.now().astimezone().isoformat(),
         "records": records,

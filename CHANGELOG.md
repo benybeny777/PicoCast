@@ -14,6 +14,37 @@
 
 ## 2026-05-21
 
+### YouTube同期・出力パス整理・台帳一元化・バグ修正
+
+**アーキテクチャ変更 (commit 7be08a7)**:
+
+- スケジュール管理を `upload_schedule_*.json` から `upload_records.json` 台帳ベースに移行
+  - `schedule_from_records()` が `publish_status == "scheduled"` のレコードから派生ビューを生成
+  - `sync_schedule_from_youtube()` で YouTube API を正としてローカル台帳を更新。チャンネル全件取得失敗時は既知 video_id のみでフォールバック
+  - `rebalance_slots()` は変更リストを返すだけで書き込みを行わない（呼び出し側が YouTube + upload_records を更新）
+  - 旧 `upload_schedule_*.json` は `output/000_legacy/` に退避
+- 出力ディレクトリを整理
+  - `output/000_data/` : `upload_records.json` / `uploaded_titles.txt`
+  - `output/000_analytics/` : Analytics スコア JSON / TSV
+  - `output/000_legacy/` : 旧スケジュールファイル退避
+  - `core/output_paths.py` で絶対パスを集約。`config.py` の ENV 変数で変更可能
+  - 旧パス (`output/upload_records.json` 等) は初回アクセス時に自動移行
+- GUI のスケジュール画面を `upload_records` 由来の表示に統一
+  - Analytics ウィンドウで閉じた後に `render()` が呼ばれて落ちる問題を `winfo_exists()` チェックで修正
+  - API ステータス確認の多重実行を `_schedule_sync_running` フラグで抑制
+  - リバランス時の移動内容をログ出力
+
+**レビュー修正**:
+
+- `schedule_from_records`: 同一スロットに重複レコードがあった場合、`setdefault` で黙って捨てていたのを `logging.warning` を出す明示判定に変更
+- `save_upload_records`: `migrate_root_file` が内部で `ensure_output_dirs` を呼ぶため、直後の冗長な `os.makedirs` を削除
+- `infer_video_type`: duration による Shorts 推定閾値を 180s → 60s に修正（YouTube 公式 Shorts 上限に合わせる）
+- `rebalance_slots`: docstring を「変更リストを返すだけ・書き込みを行わない」と明記
+- `sync_schedule_from_youtube` のフォールバック時にログを追加
+- `_schedule_sync_running` フラグのレース修正: `sync_worker` と `detect_manual_published` でフラグのチェック・セットをスレッド起動前（メインスレッド）に移動
+
+---
+
 ### vidIQ固定タグ更新・MP4なしアップロード候補除外・プロンプト改善
 
 - `core/youtube_metadata.py` を追加し、vidIQキーワード分析に基づく YouTube タグ生成を一元化。

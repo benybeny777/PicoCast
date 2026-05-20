@@ -145,7 +145,7 @@ def infer_video_type(title: str | None = None, duration: str | None = None) -> s
     if text.startswith(("[Shorts]", "[SHORT]")):
         return "shorts"
     seconds = _duration_seconds(duration)
-    if seconds is not None and seconds <= 180:
+    if seconds is not None and seconds <= 60:
         return "shorts"
     return "long"
 
