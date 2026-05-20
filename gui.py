@@ -792,7 +792,34 @@ class YMM4AutoGui:
         self.log(f"履歴一括処理開始: 合計 {len(scripts)} 件", "batch")
         threading.Thread(target=self._run_batch, args=(scripts, self._generation_settings(), self.cancel_event), daemon=True).start()
 
-    def select_history_dialog(self, title, action_text, multi=False, require_script=False):
+    def _mp4_candidates_in_dir(self, output_dir):
+        if not os.path.isdir(output_dir):
+            return []
+        return [
+            os.path.join(output_dir, f)
+            for f in os.listdir(output_dir)
+            if f.lower().endswith(".mp4")
+        ]
+
+    def _external_mp4_candidate(self, output_dir):
+        search_dir = self._DOCUMENTS_SEARCH_DIR
+        if not os.path.isdir(search_dir) or not os.path.isdir(output_dir):
+            return None
+        ymmp_stems = [
+            os.path.splitext(f)[0]
+            for f in os.listdir(output_dir)
+            if f.lower().endswith(".ymmp")
+        ]
+        for stem in ymmp_stems:
+            src = os.path.join(search_dir, stem + ".mp4")
+            if os.path.exists(src):
+                return src
+        return None
+
+    def _has_uploadable_mp4(self, output_dir):
+        return bool(self._mp4_candidates_in_dir(output_dir) or self._external_mp4_candidate(output_dir))
+
+    def select_history_dialog(self, title, action_text, multi=False, require_script=False, require_mp4=False):
         self.refresh_history()
         histories = getattr(self, "history_items", [])
         if require_script:
@@ -800,8 +827,14 @@ class YMM4AutoGui:
                 name for name in histories
                 if os.path.exists(os.path.join("output", name, "script.txt"))
             ]
+        if require_mp4:
+            histories = [
+                name for name in histories
+                if self._has_uploadable_mp4(os.path.join("output", name))
+            ]
         if not histories:
-            messagebox.showinfo("履歴なし", "選択できる履歴がありません。")
+            msg = "アップロード可能なMP4がある履歴がありません。" if require_mp4 else "選択できる履歴がありません。"
+            messagebox.showinfo("履歴なし", msg)
             return []
 
         dialog = tk.Toplevel(self.root)
@@ -838,7 +871,7 @@ class YMM4AutoGui:
                 os.path.exists(os.path.join(output_dir, "thumbnails", "thumbnail.png"))
                 or os.path.isdir(os.path.join(output_dir, "backgrounds"))
             ) else "  (画像なし)"
-            mp4_suffix = "" if any(f.lower().endswith(".mp4") for f in os.listdir(output_dir)) else "  (MP4なし)"
+            mp4_suffix = "" if self._has_uploadable_mp4(output_dir) else "  (MP4なし)"
             display_name = self._folder_name_to_title(name)
             history_list.insert(tk.END, f"{edited_at}  {display_name}{script_suffix}{image_suffix}{mp4_suffix}")
 
@@ -1383,7 +1416,12 @@ class YMM4AutoGui:
             self.root.after(0, lambda: self._toggle_ui(True))
 
     def start_youtube_upload(self):
-        selected = self.select_history_dialog("YouTubeアップロードする履歴を選択", "アップロード", multi=True)
+        selected = self.select_history_dialog(
+            "YouTubeアップロードする履歴を選択",
+            "アップロード",
+            multi=True,
+            require_mp4=True,
+        )
         if not selected:
             return
 
@@ -1391,11 +1429,7 @@ class YMM4AutoGui:
         skipped = []
         for name in selected:
             output_dir = os.path.join("output", name)
-            mp4_candidates = [
-                os.path.join(output_dir, f)
-                for f in os.listdir(output_dir)
-                if f.lower().endswith(".mp4")
-            ] if os.path.isdir(output_dir) else []
+            mp4_candidates = self._mp4_candidates_in_dir(output_dir)
 
             if not mp4_candidates:
                 moved = self._find_and_move_mp4(output_dir, name)
@@ -3721,29 +3755,14 @@ class YMM4AutoGui:
 
     def _find_and_move_mp4(self, output_dir, folder_name):
         """output_dir に MP4 がない場合、Documents から .ymmp と同名の MP4 を探して移動する。"""
-        search_dir = self._DOCUMENTS_SEARCH_DIR
-        if not os.path.isdir(search_dir):
-            return None
-
-        # プロジェクトフォルダ内の .ymmp ファイル名（拡張子なし）を基準にする
-        ymmp_stems = [
-            os.path.splitext(f)[0]
-            for f in os.listdir(output_dir)
-            if f.lower().endswith(".ymmp")
-        ] if os.path.isdir(output_dir) else []
-        if not ymmp_stems:
-            return None
-
-        for stem in ymmp_stems:
-            mp4_name = stem + ".mp4"
-            src = os.path.join(search_dir, mp4_name)
-            if os.path.exists(src):
-                os.makedirs(output_dir, exist_ok=True)
-                dest = os.path.join(output_dir, mp4_name)
-                shutil.move(src, dest)
-                self.log(f"📦 MP4 を Documents から移動: {mp4_name}", "info")
-                return dest
-
+        src = self._external_mp4_candidate(output_dir)
+        if src:
+            os.makedirs(output_dir, exist_ok=True)
+            mp4_name = os.path.basename(src)
+            dest = os.path.join(output_dir, mp4_name)
+            shutil.move(src, dest)
+            self.log(f"📦 MP4 を Documents から移動: {mp4_name}", "info")
+            return dest
         return None
 
     def open_output_dir(self):

@@ -262,7 +262,7 @@ _CHANNEL_FOOTER = (
     "💬 感想はコメントで！\n"
     "🔔 通知オンで見逃しなし！\n"
     f"\n▶ チャンネル登録はこちら → {_CHANNEL_URL}\n"
-    "\n#ずんだもん #ゆっくり解説 #食べ物雑学 #食べ物の歴史 #VOICEVOX"
+    "\n#ずんだもん #ゆっくり解説 #食べ物雑学 #食べ物の歴史 #VOICEVOX #雑学ショート"
 )
 
 
@@ -742,11 +742,20 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     if "description" in meta:
         from core.ng_words import apply_ng_word_replacements
+        from core.youtube_metadata import optimize_description, optimize_tags
         _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
         if _stripped:
             update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
         _desc = re.sub(r'#\S+', '', _desc).strip()
-        meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+        _desc = optimize_description(apply_ng_word_replacements(_desc), is_shorts=is_shorts, keep_hashtags=False)
+        meta["description"] = _desc + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+    if "tags" in meta:
+        from core.youtube_metadata import optimize_tags
+        meta["tags"] = optimize_tags(
+            meta["tags"],
+            title=meta.get("video_title", topic),
+            description=meta.get("description", ""),
+        )
 
     opening_title = meta.get("video_title", topic)
     opening_thumb_text = meta.get("thumbnail_text", "")
@@ -883,11 +892,20 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     ai_thumbnail_prompt = meta.get("thumbnail")
                     if "description" in meta:
                         from core.ng_words import apply_ng_word_replacements
+                        from core.youtube_metadata import optimize_description, optimize_tags
                         _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
                         if _stripped:
                             update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
                         _desc = re.sub(r'#\S+', '', _desc).strip()
-                        meta["description"] = apply_ng_word_replacements(_desc) + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+                        _desc = optimize_description(apply_ng_word_replacements(_desc), is_shorts=is_shorts, keep_hashtags=False)
+                        meta["description"] = _desc + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+                    if "tags" in meta:
+                        from core.youtube_metadata import optimize_tags
+                        meta["tags"] = optimize_tags(
+                            meta["tags"],
+                            title=meta.get("video_title", topic),
+                            description=meta.get("description", ""),
+                        )
                     opening_title = meta.get("video_title", topic)
                     opening_thumb_text = meta.get("thumbnail_text", "")
                     opening_review = candidate_review

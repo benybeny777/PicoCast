@@ -260,6 +260,39 @@ def add_video_to_playlist_by_name(video_id: str, playlist_name: str, progress_ca
         return result
 
 
+def _read_script_text_for_tags(mp4_path: str) -> str:
+    output_dir = os.path.dirname(os.path.abspath(mp4_path))
+    script_path = os.path.join(output_dir, "script.txt")
+    if not os.path.exists(script_path):
+        return ""
+    try:
+        with open(script_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return ""
+
+
+def _write_youtube_metadata(output_dir: str, title: str, youtube_tags: list[str]) -> str | None:
+    if not output_dir:
+        return None
+    try:
+        from core.youtube_metadata import TAG_POLICY
+
+        meta_dir = os.path.join(output_dir, "_meta")
+        os.makedirs(meta_dir, exist_ok=True)
+        path = os.path.join(meta_dir, "youtube_metadata.json")
+        data = {
+            "title": title,
+            "youtube_tags": youtube_tags,
+            "tag_policy": TAG_POLICY,
+        }
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        return path
+    except Exception:
+        return None
+
+
 def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
                  privacy="private", publish_at=None, progress_callback=None):
     """
@@ -272,12 +305,26 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
         else:
             print(msg, flush=True)
 
+    from core.youtube_metadata import optimize_upload_metadata, split_tags
+
     title = _strip_video_type_prefix(title)
+    is_shorts = "[Shorts]" in str(mp4_path) or "[Shorts]" in str(title)
+    script_text = _read_script_text_for_tags(mp4_path)
+    title, description, tags = optimize_upload_metadata(
+        title,
+        description,
+        tags,
+        is_shorts=is_shorts,
+        script_text=script_text,
+    )
 
     _log("🔑 YouTube 認証中...")
     youtube = get_youtube_client()
 
-    tag_list = [t.strip() for t in tags.replace("、", ",").split(",") if t.strip()]
+    tag_list = split_tags(tags)
+    metadata_path = _write_youtube_metadata(os.path.dirname(os.path.abspath(mp4_path)), title, tag_list)
+    if metadata_path:
+        _log(f"  🏷 YouTubeタグ記録: {metadata_path}")
 
     # publish_at が指定されていれば ISO8601 文字列に統一
     publish_at_str = None
