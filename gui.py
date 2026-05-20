@@ -20,6 +20,7 @@ from main import (
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
 from core.analytics_score import build_performance_summary, format_duration, format_duration_status, save_score_files, score_items, to_tsv
+from core.output_paths import UPLOADED_TITLES_FILE, analytics_paths, ensure_output_dirs, migrate_root_file
 from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
@@ -337,6 +338,7 @@ class YMM4AutoGui:
         self.cancel_event = threading.Event()
         self._gen_id = 0
         self._log_queue = queue.Queue()
+        self._schedule_sync_running = False
 
         self.refresh_history()
         self._migrate_upload_records_once()
@@ -408,15 +410,7 @@ class YMM4AutoGui:
 
     @staticmethod
     def _read_latest_analytics_items():
-        output_dir = "output"
-        try:
-            paths = [
-                os.path.join(output_dir, name)
-                for name in os.listdir(output_dir)
-                if name.startswith("analytics_score_") and name.endswith(".json")
-            ]
-        except OSError:
-            return [], None
+        paths = analytics_paths(".json")
         if not paths:
             return [], None
         latest = max(paths, key=lambda path: os.path.getmtime(path))
@@ -433,15 +427,7 @@ class YMM4AutoGui:
 
     @staticmethod
     def _read_latest_analytics_tsv(max_rows=80):
-        output_dir = "output"
-        try:
-            paths = [
-                os.path.join(output_dir, name)
-                for name in os.listdir(output_dir)
-                if name.startswith("analytics_score_") and name.endswith(".tsv")
-            ]
-        except OSError:
-            return "", None, 0
+        paths = analytics_paths(".tsv")
         if not paths:
             return "", None, 0
         latest = max(paths, key=lambda path: os.path.getmtime(path))
@@ -555,7 +541,7 @@ class YMM4AutoGui:
         if not os.path.exists("output"): os.makedirs("output", exist_ok=True)
         history = [
             d for d in os.listdir("output")
-            if os.path.isdir(os.path.join("output", d)) and d not in {"000_uploaded", "000_backups"}
+            if os.path.isdir(os.path.join("output", d)) and not d.startswith("000_")
         ]
         history.sort(key=lambda d: os.path.getmtime(os.path.join("output", d)), reverse=True)
         self.history_items = history
@@ -626,7 +612,7 @@ class YMM4AutoGui:
         active = self._collect_titles_from_folder("output", exclude_uploaded=True)
 
         # 投稿済み: ログファイル（フォルダが消えても残る）＋現存フォルダをマージ
-        log_path = os.path.join("output", "uploaded_titles.txt")
+        log_path = migrate_root_file("uploaded_titles.txt", os.path.dirname(UPLOADED_TITLES_FILE))
         logged_names = []
         if os.path.exists(log_path):
             with open(log_path, "r", encoding="utf-8") as lf:
@@ -649,8 +635,8 @@ class YMM4AutoGui:
         return active, uploaded
 
     def _append_uploaded_titles(self, titles):
-        os.makedirs("output", exist_ok=True)
-        log_path = os.path.join("output", "uploaded_titles.txt")
+        ensure_output_dirs()
+        log_path = migrate_root_file("uploaded_titles.txt", os.path.dirname(UPLOADED_TITLES_FILE))
         existing = set()
         if os.path.exists(log_path):
             with open(log_path, "r", encoding="utf-8") as lf:
@@ -1481,6 +1467,8 @@ class YMM4AutoGui:
 
         # 確認ダイアログ
         rows = []
+        seen_schedule_rows = set()
+        seen_schedule_rows = set()
         for j in base_jobs:
             vt, slot = slot_map[id(j)]
             score_label = self._read_score_label(j[5])
@@ -2080,6 +2068,12 @@ class YMM4AutoGui:
         tree.tag_configure("score_C", background="#ffe8cc")
         tree.tag_configure("score_D", background="#ffe3e3")
 
+        def _widget_alive(widget):
+            try:
+                return bool(widget.winfo_exists())
+            except tk.TclError:
+                return False
+
         def _fmt_percent(value):
             if value is None:
                 return ""
@@ -2138,6 +2132,8 @@ class YMM4AutoGui:
             return str(item.get(col) or "")
 
         def _refresh_headings():
+            if not _widget_alive(tree):
+                return
             for col in cols:
                 label = headings[col]
                 if state["sort_col"] == col:
@@ -2145,6 +2141,8 @@ class YMM4AutoGui:
                 tree.heading(col, text=label, command=lambda c=col: sort_by(c))
 
         def sort_by(col):
+            if not _widget_alive(tree):
+                return
             if state["sort_col"] == col:
                 state["sort_reverse"] = not state["sort_reverse"]
             else:
@@ -2159,6 +2157,8 @@ class YMM4AutoGui:
             render()
 
         def render():
+            if not _widget_alive(tree):
+                return
             tree.delete(*tree.get_children())
             for item in state["items"]:
                 values = (
@@ -2203,6 +2203,8 @@ class YMM4AutoGui:
                     json_path, tsv_path = save_score_files(items, days)
 
                     def done():
+                        if not _widget_alive(tree):
+                            return
                         state["items"] = items
                         summary = data.get("summary", {})
                         published_count = sum(1 for item in items if item.get("publish_status") == "published")
@@ -2223,6 +2225,8 @@ class YMM4AutoGui:
                     tb_text = traceback.format_exc()
 
                     def failed(err_text=err_text, tb_text=tb_text):
+                        if not _widget_alive(tree):
+                            return
                         summary_var.set("取得失敗")
                         error_var.set(err_text)
                         self.log(f"❌ Analytics取得エラー: {err_text}", "error")
@@ -2266,28 +2270,44 @@ class YMM4AutoGui:
 
         fetch()
 
-    def show_upload_schedule_dialog(self):
-        from core.upload_scheduler import list_schedule, format_slot
+    def show_upload_schedule_dialog(self, auto_sync=True):
+        from core.upload_scheduler import list_schedule, format_slot, sync_schedule_from_youtube
         from datetime import datetime, timedelta, timezone
         JST = timezone(timedelta(hours=9))
         now = datetime.now(JST)
 
-        # Shorts / Long を統合してソート
         schedule = list_schedule()
+
+        def _schedule_title_key(value):
+            value = str(value or "").split("\n")[0].strip()
+            for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+                if value.startswith(prefix):
+                    return value[len(prefix):].strip().lower()
+            return value.lower()
+
+        def _schedule_dt(value):
+            try:
+                return datetime.fromisoformat(str(value).replace("Z", "+00:00")).astimezone(JST)
+            except Exception:
+                return None
 
         # upload_records から生成区分・キャラパターンを引く（title+iso[:16] でキー）
         try:
             from core.upload_records import load_upload_records
             _rec_lookup = {}
-            for rec in load_upload_records():
-                t = str(rec.get("title") or "").strip().lower()
-                pa = str(rec.get("publish_at") or "")
-                if t and pa:
-                    _rec_lookup[(t, pa[:16])] = rec
+            _upload_records = load_upload_records()
+            for rec in _upload_records:
+                t = _schedule_title_key(rec.get("title") or "")
+                dt = _schedule_dt(rec.get("publish_at"))
+                vt = str(rec.get("video_type") or "").lower()
+                if t and dt:
+                    _rec_lookup[(vt, t, dt.isoformat()[:16])] = rec
         except Exception:
             _rec_lookup = {}
+            _upload_records = []
 
         rows = []
+        seen_schedule_rows = set()
         for vt, entries in schedule.items():
             label = "Shorts" if vt == "shorts" else "Long"
             for iso, title in entries.items():
@@ -2297,10 +2317,33 @@ class YMM4AutoGui:
                     continue
                 status = "済" if dt < now else "予定"
                 clean_title = title.split("\n")[0]
-                meta_rec = _rec_lookup.get((clean_title.lower(), iso[:16]), {})
+                meta_rec = _rec_lookup.get((vt, _schedule_title_key(clean_title), dt.isoformat()[:16]), {})
                 gen_kind = meta_rec.get("generation_kind", "") or ""
                 char_pat = meta_rec.get("character_pattern", "") or ""
                 rows.append((dt, label, clean_title, status, vt, iso, gen_kind, char_pat))
+                seen_schedule_rows.add((vt, dt.isoformat()[:16], _schedule_title_key(clean_title)))
+        for rec in _upload_records:
+            vt = str(rec.get("video_type") or "").lower()
+            if vt not in ("shorts", "long"):
+                continue
+            publish_status = str(rec.get("publish_status") or "").lower()
+            if publish_status != "scheduled":
+                continue
+            dt = _schedule_dt(rec.get("publish_at"))
+            if not dt or dt <= now:
+                continue
+            title = str(rec.get("title") or "").split("\n")[0].strip()
+            if not title:
+                continue
+            title_key = _schedule_title_key(title)
+            row_key = (vt, dt.isoformat()[:16], title_key)
+            if row_key in seen_schedule_rows:
+                continue
+            label = "Shorts" if vt == "shorts" else "Long"
+            gen_kind = rec.get("generation_kind", "") or ""
+            char_pat = rec.get("character_pattern", "") or ""
+            rows.append((dt, label, title, "予定", vt, dt.isoformat(), gen_kind, char_pat))
+            seen_schedule_rows.add(row_key)
         rows.sort(key=lambda r: r[0])
 
         dialog = tk.Toplevel(self.root)
@@ -2318,11 +2361,6 @@ class YMM4AutoGui:
         for _txt in ("すべて", "Shorts", "Long"):
             ttk.Radiobutton(filter_frame, text=_txt, variable=filter_var, value=_txt,
                             command=lambda: refresh_tree()).pack(side=tk.LEFT, padx=(0, 16))
-        ttk.Separator(filter_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=(4, 12))
-        show_done_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(filter_frame, text="済みも表示", variable=show_done_var,
-                        command=lambda: refresh_tree()).pack(side=tk.LEFT)
-
         frame = ttk.Frame(dialog)
         frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
@@ -2356,11 +2394,8 @@ class YMM4AutoGui:
             tree.delete(*tree.get_children())
             row_by_iid.clear()
             filt = filter_var.get()
-            show_done = show_done_var.get()
             for idx, (dt, label, title, status, vt, iso, gen_kind, char_pat) in enumerate(rows):
                 if filt != "すべて" and label != filt:
-                    continue
-                if not show_done and status == "済":
                     continue
                 dt_str = dt.strftime("%Y/%m/%d %H:%M")
                 tag = "done" if status == "済" else "upcoming"
@@ -2381,6 +2416,33 @@ class YMM4AutoGui:
 
         refresh_tree()
 
+        if auto_sync:
+            def sync_worker():
+                if self._schedule_sync_running:
+                    self.root.after(0, lambda: self.log("YouTube同期はすでに実行中です。", "info"))
+                    return
+                self._schedule_sync_running = True
+                try:
+                    sync_result = sync_schedule_from_youtube(
+                        progress_callback=lambda msg: self.root.after(0, lambda m=msg: self.log(m, "info"))
+                    )
+                    def done():
+                        if sync_result.get("checked"):
+                            self.log(
+                                f"YouTube同期: 確認 {sync_result.get('checked', 0)} / 予約 {sync_result.get('scheduled', 0)} / 公開済み {sync_result.get('published', 0)}",
+                                "info",
+                            )
+                        if dialog.winfo_exists():
+                            dialog.destroy()
+                            self.show_upload_schedule_dialog(auto_sync=False)
+                    self.root.after(0, done)
+                except Exception as e:
+                    self.root.after(0, lambda e=e: self.log(f"YouTube同期に失敗したためローカル表示のまま続行: {e}", "warning"))
+                finally:
+                    self._schedule_sync_running = False
+
+            threading.Thread(target=sync_worker, daemon=True).start()
+
         # 削除・手動公開済みボタン
         def delete_selected():
             sel = tree.selection()
@@ -2388,21 +2450,18 @@ class YMM4AutoGui:
                 return
             if not messagebox.askyesno("削除確認", f"{len(sel)}件のスケジュールを削除しますか？", parent=dialog):
                 return
-            from core.upload_scheduler import _load, _save
-            schedules = {vt: _load(vt) for vt in ("shorts", "long")}
             for item in sel:
-                vals = tree.item(item, "values")
-                dt_str, label = vals[0], vals[1]
-                vt = "shorts" if label == "Shorts" else "long"
-                # ISO キーを再構築
-                try:
-                    dt = datetime.strptime(dt_str, "%Y/%m/%d %H:%M").replace(tzinfo=JST)
-                    schedules[vt].pop(dt.isoformat(), None)
-                except Exception:
-                    pass
+                row = row_by_iid.get(item)
+                if row:
+                    record, record_path = self._find_upload_record_for_schedule(row["title"], row["video_type"], row["dt"])
+                    if record and record_path:
+                        record["publish_at"] = None
+                        record["publish_status"] = "private"
+                        try:
+                            self._write_upload_record_data(record_path, record)
+                        except Exception as e:
+                            self.log(f"  ⚠ upload_record更新失敗: {e}", "warning")
                 tree.delete(item)
-            for vt, data in schedules.items():
-                _save(data, vt)
             self.log(f"🗑 スケジュール {len(sel)}件を削除しました", "info")
 
         def mark_manual_published():
@@ -2418,24 +2477,23 @@ class YMM4AutoGui:
             ):
                 return
 
-            from core.upload_scheduler import _load, _save
-            schedules = {vt: _load(vt) for vt in ("shorts", "long")}
             published_titles = []
             for item in sel:
-                vals = tree.item(item, "values")
-                dt_str, label, title = vals[0], vals[1], vals[2]
-                vt = "shorts" if label == "Shorts" else "long"
-                try:
-                    dt = datetime.strptime(dt_str, "%Y/%m/%d %H:%M").replace(tzinfo=JST)
-                    schedules[vt].pop(dt.isoformat(), None)
-                except Exception:
-                    pass
+                row = row_by_iid.get(item)
+                title = row["title"] if row else tree.item(item, "values")[2]
+                if row:
+                    record, record_path = self._find_upload_record_for_schedule(row["title"], row["video_type"], row["dt"])
+                    if record and record_path:
+                        record["publish_at"] = None
+                        record["publish_status"] = "published"
+                        try:
+                            self._write_upload_record_data(record_path, record)
+                        except Exception as e:
+                            self.log(f"  ⚠ upload_record更新失敗: {e}", "warning")
                 if title:
                     published_titles.append(str(title).strip())
                 tree.delete(item)
 
-            for vt, data in schedules.items():
-                _save(data, vt)
             added = self._append_uploaded_titles(published_titles)
             self.refresh_history()
             self.log(f"✅ 手動公開済みとして処理しました: {len(sel)}件（履歴追記 {added}件）", "success")
@@ -2527,11 +2585,20 @@ class YMM4AutoGui:
                     )
                     return
 
-                from core.upload_scheduler import _load, _save, format_slot
-                schedules = {vt: _load(vt) for vt in ("shorts", "long")}
-                new_key = new_dt.isoformat()
+                from core.upload_scheduler import format_slot
                 vt = row["video_type"]
-                conflict_title = schedules[vt].get(new_key) if new_key != row["iso"] else None
+                conflicts = [
+                    r for r in rows
+                    if r[4] == vt and r[3] == "予定" and r[0] == new_dt and r[5] != row["iso"]
+                ]
+                if len(conflicts) > 1:
+                    messagebox.showerror(
+                        "入れ替え不可",
+                        "変更先の枠に複数の予約があります。先にスケジュール同期で整理してください。",
+                        parent=edit,
+                    )
+                    return
+                conflict_title = conflicts[0][2] if conflicts else None
 
                 record, record_path = self._find_upload_record_for_schedule(row["title"], vt, row["dt"])
                 if not record:
@@ -2578,14 +2645,11 @@ class YMM4AutoGui:
                         if not ok_swap or not ok:
                             messagebox.showerror("変更失敗", "YouTube側の公開予定変更に失敗しました。ログを確認してください。", parent=edit)
                             return
-                        title = schedules[vt].pop(row["iso"], row["title"])
-                        if conflict_title:
-                            schedules[vt][row["iso"]] = conflict_title
-                        schedules[vt][new_key] = title
-                        _save(schedules[vt], vt)
                         record["publish_at"] = new_dt.isoformat()
+                        record["publish_status"] = "scheduled"
                         if conflict_title:
                             swap_record["publish_at"] = row["dt"].isoformat()
+                            swap_record["publish_status"] = "scheduled"
                         try:
                             self._write_upload_record_data(record_path, record)
                             if conflict_title:
@@ -2593,12 +2657,16 @@ class YMM4AutoGui:
                         except Exception as e:
                             self.log(f"  ⚠ upload_record.json更新失敗: {e}", "warning")
                         if conflict_title:
-                            self.log(f"✅ 公開予定を入れ替え: {row['title']} ⇄ {conflict_title}", "success")
+                            self.log(
+                                f"✅ 公開予定を入れ替え: {row['title']} {format_slot(row['dt'])} → {format_slot(new_dt)} / "
+                                f"{conflict_title} {format_slot(new_dt)} → {format_slot(row['dt'])}",
+                                "success",
+                            )
                         else:
-                            self.log(f"✅ 公開予定を変更: {row['title']} → {format_slot(new_dt)}", "success")
+                            self.log(f"✅ 公開予定を変更: {row['title']} {format_slot(row['dt'])} → {format_slot(new_dt)}", "success")
                         edit.destroy()
                         dialog.destroy()
-                        self.show_upload_schedule_dialog()
+                        self.show_upload_schedule_dialog(auto_sync=False)
 
                     self.root.after(0, done)
 
@@ -2626,12 +2694,36 @@ class YMM4AutoGui:
                 import json as _json
                 from core.upload_scheduler import rebalance_slots
                 from core.youtube_uploader import update_video_publish_time
-                from core.upload_records import UPLOAD_RECORDS_FILE, load_upload_records
+                from core.upload_records import UPLOAD_RECORDS_FILE, find_upload_record, load_upload_records
 
-                def find_record_by_publish_at(iso_key):
+                def _record_title(value):
+                    value = str(value or "").strip()
+                    for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+                        if value.startswith(prefix):
+                            return value[len(prefix):].strip()
+                    return value
+
+                def _record_type_matches(data, vt):
+                    rec_type = str(data.get("video_type") or "").lower()
+                    return not rec_type or rec_type == vt
+
+                def find_record_for_rebalance(iso_key, title, vt):
+                    record = find_upload_record(title=title, video_type=vt, publish_at=iso_key)
+                    if record and record.get("video_id"):
+                        return record.get("video_id"), UPLOAD_RECORDS_FILE
+
+                    title_key = _record_title(title)
+                    candidates = []
                     for data in load_upload_records():
-                        if data.get("publish_at") == iso_key:
-                            return data.get("video_id"), UPLOAD_RECORDS_FILE
+                        if data.get("publish_at") == iso_key and _record_type_matches(data, vt):
+                            candidates.append(data)
+                            if _record_title(data.get("title")) == title_key and data.get("video_id"):
+                                return data.get("video_id"), UPLOAD_RECORDS_FILE
+                    if len(candidates) == 1 and candidates[0].get("video_id"):
+                        return candidates[0].get("video_id"), UPLOAD_RECORDS_FILE
+
+                    uploaded_matches = []
+                    uploaded_title_matches = []
                     uploaded_dir = os.path.join("output", "000_uploaded")
                     if not os.path.exists(uploaded_dir):
                         return None, None
@@ -2641,10 +2733,19 @@ class YMM4AutoGui:
                             try:
                                 with open(path, "r", encoding="utf-8") as f:
                                     data = _json.load(f)
-                                if data.get("publish_at") == iso_key:
-                                    return data.get("video_id"), path
+                                if data.get("publish_at") == iso_key and _record_type_matches(data, vt):
+                                    row = (data, path)
+                                    uploaded_matches.append(row)
+                                    if _record_title(data.get("title")) == title_key:
+                                        uploaded_title_matches.append(row)
                             except Exception:
                                 pass
+                    if len(uploaded_title_matches) == 1 and uploaded_title_matches[0][0].get("video_id"):
+                        data, path = uploaded_title_matches[0]
+                        return data.get("video_id"), path
+                    if len(uploaded_matches) == 1 and uploaded_matches[0][0].get("video_id"):
+                        data, path = uploaded_matches[0]
+                        return data.get("video_id"), path
                     return None, None
 
                 all_changes = []
@@ -2665,17 +2766,32 @@ class YMM4AutoGui:
                     ))
                     return
 
+                def type_label(vt):
+                    return "Shorts" if vt == "shorts" else "Long"
+
+                def fmt_iso(iso):
+                    return iso[:16].replace("T", " ")
+
+                plan_lines = [
+                    f"  ・[{type_label(vt)}] {title[:45]}: {fmt_iso(old_iso)} → {fmt_iso(new_iso)}"
+                    for vt, old_iso, new_iso, title in all_changes
+                ]
+                self.root.after(0, lambda lines=plan_lines: (
+                    self.log(f"📅 スロット詰め直し 移動予定: {len(lines)}件", "info"),
+                    [self.log(line, "info") for line in lines],
+                ))
+
                 updated_yt = 0
                 no_id = []
                 for vt, old_iso, new_iso, title in all_changes:
-                    video_id, record_path = find_record_by_publish_at(old_iso)
+                    video_id, record_path = find_record_for_rebalance(old_iso, title, vt)
                     short_title = title[:30]
                     old_dt_str = old_iso[:16].replace("T", " ")
                     new_dt_str = new_iso[:16].replace("T", " ")
                     if not video_id:
                         no_id.append(short_title)
-                        self.root.after(0, lambda t=short_title, o=old_dt_str, n=new_dt_str: self.log(
-                            f"  ⚠ video_id未発見・スケジュールのみ更新: {t} ({o} → {n})", "warning",
+                        self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str: self.log(
+                            f"  ⚠ [{label}] video_id未発見・ローカルのみ: {t} ({o} → {n})", "warning",
                         ))
                         continue
                     try:
@@ -2694,14 +2810,19 @@ class YMM4AutoGui:
                                 except Exception as e:
                                     self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
                             updated_yt += 1
-                            self.root.after(0, lambda t=short_title, o=old_dt_str, n=new_dt_str: self.log(
-                                f"  ✅ {t}: {o} → {n}", "success",
+                            self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str: self.log(
+                                f"  ✅ [{label}] 移動完了: {t} ({o} → {n})", "success",
                             ))
                         else:
                             no_id.append(short_title)
+                            self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str: self.log(
+                                f"  ⚠ [{label}] YouTube未更新: {t} ({o} → {n})", "warning",
+                            ))
                     except Exception as e:
                         no_id.append(short_title)
-                        self.root.after(0, lambda e=e: self.log(f"  ❌ YouTube更新失敗: {e}", "error"))
+                        self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str, e=e: self.log(
+                            f"  ❌ [{label}] YouTube更新失敗: {t} ({o} → {n}) / {e}", "error",
+                        ))
 
                 def done():
                     msg = f"✅ {len(all_changes)}件を詰め直しました（YouTube更新: {updated_yt}件）"
@@ -2709,7 +2830,7 @@ class YMM4AutoGui:
                         msg += f"\n⚠ YouTube未更新: {', '.join(no_id[:3])}"
                     self.log(msg, "success")
                     dialog.destroy()
-                    self.show_upload_schedule_dialog()
+                    self.show_upload_schedule_dialog(auto_sync=False)
 
                 self.root.after(0, done)
 
@@ -2720,6 +2841,9 @@ class YMM4AutoGui:
             ・public になっていた → 手動公開済みとして処理
             ・publishAt がローカルと異なる → ローカルスケジュールを YouTube 側に合わせる
             """
+            if self._schedule_sync_running:
+                self.log("YouTube同期はすでに実行中です。", "info")
+                return
             # 全予定スロット（フィルター前の rows を使う）
             scheduled_rows_all = [r for r in rows if r[3] == "予定"]
             if not scheduled_rows_all:
@@ -2727,11 +2851,10 @@ class YMM4AutoGui:
                 return
 
             def worker():
+                self._schedule_sync_running = True
                 import json as _json
                 from datetime import datetime, timedelta, timezone
                 from core.youtube_uploader import get_video_statuses
-                from core.upload_scheduler import _load, _save
-
                 JST = timezone(timedelta(hours=9))
 
                 # 予定スロットの video_id と record_path を取得
@@ -2755,6 +2878,7 @@ class YMM4AutoGui:
                     self.root.after(0, lambda: messagebox.showinfo(
                         "手動公開を検出", "video_idが取得できたスロットがありません。\nアップロード履歴を確認してください。", parent=dialog,
                     ))
+                    self._schedule_sync_running = False
                     return
 
                 self.root.after(0, lambda: self.log(f"🔍 YouTube APIでステータス確認中... ({len(id_to_info)}件)", "info"))
@@ -2765,6 +2889,7 @@ class YMM4AutoGui:
                         self.log(f"❌ YouTube API エラー: {e}", "error"),
                         messagebox.showerror("エラー", str(e), parent=dialog),
                     ))
+                    self._schedule_sync_running = False
                     return
 
                 published_rows = []   # 手動公開済み
@@ -2793,15 +2918,22 @@ class YMM4AutoGui:
 
                 if not published_rows and not time_mismatch:
                     self.root.after(0, lambda: self.log("✅ スケジュール同期チェック完了: 差異なし", "info"))
+                    self._schedule_sync_running = False
                     return
 
                 def apply_sync():
-                    schedules = {vt: _load(vt) for vt in ("shorts", "long")}
                     published_titles = []
 
                     for info in published_rows:
                         row = info["row"]
-                        schedules[row["video_type"]].pop(row["iso"], None)
+                        record = info.get("record")
+                        record_path = info.get("record_path")
+                        if record and record_path:
+                            try:
+                                record["publish_status"] = "published"
+                                self._write_upload_record_data(record_path, record)
+                            except Exception as e:
+                                self.log(f"  ? upload_record????: {e}", "warning")
                         if row["title"]:
                             published_titles.append(row["title"].strip())
                         self.log(f"  📢 手動公開済み検出: {row['title'][:35]}", "info")
@@ -2810,18 +2942,14 @@ class YMM4AutoGui:
                         vt = row["video_type"]
                         old_iso = row["iso"]
                         new_iso = yt_dt.isoformat()
-                        title = schedules[vt].pop(old_iso, row["title"])
-                        schedules[vt][new_iso] = title
                         if record and record_path:
                             try:
                                 record["publish_at"] = new_iso
+                                record["publish_status"] = "scheduled"
                                 self._write_upload_record_data(record_path, record)
                             except Exception as e:
                                 self.log(f"  ⚠ upload_record更新失敗: {e}", "warning")
                         self.log(f"  🔄 スロット時刻修正: {row['title'][:25]} {old_iso[:16]} → {new_iso[:16]}", "info")
-
-                    for vt, data in schedules.items():
-                        _save(data, vt)
 
                     added = 0
                     if published_titles:
@@ -2835,7 +2963,8 @@ class YMM4AutoGui:
                         msgs.append(f"スロット時刻修正: {len(time_mismatch)}件")
                     self.log("✅ " + " / ".join(msgs), "success")
                     dialog.destroy()
-                    self.show_upload_schedule_dialog()
+                    self._schedule_sync_running = False
+                    self.show_upload_schedule_dialog(auto_sync=False)
 
                 self.root.after(0, apply_sync)
 
@@ -2850,8 +2979,7 @@ class YMM4AutoGui:
         ttk.Button(btn_frame, text="公開予定を変更", command=change_publish_time).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btn_frame, text="スロット詰め直し", command=rebalance).pack(side=tk.RIGHT, padx=(0, 8))
 
-        # ダイアログを開いたときにYouTubeと自動同期
-        dialog.after(300, detect_manual_published)
+        # YouTube status checks are intentionally manual; auto-sync already runs once on open.
 
     def _confirm_upload_schedule(self, rows):
         """rows: [(type_label, title, slot_str, score_label), ...] — True で確定、False でキャンセル。"""
@@ -2956,6 +3084,7 @@ class YMM4AutoGui:
             "video_type": video_type,
             "uploaded_at": datetime.now(timezone.utc).isoformat(),
             "publish_at": publish_at.isoformat() if hasattr(publish_at, "isoformat") else str(publish_at) if publish_at else None,
+            "publish_status": "scheduled" if publish_at else "private",
             "opening_score": opening.get("final_score"),
             "opening_status": opening.get("final_status"),
             "duration_sec": duration.get("seconds"),
@@ -3075,7 +3204,7 @@ class YMM4AutoGui:
                                 self.log(f"🗑 MP4 削除: {f}", "info")
                             except Exception:
                                 pass
-                    # タイトルログに追記（000_uploaded が消えても残るよう output/ 直下に保存）
+                    # タイトルログに追記（000_uploaded が消えても残るよう台帳ディレクトリに保存）
                     try:
                         self._append_uploaded_titles([folder_name])
                     except Exception:

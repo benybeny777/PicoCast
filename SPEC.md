@@ -59,8 +59,6 @@ yukkurijidou/
 │   ├── prompt_parts/food/   # 食べ物用プロンプト設定の復元サンプル
 │   └── scripts/             # 共有用サンプル台本
 └── output/                 # 生成物出力先
-    ├── upload_schedule_shorts.json
-    └── upload_schedule_long.json
 ```
 
 `core/script_prompts.py` は `core/prompt_parts/local/` に同名ファイルがある場合、Git管理側の `core/prompt_parts/` より `local/` を優先して読み込む。これにより初期状態は食べ物用設定で動き、別ジャンル担当者は自分の `local/` だけを編集できる。
@@ -231,7 +229,6 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 | Shorts | 7:00 / 12:00 / 19:00 | 毎日 |
 | Long | 21:00（毎日）/ 12:00（土日のみ） | 毎日 |
 
-- スケジュールは `output/upload_schedule_shorts.json` / `upload_schedule_long.json` に永続化
 - スロット割当範囲: 最大90日先まで探索
 - アップロード実行後: `_meta/upload_record.json` にスコア情報を保存
 
@@ -252,7 +249,7 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 | 画像確認 | サムネイル・背景画像を確認し、選択した画像だけ再生成 |
 | YouTubeアップ | 複数動画の一括スケジュールアップロード |
 | 固定コメント | アップロード済み動画へ固定コメント用コメントを投稿し、動画URLを表示 |
-| スケジュール | 予約済み・手動公開済みの一覧確認、削除、公開予定変更。開くたびにYouTube APIで自動同期（手動公開検出・時刻ズレ修正）。デフォルト「予定のみ」表示、ラジオボタンで Shorts/Long 絞り込み、「済みも表示」チェックボックスで切替 |
+| スケジュール | 予約中の一覧確認、削除、公開予定変更。YouTube API同期で予約状態を確認。ラジオボタンで Shorts/Long 絞り込み |
 | アナリティクス | YouTube Analytics取得、横展開候補や改善対象を評価 |
 | サービス確認 | VOICEVOX / Nano Banana 起動状態チェック |
 
@@ -450,13 +447,11 @@ output/{テーマ名}/
     └── bg_*.png
 ```
 
-アップロード済みの履歴は `output/000_uploaded/` に移動します。アップロード記録の永続台帳は `output/upload_records.json` に保存するため、`output/000_uploaded/` は削除しても運用上必要な `video_id`、公開予定、固定コメント状態、再生リスト登録結果、生成区分情報は残ります。生成時に既存フォルダを退避した `output/000_backups/` の同一テーマバックアップは最新1世代だけ残し、アップロード成功後に削除します。
+アップロード済みの履歴は `output/000_uploaded/` に移動します。アップロード記録の永続台帳は `output/000_data/upload_records.json` に保存するため、`output/000_uploaded/` は削除しても運用上必要な `video_id`、公開予定、固定コメント状態、再生リスト登録結果、生成区分情報は残ります。生成時に既存フォルダを退避した `output/000_backups/` の同一テーマバックアップは最新1世代だけ残し、アップロード成功後に削除します。
 
 スケジュールは以下に保存されます（Git 管理外）:
 
 ```text
-output/upload_schedule_shorts.json
-output/upload_schedule_long.json
 ```
 
 ---
@@ -525,7 +520,7 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 `Shortsタイトル案` は、既存タイトルと直近の YouTube Analytics 実績データを使って、Shorts寄りの食べ物雑学向けタイトル案プロンプトをコピーします。`Longタイトル案` は、Long候補だけを出す条件を付けたプロンプトをコピーします。
 
-- 直近の `output/analytics_score_*.tsv` がある場合、最大80件をプロンプトへ自動差し込み
+- 直近の `output/000_analytics/analytics_score_*.tsv` がある場合、最大80件をプロンプトへ自動差し込み
 - 実績データがない場合は、実績根拠のない案を `新規開拓枠` として扱う指示を追加
 - 20案の表は軽量化（12列）。詳細（選定理由・台本化理由・想定フック・冒頭1秒・注意点・事実確認ポイント）はTOP5表に集約
 - タイトル分類は A〜H。H は「名前・発祥の勘違い」（天津飯・ナポリタン・シュークリーム等）
@@ -623,15 +618,15 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 ### YouTubeアップロード
 
-`YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には、アップロード可能な `.mp4` がある履歴だけを表示します。各履歴フォルダから最新の `.mp4` を探し、`_meta/metadata.txt` のタイトル・説明文・タグを使ってアップロードします。アップロード成功後は、その履歴フォルダを `output/000_uploaded/` に移動し、同時に中央台帳 `output/upload_records.json` へ記録します。
+`YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には、アップロード可能な `.mp4` がある履歴だけを表示します。各履歴フォルダから最新の `.mp4` を探し、`_meta/metadata.txt` のタイトル・説明文・タグを使ってアップロードします。アップロード成功後は、その履歴フォルダを `output/000_uploaded/` に移動し、同時に中央台帳 `output/000_data/upload_records.json` へ記録します。
 
 YouTubeタグは `core/youtube_metadata.py` で一元管理します。vidIQキーワード分析に基づく共通タグ（`食べ物 雑学`、`雑学 ショート`、`ゆっくり解説 食べ物`、`VOICEVOX解説` など）を入れ、`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。寿司、コンビニ、お菓子、マック、トマト、コーラなどはタイトルや `script.txt` から題材別タグを追加し、タグ欄は500文字以内に調整します。アップロード時に実際に使ったタグを `_meta/youtube_metadata.json` へ保存します。
 
 Long動画のアップロード成功後は、`LONG_UPLOAD_PLAYLIST_NAME` の名前と完全一致する自チャンネルの再生リストへ動画を自動追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。既に同じ動画が入っている場合は重複追加せず、結果を `_meta/upload_record.json` の `playlist_*` フィールドに保存します。Shortsには適用しません。再生リストが見つからない場合、アップロード自体は成功扱いのまま警告ログを出します。
 
-`💬 固定コメント` は、`output/upload_records.json` と `output/000_uploaded/` 配下のアップロード済み履歴から、固定コメントと `video_id` がある動画を選んでコメント投稿します。投稿成功後は中央台帳にも `fixed_comment_thread_id` を保存し、二重投稿を避けます。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
+`💬 固定コメント` は、`output/000_data/upload_records.json` と `output/000_uploaded/` 配下のアップロード済み履歴から、固定コメントと `video_id` がある動画を選んでコメント投稿します。投稿成功後は中央台帳にも `fixed_comment_thread_id` を保存し、二重投稿を避けます。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
 
-台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。アップロード時に `_meta/upload_record.json` と `output/upload_records.json` へ保存し、Analytics一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。
+台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。アップロード時に `_meta/upload_record.json` と `output/000_data/upload_records.json` へ保存し、Analytics一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。
 
 Analytics画面には `高評価率` に加えて `生成区分` / `元動画` / `目的` を表示します。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、再生数上位・平均視聴率上位・高評価率上位をまとめた実績サマリーを付けます。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
 
@@ -702,7 +697,7 @@ YouTube Studio 側で予約動画を手動公開した場合:
 
 `📅 スケジュール` を開くと自動的に YouTube API でステータスを確認し、差異があれば確認ダイアログを表示します。
 
-- **手動公開済み検出**: `privacyStatus == "public"` になっていた動画を一覧表示し、確認後に予約スロットから削除・`uploaded_titles.txt` に追記。
+- **手動公開済み検出**: `privacyStatus == "public"` になっていた動画を一覧表示し、確認後に予約スロットから削除・`output/000_data/uploaded_titles.txt` に追記。
 - **時刻ズレ修正**: ローカルと YouTube の `publishAt` が 1 分以上ズレている場合、ローカルスケジュールと `upload_record.json` を YouTube 側の時刻に更新。
 - 差異がない場合はログに「差異なし」とだけ表示してダイアログを維持。
 
@@ -715,14 +710,14 @@ YouTube Studio 側で予約動画を手動公開した場合:
 3. `公開予定を変更` を押す
 4. 日付と時間をプルダウンから選択
 
-この操作でYouTube側の `publishAt`、アプリ側の `upload_schedule_*.json`、中央台帳 `output/upload_records.json`、該当履歴の `upload_record.json` をまとめて更新します。対象動画は中央台帳または履歴内の `upload_record.json` に `video_id` が残っている必要があります。変更先は既存のアップロード時刻ルールに限定します。Shortsは `7:00 / 12:00 / 19:00`、Longは平日 `21:00`、土日は `12:00 / 21:00` のみ指定できます。変更先の枠に同じ種別の既存予定がある場合は、2本の公開予定を入れ替えます。
+This operation updates YouTube publishAt, output/000_data/upload_records.json, and each upload_record.json. The target video must have video_id in the central ledger or upload history. Allowed times: Shorts 7:00 / 12:00 / 19:00, Long weekday 21:00 and weekend 12:00 / 21:00. If the destination slot already has another video of the same type, the two publish times are swapped.
 
 予約スロットを前詰めしたい場合:
 
 1. `📅 スケジュール` を開く
 2. `スロット詰め直し` を押す
 
-未来の予約スロット全件を現在から最速の空きスロットに詰め直します。`upload_record.json` の `publish_at` を使って video_id を特定し、YouTube側の公開予定時刻・`upload_schedule_*.json`・`upload_record.json` を一括更新します。video_id が見つからない場合はスケジュールJSONのみ更新してログに警告を出します。処理は `core/upload_scheduler.py` の `rebalance_slots()` が担います。
+Future scheduled slots can be packed forward from the earliest available slot. rebalance_slots() uses upload_records publish_at/video_id data, updates YouTube publish times, and updates output/000_data/upload_records.json / upload_record.json. If video_id is missing, that video is skipped with a warning log.
 
 ---
 

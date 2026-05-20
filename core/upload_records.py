@@ -3,12 +3,13 @@ import os
 from datetime import datetime
 from typing import Any
 
+from core.output_paths import UPLOAD_RECORDS_FILE, migrate_root_file
 
 ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-UPLOAD_RECORDS_FILE = os.path.join(ROOT_DIR, "output", "upload_records.json")
 
 
 def load_upload_records() -> list[dict[str, Any]]:
+    migrate_root_file("upload_records.json", os.path.dirname(UPLOAD_RECORDS_FILE))
     if not os.path.exists(UPLOAD_RECORDS_FILE):
         return []
     try:
@@ -24,6 +25,7 @@ def load_upload_records() -> list[dict[str, Any]]:
 
 
 def save_upload_records(records: list[dict[str, Any]]) -> str:
+    migrate_root_file("upload_records.json", os.path.dirname(UPLOAD_RECORDS_FILE))
     os.makedirs(os.path.dirname(UPLOAD_RECORDS_FILE), exist_ok=True)
     payload = {
         "updated_at": datetime.now().astimezone().isoformat(),
@@ -100,6 +102,8 @@ def find_upload_record(title: str | None = None, video_type: str | None = None, 
                 rec_type = str(record.get("video_type") or "").lower()
                 if rec_type and rec_type != target_type:
                     continue
+            if target_title and _norm_title(record.get("title") or "") != target_title:
+                continue
             rec_ts = _to_timestamp(record.get("publish_at"))
             if rec_ts is None:
                 continue

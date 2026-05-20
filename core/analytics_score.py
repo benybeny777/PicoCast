@@ -4,6 +4,8 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
+from core.output_paths import ANALYTICS_DIR
+
 
 SCORE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "未計測": 0, "対象外": -1}
 DURATION_STATUS_LABELS = {
@@ -396,7 +398,7 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5) -> st
     return "\n".join(lines)
 
 
-def save_score_files(items: list[dict[str, Any]], days: int, output_dir="output") -> tuple[str, str]:
+def save_score_files(items: list[dict[str, Any]], days: int, output_dir=ANALYTICS_DIR) -> tuple[str, str]:
     os.makedirs(output_dir, exist_ok=True)
     jst = timezone(timedelta(hours=9))
     now = datetime.now(jst)

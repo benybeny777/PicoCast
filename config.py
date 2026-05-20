@@ -61,7 +61,12 @@ CHARACTERS = {
 
 VIDEO_FPS = 30
 
-OUTPUT_DIR = "output"
+OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "output")
+OUTPUT_DATA_DIR = os.environ.get("OUTPUT_DATA_DIR", os.path.join(OUTPUT_DIR, "000_data"))
+OUTPUT_ANALYTICS_DIR = os.environ.get("OUTPUT_ANALYTICS_DIR", os.path.join(OUTPUT_DIR, "000_analytics"))
+OUTPUT_LEGACY_DIR = os.environ.get("OUTPUT_LEGACY_DIR", os.path.join(OUTPUT_DIR, "000_legacy"))
+UPLOAD_RECORDS_FILE = os.environ.get("UPLOAD_RECORDS_FILE", os.path.join(OUTPUT_DATA_DIR, "upload_records.json"))
+UPLOADED_TITLES_FILE = os.environ.get("UPLOADED_TITLES_FILE", os.path.join(OUTPUT_DATA_DIR, "uploaded_titles.txt"))
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")
 CHARACTER_PNGS = {

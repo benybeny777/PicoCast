@@ -107,16 +107,88 @@ def get_video_statuses(video_ids: list[str]) -> dict[str, dict]:
     result = {}
     for i in range(0, len(video_ids), 50):
         chunk = video_ids[i:i + 50]
-        resp = youtube.videos().list(part="status", id=",".join(chunk)).execute()
+        resp = youtube.videos().list(part="snippet,status,contentDetails", id=",".join(chunk)).execute()
         for item in resp.get("items", []):
             vid = item.get("id")
             st = item.get("status", {})
+            sn = item.get("snippet", {})
+            cd = item.get("contentDetails", {})
             if vid:
                 result[vid] = {
                     "privacyStatus": st.get("privacyStatus"),
                     "publishAt": st.get("publishAt"),
+                    "title": sn.get("title"),
+                    "publishedAt": sn.get("publishedAt"),
+                    "duration": cd.get("duration"),
                 }
     return result
+
+
+def _duration_seconds(duration: str | None) -> int | None:
+    if not duration:
+        return None
+    import re
+    match = re.fullmatch(
+        r"P(?:(?P<days>\d+)D)?(?:T(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>\d+)S)?)?",
+        str(duration),
+    )
+    if not match:
+        return None
+    parts = {k: int(v or 0) for k, v in match.groupdict().items()}
+    return parts["days"] * 86400 + parts["hours"] * 3600 + parts["minutes"] * 60 + parts["seconds"]
+
+
+def infer_video_type(title: str | None = None, duration: str | None = None) -> str:
+    text = str(title or "").strip()
+    if text.startswith(("[Long]", "[LONG]")):
+        return "long"
+    if text.startswith(("[Shorts]", "[SHORT]")):
+        return "shorts"
+    seconds = _duration_seconds(duration)
+    if seconds is not None and seconds <= 180:
+        return "shorts"
+    return "long"
+
+
+def get_channel_upload_video_statuses() -> dict[str, dict]:
+    """Return status/snippet data for videos in the authenticated channel uploads playlist."""
+    youtube = get_youtube_client()
+    channel = youtube.channels().list(part="contentDetails", mine=True, maxResults=1).execute()
+    items = channel.get("items", [])
+    if not items:
+        return {}
+    uploads_id = (
+        items[0]
+        .get("contentDetails", {})
+        .get("relatedPlaylists", {})
+        .get("uploads")
+    )
+    if not uploads_id:
+        return {}
+
+    video_ids = []
+    page_token = None
+    while True:
+        kwargs = {
+            "part": "contentDetails",
+            "playlistId": uploads_id,
+            "maxResults": 50,
+        }
+        if page_token:
+            kwargs["pageToken"] = page_token
+        resp = youtube.playlistItems().list(**kwargs).execute()
+        for item in resp.get("items", []):
+            vid = item.get("contentDetails", {}).get("videoId")
+            if vid:
+                video_ids.append(vid)
+        page_token = resp.get("nextPageToken")
+        if not page_token:
+            break
+
+    statuses = get_video_statuses(video_ids)
+    for data in statuses.values():
+        data["video_type"] = infer_video_type(data.get("title"), data.get("duration"))
+    return statuses
 
 
 def update_video_publish_time(video_id: str, publish_at, progress_callback=None) -> bool:
