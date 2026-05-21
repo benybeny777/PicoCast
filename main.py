@@ -47,10 +47,10 @@ from config import (
     VOICE_INTRO_SPEED_SCALE_SHORTS,
     VOICE_SPEED_SCALE_LONG,
     VOICE_SPEED_SCALE_SHORTS,
-    NATIVE_VOICE_INTRO_SPEED_SCALE_LONG,
-    NATIVE_VOICE_INTRO_SPEED_SCALE_SHORTS,
-    NATIVE_VOICE_SPEED_SCALE_LONG,
-    NATIVE_VOICE_SPEED_SCALE_SHORTS,
+    NATIVE_LONG_BODY_VOICE_SPEED,
+    NATIVE_LONG_INTRO_VOICE_SPEED,
+    NATIVE_SHORTS_BODY_VOICE_SPEED,
+    NATIVE_SHORTS_INTRO_VOICE_SPEED,
 )
 
 
@@ -663,8 +663,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     else:
         max_backgrounds = MAX_BACKGROUNDS_LONG
     if native_render:
-        intro_voice_speed = NATIVE_VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else NATIVE_VOICE_INTRO_SPEED_SCALE_LONG
-        body_voice_speed = NATIVE_VOICE_SPEED_SCALE_SHORTS if is_shorts else NATIVE_VOICE_SPEED_SCALE_LONG
+        intro_voice_speed = NATIVE_SHORTS_INTRO_VOICE_SPEED if is_shorts else NATIVE_LONG_INTRO_VOICE_SPEED
+        body_voice_speed = NATIVE_SHORTS_BODY_VOICE_SPEED if is_shorts else NATIVE_LONG_BODY_VOICE_SPEED
     else:
         intro_voice_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
         body_voice_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
