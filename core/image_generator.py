@@ -1,6 +1,5 @@
 import os
 import time
-import gc
 from google import genai
 from config import GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL
 
@@ -136,11 +135,8 @@ class ImageGenerator:
             print(f"  [AI] Nano Banana エラー: {e}")
             raise Exception(f"Nano Banana ({model_name}) が失敗しました: {e}")
         finally:
-            try:
-                del response, parts, contents, all_refs, full_prompt
-            except Exception:
-                pass
-            gc.collect()
+            response = None
+            parts = None
 
     def generate_backgrounds_batch(self, requests_list, target_dir=None, fnames=None):
         """Google Batch API で複数背景を一括生成する。
@@ -209,6 +205,4 @@ class ImageGenerator:
                 if self.debug:
                     print(f"  [Batch] 結果[{i}]処理エラー: {e}")
 
-        del inline_requests, batch_prompts, batch_job
-        gc.collect()
         return results

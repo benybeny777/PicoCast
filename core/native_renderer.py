@@ -498,7 +498,6 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
         segment_paths.append(segment_path)
         prev_bg_path = bg_path
         del filter_complex, inputs, encode_candidates, last_error
-        gc.collect()
 
     _write_concat_list(segment_list, segment_paths)
     _run_ffmpeg([FFMPEG_BIN, "-y", "-f", "concat", "-safe", "0", "-i", segment_list, "-c", "copy", video_path])

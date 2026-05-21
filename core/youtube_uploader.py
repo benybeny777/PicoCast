@@ -45,19 +45,6 @@ def _compress_thumbnail(path):
     return tmp.name  # 最低品質でも返す
 
 
-def _close_media_upload(media) -> None:
-    stream = None
-    try:
-        stream = media.stream() if hasattr(media, "stream") else getattr(media, "_fd", None)
-    except Exception:
-        stream = getattr(media, "_fd", None)
-    close = getattr(stream, "close", None)
-    if callable(close):
-        try:
-            close()
-        except Exception:
-            pass
-
 
 def get_youtube_client():
     creds = None
@@ -479,18 +466,15 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
     }
 
     media = MediaFileUpload(mp4_path, chunksize=5 * 1024 * 1024, resumable=True)
-    try:
-        _log(f"📤 アップロード開始: {os.path.basename(mp4_path)}")
-
-        request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
-        response = None
-        while response is None:
-            status, response = request.next_chunk()
-            if status:
-                pct = int(status.progress() * 100)
-                _log(f"  ... {pct}%")
-    finally:
-        _close_media_upload(media)
+    _log(f"📤 アップロード開始: {os.path.basename(mp4_path)}")
+    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+    response = None
+    while response is None:
+        status, response = request.next_chunk()
+        if status:
+            pct = int(status.progress() * 100)
+            _log(f"  ... {pct}%")
+    del media
 
     video_id = response["id"]
     _log(f"✅ アップロード完了: https://youtu.be/{video_id}")
@@ -505,7 +489,7 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
                 media_body=thumb_media
             ).execute()
         finally:
-            _close_media_upload(thumb_media)
+            del thumb_media
             if upload_thumb != thumbnail_path and os.path.exists(upload_thumb):
                 os.remove(upload_thumb)
         _log("  ✅ サムネイル設定完了")

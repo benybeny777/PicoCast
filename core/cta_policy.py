@@ -49,6 +49,8 @@ def should_allow_topic_request_cta(
     batch_size: int,
     already_allowed_in_batch: bool,
 ) -> bool:
+    # ネタ募集CTAは「Shorts 新規/横展開 5本以上バッチの最終1本のみ」に限定。
+    # 単発・4本以下では視聴者へのノイズになるため原則禁止。
     if not is_shorts_video_type(video_type):
         return False
     if normalize_generation_kind(generation_kind) not in {"新規", "横展開"}:

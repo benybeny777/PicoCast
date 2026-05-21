@@ -2589,8 +2589,8 @@ class YMM4AutoGui:
                         self.root.after(0, done)
                     except Exception as e:
                         def failed(e=e):
-                            self.log(f"YouTube同期に失敗しました。ローカル台帳だけでは表示しません: {e}", "warning")
-                            rows[:] = []
+                            self.log(f"YouTube同期に失敗しました。ローカル台帳の内容を表示します: {e}", "warning")
+                            rows[:] = build_rows()
                             refresh_tree()
                         self.root.after(0, failed)
                     finally:
