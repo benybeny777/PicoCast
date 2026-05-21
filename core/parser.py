@@ -17,9 +17,11 @@ class ScriptParser:
     _generation_purpose_re = re.compile(r'^(?:目的|生成目的|GenerationPurpose)[:：](.*)$', re.IGNORECASE)
     _character_pattern_re = re.compile(r'^(?:キャラパターン|CharacterPattern)[:：](.*)$', re.IGNORECASE)
     _genre_group_re = re.compile(r'^(?:ジャンル|Genre(?:Group)?)[:：](.*)$', re.IGNORECASE)
+    _topic_request_cta_re = re.compile(r'^(?:ネタ募集CTA|TopicRequestCTA)[:：](.*)$', re.IGNORECASE)
+    _topic_request_cta_reason_re = re.compile(r'^(?:ネタ募集CTA理由|TopicRequestCTAReason)[:：](.*)$', re.IGNORECASE)
     _chapter_re = re.compile(r'^(?:チャプター|チャプター一覧|Chapter(?:s|List)?)[:：]', re.IGNORECASE)
     _bracket_meta_re = re.compile(
-        r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?|固定コメント|PinnedComment|生成区分|GenerationKind|元動画|派生元|SourceVideo|目的|生成目的|GenerationPurpose)\s*】\s*(.*)$',
+        r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?|固定コメント|PinnedComment|生成区分|GenerationKind|元動画|派生元|SourceVideo|目的|生成目的|GenerationPurpose|ネタ募集CTA|TopicRequestCTA|ネタ募集CTA理由|TopicRequestCTAReason)\s*】\s*(.*)$',
         re.IGNORECASE,
     )
     _bracket_meta_types = {
@@ -50,6 +52,10 @@ class ScriptParser:
         "ジャンル": "genre_group",
         "genre": "genre_group",
         "genregroup": "genre_group",
+        "ネタ募集cta": "topic_request_cta",
+        "topicrequestcta": "topic_request_cta",
+        "ネタ募集cta理由": "topic_request_cta_reason",
+        "topicrequestctareason": "topic_request_cta_reason",
     }
     _ignore_patterns = [
         re.compile(r'^```.*$'),
@@ -67,7 +73,7 @@ class ScriptParser:
         "thumbnail", "video_title", "description", "tags",
         "video_format", "thumbnail_text", "fixed_comment",
         "generation_kind", "source_video_title", "generation_purpose",
-        "character_pattern", "genre_group",
+        "character_pattern", "genre_group", "topic_request_cta", "topic_request_cta_reason",
     })
 
     @staticmethod
@@ -88,6 +94,8 @@ class ScriptParser:
         generation_purpose_re = ScriptParser._generation_purpose_re
         character_pattern_re = ScriptParser._character_pattern_re
         genre_group_re = ScriptParser._genre_group_re
+        topic_request_cta_re = ScriptParser._topic_request_cta_re
+        topic_request_cta_reason_re = ScriptParser._topic_request_cta_reason_re
         bracket_meta_re = ScriptParser._bracket_meta_re
         ignore_patterns = ScriptParser._ignore_patterns
 
@@ -119,7 +127,7 @@ class ScriptParser:
 
                 # Continuation of metadata (description=multi-line, others=next-line-only)
                 if last_meta:
-                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, bracket_meta_re])
+                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
                     is_ignore = any(p.match(line) for p in ignore_patterns)
                     if not is_keyword and not is_dialogue and (not is_ignore or last_meta["type"] == "description"):
@@ -171,6 +179,8 @@ class ScriptParser:
                     (generation_purpose_re, "generation_purpose"),
                     (character_pattern_re, "character_pattern"),
                     (genre_group_re, "genre_group"),
+                    (topic_request_cta_re, "topic_request_cta"),
+                    (topic_request_cta_reason_re, "topic_request_cta_reason"),
                 ]:
                     m = meta_re.match(line)
                     if m:

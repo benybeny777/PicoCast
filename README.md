@@ -120,6 +120,7 @@ python gui.py
 
 ## 注意
 
+- YMM4を使わない実験レンダラーの実装概要と段階別ロードマップは `docs/YMM_FREE_RENDERER.md` を参照してください。
 - `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
 - アップロード記録は `output/000_data/upload_records.json` に残します。`output/000_uploaded/` はアップロード済み生成物の保管場所なので、容量整理で削除しても運用上の台帳は残ります。
 - `OUTPUT_DIR` / `OUTPUT_DATA_DIR` / `OUTPUT_ANALYTICS_DIR` / `OUTPUT_LEGACY_DIR` / `UPLOAD_RECORDS_FILE` / `UPLOADED_TITLES_FILE` は `.env` または環境変数で変更できます。
@@ -131,3 +132,8 @@ python gui.py
 - YouTube アップロードには Google OAuth 用の `client_secrets.json` が必要です。
 - 詳細仕様・操作手順は [SPEC.md](SPEC.md) を参照してください。
 - 大きめの変更履歴は [CHANGELOG.md](CHANGELOG.md) に残します。
+## CTA/Long運用メモ
+
+- Shorts本編はループ視聴優先です。アプリは一括生成時に `ネタ募集CTA: 許可 / 禁止` を台本へ差し込み、5本以上のShorts同時生成でもネタ募集CTAは最大1本だけにします。
+- Shorts台本に `次回は` / `次の動画` / `他の動画も見て` / `チャンネル登録お願いします` などの直接誘導がある場合、生成前チェックで警告します。Longでは関連動画誘導を許可します。
+- Longアップロード時は説明欄末尾にYouTubeチャプター形式の `【目次】` を自動追加できます。方針は `_meta/cta_policy.json` と `_meta/youtube_metadata.json` に保存されます。

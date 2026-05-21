@@ -297,6 +297,9 @@ class YMM4AutoGui:
         self.image_review_btn = ttk.Button(btn_frame, text="🔄 画像確認", command=self.start_image_review)
         self.image_review_btn.pack(side=tk.LEFT, padx=(8, 0))
         self._add_tooltip(self.image_review_btn, "サムネイル・背景画像を確認し、選んだ画像だけ再生成できます。")
+        self.native_render_history_btn = ttk.Button(btn_frame, text="YMMなしMP4化(test)", command=self.start_native_render_from_history)
+        self.native_render_history_btn.pack(side=tk.LEFT, padx=(8, 0))
+        self._add_tooltip(self.native_render_history_btn, "既存履歴の音声・背景を使い、ffmpegのYMMなしMP4出力だけを実行します。")
         self._studio_url = None
         self.studio_btn = ttk.Button(btn_frame, text="🌐 YouTube Studio", command=self._open_studio)
         self.studio_btn.pack(side=tk.LEFT, padx=(8, 0))
@@ -891,6 +894,18 @@ class YMM4AutoGui:
         meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
         dialogue_items = [it for it in items if it["type"] == "dialogue"]
         bg_items = [it for it in items if it["type"] == "background"]
+        try:
+            from core.cta_policy import check_shorts_navigation_ng
+
+            script_text = "\n".join(it.get("text", "") for it in dialogue_items)
+            hits = check_shorts_navigation_ng(script_text, "Shorts" if is_shorts else "Long")
+            if hits:
+                warnings.append(
+                    "Shortsでは直接的な他動画誘導・次回予告が含まれています。"
+                    f"ループ締めに変更してください: {', '.join(hits)}"
+                )
+        except Exception:
+            pass
 
         if not meta.get("video_title"):
             errors.append("video_titleがありません")
@@ -1221,6 +1236,21 @@ class YMM4AutoGui:
     def start_native_generation(self):
         self._start_generation(native_render=True)
 
+    def start_native_render_from_history(self):
+        selected = self.select_history_dialog(
+            "YMMなしMP4化(test)する履歴を選択",
+            "MP4化する",
+            multi=True,
+            require_script=True,
+        )
+        if not selected:
+            return
+        self._toggle_ui(False)
+        self.cancel_event = threading.Event()
+        self._gen_id += 1
+        self.log(f"YMMなしMP4化(test)開始: 合計 {len(selected)} 件", "batch")
+        threading.Thread(target=self._run_native_render_histories, args=(selected, self._gen_id, self.cancel_event), daemon=True).start()
+
     def _start_generation(self, native_render=False):
         from core.parser import ScriptParser
         raw_scripts = self.ref_text.get("1.0", tk.END).strip()
@@ -1286,6 +1316,36 @@ class YMM4AutoGui:
         self.log(f"{mode}開始: 合計 {len(scripts)} 件")
         threading.Thread(target=self._run_batch, args=(scripts, settings, self.cancel_event), daemon=True).start()
 
+    def _run_native_render_histories(self, history_names, gen_id, cancel_event):
+        from core.native_renderer import render_native_test
+
+        total = len(history_names)
+        for idx, name in enumerate(history_names, start=1):
+            if cancel_event.is_set():
+                self.log("⏹ YMMなしMP4化(test)を中止しました。", "error")
+                break
+            output_dir = os.path.join("output", name)
+            try:
+                self._set_batch_progress_text(f"YMMなしMP4化(test): {idx}/{total}")
+                self.root.after(0, lambda v=int(((idx - 1) / max(total, 1)) * 100): self.progress.config(value=v))
+                self.log(f"🎞 YMMなしMP4化(test): {name}", "batch")
+                result = render_native_test(output_dir, progress_callback=self.log)
+                self.log(
+                    f"✅ YMMなしMP4化完了: {os.path.basename(result.output_path)} "
+                    f"({result.duration_sec:.1f}s / 音声{result.audio_count} / 背景{result.background_count})",
+                    "success",
+                )
+            except Exception as e:
+                self.log(f"❌ YMMなしMP4化失敗: {name}: {e}", "error")
+                if self.debug_var.get():
+                    self.log(traceback.format_exc(), "error")
+
+        if gen_id == self._gen_id:
+            self.root.after(0, lambda: self.progress.config(value=100 if not cancel_event.is_set() else 0))
+            self.root.after(0, lambda: self.status_var.set("YMMなしMP4化(test) 完了" if not cancel_event.is_set() else "Canceled"))
+            self.root.after(0, lambda: self._toggle_ui(True))
+            self._set_batch_progress_text("" if cancel_event.is_set() else f"YMMなしMP4化(test)完了: {total}/{total}")
+
     @staticmethod
     def _project_path_from_message(message):
         marker = "プロジェクト保存済み: "
@@ -1302,6 +1362,43 @@ class YMM4AutoGui:
         _all_titles = _active + _uploaded
         existing_titles = [t for t in _all_titles if self._is_food_title(t)]
         is_batch = count > 1
+        try:
+            from core.cta_policy import (
+                ensure_topic_request_fixed_comment,
+                should_allow_topic_request_cta,
+                topic_request_cta_reason,
+                update_script_topic_request_cta,
+            )
+
+            updated_scripts = []
+            already_allowed = False
+            for idx, script in enumerate(scripts):
+                items = ScriptParser.parse_string(script)
+                meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
+                video_type = meta.get("video_format") or ("Shorts" if any(it.get("text", "").strip() == "Shorts" for it in items if it["type"] == "video_format") else "Long")
+                generation_kind = meta.get("generation_kind", "")
+                allowed = should_allow_topic_request_cta(
+                    video_type=video_type,
+                    generation_kind=generation_kind,
+                    batch_index=idx,
+                    batch_size=count,
+                    already_allowed_in_batch=already_allowed,
+                )
+                reason = topic_request_cta_reason(
+                    video_type=video_type,
+                    generation_kind=generation_kind,
+                    batch_index=idx,
+                    batch_size=count,
+                    already_allowed_in_batch=already_allowed,
+                )
+                if allowed:
+                    already_allowed = True
+                script = update_script_topic_request_cta(script, allowed, reason)
+                script = ensure_topic_request_fixed_comment(script, allowed)
+                updated_scripts.append(script)
+            scripts = updated_scripts
+        except Exception as e:
+            self.log(f"⚠ CTA方針の自動付与をスキップ: {e}", "warning")
 
         if is_batch:
             self._set_batch_progress_text(f"一括生成: 0/{count} 完了")
@@ -2310,8 +2407,6 @@ class YMM4AutoGui:
         JST = timezone(timedelta(hours=9))
         now = datetime.now(JST)
 
-        schedule = list_schedule()
-
         def _schedule_title_key(value):
             value = str(value or "").split("\n")[0].strip()
             for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
@@ -2325,60 +2420,70 @@ class YMM4AutoGui:
             except Exception:
                 return None
 
-        # upload_records から生成区分・キャラパターンを引く（title+iso[:16] でキー）
-        try:
-            from core.upload_records import load_upload_records
-            _rec_lookup = {}
-            _upload_records = load_upload_records()
-            for rec in _upload_records:
-                t = _schedule_title_key(rec.get("title") or "")
-                dt = _schedule_dt(rec.get("publish_at"))
-                vt = str(rec.get("video_type") or "").lower()
-                if t and dt:
-                    _rec_lookup[(vt, t, dt.isoformat()[:16])] = rec
-        except Exception:
-            _rec_lookup = {}
-            _upload_records = []
+        def build_rows():
+            current_now = datetime.now(JST)
+            schedule = list_schedule()
+            try:
+                from core.upload_records import load_upload_records
+                rec_lookup = {}
+                upload_records = load_upload_records()
+                for rec in upload_records:
+                    t = _schedule_title_key(rec.get("title") or "")
+                    dt = _schedule_dt(rec.get("publish_at"))
+                    vt = str(rec.get("video_type") or "").lower()
+                    if t and dt:
+                        rec_lookup[(vt, t, dt.isoformat()[:16])] = rec
+            except Exception:
+                rec_lookup = {}
+                upload_records = []
 
-        rows = []
-        seen_schedule_rows = set()
-        for vt, entries in schedule.items():
-            label = "Shorts" if vt == "shorts" else "Long"
-            for iso, title in entries.items():
-                try:
-                    dt = datetime.fromisoformat(iso)
-                except ValueError:
+            new_rows = []
+            seen_schedule_rows = set()
+            for vt, entries in schedule.items():
+                label = "Shorts" if vt == "shorts" else "Long"
+                for iso, title in entries.items():
+                    try:
+                        dt = datetime.fromisoformat(iso)
+                    except ValueError:
+                        continue
+                    status = "済" if dt < current_now else "予定"
+                    if status == "済":
+                        continue
+                    clean_title = title.split("\n")[0]
+                    meta_rec = rec_lookup.get((vt, _schedule_title_key(clean_title), dt.isoformat()[:16]), {})
+                    gen_kind = meta_rec.get("generation_kind", "") or ""
+                    char_pat = meta_rec.get("character_pattern", "") or ""
+                    new_rows.append((dt, label, clean_title, status, vt, iso, gen_kind, char_pat))
+                    seen_schedule_rows.add((vt, dt.isoformat()[:16], _schedule_title_key(clean_title)))
+            for rec in upload_records:
+                vt = str(rec.get("video_type") or "").lower()
+                if vt not in ("shorts", "long"):
                     continue
-                status = "済" if dt < now else "予定"
-                clean_title = title.split("\n")[0]
-                meta_rec = _rec_lookup.get((vt, _schedule_title_key(clean_title), dt.isoformat()[:16]), {})
-                gen_kind = meta_rec.get("generation_kind", "") or ""
-                char_pat = meta_rec.get("character_pattern", "") or ""
-                rows.append((dt, label, clean_title, status, vt, iso, gen_kind, char_pat))
-                seen_schedule_rows.add((vt, dt.isoformat()[:16], _schedule_title_key(clean_title)))
-        for rec in _upload_records:
-            vt = str(rec.get("video_type") or "").lower()
-            if vt not in ("shorts", "long"):
-                continue
-            publish_status = str(rec.get("publish_status") or "").lower()
-            if publish_status != "scheduled":
-                continue
-            dt = _schedule_dt(rec.get("publish_at"))
-            if not dt or dt <= now:
-                continue
-            title = str(rec.get("title") or "").split("\n")[0].strip()
-            if not title:
-                continue
-            title_key = _schedule_title_key(title)
-            row_key = (vt, dt.isoformat()[:16], title_key)
-            if row_key in seen_schedule_rows:
-                continue
-            label = "Shorts" if vt == "shorts" else "Long"
-            gen_kind = rec.get("generation_kind", "") or ""
-            char_pat = rec.get("character_pattern", "") or ""
-            rows.append((dt, label, title, "予定", vt, dt.isoformat(), gen_kind, char_pat))
-            seen_schedule_rows.add(row_key)
-        rows.sort(key=lambda r: r[0])
+                publish_status = str(rec.get("publish_status") or "").lower()
+                privacy_status = str(rec.get("privacy_status") or rec.get("privacyStatus") or "").lower()
+                if publish_status in ("published", "public", "manual_published", "deleted", "failed") or privacy_status == "public":
+                    continue
+                if not rec.get("publish_at"):
+                    continue
+                dt = _schedule_dt(rec.get("publish_at"))
+                if not dt or dt <= current_now:
+                    continue
+                title = str(rec.get("title") or "").split("\n")[0].strip()
+                if not title:
+                    continue
+                title_key = _schedule_title_key(title)
+                row_key = (vt, dt.isoformat()[:16], title_key)
+                if row_key in seen_schedule_rows:
+                    continue
+                label = "Shorts" if vt == "shorts" else "Long"
+                gen_kind = rec.get("generation_kind", "") or ""
+                char_pat = rec.get("character_pattern", "") or ""
+                new_rows.append((dt, label, title, "予定", vt, dt.isoformat(), gen_kind, char_pat))
+                seen_schedule_rows.add(row_key)
+            new_rows.sort(key=lambda r: r[0])
+            return new_rows
+
+        rows = [] if auto_sync else build_rows()
 
         dialog = tk.Toplevel(self.root)
         dialog.title("アップロードスケジュール")
@@ -2425,6 +2530,8 @@ class YMM4AutoGui:
         count_var = tk.StringVar()
 
         def refresh_tree():
+            if not tree.winfo_exists():
+                return
             tree.delete(*tree.get_children())
             row_by_iid.clear()
             filt = filter_var.get()
@@ -2448,7 +2555,10 @@ class YMM4AutoGui:
                 f"合計 {len(visible)} 件  /  予定 {sum(1 for r in visible if r['status']=='予定')} 件  /  済 {sum(1 for r in visible if r['status']=='済')} 件"
             )
 
-        refresh_tree()
+        if auto_sync:
+            count_var.set("YouTube同期中...")
+        else:
+            refresh_tree()
 
         if auto_sync:
             if self._schedule_sync_running:
@@ -2468,15 +2578,21 @@ class YMM4AutoGui:
                                     "info",
                                 )
                             if dialog.winfo_exists():
-                                dialog.destroy()
-                                self.show_upload_schedule_dialog(auto_sync=False)
+                                rows[:] = build_rows()
+                                refresh_tree()
                         self.root.after(0, done)
                     except Exception as e:
-                        self.root.after(0, lambda e=e: self.log(f"YouTube同期に失敗したためローカル表示のまま続行: {e}", "warning"))
+                        def failed(e=e):
+                            self.log(f"YouTube同期に失敗しました。ローカル台帳だけでは表示しません: {e}", "warning")
+                            rows[:] = []
+                            refresh_tree()
+                        self.root.after(0, failed)
                     finally:
                         self._schedule_sync_running = False
 
                 threading.Thread(target=sync_worker, daemon=True).start()
+        else:
+            refresh_tree()
 
         # 削除・手動公開済みボタン
         def delete_selected():
@@ -2727,7 +2843,8 @@ class YMM4AutoGui:
 
             def worker():
                 import json as _json
-                from core.upload_scheduler import rebalance_slots
+                from core.upload_scheduler import count_rebalance_candidates, rebalance_slots_detailed
+                from core.upload_scheduler import sync_schedule_from_youtube as _sync_schedule_from_youtube
                 from core.youtube_uploader import update_video_publish_time
                 from core.upload_records import UPLOAD_RECORDS_FILE, find_upload_record, load_upload_records
 
@@ -2784,9 +2901,16 @@ class YMM4AutoGui:
                     return None, None
 
                 all_changes = []
+                candidate_counts = {}
                 try:
+                    sync_result = _sync_schedule_from_youtube(progress_callback=self.log)
+                    self.root.after(0, lambda r=sync_result: self.log(
+                        f"YouTube同期後に詰め直し: 確認 {r.get('checked', 0)} / 予約 {r.get('scheduled', 0)} / 公開済み {r.get('published', 0)}",
+                        "info",
+                    ))
                     for vt in ("shorts", "long"):
-                        changes = rebalance_slots(vt)
+                        candidate_counts[vt] = count_rebalance_candidates(vt)
+                        changes = rebalance_slots_detailed(vt)
                         all_changes.extend([(vt, *c) for c in changes])
                 except Exception as e:
                     self.root.after(0, lambda e=e: (
@@ -2796,6 +2920,10 @@ class YMM4AutoGui:
                     return
 
                 if not all_changes:
+                    self.root.after(0, lambda counts=candidate_counts: self.log(
+                        f"📅 スロット詰め直し対象: Shorts {counts.get('shorts', 0)}件 / Long {counts.get('long', 0)}件、移動なし",
+                        "info",
+                    ))
                     self.root.after(0, lambda: messagebox.showinfo(
                         "スロット詰め直し", "すでに最速スロットに詰まっています。変更なし。", parent=dialog,
                     ))
@@ -2805,11 +2933,11 @@ class YMM4AutoGui:
                     return "Shorts" if vt == "shorts" else "Long"
 
                 def fmt_iso(iso):
-                    return iso[:16].replace("T", " ")
+                    return iso[:16].replace("T", " ") if iso else "未設定"
 
                 plan_lines = [
                     f"  ・[{type_label(vt)}] {title[:45]}: {fmt_iso(old_iso)} → {fmt_iso(new_iso)}"
-                    for vt, old_iso, new_iso, title in all_changes
+                    for vt, old_iso, new_iso, title, _video_id in all_changes
                 ]
                 self.root.after(0, lambda lines=plan_lines: (
                     self.log(f"📅 スロット詰め直し 移動予定: {len(lines)}件", "info"),
@@ -2818,10 +2946,10 @@ class YMM4AutoGui:
 
                 updated_yt = 0
                 no_id = []
-                for vt, old_iso, new_iso, title in all_changes:
-                    video_id, record_path = find_record_for_rebalance(old_iso, title, vt)
+                for vt, old_iso, new_iso, title, change_video_id in all_changes:
+                    video_id, record_path = (change_video_id, UPLOAD_RECORDS_FILE) if change_video_id else find_record_for_rebalance(old_iso, title, vt)
                     short_title = title[:30]
-                    old_dt_str = old_iso[:16].replace("T", " ")
+                    old_dt_str = old_iso[:16].replace("T", " ") if old_iso else "未設定"
                     new_dt_str = new_iso[:16].replace("T", " ")
                     if not video_id:
                         no_id.append(short_title)
@@ -2860,10 +2988,10 @@ class YMM4AutoGui:
                         ))
 
                 def done():
-                    msg = f"✅ {len(all_changes)}件を詰め直しました（YouTube更新: {updated_yt}件）"
+                    msg = f"YouTube更新: {updated_yt}/{len(all_changes)}件"
                     if no_id:
                         msg += f"\n⚠ YouTube未更新: {', '.join(no_id[:3])}"
-                    self.log(msg, "success")
+                    self.log(msg, "success" if updated_yt else "warning")
                     dialog.destroy()
                     self.show_upload_schedule_dialog(auto_sync=False)
 
@@ -3113,6 +3241,7 @@ class YMM4AutoGui:
         opening = _read("opening_review.json")
         duration = _read("duration_review.json")
         final = _read("final_review.json")
+        cta_policy = _read("cta_policy.json")
 
         record = {
             "video_id": video_id,
@@ -3130,6 +3259,8 @@ class YMM4AutoGui:
             "risk": final.get("risk") if not final.get("skipped") and not final.get("error") else None,
             "must_fix": (final.get("must_fix") or []) if not final.get("skipped") and not final.get("error") else [],
         }
+        if cta_policy:
+            record.update(cta_policy)
         try:
             parser_items = ScriptParser.parse(os.path.join(output_dir, "script.txt"))
             script_meta = {
@@ -3913,6 +4044,7 @@ class YMM4AutoGui:
         self.cancel_btn.config(state=tk.DISABLED if enabled else tk.NORMAL)
         self.comment_btn.config(state=state)
         self.image_review_btn.config(state=state)
+        self.native_render_history_btn.config(state=state)
         self.ref_text.config(state=state)
         if enabled: self.progress.stop()
         else: self.progress.start(10)

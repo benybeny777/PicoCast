@@ -150,6 +150,25 @@ def infer_video_type(title: str | None = None, duration: str | None = None) -> s
     return "long"
 
 
+def _youtube_publish_at(publish_at) -> tuple[str, str]:
+    """Return (UTC RFC3339 for YouTube, JST display text)."""
+    from datetime import datetime, timedelta, timezone
+
+    JST = timezone(timedelta(hours=9))
+    if isinstance(publish_at, datetime):
+        dt = publish_at
+    else:
+        text = str(publish_at).strip()
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        dt = datetime.fromisoformat(text)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=JST)
+    jst = dt.astimezone(JST).replace(microsecond=0)
+    utc = dt.astimezone(timezone.utc).replace(microsecond=0)
+    return utc.isoformat().replace("+00:00", "Z"), jst.strftime("%Y-%m-%d %H:%M JST")
+
+
 def get_channel_upload_video_statuses() -> dict[str, dict]:
     """Return status/snippet data for videos in the authenticated channel uploads playlist."""
     youtube = get_youtube_client()
@@ -200,8 +219,7 @@ def update_video_publish_time(video_id: str, publish_at, progress_callback=None)
             print(msg, flush=True)
 
     try:
-        from datetime import datetime
-        publish_at_str = publish_at.isoformat() if isinstance(publish_at, datetime) else str(publish_at)
+        publish_at_str, publish_at_display = _youtube_publish_at(publish_at)
         youtube = get_youtube_client()
         current = youtube.videos().list(part="status", id=video_id).execute()
         items = current.get("items", [])
@@ -209,20 +227,25 @@ def update_video_publish_time(video_id: str, publish_at, progress_callback=None)
             _log(f"  ⚠ 動画が見つかりません: {video_id}")
             return False
         status = items[0].get("status", {})
-        if status.get("privacyStatus") != "private":
-            _log(f"  ⚠ private動画ではないため予約変更できません: {status.get('privacyStatus')}")
+        privacy_status = status.get("privacyStatus")
+        if privacy_status not in ("private", "unlisted"):
+            _log(f"  ⚠ 予約変更対象外の公開状態です: {privacy_status}")
+            return False
+        if privacy_status == "unlisted" and not status.get("publishAt"):
+            _log("  ⚠ 限定公開済みで公開予定がないため、APIでは予約投稿に戻せません")
             return False
 
+        made_for_kids = bool(status.get("selfDeclaredMadeForKids", False))
         body = {
             "id": video_id,
             "status": {
                 "privacyStatus": "private",
                 "publishAt": publish_at_str,
-                "selfDeclaredMadeForKids": bool(status.get("selfDeclaredMadeForKids", False)),
+                "selfDeclaredMadeForKids": made_for_kids,
             },
         }
         youtube.videos().update(part="status", body=body).execute()
-        _log(f"  ✅ YouTube公開予定を変更: {publish_at_str}")
+        _log(f"  ✅ YouTube公開予定を変更: {publish_at_display} ({publish_at_str})")
         return True
     except Exception as e:
         _log(f"  ⚠ 公開予定変更エラー: {e}")
@@ -344,7 +367,7 @@ def _read_script_text_for_tags(mp4_path: str) -> str:
         return ""
 
 
-def _write_youtube_metadata(output_dir: str, title: str, youtube_tags: list[str]) -> str | None:
+def _write_youtube_metadata(output_dir: str, title: str, youtube_tags: list[str], extra: dict | None = None) -> str | None:
     if not output_dir:
         return None
     try:
@@ -358,6 +381,8 @@ def _write_youtube_metadata(output_dir: str, title: str, youtube_tags: list[str]
             "youtube_tags": youtube_tags,
             "tag_policy": TAG_POLICY,
         }
+        if extra:
+            data.update(extra)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         return path
@@ -378,6 +403,7 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
             print(msg, flush=True)
 
     from core.youtube_metadata import optimize_upload_metadata, split_tags
+    from core.cta_policy import append_long_youtube_chapters, probe_duration_sec, read_policy_file
 
     title = _strip_video_type_prefix(title)
     is_shorts = "[Shorts]" in str(mp4_path) or "[Shorts]" in str(title)
@@ -389,20 +415,33 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
         is_shorts=is_shorts,
         script_text=script_text,
     )
+    policy_data = read_policy_file(os.path.dirname(os.path.abspath(mp4_path)))
+    if not is_shorts:
+        description, chapters_added = append_long_youtube_chapters(
+            description,
+            script_text,
+            duration_sec=probe_duration_sec(mp4_path),
+        )
+        long_policy = dict(policy_data.get("long_policy") or {})
+        long_policy.update({
+            "related_video_navigation_allowed": True,
+            "vidiq_title_adjustment_allowed": True,
+            "youtube_chapters_added": bool(chapters_added),
+        })
+        policy_data["long_policy"] = long_policy
 
     _log("🔑 YouTube 認証中...")
     youtube = get_youtube_client()
 
     tag_list = split_tags(tags)
-    metadata_path = _write_youtube_metadata(os.path.dirname(os.path.abspath(mp4_path)), title, tag_list)
+    metadata_path = _write_youtube_metadata(os.path.dirname(os.path.abspath(mp4_path)), title, tag_list, extra=policy_data)
     if metadata_path:
         _log(f"  🏷 YouTubeタグ記録: {metadata_path}")
 
     # publish_at が指定されていれば ISO8601 文字列に統一
     publish_at_str = None
     if publish_at is not None:
-        from datetime import datetime
-        publish_at_str = publish_at.isoformat() if isinstance(publish_at, datetime) else str(publish_at)
+        publish_at_str, _publish_at_display = _youtube_publish_at(publish_at)
 
     status_body = {
         "privacyStatus": "private" if publish_at_str else privacy,

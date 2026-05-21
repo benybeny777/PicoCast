@@ -4,6 +4,7 @@ token.json
 token_analytics.json
 .claude/
 core/prompt_parts/local/
+assets/characters/_native_cache/
 __pycache__/
 *.pyc
 *.pyo

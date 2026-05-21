@@ -873,3 +873,11 @@ OPENAI_FINAL_REVIEW_MODEL=gpt-5.4-mini
 LONG_FULL_SCRIPT_REVIEW=0
 LONG_UPLOAD_PLAYLIST_NAME=ロング動画
 ```
+## CTA / 導線制御
+
+- Shortsは本編内の他動画誘導より、完走率・平均視聴率・ループ視聴を優先する。
+- Shortsの `次回は` / `次の動画` / `他の動画も見て` / `チャンネル登録お願いします` / `高評価お願いします` は生成前チェックで警告する。
+- `core/cta_policy.py` が一括生成時の `ネタ募集CTA: 許可 / 禁止` を判定する。Shortsかつ生成区分が `新規` / `横展開`、同時生成5本以上の場合のみ最大1本許可する。
+- ネタ募集CTAを許可した台本で固定コメントが未指定なら、ネタ募集用固定コメントを自動差し込みする。
+- Longでは関連動画誘導・vidIQタイトル調整・説明欄YouTubeチャプター追加を許可する。アップロード時に `チャプター:` 行または既定章立てから `【目次】` を説明欄末尾へ追加する。
+- CTA方針は `_meta/cta_policy.json`、アップロード時のYouTubeメタ方針は `_meta/youtube_metadata.json` に保存する。

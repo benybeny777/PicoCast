@@ -13,6 +13,8 @@ LONG_SLOTS_WEEKDAY = [21]
 LONG_SLOTS_WEEKEND = [12, 21]
 
 VIDEO_TYPES = ("shorts", "long")
+SCHEDULED_STATUSES = {"", "scheduled", "unlisted", "private"}
+NOT_SCHEDULED_STATUSES = {"published", "public", "manual_published", "deleted", "failed"}
 
 
 def _as_jst(dt: datetime) -> datetime:
@@ -29,6 +31,16 @@ def _slot_hours(video_type: str, candidate) -> list[int]:
     if video_type == "long":
         return LONG_SLOTS_WEEKEND if candidate.weekday() in (5, 6) else LONG_SLOTS_WEEKDAY
     return SLOTS
+
+
+def _is_scheduled_record(record: dict) -> bool:
+    status = str(record.get("publish_status") or "").lower()
+    privacy = str(record.get("privacy_status") or record.get("privacyStatus") or "").lower()
+    if status in NOT_SCHEDULED_STATUSES or privacy in {"public"}:
+        return False
+    if not str(record.get("publish_at") or "").strip():
+        return False
+    return status in SCHEDULED_STATUSES or privacy == "unlisted"
 
 
 def _assign_slots_from_used(
@@ -83,14 +95,12 @@ def schedule_from_records(records: list[dict] | None = None) -> dict[str, dict]:
 
         records = load_upload_records()
 
-    import logging
-
     schedules = {vt: {} for vt in VIDEO_TYPES}
     for record in records:
         vt = str(record.get("video_type") or "").lower()
         if vt not in schedules:
             continue
-        if str(record.get("publish_status") or "").lower() != "scheduled":
+        if not _is_scheduled_record(record):
             continue
         publish_at = str(record.get("publish_at") or "").strip()
         if not publish_at:
@@ -102,12 +112,7 @@ def schedule_from_records(records: list[dict] | None = None) -> dict[str, dict]:
         title = str(record.get("title") or "").split("\n")[0].strip()
         if not title:
             continue
-        if iso in schedules[vt]:
-            logging.warning(
-                "schedule_from_records: duplicate slot %s for %s (keeping %r, ignoring %r)",
-                iso, vt, schedules[vt][iso], title,
-            )
-        else:
+        if iso not in schedules[vt]:
             schedules[vt][iso] = title
     return schedules
 
@@ -154,12 +159,102 @@ def build_rebalanced_schedule(
     return new_schedule, changes
 
 
+def _scheduled_entries_from_records(records: list[dict], video_type: str) -> list[dict]:
+    now = datetime.now(JST)
+    entries = []
+    for idx, record in enumerate(records):
+        vt = str(record.get("video_type") or "").lower()
+        if vt != video_type:
+            continue
+        if not _is_scheduled_record(record):
+            continue
+        publish_at = str(record.get("publish_at") or "").strip()
+        if publish_at:
+            try:
+                iso = _parse_slot(publish_at.replace("Z", "+00:00")).isoformat()
+                slot_dt = _parse_slot(iso)
+            except Exception:
+                continue
+            if slot_dt <= now and str(record.get("publish_status") or "").lower() != "scheduled":
+                continue
+        else:
+            continue
+        title = str(record.get("title") or "").split("\n")[0].strip()
+        if not title:
+            title = str(record.get("video_id") or f"record-{idx}").strip()
+        entries.append({
+            "index": idx,
+            "iso": iso,
+            "slot_dt": slot_dt,
+            "title": title,
+            "video_id": str(record.get("video_id") or "").strip(),
+        })
+    return entries
+
+
+def build_rebalanced_entries(
+    entries: list[dict],
+    video_type: str,
+    now: datetime | None = None,
+    include_video_id: bool = False,
+) -> list[tuple[str, str, str]]:
+    """Build rebalance changes from record entries, preserving duplicate slots."""
+    now = _as_jst(now or datetime.now(JST))
+    cutoff = now + timedelta(minutes=5)
+
+    used = set()
+    future = []
+    for entry in entries:
+        slot_dt = entry["slot_dt"]
+        iso = entry["iso"]
+        if iso and slot_dt <= cutoff:
+            used.add(iso)
+        else:
+            future.append(entry)
+
+    future.sort(key=lambda item: (item["slot_dt"], item["index"]))
+    if not future:
+        return []
+
+    new_slots = _assign_slots_from_used(len(future), video_type, used, now)
+    if len(new_slots) != len(future):
+        raise RuntimeError("Not enough available upload slots within 90 days.")
+
+    changes = []
+    for entry, new_dt in zip(future, new_slots):
+        old_iso = entry["iso"]
+        new_iso = new_dt.isoformat()
+        if old_iso != new_iso:
+            if include_video_id:
+                changes.append((old_iso, new_iso, entry["title"], entry.get("video_id") or ""))
+            else:
+                changes.append((old_iso, new_iso, entry["title"]))
+    return changes
+
+
 def rebalance_slots(video_type: str) -> list[tuple[str, str, str]]:
     """Compute changes needed to repack future slots. Does not write anything.
     The caller is responsible for applying each change to YouTube and upload_records."""
-    schedule = schedule_from_records().get(video_type, {})
-    _new_schedule, changes = build_rebalanced_schedule(schedule, video_type)
-    return changes
+    from core.upload_records import load_upload_records
+
+    records = load_upload_records()
+    entries = _scheduled_entries_from_records(records, video_type)
+    return build_rebalanced_entries(entries, video_type)
+
+
+def rebalance_slots_detailed(video_type: str) -> list[tuple[str, str, str, str]]:
+    """Like rebalance_slots(), but includes video_id for unambiguous callers."""
+    from core.upload_records import load_upload_records
+
+    records = load_upload_records()
+    entries = _scheduled_entries_from_records(records, video_type)
+    return build_rebalanced_entries(entries, video_type, include_video_id=True)
+
+
+def count_rebalance_candidates(video_type: str) -> int:
+    from core.upload_records import load_upload_records
+
+    return len(_scheduled_entries_from_records(load_upload_records(), video_type))
 
 
 def list_schedule() -> dict:
@@ -211,8 +306,10 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
     changed_records = 0
     scheduled = 0
     published = 0
+    seen_video_ids = set()
 
     for video_id, status in statuses.items():
+        seen_video_ids.add(video_id)
         record = id_to_record.get(video_id)
         if record is None:
             record = {
@@ -245,16 +342,39 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
                 except Exception:
                     record["published_at"] = published_at
             published += 1
-        elif privacy == "private" and yt_publish_at:
+        elif privacy in ("private", "unlisted") and yt_publish_at:
             yt_dt = _parse_slot(str(yt_publish_at).replace("Z", "+00:00"))
             new_iso = yt_dt.isoformat()
             record["publish_at"] = new_iso
             record["publish_status"] = "scheduled" if yt_dt > now else "private"
+            record["privacy_status"] = privacy
             scheduled += 1
+        elif privacy == "unlisted":
+            record["publish_status"] = "unlisted"
+            record["privacy_status"] = "unlisted"
+            record["publish_at"] = None
         else:
             record["publish_status"] = privacy or "unknown"
             record["publish_at"] = None
 
+        if record != before:
+            changed_records += 1
+
+    for record in records:
+        before = dict(record)
+        video_id = str(record.get("video_id") or "").strip()
+        publish_at = str(record.get("publish_at") or "").strip()
+        status = str(record.get("publish_status") or "").lower()
+        if publish_at and (not video_id or video_id not in seen_video_ids):
+            record["publish_at"] = None
+            record["publish_status"] = "private"
+        elif publish_at and status in ("", "private", "unlisted"):
+            try:
+                if _parse_slot(publish_at.replace("Z", "+00:00")) <= now:
+                    record["publish_at"] = None
+                    record["publish_status"] = "private"
+            except Exception:
+                pass
         if record != before:
             changed_records += 1
 

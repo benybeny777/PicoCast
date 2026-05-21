@@ -60,6 +60,19 @@ CHARACTERS = {
 }
 
 VIDEO_FPS = 30
+FFMPEG_BIN = os.environ.get("FFMPEG_BIN", "ffmpeg")
+NATIVE_SUBTITLE_OFFSET_SEC = float(os.environ.get("NATIVE_SUBTITLE_OFFSET_SEC", "0"))
+NATIVE_FFMPEG_ENCODER = os.environ.get("NATIVE_FFMPEG_ENCODER", "h264_nvenc")
+NATIVE_FFMPEG_PRESET = os.environ.get("NATIVE_FFMPEG_PRESET", "p5")
+NATIVE_FFMPEG_CRF = os.environ.get("NATIVE_FFMPEG_CRF", "20")
+NATIVE_FFMPEG_CQ = os.environ.get("NATIVE_FFMPEG_CQ", "23")
+NATIVE_RENDER_CHARACTERS = os.environ.get("NATIVE_RENDER_CHARACTERS", "1").strip().lower() in ("1", "true", "yes", "on")
+NATIVE_ENABLE_LIPSYNC = os.environ.get("NATIVE_ENABLE_LIPSYNC", "1").strip().lower() in ("1", "true", "yes", "on")
+NATIVE_ENABLE_BLINK = os.environ.get("NATIVE_ENABLE_BLINK", "1").strip().lower() in ("1", "true", "yes", "on")
+NATIVE_CHARACTER_HEIGHT_SHORTS = int(os.environ.get("NATIVE_CHARACTER_HEIGHT_SHORTS", "760"))
+NATIVE_CHARACTER_HEIGHT_LONG = int(os.environ.get("NATIVE_CHARACTER_HEIGHT_LONG", "520"))
+ZUNDAMON_PSD_PATH = os.environ.get("ZUNDAMON_PSD_PATH", "")
+METAN_PSD_PATH = os.environ.get("METAN_PSD_PATH", "")
 
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "output")
 OUTPUT_DATA_DIR = os.environ.get("OUTPUT_DATA_DIR", os.path.join(OUTPUT_DIR, "000_data"))

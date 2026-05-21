@@ -641,6 +641,17 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # Step 2: 動画形式を検出
     is_shorts = _detect_is_shorts(script_content)
+    try:
+        from core.cta_policy import check_shorts_navigation_ng
+        _nav_hits = check_shorts_navigation_ng(script_content, "Shorts" if is_shorts else "Long")
+        if _nav_hits:
+            update_status(
+                "⚠ Shortsでは直接的な他動画誘導・次回予告が含まれています。"
+                f"ループ締めに変更してください: {', '.join(_nav_hits)}",
+                "warning",
+            )
+    except Exception:
+        pass
     if is_shorts:
         max_backgrounds = MAX_BACKGROUNDS_SHORTS
     elif long_budget_mode:
@@ -737,6 +748,20 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
     items = [it for it in items if it["type"] not in ScriptParser.META_TYPES]
     items = normalize_background_order(items)
+    try:
+        from core.cta_policy import build_cta_policy, write_policy_file
+
+        topic_request_allowed = str(meta.get("topic_request_cta", "")).strip() == "許可"
+        cta_policy = build_cta_policy(
+            "Shorts" if is_shorts else "Long",
+            generation_kind=meta.get("generation_kind", ""),
+            topic_request_allowed=topic_request_allowed,
+            topic_request_reason=meta.get("topic_request_cta_reason", ""),
+            final_cta_type="topic_request" if topic_request_allowed else ("loop" if is_shorts else "long_related_video"),
+        )
+        write_policy_file(theme_dir, cta_policy)
+    except Exception as e:
+        update_status(f"  ⚠ CTA方針メタ保存をスキップ: {e}", "warning")
 
     ai_thumbnail_prompt = meta.get("thumbnail")
 

@@ -62,6 +62,194 @@ class UploadSchedulerTests(unittest.TestCase):
 
         self.assertEqual(changes, [("2026-05-25T07:00:00+09:00", "2026-05-21T12:00:00+09:00", "future")])
 
+    def test_rebalance_preserves_duplicate_record_slots(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "shorts",
+                "title": "future a",
+                "publish_at": "2026-05-21T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+            {
+                "video_id": "v2",
+                "video_type": "shorts",
+                "title": "future b",
+                "publish_at": "2026-05-21T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+        ]
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            changes = upload_scheduler.rebalance_slots("shorts")
+
+        self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "future b")])
+
+    def test_rebalance_includes_unlisted_records_with_publish_at(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "shorts",
+                "title": "unlisted future",
+                "publish_at": "2026-05-25T07:00:00+09:00",
+                "publish_status": "unlisted",
+            },
+        ]
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            changes = upload_scheduler.rebalance_slots("shorts")
+
+        self.assertEqual(changes, [("2026-05-25T07:00:00+09:00", "2026-05-21T12:00:00+09:00", "unlisted future")])
+
+    def test_rebalance_includes_empty_status_records_with_publish_at(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "shorts",
+                "title": "empty status future",
+                "publish_at": "2026-05-25T07:00:00+09:00",
+            },
+        ]
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            changes = upload_scheduler.rebalance_slots("shorts")
+
+        self.assertEqual(changes, [("2026-05-25T07:00:00+09:00", "2026-05-21T12:00:00+09:00", "empty status future")])
+
+    def test_sync_treats_unlisted_with_publish_at_as_scheduled(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "shorts",
+                "title": "unlisted scheduled",
+            }
+        ]
+        saved_records = []
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.upload_records.save_upload_records", side_effect=lambda data: saved_records.append(data)),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={
+                "v1": {"privacyStatus": "unlisted", "publishAt": "2026-05-23T03:00:00Z"}
+            }),
+        ):
+            result = upload_scheduler.sync_schedule_from_youtube()
+
+        self.assertEqual(result["scheduled"], 1)
+        self.assertEqual(records[0]["publish_at"], "2026-05-23T12:00:00+09:00")
+        self.assertEqual(records[0]["publish_status"], "scheduled")
+        self.assertEqual(records[0]["privacy_status"], "unlisted")
+        self.assertTrue(saved_records)
+
+    def test_rebalance_skips_unlisted_without_publish_at(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "shorts",
+                "title": "unlisted no schedule",
+                "publish_status": "unlisted",
+                "privacy_status": "unlisted",
+                "uploaded_at": "2026-05-21T00:00:00+09:00",
+            },
+        ]
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            changes = upload_scheduler.rebalance_slots_detailed("shorts")
+
+        self.assertEqual(changes, [])
+
+    def test_sync_treats_unlisted_without_publish_at_as_not_scheduled(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "shorts",
+                "title": "unlisted no schedule",
+                "publish_at": "2026-05-25T07:00:00+09:00",
+                "publish_status": "scheduled",
+            }
+        ]
+        saved_records = []
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.upload_records.save_upload_records", side_effect=lambda data: saved_records.append(data)),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={
+                "v1": {"privacyStatus": "unlisted", "publishAt": None}
+            }),
+        ):
+            result = upload_scheduler.sync_schedule_from_youtube()
+
+        self.assertIsNone(records[0]["publish_at"])
+        self.assertEqual(records[0]["publish_status"], "unlisted")
+        self.assertEqual(records[0]["privacy_status"], "unlisted")
+        self.assertEqual(result["scheduled"], 0)
+        self.assertTrue(saved_records)
+
+    def test_sync_clears_stale_past_publish_at_with_empty_status(self):
+        records = [
+            {
+                "video_id": "v-old",
+                "video_type": "shorts",
+                "title": "old stale",
+                "publish_at": "2026-05-19T12:00:00+09:00",
+            }
+        ]
+        saved_records = []
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.upload_records.save_upload_records", side_effect=lambda data: saved_records.append(data)),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={}),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            result = upload_scheduler.sync_schedule_from_youtube()
+
+        self.assertEqual(records[0]["publish_at"], None)
+        self.assertEqual(records[0]["publish_status"], "private")
+        self.assertEqual(result["changed"], 1)
+        self.assertTrue(saved_records)
+
     def test_long_weekend_rebalance_uses_noon_and_evening(self):
         now = datetime(2026, 5, 22, 22, 0, tzinfo=upload_scheduler.JST)
         schedule = {
@@ -122,7 +310,7 @@ class UploadSchedulerTests(unittest.TestCase):
         self.assertIsNone(records[0]["publish_at"])
         self.assertEqual(records[0]["publish_status"], "private")
 
-    def test_schedule_from_records_uses_only_scheduled_records(self):
+    def test_schedule_from_records_uses_publish_at_records_except_published(self):
         records = [
             {
                 "video_type": "shorts",
@@ -132,16 +320,23 @@ class UploadSchedulerTests(unittest.TestCase):
             },
             {
                 "video_type": "shorts",
-                "title": "stale",
+                "title": "private with publish at",
                 "publish_at": "2026-05-25T12:00:00+09:00",
                 "publish_status": "private",
+            },
+            {
+                "video_type": "shorts",
+                "title": "published",
+                "publish_at": "2026-05-25T19:00:00+09:00",
+                "publish_status": "published",
             },
         ]
 
         schedule = upload_scheduler.schedule_from_records(records)
 
         self.assertIn("2026-05-25T07:00:00+09:00", schedule["shorts"])
-        self.assertNotIn("2026-05-25T12:00:00+09:00", schedule["shorts"])
+        self.assertIn("2026-05-25T12:00:00+09:00", schedule["shorts"])
+        self.assertNotIn("2026-05-25T19:00:00+09:00", schedule["shorts"])
 
     def test_sync_imports_scheduled_video_missing_from_local_records(self):
         records = []
