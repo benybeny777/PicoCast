@@ -761,7 +761,8 @@ class YMM4AutoGui:
                 abort = True
             for w in warns:
                 self.log(f"⚠ {prefix}{w}", "warning")
-            est, n, avg = self._estimate_duration(items, is_shorts)
+            _est_native = is_shorts and DEFAULT_SHORTS_RENDER_ENGINE == "native"
+            est, n, avg = self._estimate_duration(items, is_shorts, native_render=_est_native)
             if est is not None:
                 if is_shorts:
                     if est < 35:
@@ -934,8 +935,12 @@ class YMM4AutoGui:
         return errors, warnings
 
     @staticmethod
-    def _estimate_duration(items, is_shorts: bool):
-        """推定尺（秒）を返す。Shorts: イントロ2.0x/本編1.65x、Long: イントロ1.6x/本編1.35x。"""
+    def _estimate_duration(items, is_shorts: bool, native_render: bool = False):
+        """推定尺（秒）を返す。
+
+        native_render=True（Shorts限定）: 1.40x/1.25x基準で計算。
+        YMM4: Shorts 2.0x/1.65x、Long 1.6x/1.35x。
+        """
         dialogue_items = [it for it in items if it["type"] == "dialogue"]
         if not dialogue_items:
             return None, 0, 0
@@ -943,18 +948,26 @@ class YMM4AutoGui:
         total_chars = sum(len(it.get("text", "")) for it in dialogue_items)
         avg_chars = total_chars / n if n else 0
 
-        CHARS_PER_SEC_AT_1X = 5.4
-        INTRO_SPEED = 2.0 if is_shorts else 1.6
-        BODY_SPEED = 1.65 if is_shorts else 1.35
-        INTRO_FAST_SECONDS = 5.0
-        ADDITIONAL = 0.3 + 0.5 + 0.2
+        from config import (
+            NATIVE_SHORTS_INTRO_VOICE_SPEED, NATIVE_SHORTS_BODY_VOICE_SPEED,
+            VOICE_INTRO_FAST_LINES, NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
+        )
 
         elapsed = 0.0
-        for item in dialogue_items:
-            chars = len(item.get("text", ""))
-            speed = INTRO_SPEED if elapsed < INTRO_FAST_SECONDS else BODY_SPEED
-            line_time = chars / (CHARS_PER_SEC_AT_1X * speed) + 0.1 * speed + ADDITIONAL
-            elapsed += line_time
+        if native_render and is_shorts:
+            for i, item in enumerate(dialogue_items):
+                chars = len(item.get("text", ""))
+                speed = NATIVE_SHORTS_INTRO_VOICE_SPEED if i < VOICE_INTRO_FAST_LINES else NATIVE_SHORTS_BODY_VOICE_SPEED
+                elapsed += chars / (3.0 * speed) + 0.1 * speed + NATIVE_DEFAULT_SILENCE_BETWEEN_LINES
+        else:
+            INTRO_SPEED = 2.0 if is_shorts else 1.6
+            BODY_SPEED = 1.65 if is_shorts else 1.35
+            INTRO_FAST_SECONDS = 5.0
+            ADDITIONAL = 0.3 + 0.5 + 0.2
+            for item in dialogue_items:
+                chars = len(item.get("text", ""))
+                speed = INTRO_SPEED if elapsed < INTRO_FAST_SECONDS else BODY_SPEED
+                elapsed += chars / (5.4 * speed) + 0.1 * speed + ADDITIONAL
 
         return elapsed, n, avg_chars
 
@@ -1058,7 +1071,8 @@ class YMM4AutoGui:
                         self.log(f"{prefix}  must_fix: {issue}", "warning")
                         ai_report.append(f"  - must_fix: {issue}")
 
-                    est, n, avg = self._estimate_duration(items, is_shorts)
+                    _bulk_native = is_shorts and DEFAULT_SHORTS_RENDER_ENGINE == "native"
+                    est, n, avg = self._estimate_duration(items, is_shorts, native_render=_bulk_native)
                     duration_tag = "warning"
                     if est is not None:
                         dur = duration_review(est, is_shorts)
@@ -1188,7 +1202,7 @@ class YMM4AutoGui:
                     self.log(f"{prefix}  must_fix: {issue}", "warning")
                     ai_report.append(f"  - must_fix: {issue}")
 
-                est, n, avg = self._estimate_duration(items, is_shorts)
+                est, n, avg = self._estimate_duration(items, is_shorts, native_render=_effective_native)
                 duration_tag = "warning"
                 if est is not None:
                     dur = duration_review(est, is_shorts)
@@ -1293,7 +1307,8 @@ class YMM4AutoGui:
                 abort = True
             for w in warns:
                 self.log(f"⚠ {prefix}{w}", "warning")
-            est, n, avg = self._estimate_duration(items, is_shorts)
+            _est_native = is_shorts and DEFAULT_SHORTS_RENDER_ENGINE == "native"
+            est, n, avg = self._estimate_duration(items, is_shorts, native_render=_est_native)
             if est is not None:
                 if is_shorts:
                     if est < 35:

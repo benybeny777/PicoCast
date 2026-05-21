@@ -360,8 +360,12 @@ class GenerationReport:
         )
 
 
-def _estimate_script_duration(items, is_shorts: bool):
-    """Estimate narration duration before VOICEVOX generation."""
+def _estimate_script_duration(items, is_shorts: bool, native_render: bool = False):
+    """Estimate narration duration before VOICEVOX generation.
+
+    native_render=True の場合は native 速度（1.40x/1.25x）で計算する。
+    YMM4 モードは従来通り 2.0x/1.65x（Shorts）。
+    """
     dialogue_items = [it for it in items if it["type"] == "dialogue"]
     if not dialogue_items:
         return None, 0, 0.0
@@ -369,16 +373,27 @@ def _estimate_script_duration(items, is_shorts: bool):
     total_chars = sum(len(it.get("text", "")) for it in dialogue_items)
     avg_chars = total_chars / n if n else 0.0
 
-    chars_per_sec_at_1x = 5.4
-    intro_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
-    body_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
-    additional = TRANSITION_SEC + VOICE_TAIL_SAFETY_SEC + INTER_DIALOGUE_GAP_SEC
-
-    elapsed = 0.0
-    for item in dialogue_items:
-        chars = len(item.get("text", ""))
-        speed = intro_speed if elapsed < VOICE_INTRO_FAST_SECONDS else body_speed
-        elapsed += chars / (chars_per_sec_at_1x * speed) + 0.1 * speed + additional
+    if native_render and is_shorts:
+        # native Shorts: VOICEVOX slower speeds → lower chars/sec calibration (≈3.0 at 1x)
+        # Overhead per line: tail_silence (0.1×speed) + NATIVE_DEFAULT_SILENCE_BETWEEN_LINES
+        chars_per_sec_at_1x = 3.0
+        intro_speed = NATIVE_SHORTS_INTRO_VOICE_SPEED
+        body_speed = NATIVE_SHORTS_BODY_VOICE_SPEED
+        elapsed = 0.0
+        for i, item in enumerate(dialogue_items):
+            chars = len(item.get("text", ""))
+            speed = intro_speed if i < VOICE_INTRO_FAST_LINES else body_speed
+            elapsed += chars / (chars_per_sec_at_1x * speed) + 0.1 * speed + NATIVE_DEFAULT_SILENCE_BETWEEN_LINES
+    else:
+        chars_per_sec_at_1x = 5.4
+        intro_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
+        body_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
+        additional = TRANSITION_SEC + VOICE_TAIL_SAFETY_SEC + INTER_DIALOGUE_GAP_SEC
+        elapsed = 0.0
+        for item in dialogue_items:
+            chars = len(item.get("text", ""))
+            speed = intro_speed if elapsed < VOICE_INTRO_FAST_SECONDS else body_speed
+            elapsed += chars / (chars_per_sec_at_1x * speed) + 0.1 * speed + additional
     return elapsed, n, avg_chars
 
 
@@ -1020,7 +1035,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         report.elapsed_sec = time.time() - pipeline_start
         return msg, report
 
-    estimated_sec, estimated_lines, estimated_avg_chars = _estimate_script_duration(items, is_shorts)
+    estimated_sec, estimated_lines, estimated_avg_chars = _estimate_script_duration(items, is_shorts, native_render=native_render)
     estimated_sec = float(estimated_sec or 0.0)
     estimated_duration_result = duration_review(estimated_sec, is_shorts)
     estimated_duration_result["estimated"] = True
