@@ -47,6 +47,10 @@ from config import (
     VOICE_INTRO_SPEED_SCALE_SHORTS,
     VOICE_SPEED_SCALE_LONG,
     VOICE_SPEED_SCALE_SHORTS,
+    NATIVE_VOICE_INTRO_SPEED_SCALE_LONG,
+    NATIVE_VOICE_INTRO_SPEED_SCALE_SHORTS,
+    NATIVE_VOICE_SPEED_SCALE_LONG,
+    NATIVE_VOICE_SPEED_SCALE_SHORTS,
 )
 
 
@@ -585,7 +589,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
-                 long_budget_mode=None):
+                 long_budget_mode=None, native_render=False):
     report = GenerationReport()
     pipeline_start = time.time()
 
@@ -658,8 +662,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         max_backgrounds = MAX_BACKGROUNDS_LONG_BUDGET
     else:
         max_backgrounds = MAX_BACKGROUNDS_LONG
-    intro_voice_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
-    body_voice_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
+    if native_render:
+        intro_voice_speed = NATIVE_VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else NATIVE_VOICE_INTRO_SPEED_SCALE_LONG
+        body_voice_speed = NATIVE_VOICE_SPEED_SCALE_SHORTS if is_shorts else NATIVE_VOICE_SPEED_SCALE_LONG
+    else:
+        intro_voice_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
+        body_voice_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
     update_status(f"📐 動画形式: {'Shorts' if is_shorts else 'ロング'}")
 
     # Step 3: パス設定（台本のvideo_titleを優先してフォルダ名に使う）

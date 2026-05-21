@@ -1456,6 +1456,7 @@ class YMM4AutoGui:
                             existing_titles=existing_titles,
                             long_thumbnail_ab_test=settings.get("long_thumbnail_ab_test", False),
                             long_budget_mode=settings.get("long_budget_mode", False),
+                            native_render=bool(settings.get("native_render")),
                         )
                         break
                     except OutputDirectoryLockedError as e:
