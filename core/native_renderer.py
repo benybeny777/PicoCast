@@ -416,7 +416,12 @@ def _video_size(output_dir: str, script_path: str) -> tuple[int, int]:
     return 1920, 1080
 
 
-def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderResult:
+def render_native_test(
+    output_dir: str,
+    progress_callback=None,
+    voice_speed_intro: float | None = None,
+    voice_speed_body: float | None = None,
+) -> NativeRenderResult:
     """Create a simple YMM-free MP4 from generated audio/background assets."""
     output_dir = os.path.abspath(output_dir)
     script_path = os.path.join(output_dir, "script.txt")
@@ -519,20 +524,48 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
     actual_duration = media_duration_sec(output_path) or total_audio
     if progress_callback:
         progress_callback(f"✅ YMMなし(test) MP4出力: {output_path}")
-        progress_callback(f"📏 実動画尺: {actual_duration:.1f}秒（音声合計: {total_audio:.1f}秒）")
+
+        # silence計測（セグメント間のINTER_DIALOGUE_GAP_SEC合計）
+        silence_total = INTER_DIALOGUE_GAP_SEC * max(0, len(durations) - 1)
+        median_silence = INTER_DIALOGUE_GAP_SEC
+
         cps = script_char_count / total_audio if total_audio > 0 else 0.0
         if cps < 6.0:
-            verdict = "ゆっくり・聞きやすい"
+            speed_verdict = "ゆっくり・聞きやすい"
         elif cps < 7.5:
-            verdict = "Shorts向きで良い"
+            speed_verdict = "Shorts向きで良い"
         elif cps < 8.5:
-            verdict = "速めだが許容"
+            speed_verdict = "速めだが許容"
         else:
-            verdict = "早口注意"
+            speed_verdict = "早口注意"
+
+        from config import (
+            NATIVE_SHORTS_LINES_IDEAL_MAX,
+            NATIVE_SHORTS_LINES_IDEAL_MIN,
+            NATIVE_SHORTS_LINES_MUST_FIX,
+            NATIVE_SHORTS_LINES_WARNING,
+        )
+        if script_caption_count < NATIVE_SHORTS_LINES_IDEAL_MIN:
+            volume_verdict = f"台本量不足（理想: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行）"
+        elif script_caption_count <= NATIVE_SHORTS_LINES_IDEAL_MAX:
+            volume_verdict = "台本量OK"
+        elif script_caption_count < NATIVE_SHORTS_LINES_WARNING:
+            volume_verdict = "台本量OK（やや多め）"
+        elif script_caption_count < NATIVE_SHORTS_LINES_MUST_FIX:
+            volume_verdict = f"台本量warning（{script_caption_count}行）"
+        else:
+            volume_verdict = f"台本量must_fix（{script_caption_count}行以上）"
+
+        intro_spd = f"{voice_speed_intro:.2f}" if voice_speed_intro is not None else "不明"
+        body_spd = f"{voice_speed_body:.2f}" if voice_speed_body is not None else "不明"
+
         progress_callback(
-            f"🗣 音声速度判定:\n"
-            f"   台本文字数: {script_char_count} / 音声合計秒: {total_audio:.1f} / "
-            f"文字/秒: {cps:.2f} / 判定: {verdict}"
+            f"📊 render_engine: native\n"
+            f"   voice_speed_intro: {intro_spd} / voice_speed_body: {body_spd}\n"
+            f"   dialogue_lines: {script_caption_count} / script_chars: {script_char_count}\n"
+            f"   audio_duration_total: {total_audio:.1f}秒 / silence_total: {silence_total:.2f}秒 / median_silence: {median_silence:.2f}秒\n"
+            f"   speech_chars_per_sec: {cps:.2f} / final_video_duration: {actual_duration:.1f}秒\n"
+            f"   速度判定: {speed_verdict} / 台本量判定: {volume_verdict}"
         )
     result = NativeRenderResult(
         output_path=output_path,

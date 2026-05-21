@@ -792,7 +792,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     opening_title = meta.get("video_title", topic)
     opening_thumb_text = meta.get("thumbnail_text", "")
-    opening_review = local_opening_review(items, opening_title, opening_thumb_text, is_shorts)
+    _render_engine = "native" if native_render else "ymm4"
+    opening_review = local_opening_review(items, opening_title, opening_thumb_text, is_shorts, render_engine=_render_engine)
     llm_review = None
     rewrite_text = None
     target_duration = "38-50秒" if is_shorts else "5-8分"
@@ -898,6 +899,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     candidate_title,
                     candidate_thumb_text,
                     is_shorts,
+                    render_engine=_render_engine,
                 )
                 candidate_score = int(candidate_review.get("score") or 0)
                 candidate_critical_errors = candidate_review.get("critical_errors") or []
@@ -1006,7 +1008,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     estimated_sec = float(estimated_sec or 0.0)
     estimated_duration_result = duration_review(estimated_sec, is_shorts)
     estimated_duration_result["estimated"] = True
-    if is_shorts and (estimated_sec < 35 or estimated_sec > 55):
+    if native_render:
+        # native版では推定尺は参考値のみ。尺は台本量で調整するため停止しない。
+        update_status(
+            f"📐 native推定: {estimated_sec:.1f}秒（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
+            f" ※nativeでは尺ではなく語り速度と台本量で調整"
+        )
+    elif is_shorts and (estimated_sec < 35 or estimated_sec > 55):
         estimated_duration_path = save_duration_review(theme_dir, estimated_duration_result)
         msg = (
             f"❌ 推定尺が許容範囲外のため処理を中止しました"

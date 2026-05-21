@@ -108,7 +108,7 @@ def _opening_limit(is_shorts: bool) -> int:
     return 12 if is_shorts else 20
 
 
-def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool) -> dict[str, Any]:
+def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool, render_engine: str = "ymm4") -> dict[str, Any]:
     dialogue_items = [item for item in items if item.get("type") == "dialogue"]
     opening = dialogue_items[:_opening_limit(is_shorts)]
     opening_text = "\n".join(_dialogue_text(item) for item in opening)
@@ -166,8 +166,16 @@ def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool
 
     dialogue_count = len(dialogue_items)
     checks["dialogue_count"] = dialogue_count
-    if is_shorts and dialogue_count >= 21:
-        critical_errors.append("Shortsのセリフ数が21行以上")
+    if is_shorts:
+        if render_engine == "native":
+            from config import NATIVE_SHORTS_LINES_MUST_FIX, NATIVE_SHORTS_LINES_WARNING
+            if dialogue_count >= NATIVE_SHORTS_LINES_MUST_FIX:
+                critical_errors.append(f"Shorts(native)のセリフ数が{NATIVE_SHORTS_LINES_MUST_FIX}行以上")
+            elif dialogue_count >= NATIVE_SHORTS_LINES_WARNING:
+                issues.append(f"Shorts(native)のセリフ数が{dialogue_count}行（{NATIVE_SHORTS_LINES_WARNING}行以上は多め）")
+        else:
+            if dialogue_count >= 21:
+                critical_errors.append("Shortsのセリフ数が21行以上")
 
     incomplete_first_line = _is_incomplete_opening_line(first_line)
     checks["first_line_complete"] = not incomplete_first_line

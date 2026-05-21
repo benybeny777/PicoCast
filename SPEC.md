@@ -1,7 +1,7 @@
 # ずんかみ自動生成システム 仕様書
 
 チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
-最終更新: 2026-05-19
+最終更新: 2026-05-22
 
 ---
 
@@ -71,17 +71,20 @@ yukkurijidou/
 
 ### Shorts
 - 尺: **38〜50秒（理想）/ 35〜55秒（許容）**
-- セリフ数: **17〜20行（21行以上禁止）**
+- セリフ数（YMM4）: **17〜20行（21行以上禁止）**
+- セリフ数（native）: **22〜28行（理想）/ 29〜30行: warning / 31行以上: must_fix**
 - 尺計算式: `総文字数 × 0.11秒 + 行数 × 1.2秒 = 推定尺`
 - 背景枚数: 6〜9枚
-- 再生速度: イントロ2.0x（最初5秒）/ 本編1.65x
+- 再生速度（YMM4）: イントロ2.0x（最初5秒）/ 本編1.65x
+- 再生速度（native）: イントロ1.45x / 本編1.25x
 - アップロードスロット: 毎日 7:00 / 12:00 / 19:00 (JST)
 
 ### Long
 - 尺: **5〜10分（理想5〜8分）**
 - セリフ数: 150〜250行
 - 背景枚数: 5〜7秒に1枚（同一背景10秒以上禁止）
-- 再生速度: イントロ1.6x / 本編1.35x
+- 再生速度（YMM4）: イントロ1.6x / 本編1.35x
+- 再生速度（native）: イントロ1.40x / 本編1.20x
 - アップロードスロット: 毎日 21:00 / 土日は追加で 12:00 (JST)
 
 ---
@@ -370,11 +373,19 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | 設定 | デフォルト | 説明 |
 |---|---|---|
 | `VOICEVOX_URL` | `http://localhost:50021` | VOICEVOX API URL |
-| `VOICE_SPEED_SCALE_SHORTS` | 1.65 | Shorts本編再生速度 |
-| `VOICE_INTRO_SPEED_SCALE_SHORTS` | 2.0 | Shortsイントロ再生速度 |
+| `VOICE_SPEED_SCALE_SHORTS` | 1.65 | Shorts本編再生速度（YMM4） |
+| `VOICE_INTRO_SPEED_SCALE_SHORTS` | 2.0 | Shortsイントロ再生速度（YMM4） |
 | `VOICE_INTRO_FAST_SECONDS` | 5.0 | イントロ高速区間（秒） |
-| `VOICE_SPEED_SCALE_LONG` | 1.35 | Long本編再生速度 |
-| `VOICE_INTRO_SPEED_SCALE_LONG` | 1.6 | Longイントロ再生速度 |
+| `VOICE_SPEED_SCALE_LONG` | 1.35 | Long本編再生速度（YMM4） |
+| `VOICE_INTRO_SPEED_SCALE_LONG` | 1.6 | Longイントロ再生速度（YMM4） |
+| `NATIVE_SHORTS_BODY_VOICE_SPEED` | 1.25 | Shorts本編再生速度（native） |
+| `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.45 | Shortsイントロ再生速度（native） |
+| `NATIVE_LONG_BODY_VOICE_SPEED` | 1.20 | Long本編再生速度（native） |
+| `NATIVE_LONG_INTRO_VOICE_SPEED` | 1.40 | Longイントロ再生速度（native） |
+| `NATIVE_SHORTS_LINES_IDEAL_MIN` | 22 | Shorts nativeセリフ数 理想下限 |
+| `NATIVE_SHORTS_LINES_IDEAL_MAX` | 28 | Shorts nativeセリフ数 理想上限 |
+| `NATIVE_SHORTS_LINES_WARNING` | 29 | Shorts nativeセリフ数 warning閾値 |
+| `NATIVE_SHORTS_LINES_MUST_FIX` | 31 | Shorts nativeセリフ数 must_fix閾値 |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
@@ -386,6 +397,39 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `MAX_BACKGROUNDS_LONG_BUDGET` | 16 | Long節約モードの最大背景生成枚数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 | `BGM_VOLUME` | 15.0 | BGM音量(%) |
+
+---
+
+## ffmpeg ネイティブレンダラー (`core/native_renderer.py`)
+
+GUI の **「YMMなし(test)」ボタン**（または `_start_generation(native_render=True)`）から起動。YMM4 なしで ffmpeg だけを使って MP4 を生成する。
+
+- `run_pipeline()` は `native_render=True` でも通常通り `.ymmp` まで生成する（YMM4 プロジェクトは保持）。
+- `render_native_test(output_dir, voice_speed_intro, voice_speed_body)` が音声・背景を結合して MP4 を出力する。
+
+### 安定条件（YMM4 とは別基準）
+
+| 項目 | YMM4 | native |
+|---|---|---|
+| Shorts セリフ数（理想） | 17〜20行 | 22〜28行 |
+| Shorts セリフ数（warning） | 20行（21+ は must_fix） | 29〜30行 |
+| Shorts セリフ数（must_fix） | 21行以上 | 31行以上 |
+| Shorts 推定尺チェック | 35s未満または55s超で停止 | 参考値のみ表示（停止しない） |
+| Shorts 音声速度 | イントロ 2.0x / 本編 1.65x | イントロ 1.45x / 本編 1.25x |
+| Long 音声速度 | イントロ 1.6x / 本編 1.35x | イントロ 1.40x / 本編 1.20x |
+
+native では尺ではなく**語り速度（chars/sec）と台本量**で調整するため、推定尺による停止は行わない。
+
+### 詳細ログ（`render_native_test` 完了時）
+
+```
+📊 render_engine: native
+   voice_speed_intro: 1.45 / voice_speed_body: 1.25
+   dialogue_lines: 25 / script_chars: 420
+   audio_duration_total: 52.3秒 / silence_total: 4.80秒 / median_silence: 0.20秒
+   speech_chars_per_sec: 8.02 / final_video_duration: 57.1秒
+   速度判定: Shorts向きで良い / 台本量判定: OK
+```
 
 ---
 

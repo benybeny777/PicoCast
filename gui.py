@@ -1109,7 +1109,7 @@ class YMM4AutoGui:
         self.root.update()
         self.log("📋 AI修正依頼用チェック結果をクリップボードにコピーしました", "success")
 
-    def _run_generation_score_gate(self, scripts, cancel_event):
+    def _run_generation_score_gate(self, scripts, cancel_event, native_render=False):
         ok_count = 0
         warn_count = 0
         ng_count = 0
@@ -1154,7 +1154,8 @@ class YMM4AutoGui:
 
                 ai_report.extend(["", f"## 台本{idx}: {title}", f"- 動画形式: {'Shorts' if is_shorts else 'Long'}"])
                 self.log(f"{prefix}🤖 生成前Ollama冒頭レビュー中: {title}")
-                local = local_opening_review(body_items, title, thumb_text, is_shorts)
+                _render_engine = "native" if native_render else "ymm4"
+                local = local_opening_review(body_items, title, thumb_text, is_shorts, render_engine=_render_engine)
                 llm = llm_opening_review(
                     local,
                     title,
@@ -1407,7 +1408,7 @@ class YMM4AutoGui:
 
         if is_batch:
             self._set_batch_progress_text(f"一括生成: 0/{count} 完了")
-            if not self._run_generation_score_gate(scripts, cancel_event):
+            if not self._run_generation_score_gate(scripts, cancel_event, native_render=bool(settings.get("native_render"))):
                 if cancel_event.is_set():
                     self.log("\n⏹ 生成前スコアリング中に中止しました。", "error")
                     self.root.after(0, lambda: self.status_var.set("Canceled"))
@@ -1493,8 +1494,24 @@ class YMM4AutoGui:
                     if not output_dir or not os.path.isdir(output_dir):
                         raise Exception("YMMなし(test)の出力先フォルダを特定できませんでした")
                     from core.native_renderer import render_native_test
+                    from config import (
+                        NATIVE_SHORTS_INTRO_VOICE_SPEED, NATIVE_SHORTS_BODY_VOICE_SPEED,
+                        NATIVE_LONG_INTRO_VOICE_SPEED, NATIVE_LONG_BODY_VOICE_SPEED,
+                    )
+                    try:
+                        _native_is_shorts = any(
+                            it["type"] == "video_format" and it["text"].strip().lower() in ("shorts", "short", "ショート")
+                            for it in _items_for_topic
+                        )
+                    except Exception:
+                        _native_is_shorts = False
                     self.log(f"🎞 YMMなし(test) MP4出力開始: {os.path.basename(output_dir)}", "batch")
-                    native_result = render_native_test(output_dir, progress_callback=self.log)
+                    native_result = render_native_test(
+                        output_dir,
+                        progress_callback=self.log,
+                        voice_speed_intro=NATIVE_SHORTS_INTRO_VOICE_SPEED if _native_is_shorts else NATIVE_LONG_INTRO_VOICE_SPEED,
+                        voice_speed_body=NATIVE_SHORTS_BODY_VOICE_SPEED if _native_is_shorts else NATIVE_LONG_BODY_VOICE_SPEED,
+                    )
                     msg = (
                         f"{msg}\n"
                         f"✅ YMMなし(test) MP4出力済み: {native_result.output_path}\n"

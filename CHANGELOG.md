@@ -12,6 +12,37 @@
 
 ---
 
+## 2026-05-22（続き）
+
+### ffmpeg nativeレンダラー: エンジン別安定条件・音声速度分離
+
+- `config.py`: YMM4とnativeで音声速度定数を分離
+  - `NATIVE_SHORTS_BODY_VOICE_SPEED=1.25` / `NATIVE_SHORTS_INTRO_VOICE_SPEED=1.45`
+  - `NATIVE_LONG_BODY_VOICE_SPEED=1.20` / `NATIVE_LONG_INTRO_VOICE_SPEED=1.40`
+  - すべて `.env` で上書き可能（`NATIVE_SHORTS_BODY_VOICE_SPEED` 等）
+  - 既存の YMM4 速度定数（`VOICE_SPEED_SCALE_SHORTS` 等）は変更なし
+- `config.py`: native Shorts のセリフ数しきい値を追加
+  - 理想: 22〜28行 / warning: 29〜30行 / must_fix: 31行以上
+- `core/opening_quality.py`: `local_opening_review` に `render_engine` 引数を追加
+  - `render_engine="ymm4"`: 21行以上 → must_fix（従来通り）
+  - `render_engine="native"`: NATIVE_SHORTS_LINES_* に従う
+- `main.py`: `run_pipeline` に `native_render` 引数を追加
+  - `_render_engine` を派生し `local_opening_review` へ渡す
+  - native では推定尺による停止をスキップし参考ログのみ表示
+  - 音声速度は native/YMM4 の定数から分岐して選択
+- `core/native_renderer.py`: `render_native_test` に `voice_speed_intro/body` 引数を追加
+  - 完了時に語り速度（chars/sec）・台本量・速度判定・台本量判定を含む詳細ログを出力
+- `gui.py`: 生成前スコアゲートと render_native_test 呼び出しをエンジン対応
+  - `_run_generation_score_gate` が `native_render` を受け取り `render_engine` を渡す
+  - `render_native_test` に `voice_speed_intro/body` を config 定数から渡す
+- 各種コードレビュー修正（Codexリファクタ引き継ぎ）:
+  - `image_generator.py`: 重複行削除・不要な `gc.collect()` 除去
+  - `youtube_uploader.py`: `_close_media_upload` (no-op) を削除し `del media` に置換
+  - `core/cta_policy.py`: Long目次のフードハードコード fallback を削除
+  - `build_rebalanced_entries` 戻り値型アノテーションを `list[tuple]` に修正
+
+---
+
 ## 2026-05-22
 
 ### Shortsループ優先・CTA制御・Long目次の運用反映
