@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-05-22（続き3）
+
+### アナリティクス・アップロード記録に render_engine を追加
+
+- `core/analytics_score.py`: `to_tsv()` の列に `render_engine` を追加（`genre_group` の直後）
+- `gui.py` `_write_upload_record`: `_meta/render_info.json` を読み込み `render_engine` フィールドをアップロード記録に保存
+  - アップロード後のアナリティクス画面の TSV にも自動反映
+
+---
+
 ## 2026-05-22（続き2）
 
 ### Shorts本番レンダリングをffmpeg/nativeへ移行

@@ -3274,6 +3274,7 @@ class YMM4AutoGui:
         duration = _read("duration_review.json")
         final = _read("final_review.json")
         cta_policy = _read("cta_policy.json")
+        render_info = _read("render_info.json")
 
         record = {
             "video_id": video_id,
@@ -3290,6 +3291,7 @@ class YMM4AutoGui:
             "publish_ok": final.get("publish_ok") if not final.get("skipped") and not final.get("error") else None,
             "risk": final.get("risk") if not final.get("skipped") and not final.get("error") else None,
             "must_fix": (final.get("must_fix") or []) if not final.get("skipped") and not final.get("error") else [],
+            "render_engine": render_info.get("render_engine", ""),
         }
         if cta_policy:
             record.update(cta_policy)

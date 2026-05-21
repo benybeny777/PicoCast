@@ -339,7 +339,7 @@ def to_tsv(items: list[dict[str, Any]]) -> str:
         "title", "published_at", "video_type", "duration", "duration_status",
         "publish_status", "analysis_status", "is_provisional",
         "generation_kind", "source_video_title", "generation_purpose",
-        "character_pattern", "genre_group",
+        "character_pattern", "genre_group", "render_engine",
         "views", "impressions", "ctr",
         "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
         "comments", "subscribers_net", "score", "action",

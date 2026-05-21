@@ -758,7 +758,7 @@ views 上位20% ルール（`score_items` でまとめて適用）：
 - Shorts / ShortLong は最低視聴率ライン未満なら昇格しない
 - ただし action が `横展開` の場合は維持
 
-TSVには `publish_status` / `analysis_status` / `is_provisional` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複や判定保留を考慮できます。
+TSVには `publish_status` / `analysis_status` / `is_provisional` / `render_engine` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複や判定保留を考慮できます。`render_engine` は `_meta/render_info.json` から取得し、アップロード記録に保存されます。
 
 YouTube Studio 側で予約動画を手動公開した場合:
 
