@@ -1,7 +1,7 @@
 # ずんかみ自動生成システム 仕様書
 
 チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
-最終更新: 2026-05-22
+最終更新: 2026-05-22（続き）
 
 ---
 
@@ -386,6 +386,11 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_SHORTS_LINES_IDEAL_MAX` | 28 | Shorts nativeセリフ数 理想上限 |
 | `NATIVE_SHORTS_LINES_WARNING` | 29 | Shorts nativeセリフ数 warning閾値 |
 | `NATIVE_SHORTS_LINES_MUST_FIX` | 31 | Shorts nativeセリフ数 must_fix閾値 |
+| `DEFAULT_SHORTS_RENDER_ENGINE` | `native` | Shortsのデフォルトレンダラー（native/ymm4） |
+| `GENERATE_YMM4_PROJECT` | `true` | native時でもYMM4プロジェクトを生成するか |
+| `RENDER_WITH_YMM4` | `false` | YMM4による本番動画書き出しを行うか |
+| `VOICE_INTRO_FAST_MODE` | `line_count` | 冒頭速度切り替えモード（line_count/seconds） |
+| `VOICE_INTRO_FAST_LINES` | 3 | native: 冒頭N行がintro速度 |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
@@ -400,12 +405,17 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 
 ---
 
-## ffmpeg ネイティブレンダラー (`core/native_renderer.py`)
+## ffmpeg ネイティブレンダラー (`core/native_renderer.py`) — Shorts本番レンダラー
 
-GUI の **「YMMなし(test)」ボタン**（または `_start_generation(native_render=True)`）から起動。YMM4 なしで ffmpeg だけを使って MP4 を生成する。
+Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を生成すると自動的に native が選択される。
 
-- `run_pipeline()` は `native_render=True` でも通常通り `.ymmp` まで生成する（YMM4 プロジェクトは保持）。
-- `render_native_test(output_dir, voice_speed_intro, voice_speed_body)` が音声・背景を結合して MP4 を出力する。
+- **デフォルト動作**: `DEFAULT_SHORTS_RENDER_ENGINE = "native"` が設定されているため、Shorts の `run_pipeline()` は `native_render=None` を受け取ると自動で `native_render=True` に切り替わる。
+- `run_pipeline()` は native/YMM4 どちらでも通常通り `.ymmp` プロジェクトを生成する（保険・確認・再編集用）。
+- `render_native_test(output_dir, voice_speed_intro, voice_speed_body)` が音声・背景を結合して `video_native.mp4` を出力する。
+- YouTubeアップロード時は `video_native.mp4` を優先して選択する。
+- `_meta/render_info.json` に render_engine・voice_speed・line_rule・ymm4_project_generated を保存する。
+
+`DEFAULT_SHORTS_RENDER_ENGINE=ymm4` (.env) で YMM4 本番レンダリングに戻せる。
 
 ### 安定条件（YMM4 とは別基準）
 

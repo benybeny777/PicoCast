@@ -12,6 +12,33 @@
 
 ---
 
+## 2026-05-22（続き2）
+
+### Shorts本番レンダリングをffmpeg/nativeへ移行
+
+- **Shorts生成のデフォルトをnativeに変更**
+  - `DEFAULT_SHORTS_RENDER_ENGINE = "native"` (config.py / ENV上書き可)
+  - `run_pipeline(native_render=None)` がShortsを検出すると自動でnativeに切り替わる
+  - 通常の「生成」ボタンがShortsをnativeで出力するようになった（YMMなし専用ボタン不要）
+  - YMM4プロジェクト生成は継続（保険・確認・再編集用）
+  - `RENDER_WITH_YMM4 = False` でYMM4本番書き出しをデフォルト無効化
+- **GenerationReport.native_render_used** を追加し、GUIがnativeレンダリングを自動トリガー
+- **出力ファイル名を `video_native.mp4` に変更**（旧: `{folder名}_native_test.mp4`）
+- **アップロード優先順位を更新**: `video_native.mp4` を最優先で選択
+- **冒頭速度切り替えをline_countモードに変更**（native Shorts）
+  - 旧: フレーム上の5秒経過で切り替え
+  - 新: 冒頭3行（`VOICE_INTRO_FAST_LINES=3`）がintro速度、4行目以降がbody速度
+- **render_info.json を `_meta/` に保存**（render_engine・voice_speed・ymm4_project_generated）
+- **native prompt追加**: script_generation_prompt.txt に「native/ffmpeg Shortsルール」と「展開密度ルール」を追記
+- **native生成ログにmax_silenceを追加**
+- **config.py に追加した定数**:
+  - `NATIVE_SHORTS_INTRO/BODY_VOICE_SPEED_MIN/MAX` (許容範囲)
+  - `NATIVE_MIN/DEFAULT/SCENE_CHANGE/MAX_NORMAL/WARNING_SILENCE` (無音設定)
+  - `YMM4_SHORTS/LONG_INTRO/BODY_VOICE_SPEED` (明示エイリアス)
+  - `VOICE_INTRO_FAST_MODE` / `VOICE_INTRO_FAST_LINES`
+
+---
+
 ## 2026-05-22（続き）
 
 ### ffmpeg nativeレンダラー: エンジン別安定条件・音声速度分離

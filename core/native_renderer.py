@@ -446,7 +446,7 @@ def render_native_test(
     audio_list = os.path.join(work_dir, "audio_concat.txt")
     segment_list = os.path.join(work_dir, "segment_concat.txt")
     video_path = os.path.join(work_dir, "video_with_narration.mp4")
-    output_path = os.path.join(output_dir, os.path.basename(output_dir) + "_native_test.mp4")
+    output_path = os.path.join(output_dir, "video_native.mp4")
 
     durations = [_wav_duration(path) for path in audio_files]
     total_audio = sum(durations)
@@ -523,11 +523,12 @@ def render_native_test(
 
     actual_duration = media_duration_sec(output_path) or total_audio
     if progress_callback:
-        progress_callback(f"✅ YMMなし(test) MP4出力: {output_path}")
+        progress_callback(f"✅ native MP4出力: {output_path}")
 
         # silence計測（セグメント間のINTER_DIALOGUE_GAP_SEC合計）
         silence_total = INTER_DIALOGUE_GAP_SEC * max(0, len(durations) - 1)
         median_silence = INTER_DIALOGUE_GAP_SEC
+        max_silence = INTER_DIALOGUE_GAP_SEC  # 現状全セグメント同一値
 
         cps = script_char_count / total_audio if total_audio > 0 else 0.0
         if cps < 6.0:
@@ -546,15 +547,15 @@ def render_native_test(
             NATIVE_SHORTS_LINES_WARNING,
         )
         if script_caption_count < NATIVE_SHORTS_LINES_IDEAL_MIN:
-            volume_verdict = f"台本量不足（理想: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行）"
+            volume_verdict = f"台本量不足（{script_caption_count}行 / 理想: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行）"
         elif script_caption_count <= NATIVE_SHORTS_LINES_IDEAL_MAX:
-            volume_verdict = "台本量OK"
+            volume_verdict = "OK"
         elif script_caption_count < NATIVE_SHORTS_LINES_WARNING:
-            volume_verdict = "台本量OK（やや多め）"
+            volume_verdict = "OK（やや多め）"
         elif script_caption_count < NATIVE_SHORTS_LINES_MUST_FIX:
-            volume_verdict = f"台本量warning（{script_caption_count}行）"
+            volume_verdict = f"warning（{script_caption_count}行）"
         else:
-            volume_verdict = f"台本量must_fix（{script_caption_count}行以上）"
+            volume_verdict = f"must_fix（{script_caption_count}行以上）"
 
         intro_spd = f"{voice_speed_intro:.2f}" if voice_speed_intro is not None else "不明"
         body_spd = f"{voice_speed_body:.2f}" if voice_speed_body is not None else "不明"
@@ -563,7 +564,8 @@ def render_native_test(
             f"📊 render_engine: native\n"
             f"   voice_speed_intro: {intro_spd} / voice_speed_body: {body_spd}\n"
             f"   dialogue_lines: {script_caption_count} / script_chars: {script_char_count}\n"
-            f"   audio_duration_total: {total_audio:.1f}秒 / silence_total: {silence_total:.2f}秒 / median_silence: {median_silence:.2f}秒\n"
+            f"   audio_duration_total: {total_audio:.1f}秒 / silence_total: {silence_total:.2f}秒\n"
+            f"   median_silence: {median_silence:.2f}秒 / max_silence: {max_silence:.2f}秒\n"
             f"   speech_chars_per_sec: {cps:.2f} / final_video_duration: {actual_duration:.1f}秒\n"
             f"   速度判定: {speed_verdict} / 台本量判定: {volume_verdict}"
         )

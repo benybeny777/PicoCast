@@ -793,11 +793,14 @@ class YMM4AutoGui:
     def _mp4_candidates_in_dir(self, output_dir):
         if not os.path.isdir(output_dir):
             return []
-        return [
+        candidates = [
             os.path.join(output_dir, f)
             for f in os.listdir(output_dir)
             if f.lower().endswith(".mp4")
         ]
+        # video_native.mp4 を優先（render_engine=native の本番出力）
+        candidates.sort(key=lambda p: (0 if os.path.basename(p) == "video_native.mp4" else 1, -os.path.getmtime(p)))
+        return candidates
 
     def _external_mp4_candidate(self, output_dir):
         search_dir = self._DOCUMENTS_SEARCH_DIR
@@ -1109,7 +1112,7 @@ class YMM4AutoGui:
         self.root.update()
         self.log("📋 AI修正依頼用チェック結果をクリップボードにコピーしました", "success")
 
-    def _run_generation_score_gate(self, scripts, cancel_event, native_render=False):
+    def _run_generation_score_gate(self, scripts, cancel_event, native_render=None):
         ok_count = 0
         warn_count = 0
         ng_count = 0
@@ -1154,7 +1157,10 @@ class YMM4AutoGui:
 
                 ai_report.extend(["", f"## 台本{idx}: {title}", f"- 動画形式: {'Shorts' if is_shorts else 'Long'}"])
                 self.log(f"{prefix}🤖 生成前Ollama冒頭レビュー中: {title}")
-                _render_engine = "native" if native_render else "ymm4"
+                # native_render=None → Shortsはdefault engine、Longは常にymm4
+                from config import DEFAULT_SHORTS_RENDER_ENGINE
+                _effective_native = native_render if native_render is not None else (is_shorts and DEFAULT_SHORTS_RENDER_ENGINE == "native")
+                _render_engine = "native" if _effective_native else "ymm4"
                 local = local_opening_review(body_items, title, thumb_text, is_shorts, render_engine=_render_engine)
                 llm = llm_opening_review(
                     local,
@@ -1317,8 +1323,9 @@ class YMM4AutoGui:
 
         self.log("⚠ 問題がある場合は「作業中止」ボタンで止めてください", "warning")
         settings = self._generation_settings()
-        settings["native_render"] = bool(native_render)
-        mode = "YMMなし(test)生成" if native_render else "一括処理"
+        # native_render=True: 明示的にnative強制 / None: run_pipeline内でShortsはauto-native
+        settings["native_render"] = True if native_render else None
+        mode = "YMMなし生成" if native_render else "一括処理（Shortsはffmpeg/nativeで出力）"
         self.log(f"{mode}開始: 合計 {len(scripts)} 件")
         threading.Thread(target=self._run_batch, args=(scripts, settings, self.cancel_event), daemon=True).start()
 
@@ -1408,7 +1415,7 @@ class YMM4AutoGui:
 
         if is_batch:
             self._set_batch_progress_text(f"一括生成: 0/{count} 完了")
-            if not self._run_generation_score_gate(scripts, cancel_event, native_render=bool(settings.get("native_render"))):
+            if not self._run_generation_score_gate(scripts, cancel_event, native_render=settings.get("native_render")):
                 if cancel_event.is_set():
                     self.log("\n⏹ 生成前スコアリング中に中止しました。", "error")
                     self.root.after(0, lambda: self.status_var.set("Canceled"))
@@ -1457,7 +1464,7 @@ class YMM4AutoGui:
                             existing_titles=existing_titles,
                             long_thumbnail_ab_test=settings.get("long_thumbnail_ab_test", False),
                             long_budget_mode=settings.get("long_budget_mode", False),
-                            native_render=bool(settings.get("native_render")),
+                            native_render=settings.get("native_render"),  # None=auto, True=force native
                         )
                         break
                     except OutputDirectoryLockedError as e:
@@ -1488,11 +1495,12 @@ class YMM4AutoGui:
                         return
                     self._set_batch_progress_text(f"一括生成: {idx+1}/{count} 完了")
                     continue
-                if settings.get("native_render"):
+                _should_native_render = getattr(report, "native_render_used", False) or settings.get("native_render") is True
+                if _should_native_render:
                     project_path = self._project_path_from_message(msg)
                     output_dir = os.path.dirname(project_path) if project_path else None
                     if not output_dir or not os.path.isdir(output_dir):
-                        raise Exception("YMMなし(test)の出力先フォルダを特定できませんでした")
+                        raise Exception("native MP4出力先フォルダを特定できませんでした")
                     from core.native_renderer import render_native_test
                     from config import (
                         NATIVE_SHORTS_INTRO_VOICE_SPEED, NATIVE_SHORTS_BODY_VOICE_SPEED,
@@ -1505,7 +1513,7 @@ class YMM4AutoGui:
                         )
                     except Exception:
                         _native_is_shorts = False
-                    self.log(f"🎞 YMMなし(test) MP4出力開始: {os.path.basename(output_dir)}", "batch")
+                    self.log(f"🎞 native MP4出力開始: {os.path.basename(output_dir)}", "batch")
                     native_result = render_native_test(
                         output_dir,
                         progress_callback=self.log,
@@ -1514,7 +1522,7 @@ class YMM4AutoGui:
                     )
                     msg = (
                         f"{msg}\n"
-                        f"✅ YMMなし(test) MP4出力済み: {native_result.output_path}\n"
+                        f"✅ native MP4出力済み: {native_result.output_path}\n"
                         f"📏 実動画尺: {native_result.duration_sec:.1f}秒（音声合計: {native_result.audio_duration_sec:.1f}秒）"
                     )
                     if report:

@@ -32,25 +32,31 @@ from config import (
     BGM_PATH,
     BGM_VOLUME,
     CHARACTERS,
+    DEFAULT_SHORTS_RENDER_ENGINE,
+    GENERATE_YMM4_PROJECT,
     MAX_BACKGROUNDS_LONG,
     MAX_BACKGROUNDS_LONG_BUDGET,
     MAX_BACKGROUNDS_SHORTS,
+    NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
+    NATIVE_LONG_BODY_VOICE_SPEED,
+    NATIVE_LONG_INTRO_VOICE_SPEED,
+    NATIVE_SHORTS_BODY_VOICE_SPEED,
+    NATIVE_SHORTS_INTRO_VOICE_SPEED,
+    NATIVE_SHORTS_LINES_IDEAL_MIN,
+    NATIVE_SHORTS_LINES_IDEAL_MAX,
     OLLAMA_REWRITE_FALLBACK_MODEL,
     OLLAMA_REWRITE_MODEL,
     OPENING_SCORE_HARD_ABORT_THRESHOLD,
     OPENING_SCORE_ABORT_THRESHOLD,
     OPENING_REWRITE_MAX_FALLBACKS,
     LONG_THUMBNAIL_AB_TEST,
-    VOICEVOX_PATH,
+    VOICE_INTRO_FAST_LINES,
     VOICE_INTRO_FAST_SECONDS,
     VOICE_INTRO_SPEED_SCALE_LONG,
     VOICE_INTRO_SPEED_SCALE_SHORTS,
     VOICE_SPEED_SCALE_LONG,
     VOICE_SPEED_SCALE_SHORTS,
-    NATIVE_LONG_BODY_VOICE_SPEED,
-    NATIVE_LONG_INTRO_VOICE_SPEED,
-    NATIVE_SHORTS_BODY_VOICE_SPEED,
-    NATIVE_SHORTS_INTRO_VOICE_SPEED,
+    VOICEVOX_PATH,
 )
 
 
@@ -313,6 +319,7 @@ class GenerationReport:
         self.backgrounds_generated = 0
         self.backgrounds_failed = 0
         self.elapsed_sec = 0.0
+        self.native_render_used = False  # True if ffmpeg/native was used instead of YMM4-only
 
     def summary(self):
         m, s = divmod(int(self.elapsed_sec), 60)
@@ -589,7 +596,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
-                 long_budget_mode=None, native_render=False):
+                 long_budget_mode=None, native_render=None):
     report = GenerationReport()
     pipeline_start = time.time()
 
@@ -662,12 +669,28 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         max_backgrounds = MAX_BACKGROUNDS_LONG_BUDGET
     else:
         max_backgrounds = MAX_BACKGROUNDS_LONG
+
+    # native_render=None → Shortsはデフォルトエンジン(native)、Longは常にymm4
+    if native_render is None:
+        native_render = is_shorts and (DEFAULT_SHORTS_RENDER_ENGINE == "native")
+
+    _render_engine = "native" if native_render else "ymm4"
+    report.native_render_used = native_render
+
     if native_render:
         intro_voice_speed = NATIVE_SHORTS_INTRO_VOICE_SPEED if is_shorts else NATIVE_LONG_INTRO_VOICE_SPEED
         body_voice_speed = NATIVE_SHORTS_BODY_VOICE_SPEED if is_shorts else NATIVE_LONG_BODY_VOICE_SPEED
     else:
         intro_voice_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
         body_voice_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
+
+    if native_render and is_shorts:
+        update_status(
+            f"🎬 Shorts本番レンダリング: ffmpeg/native\n"
+            f"   🧩 YMM4プロジェクト: 生成のみ\n"
+            f"   🔊 音声速度: intro {intro_voice_speed:.2f} / body {body_voice_speed:.2f}\n"
+            f"   📏 台本基準: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行"
+        )
     update_status(f"📐 動画形式: {'Shorts' if is_shorts else 'ロング'}")
 
     # Step 3: パス設定（台本のvideo_titleを優先してフォルダ名に使う）
@@ -792,7 +815,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     opening_title = meta.get("video_title", topic)
     opening_thumb_text = meta.get("thumbnail_text", "")
-    _render_engine = "native" if native_render else "ymm4"
     opening_review = local_opening_review(items, opening_title, opening_thumb_text, is_shorts, render_engine=_render_engine)
     llm_review = None
     rewrite_text = None
@@ -1388,7 +1410,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
                 audio_filename = f"{bg_num:03d}_{audio_num:03d}_{_safe_text}.wav"
                 audio_path = os.path.join(theme_audio_dir, audio_filename)
-                speed_scale = intro_voice_speed if current_frame < intro_fast_until_frame else body_voice_speed
+                if native_render:
+                    speed_scale = intro_voice_speed if voice_num <= VOICE_INTRO_FAST_LINES else body_voice_speed
+                else:
+                    speed_scale = intro_voice_speed if current_frame < intro_fast_until_frame else body_voice_speed
 
                 preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
                 update_status(f"🎤 音声 [{voice_num}/{total_voices}] {char_key}({emotion}) x{speed_scale:g}「{preview}」")
@@ -1525,6 +1550,29 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     update_status("💾 YMM4プロジェクトを保存中...")
     editor.save(project_file_path)
+
+    # render_info を _meta に保存
+    try:
+        render_info = {
+            "render_engine": _render_engine,
+            "native_renderer": {
+                "enabled": native_render,
+                "voice_speed_intro": intro_voice_speed,
+                "voice_speed_body": body_voice_speed,
+                "min_silence_between_lines": NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
+                "target_dialogue_lines": f"{NATIVE_SHORTS_LINES_IDEAL_MIN}-{NATIVE_SHORTS_LINES_IDEAL_MAX}" if is_shorts else "n/a",
+            },
+            "ymm4": {
+                "project_generated": GENERATE_YMM4_PROJECT,
+                "rendered": not native_render,
+            },
+        }
+        render_info_path = os.path.join(_meta_dir(theme_dir), "render_info.json")
+        with open(render_info_path, "w", encoding="utf-8") as f:
+            json.dump(render_info, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
     report.elapsed_sec = time.time() - pipeline_start
     msg = f"✅ 完成! プロジェクト保存済み: {project_file_path}"
     update_status(msg)
