@@ -89,6 +89,13 @@ COMMON_SCRIPT_RULES = """\
 - Long scene target: one scene about every 5-7 seconds. Do not keep the same scene for more than 10 seconds.
 - Scene endings should create curiosity for the next scene.
 
+## Shorts Background Reference Policy
+- For Shorts, do not rely on the previous background image for every scene.
+- Prioritize visual change every 3-5 seconds over background consistency.
+- Previous-image reference is allowed only when showing the same food from another angle, matching the opening and ending for a loop, or when a Long video keeps the same place.
+- Avoid previous-image reference for scene changes, past/present comparisons, reason-to-punchline changes, and whenever the same composition would continue for two or more scenes.
+- In Shorts, every background must change at least one of these: composition, camera distance, color mood, era, food presentation, or visual type such as diagram, close-up, comparison, storefront, or dining table.
+
 Scene output example:
 # Scene 1: Opening hook
 背景: Japanese image prompt. Manga illustration style. No people. Put a short catch copy in quotes at the top center.

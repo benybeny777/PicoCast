@@ -1336,7 +1336,7 @@ class YMM4AutoGui:
                 result = render_native_test(output_dir, progress_callback=self.log)
                 self.log(
                     f"✅ YMMなしMP4化完了: {os.path.basename(result.output_path)} "
-                    f"({result.duration_sec:.1f}s / 音声{result.audio_count} / 背景{result.background_count})",
+                    f"(実尺{result.duration_sec:.1f}s / 音声合計{result.audio_duration_sec:.1f}s / 音声{result.audio_count} / 背景{result.background_count})",
                     "success",
                 )
             except Exception as e:
@@ -1495,7 +1495,8 @@ class YMM4AutoGui:
                     native_result = render_native_test(output_dir, progress_callback=self.log)
                     msg = (
                         f"{msg}\n"
-                        f"✅ YMMなし(test) MP4出力済み: {native_result.output_path}"
+                        f"✅ YMMなし(test) MP4出力済み: {native_result.output_path}\n"
+                        f"📏 実動画尺: {native_result.duration_sec:.1f}秒（音声合計: {native_result.audio_duration_sec:.1f}秒）"
                     )
                     if report:
                         report.elapsed_sec = getattr(report, "elapsed_sec", 0) or 0

@@ -1210,7 +1210,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     dialogue_tachie_info = []  # (char_name, emotion, start_frame, end_frame)
     transition_frames = round(TRANSITION_SEC * editor.fps)
     first_bg_placed = False
-    style_reference_path = None  # 1枚目の背景パス（2枚目以降のスタイル参照用）
+    style_reference_path = None  # Long only: 1枚目の背景パス（2枚目以降のスタイル参照用）
 
     # Batch API: メインループ前に全背景を一括生成
     batch_bg_results = {}  # {bg_num(1-indexed): filename}
@@ -1330,7 +1330,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
                 generated_file = img_gen.generate_background(
                     bg_description, target_dir=theme_bg_dir,
-                    reference_image_path=style_reference_path,
+                    reference_image_path=None if is_shorts else style_reference_path,
                     fname=f"bg_{bg_num:03d}_001.png",
                 )
                 if is_cancelled():
@@ -1341,7 +1341,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             if generated_file:
                 current_bg = generated_file
                 report.backgrounds_generated += 1
-                if style_reference_path is None:
+                if not is_shorts and style_reference_path is None:
                     style_reference_path = os.path.join(theme_bg_dir, generated_file)
                 update_status(f"  ✅ 背景生成完了")
             else:

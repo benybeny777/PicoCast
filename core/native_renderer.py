@@ -19,6 +19,9 @@ from config import (
     NATIVE_FFMPEG_ENCODER,
     NATIVE_FFMPEG_PRESET,
     NATIVE_RENDER_CHARACTERS,
+    NATIVE_SUBTITLE_FONT,
+    NATIVE_SUBTITLE_MARGIN_V_LONG,
+    NATIVE_SUBTITLE_MARGIN_V_SHORTS,
     NATIVE_SUBTITLE_OFFSET_SEC,
     VIDEO_FPS,
 )
@@ -33,6 +36,7 @@ INTER_DIALOGUE_GAP_SEC = 0.0
 class NativeRenderResult:
     output_path: str
     duration_sec: float
+    audio_duration_sec: float
     audio_count: int
     background_count: int
 
@@ -54,6 +58,43 @@ def _run_ffmpeg(args: list[str]) -> None:
     if proc.returncode != 0:
         tail = "\n".join((proc.stderr or proc.stdout or "").splitlines()[-20:])
         raise RuntimeError(f"ffmpeg failed ({proc.returncode})\n{tail}")
+
+
+def _ffprobe_bin() -> str:
+    base = os.path.basename(str(FFMPEG_BIN or "ffmpeg")).lower()
+    if base in {"ffmpeg", "ffmpeg.exe"}:
+        return os.path.join(os.path.dirname(FFMPEG_BIN), "ffprobe.exe" if base.endswith(".exe") else "ffprobe") if os.path.dirname(FFMPEG_BIN) else ("ffprobe.exe" if base.endswith(".exe") else "ffprobe")
+    return "ffprobe"
+
+
+def media_duration_sec(path: str) -> float | None:
+    if not path or not os.path.exists(path):
+        return None
+    startupinfo = None
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    try:
+        proc = subprocess.run(
+            [
+                _ffprobe_bin(),
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            startupinfo=startupinfo,
+        )
+        if proc.returncode != 0:
+            return None
+        return float((proc.stdout or "").strip())
+    except Exception:
+        return None
 
 
 def _wav_duration(path: str) -> float:
@@ -326,9 +367,10 @@ def _write_subtitles(
     offset_sec: float = 0.0,
 ) -> None:
     font_size = 64 if height >= 1600 else 52
-    margin_v = 180 if height >= 1600 else 70
+    margin_v = NATIVE_SUBTITLE_MARGIN_V_SHORTS if height >= 1600 else NATIVE_SUBTITLE_MARGIN_V_LONG
+    font_name = str(NATIVE_SUBTITLE_FONT or "Meiryo").replace(",", " ")
     style_body = (
-        "{name},Meiryo,{font_size},{primary},&H00FFFFFF,&H00181818,&H80000000,"
+        "{name},{font_name},{font_size},{primary},&H00FFFFFF,&H00181818,&H80000000,"
         "1,0,0,0,100,100,0,0,1,5,1,2,70,70,{margin_v},1"
     )
     lines = [
@@ -341,9 +383,9 @@ def _write_subtitles(
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        "Style: " + style_body.format(name="Default", font_size=font_size, primary="&H00FFFFFF", margin_v=margin_v),
-        "Style: " + style_body.format(name="Zundamon", font_size=font_size, primary="&H0067F28B", margin_v=margin_v),
-        "Style: " + style_body.format(name="Metan", font_size=font_size, primary="&H00F6A0FF", margin_v=margin_v),
+        "Style: " + style_body.format(name="Default", font_name=font_name, font_size=font_size, primary="&H00FFFFFF", margin_v=margin_v),
+        "Style: " + style_body.format(name="Zundamon", font_name=font_name, font_size=font_size, primary="&H0067F28B", margin_v=margin_v),
+        "Style: " + style_body.format(name="Metan", font_name=font_name, font_size=font_size, primary="&H00F6A0FF", margin_v=margin_v),
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
@@ -470,11 +512,14 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
     else:
         _run_ffmpeg([FFMPEG_BIN, "-y", "-i", video_path, "-c", "copy", output_path])
 
+    actual_duration = media_duration_sec(output_path) or total_audio
     if progress_callback:
         progress_callback(f"✅ YMMなし(test) MP4出力: {output_path}")
+        progress_callback(f"📏 実動画尺: {actual_duration:.1f}秒（音声合計: {total_audio:.1f}秒）")
     return NativeRenderResult(
         output_path=output_path,
-        duration_sec=total_audio,
+        duration_sec=actual_duration,
+        audio_duration_sec=total_audio,
         audio_count=len(audio_files),
         background_count=len(bg_files),
     )
