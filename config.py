@@ -11,7 +11,7 @@ VOICE_INTRO_SPEED_SCALE_LONG = 1.6
 VOICE_INTRO_FAST_SECONDS = 5.0
 # ffmpeg ネイティブレンダラー用の低速設定（YMM4より字幕追従のズレが出やすいため遅め）
 NATIVE_SHORTS_BODY_VOICE_SPEED = float(os.environ.get("NATIVE_SHORTS_BODY_VOICE_SPEED", "1.25"))
-NATIVE_SHORTS_INTRO_VOICE_SPEED = float(os.environ.get("NATIVE_SHORTS_INTRO_VOICE_SPEED", "1.45"))
+NATIVE_SHORTS_INTRO_VOICE_SPEED = float(os.environ.get("NATIVE_SHORTS_INTRO_VOICE_SPEED", "1.40"))
 NATIVE_LONG_BODY_VOICE_SPEED = float(os.environ.get("NATIVE_LONG_BODY_VOICE_SPEED", "1.20"))
 NATIVE_LONG_INTRO_VOICE_SPEED = float(os.environ.get("NATIVE_LONG_INTRO_VOICE_SPEED", "1.40"))
 # Backward-compatible aliases. Runtime selection uses the Shorts/Long values above.

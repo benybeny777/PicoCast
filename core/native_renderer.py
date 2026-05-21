@@ -451,7 +451,9 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
 
     width, height = _video_size(output_dir, script_path)
     characters = _character_inputs(width, height)
-    script_caption_count = len(_dialogue_captions(script_path))
+    script_captions_raw = _dialogue_captions(script_path)
+    script_caption_count = len(script_captions_raw)
+    script_char_count = sum(len(text) for text, _ in script_captions_raw)
     captions = _captions_for_audio_files(script_path, audio_files)
     if progress_callback and script_caption_count != len(audio_files):
         progress_callback(f"⚠ 字幕数補正: 台本由来{script_caption_count}件 / WAV{len(audio_files)}件。WAV順に合わせて字幕を作ります")
@@ -518,21 +520,19 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
     if progress_callback:
         progress_callback(f"✅ YMMなし(test) MP4出力: {output_path}")
         progress_callback(f"📏 実動画尺: {actual_duration:.1f}秒（音声合計: {total_audio:.1f}秒）")
-        dialogue_lines = script_caption_count
-        chars_per_sec = dialogue_lines / actual_duration if actual_duration > 0 else 0.0
-        if actual_duration < 29:
-            verdict = "速すぎ"
-        elif actual_duration < 33:
+        cps = script_char_count / total_audio if total_audio > 0 else 0.0
+        if cps < 6.0:
+            verdict = "ゆっくり・聞きやすい"
+        elif cps < 7.5:
+            verdict = "Shorts向きで良い"
+        elif cps < 8.5:
             verdict = "速めだが許容"
-        elif actual_duration <= 40:
-            verdict = "理想"
-        elif actual_duration <= 48:
-            verdict = "従来型"
         else:
-            verdict = "長め"
+            verdict = "早口注意"
         progress_callback(
-            f"⏱ duration: {actual_duration:.1f}s / dialogue_lines: {dialogue_lines} / "
-            f"chars_per_sec: {chars_per_sec:.1f} / 判定: {verdict}"
+            f"🗣 音声速度判定:\n"
+            f"   台本文字数: {script_char_count} / 音声合計秒: {total_audio:.1f} / "
+            f"文字/秒: {cps:.2f} / 判定: {verdict}"
         )
     result = NativeRenderResult(
         output_path=output_path,
