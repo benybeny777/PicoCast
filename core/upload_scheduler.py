@@ -197,7 +197,7 @@ def build_rebalanced_entries(
     video_type: str,
     now: datetime | None = None,
     include_video_id: bool = False,
-) -> list[tuple[str, str, str]]:
+) -> list[tuple]:
     """Build rebalance changes from record entries, preserving duplicate slots."""
     now = _as_jst(now or datetime.now(JST))
     cutoff = now + timedelta(minutes=5)

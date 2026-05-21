@@ -219,7 +219,7 @@ def append_long_youtube_chapters(description: str, script_text: str, duration_se
         return desc, False
     names = extract_chapter_names(script_text)
     if not names:
-        names = ["冒頭", "昔の扱い", "誤解された理由", "広まった背景", "現代との逆転", "まとめ"]
+        return desc, False
     chapters = build_youtube_chapters(names, duration_sec)
     if not chapters:
         return desc, False
