@@ -61,6 +61,9 @@ CHARACTERS = {
 
 VIDEO_FPS = 30
 FFMPEG_BIN = os.environ.get("FFMPEG_BIN", "ffmpeg")
+ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")
+CHARACTER_PSD_DIR = os.path.join(CHARACTER_PNG_DIR, "psd")
 NATIVE_SUBTITLE_OFFSET_SEC = float(os.environ.get("NATIVE_SUBTITLE_OFFSET_SEC", "0"))
 NATIVE_FFMPEG_ENCODER = os.environ.get("NATIVE_FFMPEG_ENCODER", "h264_nvenc")
 NATIVE_FFMPEG_PRESET = os.environ.get("NATIVE_FFMPEG_PRESET", "p5")
@@ -69,10 +72,12 @@ NATIVE_FFMPEG_CQ = os.environ.get("NATIVE_FFMPEG_CQ", "23")
 NATIVE_RENDER_CHARACTERS = os.environ.get("NATIVE_RENDER_CHARACTERS", "1").strip().lower() in ("1", "true", "yes", "on")
 NATIVE_ENABLE_LIPSYNC = os.environ.get("NATIVE_ENABLE_LIPSYNC", "1").strip().lower() in ("1", "true", "yes", "on")
 NATIVE_ENABLE_BLINK = os.environ.get("NATIVE_ENABLE_BLINK", "1").strip().lower() in ("1", "true", "yes", "on")
+NATIVE_BACKGROUND_TRANSITION = os.environ.get("NATIVE_BACKGROUND_TRANSITION", "fade").strip().lower()
+NATIVE_BACKGROUND_TRANSITION_SEC = float(os.environ.get("NATIVE_BACKGROUND_TRANSITION_SEC", "0.18"))
 NATIVE_CHARACTER_HEIGHT_SHORTS = int(os.environ.get("NATIVE_CHARACTER_HEIGHT_SHORTS", "760"))
 NATIVE_CHARACTER_HEIGHT_LONG = int(os.environ.get("NATIVE_CHARACTER_HEIGHT_LONG", "520"))
-ZUNDAMON_PSD_PATH = os.environ.get("ZUNDAMON_PSD_PATH", "")
-METAN_PSD_PATH = os.environ.get("METAN_PSD_PATH", "")
+ZUNDAMON_PSD_PATH = os.environ.get("ZUNDAMON_PSD_PATH", os.path.join(CHARACTER_PSD_DIR, "zundamon.psd"))
+METAN_PSD_PATH = os.environ.get("METAN_PSD_PATH", os.path.join(CHARACTER_PSD_DIR, "metan.psd"))
 
 OUTPUT_DIR = os.environ.get("OUTPUT_DIR", "output")
 OUTPUT_DATA_DIR = os.environ.get("OUTPUT_DATA_DIR", os.path.join(OUTPUT_DIR, "000_data"))
@@ -80,8 +85,6 @@ OUTPUT_ANALYTICS_DIR = os.environ.get("OUTPUT_ANALYTICS_DIR", os.path.join(OUTPU
 OUTPUT_LEGACY_DIR = os.environ.get("OUTPUT_LEGACY_DIR", os.path.join(OUTPUT_DIR, "000_legacy"))
 UPLOAD_RECORDS_FILE = os.environ.get("UPLOAD_RECORDS_FILE", os.path.join(OUTPUT_DATA_DIR, "upload_records.json"))
 UPLOADED_TITLES_FILE = os.environ.get("UPLOADED_TITLES_FILE", os.path.join(OUTPUT_DATA_DIR, "uploaded_titles.txt"))
-ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
-CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")
 CHARACTER_PNGS = {
     "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
     "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),

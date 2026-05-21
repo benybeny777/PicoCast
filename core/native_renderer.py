@@ -8,6 +8,8 @@ from config import (
     BGM_PATH,
     BGM_VOLUME,
     FFMPEG_BIN,
+    NATIVE_BACKGROUND_TRANSITION,
+    NATIVE_BACKGROUND_TRANSITION_SEC,
     NATIVE_CHARACTER_HEIGHT_LONG,
     NATIVE_CHARACTER_HEIGHT_SHORTS,
     NATIVE_ENABLE_BLINK,
@@ -213,6 +215,20 @@ def _speaker_name(style: str) -> str | None:
     return None
 
 
+def _background_transition_enabled(prev_bg_path: str | None, current_bg_path: str | None, duration: float) -> bool:
+    if str(NATIVE_BACKGROUND_TRANSITION or "").strip().lower() in ("", "none", "off", "0", "false"):
+        return False
+    if not prev_bg_path or not current_bg_path:
+        return False
+    if os.path.abspath(prev_bg_path) == os.path.abspath(current_bg_path):
+        return False
+    return duration > 0.25 and NATIVE_BACKGROUND_TRANSITION_SEC > 0
+
+
+def _background_transition_sec(duration: float) -> float:
+    return min(float(NATIVE_BACKGROUND_TRANSITION_SEC), max(0.05, float(duration) * 0.45))
+
+
 def _blink_enable_expr(duration: float, character_name: str, speaking: str | None) -> str | None:
     duration = max(0.1, float(duration or 0.1))
     if speaking != character_name:
@@ -223,13 +239,27 @@ def _blink_enable_expr(duration: float, character_name: str, speaking: str | Non
     return f"between(t,{blink_start:.3f},{blink_end:.3f})"
 
 
-def _segment_filter(width: int, height: int, ass_path: str, characters: list[CharacterVariantSet], speaking: str | None, duration: float) -> str:
+def _segment_filter(
+    width: int,
+    height: int,
+    ass_path: str,
+    characters: list[CharacterVariantSet],
+    speaking: str | None,
+    duration: float,
+    has_background_transition: bool = False,
+) -> str:
     char_h = NATIVE_CHARACTER_HEIGHT_SHORTS if height > width else NATIVE_CHARACTER_HEIGHT_LONG
-    chains = [
-        f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[base0]"
-    ]
-    current = "base0"
+    chains = [f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg_current]"]
     input_index = 2
+    if has_background_transition:
+        transition_sec = _background_transition_sec(duration)
+        expr = f"if(lte(T\\,{transition_sec:.3f})\\,A*(1-T/{transition_sec:.3f})+B*(T/{transition_sec:.3f})\\,B)"
+        chains.append(f"[{input_index}:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg_prev]")
+        chains.append(f"[bg_prev][bg_current]blend=all_expr='{expr}'[base0]")
+        input_index += 1
+    else:
+        chains.append("[bg_current]copy[base0]")
+    current = "base0"
     overlay_num = 1
     for char_idx, character in enumerate(characters):
         position = _character_position(character.name)
@@ -279,7 +309,7 @@ def _segment_character_inputs(duration: float, characters: list[CharacterVariant
         paths = [character.base]
         if NATIVE_ENABLE_LIPSYNC and speaking == character.name:
             paths.extend([character.mouth_half, character.mouth_open])
-        if NATIVE_ENABLE_BLINK:
+        if NATIVE_ENABLE_BLINK and _blink_enable_expr(duration, character.name, speaking):
             paths.append(character.eye_closed)
         for path in paths:
             if path and os.path.exists(path):
@@ -384,6 +414,7 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
         progress_callback(f"⚠ 字幕数補正: 台本由来{script_caption_count}件 / WAV{len(audio_files)}件。WAV順に合わせて字幕を作ります")
 
     segment_paths: list[str] = []
+    prev_bg_path: str | None = None
     for idx, (audio_path, duration, caption) in enumerate(zip(audio_files, durations, captions), start=1):
         bg_path = _background_for_audio(audio_path, bg_files)
         ass_path = os.path.join(work_dir, f"subtitle_{idx:04d}.ass")
@@ -391,8 +422,11 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
         _write_subtitles(ass_path, [caption], [duration], width, height, offset_sec=NATIVE_SUBTITLE_OFFSET_SEC)
         _caption_text, caption_style = caption
         speaking = _speaker_name(caption_style)
-        filter_complex = _segment_filter(width, height, ass_path, characters, speaking, duration)
+        has_bg_transition = _background_transition_enabled(prev_bg_path, bg_path, duration)
+        filter_complex = _segment_filter(width, height, ass_path, characters, speaking, duration, has_bg_transition)
         inputs = [FFMPEG_BIN, "-y", "-loop", "1", "-t", f"{max(0.1, duration):.3f}", "-i", bg_path, "-i", audio_path]
+        if has_bg_transition and prev_bg_path:
+            inputs.extend(["-loop", "1", "-t", f"{max(0.1, duration):.3f}", "-i", prev_bg_path])
         inputs.extend(_segment_character_inputs(duration, characters, speaking))
         last_error = None
         encode_candidates = _segment_encode_args()
@@ -419,6 +453,7 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
         if last_error:
             raise last_error
         segment_paths.append(segment_path)
+        prev_bg_path = bg_path
 
     _write_concat_list(segment_list, segment_paths)
     _run_ffmpeg([FFMPEG_BIN, "-y", "-f", "concat", "-safe", "0", "-i", segment_list, "-c", "copy", video_path])

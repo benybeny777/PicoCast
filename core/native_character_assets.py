@@ -138,7 +138,7 @@ def _save_variant(
 
 def _save_difference_overlay(base_path: str, variant_path: str, out_path: str, padding: int = 8) -> str | None:
     try:
-        from PIL import Image, ImageChops
+        from PIL import Image, ImageChops, ImageFilter
 
         base = Image.open(base_path).convert("RGBA")
         variant = Image.open(variant_path).convert("RGBA")
@@ -153,13 +153,25 @@ def _save_difference_overlay(base_path: str, variant_path: str, out_path: str, p
         top = max(0, top - padding)
         right = min(variant.width, right + padding)
         bottom = min(variant.height, bottom + padding)
+        cropped_variant = variant.crop((left, top, right, bottom))
+        cropped_diff = diff.crop((left, top, right, bottom))
+        mask = cropped_diff.convert("L").point(lambda p: 255 if p > 6 else 0)
+        mask = mask.filter(ImageFilter.MaxFilter(7)).filter(ImageFilter.GaussianBlur(0.8))
+        original_alpha = cropped_variant.getchannel("A")
+        mask = ImageChops.multiply(mask, original_alpha)
+        cropped_variant.putalpha(mask)
+
         overlay = Image.new("RGBA", variant.size, (0, 0, 0, 0))
-        overlay.alpha_composite(variant.crop((left, top, right, bottom)), (left, top))
+        overlay.alpha_composite(cropped_variant, (left, top))
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         overlay.save(out_path)
         return out_path
     except Exception:
         return None
+
+
+def _save_mouth_overlay(base_path: str, variant_path: str, out_path: str) -> str | None:
+    return _save_difference_overlay(base_path, variant_path, out_path, padding=12)
 
 
 def _save_manual_blink_overlay(name: str, base_path: str, out_path: str) -> str | None:
@@ -217,6 +229,8 @@ def _ensure_variants(name: str, psd_path: str | None, static_path: str | None) -
         "mouth_closed": os.path.join(char_dir, "mouth_closed.png"),
         "mouth_half": os.path.join(char_dir, "mouth_half.png"),
         "mouth_open": os.path.join(char_dir, "mouth_open.png"),
+        "mouth_half_overlay": os.path.join(char_dir, "mouth_half_overlay.png"),
+        "mouth_open_overlay": os.path.join(char_dir, "mouth_open_overlay.png"),
         "eye_closed": os.path.join(char_dir, "eye_closed.png"),
         "eye_closed_overlay": os.path.join(char_dir, "eye_closed_overlay.png"),
         "eye_closed_manual": os.path.join(char_dir, "eye_closed_manual.png"),
@@ -233,6 +247,12 @@ def _ensure_variants(name: str, psd_path: str | None, static_path: str | None) -
         _save_variant(psd_path, outputs["eye_closed"], eye_names=eye_closed, hide_markers=["!黒目"])
     if os.path.exists(outputs["base"]) and not os.path.exists(outputs["eye_closed_manual"]):
         _save_manual_blink_overlay(name, outputs["base"], outputs["eye_closed_manual"])
+    if os.path.exists(outputs["base"]) and os.path.exists(outputs["eye_closed"]):
+        _save_difference_overlay(outputs["base"], outputs["eye_closed"], outputs["eye_closed_overlay"], padding=10)
+    if os.path.exists(outputs["base"]) and os.path.exists(outputs["mouth_half"]):
+        _save_mouth_overlay(outputs["base"], outputs["mouth_half"], outputs["mouth_half_overlay"])
+    if os.path.exists(outputs["base"]) and os.path.exists(outputs["mouth_open"]):
+        _save_mouth_overlay(outputs["base"], outputs["mouth_open"], outputs["mouth_open_overlay"])
 
     def exists(key: str, fallback_static: bool = True) -> str | None:
         if os.path.exists(outputs[key]):
@@ -244,9 +264,9 @@ def _ensure_variants(name: str, psd_path: str | None, static_path: str | None) -
         static=static_path,
         base=exists("base"),
         mouth_closed=exists("mouth_closed"),
-        mouth_half=exists("mouth_half", fallback_static=False),
-        mouth_open=exists("mouth_open", fallback_static=False),
-        eye_closed=exists("eye_closed_manual", fallback_static=False),
+        mouth_half=exists("mouth_half_overlay", fallback_static=False),
+        mouth_open=exists("mouth_open_overlay", fallback_static=False),
+        eye_closed=exists("eye_closed_overlay", fallback_static=False) or exists("eye_closed_manual", fallback_static=False),
     )
 
 
