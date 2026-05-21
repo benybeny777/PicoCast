@@ -518,6 +518,22 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
     if progress_callback:
         progress_callback(f"✅ YMMなし(test) MP4出力: {output_path}")
         progress_callback(f"📏 実動画尺: {actual_duration:.1f}秒（音声合計: {total_audio:.1f}秒）")
+        dialogue_lines = script_caption_count
+        chars_per_sec = dialogue_lines / actual_duration if actual_duration > 0 else 0.0
+        if actual_duration < 29:
+            verdict = "速すぎ"
+        elif actual_duration < 33:
+            verdict = "速めだが許容"
+        elif actual_duration <= 40:
+            verdict = "理想"
+        elif actual_duration <= 48:
+            verdict = "従来型"
+        else:
+            verdict = "長め"
+        progress_callback(
+            f"⏱ duration: {actual_duration:.1f}s / dialogue_lines: {dialogue_lines} / "
+            f"chars_per_sec: {chars_per_sec:.1f} / 判定: {verdict}"
+        )
     result = NativeRenderResult(
         output_path=output_path,
         duration_sec=actual_duration,
