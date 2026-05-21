@@ -76,7 +76,7 @@ yukkurijidou/
 - 尺計算式: `総文字数 × 0.11秒 + 行数 × 1.2秒 = 推定尺`
 - 背景枚数: 6〜9枚
 - 再生速度（YMM4）: イントロ2.0x（最初5秒）/ 本編1.65x
-- 再生速度（native）: イントロ1.45x / 本編1.25x
+- 再生速度（native）: イントロ1.40x / 本編1.25x
 - アップロードスロット: 毎日 7:00 / 12:00 / 19:00 (JST)
 
 ### Long
@@ -379,7 +379,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `VOICE_SPEED_SCALE_LONG` | 1.35 | Long本編再生速度（YMM4） |
 | `VOICE_INTRO_SPEED_SCALE_LONG` | 1.6 | Longイントロ再生速度（YMM4） |
 | `NATIVE_SHORTS_BODY_VOICE_SPEED` | 1.25 | Shorts本編再生速度（native） |
-| `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.45 | Shortsイントロ再生速度（native） |
+| `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.40 | Shortsイントロ再生速度（native） |
 | `NATIVE_LONG_BODY_VOICE_SPEED` | 1.20 | Long本編再生速度（native） |
 | `NATIVE_LONG_INTRO_VOICE_SPEED` | 1.40 | Longイントロ再生速度（native） |
 | `NATIVE_SHORTS_LINES_IDEAL_MIN` | 22 | Shorts nativeセリフ数 理想下限 |
@@ -425,7 +425,7 @@ Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を�
 | Shorts セリフ数（warning） | 20行（21+ は must_fix） | 29〜30行 |
 | Shorts セリフ数（must_fix） | 21行以上 | 31行以上 |
 | Shorts 推定尺チェック | 35s未満または55s超で停止 | 参考値のみ表示（停止しない） |
-| Shorts 音声速度 | イントロ 2.0x / 本編 1.65x | イントロ 1.45x / 本編 1.25x |
+| Shorts 音声速度 | イントロ 2.0x / 本編 1.65x | イントロ 1.40x / 本編 1.25x |
 | Long 音声速度 | イントロ 1.6x / 本編 1.35x | イントロ 1.40x / 本編 1.20x |
 
 native では尺ではなく**語り速度（chars/sec）と台本量**で調整するため、推定尺による停止は行わない。
@@ -434,7 +434,7 @@ native では尺ではなく**語り速度（chars/sec）と台本量**で調整
 
 ```
 📊 render_engine: native
-   voice_speed_intro: 1.45 / voice_speed_body: 1.25
+   voice_speed_intro: 1.40 / voice_speed_body: 1.25
    dialogue_lines: 25 / script_chars: 420
    audio_duration_total: 52.3秒 / silence_total: 4.80秒 / median_silence: 0.20秒
    speech_chars_per_sec: 8.02 / final_video_duration: 57.1秒
