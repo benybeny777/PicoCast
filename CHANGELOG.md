@@ -12,6 +12,20 @@
 
 ---
 
+## 2026-05-22（続き4）
+
+### Shorts台本文字数ガイドラインをnative速度に合わせて更新
+
+- `core/prompt_parts/local/script_generation_prompt.txt`
+  - 尺計算式を旧YMM4式（×0.11＋×1.2）→ native式（÷3.75＋×0.25）に更新
+  - 例示を平均11文字 → 平均7〜8文字に変更
+  - `1セリフ15文字以内` → `10文字以内（平均7〜8文字を目標）` に変更
+  - `総文字数190〜220文字` → `130〜165文字` に変更
+- `SPEC.md`: 台本作成ルール・Shorts セリフ数・尺計算式を同様に更新
+- `gui.py` / `main.py`: `_estimate_duration` / `_estimate_script_duration` の `native_render` パラメータを削除し、Shorts=native速度/Long=YMM4速度で分岐
+
+---
+
 ## 2026-05-22（続き3）
 
 ### アナリティクス・アップロード記録に render_engine を追加
