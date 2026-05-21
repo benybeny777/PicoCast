@@ -108,9 +108,9 @@ def unified_check(name, primary_url, path):
             if alt not in urls_to_try: urls_to_try.append(alt)
     for url in urls_to_try:
         try:
-            requests.get(url, timeout=0.8)
-            found_url = url
-            break
+            with requests.get(url, timeout=0.8):
+                found_url = url
+                break
         except:
             continue
     return {
@@ -204,7 +204,8 @@ class YMM4AutoGui:
             from PIL import Image as _PilImage, ImageTk as _ImageTk
             _icon_path = os.path.join(os.path.dirname(__file__), "assets", "characters", "zundamon.png")
             if os.path.exists(_icon_path):
-                _icon_img = _PilImage.open(_icon_path).resize((64, 64), _PilImage.LANCZOS)
+                with _PilImage.open(_icon_path) as _icon_src:
+                    _icon_img = _icon_src.resize((64, 64), _PilImage.LANCZOS)
                 self._app_icon = _ImageTk.PhotoImage(_icon_img)
                 self.root.iconphoto(True, self._app_icon)
         except Exception:
@@ -3939,7 +3940,8 @@ class YMM4AutoGui:
             win.title("拡大表示")
             win.transient(dialog)
             try:
-                img = Image.open(path)
+                with Image.open(path) as src:
+                    img = src.copy()
                 img.thumbnail((900, 900), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
                 lbl = tk.Label(win, image=photo)
@@ -4002,7 +4004,8 @@ class YMM4AutoGui:
             img_frame.pack()
 
             try:
-                img = Image.open(spec["path"])
+                with Image.open(spec["path"]) as src:
+                    img = src.copy()
                 img.thumbnail((cell_w, cell_h), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
                 photo_refs.append(photo)

@@ -1,5 +1,6 @@
 import os
 import time
+import gc
 from google import genai
 from config import GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL
 
@@ -70,8 +71,11 @@ class ImageGenerator:
             f.write(part.inline_data.data)
         with Image.open(path) as img:
             if img.size != (self.width, self.height):
-                img = img.resize((self.width, self.height), Image.LANCZOS)
-                img.save(path)
+                resized = img.resize((self.width, self.height), Image.LANCZOS)
+                try:
+                    resized.save(path)
+                finally:
+                    resized.close()
         return fname
 
     def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None):
@@ -96,6 +100,8 @@ class ImageGenerator:
                 all_refs = [reference_image_path] + all_refs
             all_refs = [p for p in all_refs if p and os.path.exists(p)]
 
+            response = None
+            parts = None
             if all_refs:
                 from google.genai import types
                 parts = []
@@ -118,17 +124,23 @@ class ImageGenerator:
 
             for part in response.parts:
                 if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
-                    fname = self._save_image_part(part, save_dir, fname=fname)
+                    generated_name = self._save_image_part(part, save_dir, fname=fname)
                     if self.debug:
-                        print(f"  [AI] Nano Banana 完了: {fname} ({self.width}x{self.height})")
-                        self._save_prompt_log(save_dir, fname, full_prompt)
-                    return fname
+                        print(f"  [AI] Nano Banana 完了: {generated_name} ({self.width}x{self.height})")
+                        self._save_prompt_log(save_dir, generated_name, full_prompt)
+                    return generated_name
 
             raise Exception("No image part found in response.")
 
         except Exception as e:
             print(f"  [AI] Nano Banana エラー: {e}")
             raise Exception(f"Nano Banana ({model_name}) が失敗しました: {e}")
+        finally:
+            try:
+                del response, parts, contents, all_refs, full_prompt
+            except Exception:
+                pass
+            gc.collect()
 
     def generate_backgrounds_batch(self, requests_list, target_dir=None, fnames=None):
         """Google Batch API で複数背景を一括生成する。
@@ -147,6 +159,7 @@ class ImageGenerator:
         # inline リクエストを組み立て
         inline_requests = []
         batch_prompts = []
+        batch_job = None
         for req in requests_list:
             prompt = self._build_full_prompt(req["description"], req.get("raw", False))
             inline_requests.append({
@@ -196,5 +209,6 @@ class ImageGenerator:
                 if self.debug:
                     print(f"  [Batch] 結果[{i}]処理エラー: {e}")
 
+        del inline_requests, batch_prompts, batch_job
+        gc.collect()
         return results
-

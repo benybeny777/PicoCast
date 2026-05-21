@@ -33,7 +33,8 @@ def _compress_thumbnail(path):
     from PIL import Image
     tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
     tmp.close()
-    img = Image.open(path).convert("RGB")
+    with Image.open(path) as src:
+        img = src.convert("RGB")
     try:
         for quality in (85, 75, 60, 45):
             img.save(tmp.name, "JPEG", quality=quality)
@@ -42,6 +43,20 @@ def _compress_thumbnail(path):
     finally:
         img.close()
     return tmp.name  # 最低品質でも返す
+
+
+def _close_media_upload(media) -> None:
+    stream = None
+    try:
+        stream = media.stream() if hasattr(media, "stream") else getattr(media, "_fd", None)
+    except Exception:
+        stream = getattr(media, "_fd", None)
+    close = getattr(stream, "close", None)
+    if callable(close):
+        try:
+            close()
+        except Exception:
+            pass
 
 
 def get_youtube_client():
@@ -464,15 +479,18 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
     }
 
     media = MediaFileUpload(mp4_path, chunksize=5 * 1024 * 1024, resumable=True)
-    _log(f"📤 アップロード開始: {os.path.basename(mp4_path)}")
+    try:
+        _log(f"📤 アップロード開始: {os.path.basename(mp4_path)}")
 
-    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
-    response = None
-    while response is None:
-        status, response = request.next_chunk()
-        if status:
-            pct = int(status.progress() * 100)
-            _log(f"  ... {pct}%")
+        request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                pct = int(status.progress() * 100)
+                _log(f"  ... {pct}%")
+    finally:
+        _close_media_upload(media)
 
     video_id = response["id"]
     _log(f"✅ アップロード完了: https://youtu.be/{video_id}")
@@ -480,12 +498,16 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
     if thumbnail_path and os.path.exists(thumbnail_path):
         _log("🖼  サムネイルを設定中...")
         upload_thumb = _compress_thumbnail(thumbnail_path)
-        youtube.thumbnails().set(
-            videoId=video_id,
-            media_body=MediaFileUpload(upload_thumb)
-        ).execute()
-        if upload_thumb != thumbnail_path and os.path.exists(upload_thumb):
-            os.remove(upload_thumb)
+        thumb_media = MediaFileUpload(upload_thumb)
+        try:
+            youtube.thumbnails().set(
+                videoId=video_id,
+                media_body=thumb_media
+            ).execute()
+        finally:
+            _close_media_upload(thumb_media)
+            if upload_thumb != thumbnail_path and os.path.exists(upload_thumb):
+                os.remove(upload_thumb)
         _log("  ✅ サムネイル設定完了")
 
     return video_id

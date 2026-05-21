@@ -238,8 +238,8 @@ def _strip_json_text(text: str) -> str:
 
 def _ollama_is_ready(timeout=1.5) -> bool:
     try:
-        response = requests.get(f"{OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=timeout)
-        return response.ok
+        with requests.get(f"{OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=timeout) as response:
+            return response.ok
     except requests.RequestException:
         return False
 
@@ -287,9 +287,9 @@ def _post_ollama(prompt: str, model: str, *, json_only: bool = False) -> str:
     }
     if json_only:
         body["format"] = "json"
-    response = requests.post(f"{OLLAMA_BASE_URL.rstrip('/')}/api/generate", json=body, timeout=120)
-    response.raise_for_status()
-    return str(response.json().get("response", "")).strip()
+    with requests.post(f"{OLLAMA_BASE_URL.rstrip('/')}/api/generate", json=body, timeout=120) as response:
+        response.raise_for_status()
+        return str(response.json().get("response", "")).strip()
 
 
 def _build_opening_review_prompt(local_review: dict[str, Any], title: str, thumbnail_text: str, video_type: str, target_duration: str) -> str:
@@ -739,7 +739,7 @@ def final_chatgpt_review(
         "input": prompt,
         "text": {"format": {"type": "json_object"}},
     }
-    response = requests.post(
+    with requests.post(
         "https://api.openai.com/v1/responses",
         headers={
             "Authorization": f"Bearer {OPENAI_API_KEY}",
@@ -747,9 +747,9 @@ def final_chatgpt_review(
         },
         data=json.dumps(body),
         timeout=60,
-    )
-    response.raise_for_status()
-    text = _extract_openai_response_text(response.json())
+    ) as response:
+        response.raise_for_status()
+        text = _extract_openai_response_text(response.json())
     result = json.loads(_strip_json_text(text))
     result["model"] = OPENAI_FINAL_REVIEW_MODEL
     return result

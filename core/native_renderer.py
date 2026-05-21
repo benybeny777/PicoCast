@@ -1,4 +1,5 @@
 import os
+import gc
 import re
 import subprocess
 import wave
@@ -496,6 +497,8 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
             raise last_error
         segment_paths.append(segment_path)
         prev_bg_path = bg_path
+        del filter_complex, inputs, encode_candidates, last_error
+        gc.collect()
 
     _write_concat_list(segment_list, segment_paths)
     _run_ffmpeg([FFMPEG_BIN, "-y", "-f", "concat", "-safe", "0", "-i", segment_list, "-c", "copy", video_path])
@@ -516,10 +519,13 @@ def render_native_test(output_dir: str, progress_callback=None) -> NativeRenderR
     if progress_callback:
         progress_callback(f"✅ YMMなし(test) MP4出力: {output_path}")
         progress_callback(f"📏 実動画尺: {actual_duration:.1f}秒（音声合計: {total_audio:.1f}秒）")
-    return NativeRenderResult(
+    result = NativeRenderResult(
         output_path=output_path,
         duration_sec=actual_duration,
         audio_duration_sec=total_audio,
         audio_count=len(audio_files),
         background_count=len(bg_files),
     )
+    del characters, captions, durations, audio_files, bg_files, segment_paths
+    gc.collect()
+    return result

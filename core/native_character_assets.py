@@ -1,4 +1,5 @@
 import os
+import gc
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -114,6 +115,7 @@ def _save_variant(
         from psd_tools import PSDImage
     except Exception:
         return None
+    psd = None
     try:
         psd = PSDImage.open(psd_path)
         if mouth_names:
@@ -134,14 +136,26 @@ def _save_variant(
         return out_path
     except Exception:
         return None
+    finally:
+        try:
+            del image
+        except Exception:
+            pass
+        close = getattr(psd, "close", None)
+        if callable(close):
+            close()
+        del psd
+        gc.collect()
 
 
 def _save_difference_overlay(base_path: str, variant_path: str, out_path: str, padding: int = 8) -> str | None:
     try:
         from PIL import Image, ImageChops, ImageFilter
 
-        base = Image.open(base_path).convert("RGBA")
-        variant = Image.open(variant_path).convert("RGBA")
+        with Image.open(base_path) as base_src:
+            base = base_src.convert("RGBA")
+        with Image.open(variant_path) as variant_src:
+            variant = variant_src.convert("RGBA")
         if base.size != variant.size:
             return None
         diff = ImageChops.difference(base, variant)
@@ -168,6 +182,12 @@ def _save_difference_overlay(base_path: str, variant_path: str, out_path: str, p
         return out_path
     except Exception:
         return None
+    finally:
+        try:
+            del base, variant, diff, cropped_variant, cropped_diff, mask, original_alpha, overlay
+        except Exception:
+            pass
+        gc.collect()
 
 
 def _save_mouth_overlay(base_path: str, variant_path: str, out_path: str) -> str | None:
@@ -178,7 +198,8 @@ def _save_manual_blink_overlay(name: str, base_path: str, out_path: str) -> str 
     try:
         from PIL import Image, ImageDraw
 
-        base = Image.open(base_path).convert("RGBA")
+        with Image.open(base_path) as base_src:
+            base = base_src.convert("RGBA")
         overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
         draw = ImageDraw.Draw(overlay)
 
@@ -205,6 +226,12 @@ def _save_manual_blink_overlay(name: str, base_path: str, out_path: str) -> str 
         return out_path
     except Exception:
         return None
+    finally:
+        try:
+            del base, overlay, draw
+        except Exception:
+            pass
+        gc.collect()
 
 
 def _ensure_variants(name: str, psd_path: str | None, static_path: str | None) -> CharacterVariantSet:

@@ -8,8 +8,8 @@ class VoicevoxAPI:
 
     def check_connection(self):
         try:
-            response = requests.get(f"{self.base_url}/version", timeout=5)
-            return response.status_code == 200
+            with requests.get(f"{self.base_url}/version", timeout=5) as response:
+                return response.status_code == 200
         except:
             return False
 
@@ -20,11 +20,10 @@ class VoicevoxAPI:
             ('text', text),
             ('speaker', speaker_id),
         )
-        response = requests.post(f"{self.base_url}/audio_query", params=params, timeout=10)
-        if response.status_code != 200:
-            raise Exception(f"Failed to generate audio query: {response.text}")
-
-        query = response.json()
+        with requests.post(f"{self.base_url}/audio_query", params=params, timeout=10) as response:
+            if response.status_code != 200:
+                raise Exception(f"Failed to generate audio query: {response.text}")
+            query = response.json()
         kana = query.get("kana", "")
         query["volumeScale"] = volume_scale
         query["speedScale"] = speed_scale
