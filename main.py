@@ -9,10 +9,13 @@ import uuid
 import json
 import shutil
 import gc
+from collections import defaultdict
 from core.voicevox import VoicevoxAPI
 from core.parser import ScriptParser
 from core.ymmp_editor import YmmpEditor
 from core.ai_generator import AIGenerator
+from core.ng_words import apply_ng_word_replacements
+from core.youtube_metadata import optimize_description, optimize_tags
 from core.image_generator import ImageGenerator
 from core.opening_quality import (
     apply_opening_rewrite_to_script,
@@ -21,6 +24,7 @@ from core.opening_quality import (
     final_chatgpt_review,
     llm_opening_review,
     local_opening_review,
+    opening_score_tag,
     rewrite_opening_with_ollama,
     save_duration_review,
     save_final_review,
@@ -28,6 +32,7 @@ from core.opening_quality import (
     should_auto_rewrite_opening,
 )
 from config import (
+    ASSETS_DIR,
     BGM_LAYER,
     BGM_PATH,
     BGM_VOLUME,
@@ -50,6 +55,8 @@ from config import (
     OPENING_SCORE_ABORT_THRESHOLD,
     OPENING_REWRITE_MAX_FALLBACKS,
     LONG_THUMBNAIL_AB_TEST,
+    THUMBNAIL_CHARACTER_PNGS,
+    VIDEO_FPS,
     VOICE_INTRO_FAST_LINES,
     VOICE_INTRO_FAST_SECONDS,
     VOICE_INTRO_SPEED_SCALE_LONG,
@@ -57,6 +64,11 @@ from config import (
     VOICE_SPEED_SCALE_LONG,
     VOICE_SPEED_SCALE_SHORTS,
     VOICEVOX_PATH,
+)
+from core.cta_policy import (
+    build_cta_policy,
+    check_shorts_navigation_ng,
+    write_policy_file,
 )
 
 
@@ -278,6 +290,23 @@ _CHANNEL_FOOTER = (
 
 
 
+def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status) -> None:
+    """説明文・タグをNG語置換・最適化して meta をインプレース更新する。"""
+    if "description" in meta:
+        _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
+        if _stripped:
+            update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
+        _desc = re.sub(r'#\S+', '', _desc).strip()
+        _desc = optimize_description(apply_ng_word_replacements(_desc), is_shorts=is_shorts, keep_hashtags=False)
+        meta["description"] = _desc + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+    if "tags" in meta:
+        meta["tags"] = optimize_tags(
+            meta["tags"],
+            title=meta.get("video_title", topic),
+            description=meta.get("description", ""),
+        )
+
+
 _PUNCT = set("。！？")
 
 def _split_at_punctuation(text):
@@ -375,7 +404,6 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         f"{script_content or topic}"
     )
 
-    from config import THUMBNAIL_CHARACTER_PNGS
     char_refs = [p for p in THUMBNAIL_CHARACTER_PNGS.values() if os.path.exists(p)]
 
     # プロンプトをファイルに保存（再生成・デバッグ用）
@@ -644,7 +672,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if is_cancelled():
         return cancel_result()
 
-    from core.ng_words import apply_ng_word_replacements
     script_content = apply_ng_word_replacements(script_content)
     script_content = re.sub(r'(?m)^サムネイル[:：][^\n]*\n?', '', script_content)
     if is_cancelled():
@@ -653,7 +680,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # Step 2: 動画形式を検出
     is_shorts = _detect_is_shorts(script_content)
     try:
-        from core.cta_policy import check_shorts_navigation_ng
         _nav_hits = check_shorts_navigation_ng(script_content, "Shorts" if is_shorts else "Long")
         if _nav_hits:
             update_status(
@@ -780,8 +806,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     items = [it for it in items if it["type"] not in ScriptParser.META_TYPES]
     items = normalize_background_order(items)
     try:
-        from core.cta_policy import build_cta_policy, write_policy_file
-
         topic_request_allowed = str(meta.get("topic_request_cta", "")).strip() == "許可"
         cta_policy = build_cta_policy(
             "Shorts" if is_shorts else "Long",
@@ -796,22 +820,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     ai_thumbnail_prompt = meta.get("thumbnail")
 
-    if "description" in meta:
-        from core.ng_words import apply_ng_word_replacements
-        from core.youtube_metadata import optimize_description, optimize_tags
-        _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
-        if _stripped:
-            update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
-        _desc = re.sub(r'#\S+', '', _desc).strip()
-        _desc = optimize_description(apply_ng_word_replacements(_desc), is_shorts=is_shorts, keep_hashtags=False)
-        meta["description"] = _desc + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
-    if "tags" in meta:
-        from core.youtube_metadata import optimize_tags
-        meta["tags"] = optimize_tags(
-            meta["tags"],
-            title=meta.get("video_title", topic),
-            description=meta.get("description", ""),
-        )
+    _normalize_meta(meta, is_shorts, topic, update_status)
 
     opening_title = meta.get("video_title", topic)
     opening_thumb_text = meta.get("thumbnail_text", "")
@@ -947,22 +956,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     items = candidate_items
                     meta = candidate_meta
                     ai_thumbnail_prompt = meta.get("thumbnail")
-                    if "description" in meta:
-                        from core.ng_words import apply_ng_word_replacements
-                        from core.youtube_metadata import optimize_description, optimize_tags
-                        _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
-                        if _stripped:
-                            update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
-                        _desc = re.sub(r'#\S+', '', _desc).strip()
-                        _desc = optimize_description(apply_ng_word_replacements(_desc), is_shorts=is_shorts, keep_hashtags=False)
-                        meta["description"] = _desc + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
-                    if "tags" in meta:
-                        from core.youtube_metadata import optimize_tags
-                        meta["tags"] = optimize_tags(
-                            meta["tags"],
-                            title=meta.get("video_title", topic),
-                            description=meta.get("description", ""),
-                        )
+                    _normalize_meta(meta, is_shorts, topic, update_status)
                     opening_title = meta.get("video_title", topic)
                     opening_thumb_text = meta.get("thumbnail_text", "")
                     opening_review = candidate_review
@@ -998,7 +992,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     opening_review_path = save_opening_review(theme_dir, opening_review, llm_review, rewrite_text)
     final_score = int(final_opening.get("score") or 0)
     opening_critical_errors = final_opening.get("critical_errors") or []
-    score_tag = "score_ok" if final_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if final_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
+    score_tag = opening_score_tag(final_score, opening_critical_errors)
     opening_model_parts = []
     if llm_review and llm_review.get("model"):
         opening_model_parts.append(f"review:{llm_review.get('model')}")
@@ -1071,7 +1065,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             return msg, report
         elif final_review:
             pre_score = int(final_review.get("final_score") or 0)
-            pre_score_tag = "score_ok" if pre_score >= OPENING_SCORE_ABORT_THRESHOLD else "score_warn" if pre_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD else "score"
+            pre_score_tag = opening_score_tag(pre_score)
             final_model = final_review.get("model")
             final_model_text = f" / model {final_model}" if final_model else ""
             update_status(
@@ -1198,10 +1192,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             if vv.check_connection(): break
             time.sleep(2)
 
-    from config import VIDEO_FPS
     editor = YmmpEditor(width=width, height=height, fps=VIDEO_FPS, debug=debug_mode)
 
-    from config import ASSETS_DIR
     TEMPLATES_DIR = os.path.join(ASSETS_DIR, "templates")
     op_template = os.path.join(TEMPLATES_DIR, "opening_shorts.ymmp" if is_shorts else "opening.ymmp")
     current_frame = 3  # frame 0-2 reserved for YMM4 init
@@ -1474,7 +1466,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             editor.add_image_item(bg_path, bg_start_frame, current_frame - bg_start_frame, layer=0)
             
     # Build per-character emotion-segmented TachieItems
-    from collections import defaultdict
     char_order = list(dict.fromkeys(info[0] for info in dialogue_tachie_info))
     char_dialogues = defaultdict(list)
     for char, emotion, start, end in dialogue_tachie_info:

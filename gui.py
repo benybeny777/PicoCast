@@ -21,10 +21,10 @@ from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
 from core.analytics_score import build_performance_summary, format_duration, format_duration_status, save_score_files, score_items, to_tsv
 from core.output_paths import UPLOADED_TITLES_FILE, analytics_paths, ensure_output_dirs, migrate_root_file
-from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review
+from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review, opening_score_tag
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
-from config import OPENING_SCORE_ABORT_THRESHOLD, OPENING_SCORE_HARD_ABORT_THRESHOLD, VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
+from config import DEFAULT_SHORTS_RENDER_ENGINE, VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
 import requests
 
 APP_VERSION_BASE = "2026.05.19"
@@ -1043,7 +1043,7 @@ class YMM4AutoGui:
                     opening_score = int(opening.get("score") or 0)
                     opening_status = opening.get("status", "")
                     opening_critical_errors = opening.get("critical_errors") or []
-                    opening_tag = "score_ok" if opening_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if opening_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
+                    opening_tag = opening_score_tag(opening_score, opening_critical_errors)
                     opening_model = opening.get("model")
                     opening_model_text = f" / model {opening_model or 'local-rule'}"
                     self.log(
@@ -1158,7 +1158,6 @@ class YMM4AutoGui:
                 ai_report.extend(["", f"## 台本{idx}: {title}", f"- 動画形式: {'Shorts' if is_shorts else 'Long'}"])
                 self.log(f"{prefix}🤖 生成前Ollama冒頭レビュー中: {title}")
                 # native_render=None → Shortsはdefault engine、Longは常にymm4
-                from config import DEFAULT_SHORTS_RENDER_ENGINE
                 _effective_native = native_render if native_render is not None else (is_shorts and DEFAULT_SHORTS_RENDER_ENGINE == "native")
                 _render_engine = "native" if _effective_native else "ymm4"
                 local = local_opening_review(body_items, title, thumb_text, is_shorts, render_engine=_render_engine)
@@ -1175,7 +1174,7 @@ class YMM4AutoGui:
                 opening_critical_errors = opening.get("critical_errors") or []
                 opening_model = opening.get("model")
                 opening_model_text = f" / model {opening_model or 'local-rule'}"
-                opening_tag = "score_ok" if opening_score >= OPENING_SCORE_ABORT_THRESHOLD and not opening_critical_errors else "score_warn" if opening_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not opening_critical_errors else "score"
+                opening_tag = opening_score_tag(opening_score, opening_critical_errors)
                 self.log(
                     f"{prefix}■■■ 生成前冒頭スコア {opening_score}点 / {opening_status}{opening_model_text} ■■■",
                     opening_tag,

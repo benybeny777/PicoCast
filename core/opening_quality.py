@@ -17,6 +17,7 @@ from config import (
     OLLAMA_REWRITE_MODEL,
     OPENING_REVIEW_MAX_LLM_RETRIES,
     OPENING_REVIEW_AUTO_REWRITE,
+    OPENING_SCORE_ABORT_THRESHOLD,
     OPENING_SCORE_HARD_ABORT_THRESHOLD,
     SHORT_FULL_SCRIPT_REVIEW,
     LONG_FULL_SCRIPT_REVIEW,
@@ -106,6 +107,16 @@ def _max_same_speaker_run(speakers: list[str]) -> int:
 
 def _opening_limit(is_shorts: bool) -> int:
     return 12 if is_shorts else 20
+
+
+def opening_score_tag(score: int, critical_errors: list | None = None) -> str:
+    """Return log tag for a given opening score and critical error list."""
+    has_errors = bool(critical_errors)
+    if score >= OPENING_SCORE_ABORT_THRESHOLD and not has_errors:
+        return "score_ok"
+    if score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not has_errors:
+        return "score_warn"
+    return "score"
 
 
 def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool, render_engine: str = "ymm4") -> dict[str, Any]:
