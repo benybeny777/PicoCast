@@ -545,17 +545,25 @@ def render_native_test(
             NATIVE_SHORTS_LINES_IDEAL_MIN,
             NATIVE_SHORTS_LINES_MUST_FIX,
             NATIVE_SHORTS_LINES_WARNING,
+            NATIVE_SHORTS_TARGET_CHARS_MAX,
+            NATIVE_SHORTS_TARGET_CHARS_MIN,
         )
-        if script_caption_count < NATIVE_SHORTS_LINES_IDEAL_MIN:
-            volume_verdict = f"台本量不足（{script_caption_count}行 / 理想: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行）"
-        elif script_caption_count <= NATIVE_SHORTS_LINES_IDEAL_MAX:
+        line_ok = NATIVE_SHORTS_LINES_IDEAL_MIN <= script_caption_count <= NATIVE_SHORTS_LINES_IDEAL_MAX
+        chars_ok = NATIVE_SHORTS_TARGET_CHARS_MIN <= script_char_count <= NATIVE_SHORTS_TARGET_CHARS_MAX
+        if script_caption_count >= NATIVE_SHORTS_LINES_MUST_FIX:
+            volume_verdict = f"must_fix（{script_caption_count}行以上）"
+        elif script_caption_count < NATIVE_SHORTS_LINES_IDEAL_MIN or script_char_count < NATIVE_SHORTS_TARGET_CHARS_MIN:
+            volume_verdict = (
+                f"台本量不足（{script_caption_count}行/{script_char_count}字 / "
+                f"理想: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行・"
+                f"{NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}字）"
+            )
+        elif line_ok and chars_ok:
             volume_verdict = "OK"
         elif script_caption_count < NATIVE_SHORTS_LINES_WARNING:
-            volume_verdict = "OK（やや多め）"
-        elif script_caption_count < NATIVE_SHORTS_LINES_MUST_FIX:
-            volume_verdict = f"warning（{script_caption_count}行）"
+            volume_verdict = "OK（行数または文字数がやや多め）"
         else:
-            volume_verdict = f"must_fix（{script_caption_count}行以上）"
+            volume_verdict = f"warning（{script_caption_count}行）"
 
         intro_spd = f"{voice_speed_intro:.2f}" if voice_speed_intro is not None else "不明"
         body_spd = f"{voice_speed_body:.2f}" if voice_speed_body is not None else "不明"

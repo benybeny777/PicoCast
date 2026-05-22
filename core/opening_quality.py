@@ -558,21 +558,21 @@ def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review
 
 def duration_review(total_sec: float, is_shorts: bool) -> dict[str, Any]:
     if is_shorts:
-        if 42 <= total_sec <= 48:
+        if 38 <= total_sec <= 50:
             status = "ideal"
-        elif 39 <= total_sec < 42:
+        elif 35 <= total_sec < 38:
             status = "ok_but_short"
-        elif 48 < total_sec <= 50:
+        elif 50 < total_sec <= 55:
             status = "ok_but_long"
-        elif 51 <= total_sec <= 52:
+        elif 55 < total_sec <= 58:
             status = "warning"
         else:
             status = "needs_review"
         return {
             "video_type": "Shorts",
             "seconds": round(total_sec, 2),
-            "ideal": "42-48秒",
-            "acceptable": "39-50秒",
+            "ideal": "38-50秒",
+            "acceptable": "35-55秒",
             "status": status,
         }
     if 270 <= total_sec <= 600:

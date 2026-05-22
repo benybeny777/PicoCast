@@ -46,6 +46,7 @@ from config import (
     NATIVE_LONG_BODY_VOICE_SPEED,
     NATIVE_LONG_INTRO_VOICE_SPEED,
     NATIVE_SHORTS_BODY_VOICE_SPEED,
+    NATIVE_SHORTS_ESTIMATE_BASE_CPS,
     NATIVE_SHORTS_INTRO_VOICE_SPEED,
     NATIVE_SHORTS_LINES_IDEAL_MIN,
     NATIVE_SHORTS_LINES_IDEAL_MAX,
@@ -378,7 +379,7 @@ def _estimate_script_duration(items, is_shorts: bool):
         for i, item in enumerate(dialogue_items):
             chars = len(item.get("text", ""))
             speed = NATIVE_SHORTS_INTRO_VOICE_SPEED if i < VOICE_INTRO_FAST_LINES else NATIVE_SHORTS_BODY_VOICE_SPEED
-            elapsed += chars / (3.0 * speed) + 0.1 * speed + NATIVE_DEFAULT_SILENCE_BETWEEN_LINES
+            elapsed += chars / (NATIVE_SHORTS_ESTIMATE_BASE_CPS * speed) + 0.1 * speed
     else:
         additional = TRANSITION_SEC + VOICE_TAIL_SAFETY_SEC + INTER_DIALOGUE_GAP_SEC
         for item in dialogue_items:
@@ -1531,19 +1532,20 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if is_cancelled():
         return cancel_result()
     total_sec = current_frame / editor.fps
-    duration_result = duration_review(total_sec, is_shorts)
-    duration_review_path = save_duration_review(theme_dir, duration_result)
-    _dur_label = f"{total_sec:.1f}秒"
-    if not is_shorts:
-        _m, _s = divmod(int(total_sec), 60)
-        _dur_label = f"{_m}分{_s}秒 ({total_sec:.1f}秒)"
-    duration_status_text = duration_status_label(duration_result.get("status"))
-    update_status(
-        f"━━━━━━━━ 尺チェック {_dur_label} / {duration_status_text} ━━━━━━━━\n"
-        f"  理想: {duration_result.get('ideal')} / 許容: {duration_result.get('acceptable')}\n"
-        f"  保存先: {duration_review_path}",
-        "duration",
-    )
+    if not native_render:
+        duration_result = duration_review(total_sec, is_shorts)
+        duration_review_path = save_duration_review(theme_dir, duration_result)
+        _dur_label = f"{total_sec:.1f}秒"
+        if not is_shorts:
+            _m, _s = divmod(int(total_sec), 60)
+            _dur_label = f"{_m}分{_s}秒 ({total_sec:.1f}秒)"
+        duration_status_text = duration_status_label(duration_result.get("status"))
+        update_status(
+            f"━━━━━━━━ 尺チェック {_dur_label} / {duration_status_text} ━━━━━━━━\n"
+            f"  理想: {duration_result.get('ideal')} / 許容: {duration_result.get('acceptable')}\n"
+            f"  保存先: {duration_review_path}",
+            "duration",
+        )
 
     update_status("💾 YMM4プロジェクトを保存中...")
     editor.save(project_file_path)
@@ -1556,7 +1558,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "enabled": native_render,
                 "voice_speed_intro": intro_voice_speed,
                 "voice_speed_body": body_voice_speed,
-                "min_silence_between_lines": NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
+                "min_silence_between_lines": 0.0 if native_render else NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
                 "target_dialogue_lines": f"{NATIVE_SHORTS_LINES_IDEAL_MIN}-{NATIVE_SHORTS_LINES_IDEAL_MAX}" if is_shorts else "n/a",
             },
             "ymm4": {
@@ -1574,7 +1576,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     msg = f"✅ 完成! プロジェクト保存済み: {project_file_path}"
     update_status(msg)
 
-    if is_shorts:
+    if is_shorts and not native_render:
         if total_sec < 35:
             update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ 短すぎ（35秒未満）", "warning")
         elif total_sec < 38:

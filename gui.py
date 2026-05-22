@@ -21,7 +21,7 @@ from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
 from core.analytics_score import build_performance_summary, format_duration, format_duration_status, save_score_files, score_items, to_tsv
 from core.output_paths import UPLOADED_TITLES_FILE, analytics_paths, ensure_output_dirs, migrate_root_file
-from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review, opening_score_tag
+from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review, opening_score_tag, save_duration_review
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
 from config import DEFAULT_SHORTS_RENDER_ENGINE, VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
@@ -945,7 +945,7 @@ class YMM4AutoGui:
 
         from config import (
             NATIVE_SHORTS_INTRO_VOICE_SPEED, NATIVE_SHORTS_BODY_VOICE_SPEED,
-            VOICE_INTRO_FAST_LINES, NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
+            NATIVE_SHORTS_ESTIMATE_BASE_CPS, VOICE_INTRO_FAST_LINES,
         )
 
         elapsed = 0.0
@@ -953,7 +953,7 @@ class YMM4AutoGui:
             for i, item in enumerate(dialogue_items):
                 chars = len(item.get("text", ""))
                 speed = NATIVE_SHORTS_INTRO_VOICE_SPEED if i < VOICE_INTRO_FAST_LINES else NATIVE_SHORTS_BODY_VOICE_SPEED
-                elapsed += chars / (3.0 * speed) + 0.1 * speed + NATIVE_DEFAULT_SILENCE_BETWEEN_LINES
+                elapsed += chars / (NATIVE_SHORTS_ESTIMATE_BASE_CPS * speed) + 0.1 * speed
         else:
             ADDITIONAL = 0.3 + 0.5 + 0.2
             for item in dialogue_items:
@@ -1524,6 +1524,12 @@ class YMM4AutoGui:
                         voice_speed_intro=NATIVE_SHORTS_INTRO_VOICE_SPEED if _native_is_shorts else NATIVE_LONG_INTRO_VOICE_SPEED,
                         voice_speed_body=NATIVE_SHORTS_BODY_VOICE_SPEED if _native_is_shorts else NATIVE_LONG_BODY_VOICE_SPEED,
                     )
+                    try:
+                        native_duration = duration_review(native_result.duration_sec, _native_is_shorts)
+                        native_duration["source"] = "native_mp4"
+                        save_duration_review(output_dir, native_duration)
+                    except Exception:
+                        pass
                     msg = (
                         f"{msg}\n"
                         f"✅ native MP4出力済み: {native_result.output_path}\n"

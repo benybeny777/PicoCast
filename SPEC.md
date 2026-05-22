@@ -71,8 +71,9 @@ yukkurijidou/
 
 ### Shorts
 - 尺: **38〜50秒（理想）/ 35〜55秒（許容）**
-- セリフ数: **17〜20行（21行以上禁止）**（native速度で1行平均7〜8文字を想定）
-- 尺計算式（native）: `総文字数 ÷ 3.75 + 行数 × 0.25秒 = 推定尺`（body 1.25x）
+- セリフ数: **22〜28行（31行以上禁止）**（native速度で1行平均12〜14文字を想定）
+- 文字数: **260〜360文字**（21行・190文字前後はnative実尺で短くなりやすい）
+- 尺計算式（native）: `各行の文字数 ÷ (5.4 × 音声速度) + 0.1 × 音声速度 = 推定尺`
 - 背景枚数: 6〜9枚
 - 再生速度（YMM4）: イントロ2.0x（最初5秒）/ 本編1.65x
 - 再生速度（native）: イントロ1.40x / 本編1.25x
@@ -381,6 +382,9 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.40 | Shortsイントロ再生速度（native） |
 | `NATIVE_LONG_BODY_VOICE_SPEED` | 1.20 | Long本編再生速度（native） |
 | `NATIVE_LONG_INTRO_VOICE_SPEED` | 1.40 | Longイントロ再生速度（native） |
+| `NATIVE_SHORTS_ESTIMATE_BASE_CPS` | 5.4 | Shorts native推定の基準文字/秒 |
+| `NATIVE_SHORTS_TARGET_CHARS_MIN` | 260 | Shorts native文字数 理想下限 |
+| `NATIVE_SHORTS_TARGET_CHARS_MAX` | 360 | Shorts native文字数 理想上限 |
 | `NATIVE_SHORTS_LINES_IDEAL_MIN` | 22 | Shorts nativeセリフ数 理想下限 |
 | `NATIVE_SHORTS_LINES_IDEAL_MAX` | 28 | Shorts nativeセリフ数 理想上限 |
 | `NATIVE_SHORTS_LINES_WARNING` | 29 | Shorts nativeセリフ数 warning閾値 |
