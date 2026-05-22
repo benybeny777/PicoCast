@@ -1454,9 +1454,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     _, kana = vv.generate_audio(chunk_text, speaker_id, audio_path, speed_scale=speed_scale)
                     report.voices_generated += 1
                 except Exception as e:
-                    update_status(f"  ❌ 音声合成失敗: {e}")
                     report.voices_failed += 1
-                    continue
+                    report.elapsed_sec = time.time() - pipeline_start
+                    msg = (
+                        f"❌ 音声合成失敗のため処理を中止しました\n"
+                        f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
+                        f"理由: {e}"
+                    )
+                    update_status(msg, "error")
+                    return msg, report
                 if is_cancelled():
                     return cancel_result()
 
@@ -1486,9 +1492,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                         wav_frames = math.ceil(wr.getnframes() / wr.getframerate() * editor.fps)
                         duration_frames = wav_frames + _ADDITIONAL_FRAMES
                 except Exception as e:
-                    update_status(f"  ❌ WAV読み込み失敗: {e}")
                     report.voices_failed += 1
-                    continue
+                    report.elapsed_sec = time.time() - pipeline_start
+                    msg = (
+                        f"❌ WAV読み込み失敗のため処理を中止しました\n"
+                        f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
+                        f"理由: {e}"
+                    )
+                    update_status(msg, "error")
+                    return msg, report
 
                 voice_item_frames = duration_frames + math.ceil(VOICE_TAIL_SAFETY_SEC * editor.fps)
                 dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + voice_item_frames))
@@ -1498,6 +1510,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # 終了画面用に1秒延長
     if is_cancelled():
         return cancel_result()
+    if native_render and report.voices_failed:
+        report.elapsed_sec = time.time() - pipeline_start
+        msg = (
+            f"❌ 音声生成に失敗したセリフがあるためnative MP4化を中止しました"
+            f"（生成={report.voices_generated} / 失敗={report.voices_failed}）\n"
+            "VOICEVOXの失敗行を修正して再実行してください。"
+        )
+        update_status(msg, "error")
+        return msg, report
     current_frame += editor.fps
 
     # Finalize

@@ -459,9 +459,13 @@ def render_native_test(
     script_captions_raw = _dialogue_captions(script_path)
     script_caption_count = len(script_captions_raw)
     script_char_count = sum(len(text) for text, _ in script_captions_raw)
+    if script_caption_count != len(audio_files):
+        missing = script_caption_count - len(audio_files)
+        raise RuntimeError(
+            f"字幕数とWAV数が一致しません（台本由来{script_caption_count}件 / WAV{len(audio_files)}件 / 差分{missing:+d}）。"
+            "音声生成失敗の可能性があるため、欠けた音声を修正してから再実行してください。"
+        )
     captions = _captions_for_audio_files(script_path, audio_files)
-    if progress_callback and script_caption_count != len(audio_files):
-        progress_callback(f"⚠ 字幕数補正: 台本由来{script_caption_count}件 / WAV{len(audio_files)}件。WAV順に合わせて字幕を作ります")
 
     segment_paths: list[str] = []
     prev_bg_path: str | None = None
@@ -503,6 +507,8 @@ def render_native_test(
         if last_error:
             raise last_error
         segment_paths.append(segment_path)
+        if progress_callback:
+            progress_callback(f"   🎞 segment {idx}/{len(audio_files)} 完了")
         prev_bg_path = bg_path
         del filter_complex, inputs, encode_candidates, last_error
 
