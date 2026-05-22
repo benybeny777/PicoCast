@@ -45,11 +45,19 @@ from config import (
     NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
     NATIVE_LONG_BODY_VOICE_SPEED,
     NATIVE_LONG_INTRO_VOICE_SPEED,
+    NATIVE_SHORTS_AVG_CHARS_MIN,
     NATIVE_SHORTS_BODY_VOICE_SPEED,
+    NATIVE_SHORTS_CHARS_MUST_FIX_MIN,
     NATIVE_SHORTS_ESTIMATE_BASE_CPS,
     NATIVE_SHORTS_INTRO_VOICE_SPEED,
     NATIVE_SHORTS_LINES_IDEAL_MIN,
     NATIVE_SHORTS_LINES_IDEAL_MAX,
+    NATIVE_SHORTS_LINES_MUST_FIX,
+    NATIVE_SHORTS_LINES_TARGET_MAX,
+    NATIVE_SHORTS_LINES_TARGET_MIN,
+    NATIVE_SHORTS_SHORT_LINE_MAX,
+    NATIVE_SHORTS_TARGET_CHARS_MAX,
+    NATIVE_SHORTS_TARGET_CHARS_MIN,
     OLLAMA_REWRITE_FALLBACK_MODEL,
     OLLAMA_REWRITE_MODEL,
     OPENING_SCORE_HARD_ABORT_THRESHOLD,
@@ -722,7 +730,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             f"🎬 Shorts本番レンダリング: ffmpeg/native\n"
             f"   🧩 YMM4プロジェクト: 生成のみ\n"
             f"   🔊 音声速度: intro {intro_voice_speed:.2f} / body {body_voice_speed:.2f}\n"
-            f"   📏 台本基準: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行"
+            f"   📏 台本基準: {NATIVE_SHORTS_LINES_TARGET_MIN}〜{NATIVE_SHORTS_LINES_TARGET_MAX}行 / "
+            f"{NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}字目標"
         )
     update_status(f"📐 動画形式: {'Shorts' if is_shorts else 'ロング'}")
 
@@ -1032,6 +1041,31 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     estimated_duration_result = duration_review(estimated_sec, is_shorts)
     estimated_duration_result["estimated"] = True
     if native_render:
+        estimated_dialogue_chars = sum(len(it.get("text", "")) for it in items if it.get("type") == "dialogue")
+        if (
+            is_shorts
+            and (
+                estimated_lines < NATIVE_SHORTS_LINES_IDEAL_MIN
+                or estimated_lines >= NATIVE_SHORTS_LINES_MUST_FIX
+                or estimated_dialogue_chars < NATIVE_SHORTS_CHARS_MUST_FIX_MIN
+                or estimated_avg_chars < NATIVE_SHORTS_AVG_CHARS_MIN
+                or sum(1 for it in items if it.get("type") == "dialogue" and len(it.get("text", "")) <= 10) > NATIVE_SHORTS_SHORT_LINE_MAX
+            )
+        ):
+            missing_to_target = max(0, NATIVE_SHORTS_TARGET_CHARS_MIN - estimated_dialogue_chars)
+            short_line_count = sum(1 for it in items if it.get("type") == "dialogue" and len(it.get("text", "")) <= 10)
+            msg = (
+                "❌ native Shortsの台本量不足で処理を中止しました\n"
+                f"行数: {estimated_lines}行 / 理想: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行\n"
+                f"セリフ本文: {estimated_dialogue_chars}文字 / 最低: {NATIVE_SHORTS_CHARS_MUST_FIX_MIN}文字以上"
+                f" / 目標: {NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}文字\n"
+                f"平均: {estimated_avg_chars:.1f}文字 / 必須: {NATIVE_SHORTS_AVG_CHARS_MIN:.1f}文字以上\n"
+                f"10文字以下の短文: {short_line_count}行 / 最大: {NATIVE_SHORTS_SHORT_LINE_MAX}行\n"
+                f"不足文字数: 目標{NATIVE_SHORTS_TARGET_CHARS_MIN}文字まであと{missing_to_target}文字"
+            )
+            update_status(msg, "error")
+            report.elapsed_sec = time.time() - pipeline_start
+            return msg, report
         # native版では推定尺は参考値のみ。尺は台本量で調整するため停止しない。
         update_status(
             f"📐 native推定: {estimated_sec:.1f}秒（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"

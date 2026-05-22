@@ -930,6 +930,52 @@ class YMM4AutoGui:
             first_text = dialogue_items[0].get("text", "")
             if len(first_text) < 8:
                 warnings.append(f"冒頭セリフが短すぎます（{len(first_text)}文字）: 「{first_text}」")
+            if is_shorts:
+                from config import (
+                    NATIVE_SHORTS_AVG_CHARS_MIN,
+                    NATIVE_SHORTS_CHARS_MUST_FIX_MIN,
+                    NATIVE_SHORTS_LINES_IDEAL_MAX,
+                    NATIVE_SHORTS_LINES_IDEAL_MIN,
+                    NATIVE_SHORTS_LINES_MUST_FIX,
+                    NATIVE_SHORTS_LINES_TARGET_MAX,
+                    NATIVE_SHORTS_LINES_TARGET_MIN,
+                    NATIVE_SHORTS_SHORT_LINE_MAX,
+                    NATIVE_SHORTS_TARGET_CHARS_MIN,
+                )
+
+                dialogue_count = len(dialogue_items)
+                total_dialogue_chars = sum(len(it.get("text", "")) for it in dialogue_items)
+                avg_dialogue_chars = total_dialogue_chars / dialogue_count if dialogue_count else 0.0
+                if dialogue_count < NATIVE_SHORTS_LINES_IDEAL_MIN:
+                    errors.append(
+                        f"Shorts台本量不足（{dialogue_count}行 / 理想{NATIVE_SHORTS_LINES_IDEAL_MIN}行以上）"
+                    )
+                if dialogue_count >= NATIVE_SHORTS_LINES_MUST_FIX:
+                    errors.append(f"Shortsセリフ数過多（{dialogue_count}行 / 31行以上は禁止）")
+                if total_dialogue_chars < NATIVE_SHORTS_CHARS_MUST_FIX_MIN:
+                    missing = NATIVE_SHORTS_TARGET_CHARS_MIN - total_dialogue_chars
+                    errors.append(
+                        f"Shorts本文文字数不足（セリフ本文{total_dialogue_chars}文字 / 最低{NATIVE_SHORTS_CHARS_MUST_FIX_MIN}文字以上）"
+                        f"。目標{NATIVE_SHORTS_TARGET_CHARS_MIN}文字まであと{missing}文字"
+                    )
+                if avg_dialogue_chars < NATIVE_SHORTS_AVG_CHARS_MIN:
+                    errors.append(
+                        f"Shorts平均文字数不足（平均{avg_dialogue_chars:.1f}文字 / 必須{NATIVE_SHORTS_AVG_CHARS_MIN:.1f}文字以上）"
+                    )
+                short_line_count = sum(1 for it in dialogue_items if len(it.get("text", "")) <= 10)
+                very_short_line_count = sum(1 for it in dialogue_items if len(it.get("text", "")) <= 7)
+                if short_line_count > NATIVE_SHORTS_SHORT_LINE_MAX:
+                    errors.append(
+                        f"Shorts短文セリフ過多（10文字以下が{short_line_count}行 / 最大{NATIVE_SHORTS_SHORT_LINE_MAX}行）"
+                    )
+                if very_short_line_count:
+                    warnings.append(f"7文字以下の短文セリフがあります（{very_short_line_count}行）。原則11〜15文字に伸ばしてください")
+                if NATIVE_SHORTS_LINES_IDEAL_MIN <= dialogue_count <= NATIVE_SHORTS_LINES_IDEAL_MAX and not (
+                    NATIVE_SHORTS_LINES_TARGET_MIN <= dialogue_count <= NATIVE_SHORTS_LINES_TARGET_MAX
+                ):
+                    warnings.append(
+                        f"Shortsセリフ数は許容内ですが、安定目標は{NATIVE_SHORTS_LINES_TARGET_MIN}〜{NATIVE_SHORTS_LINES_TARGET_MAX}行です"
+                    )
 
         return errors, warnings
 

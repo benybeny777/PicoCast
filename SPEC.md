@@ -71,9 +71,10 @@ yukkurijidou/
 
 ### Shorts
 - 尺: **38〜50秒（理想）/ 35〜55秒（許容）**
-- セリフ数: **22〜28行（31行以上禁止）**（native速度で1行平均12〜14文字を想定）
-- 文字数: **260〜360文字**（21行・190文字前後はnative実尺で短くなりやすい）
-- 尺計算式（native）: `各行の文字数 ÷ (5.4 × 音声速度) + 0.1 × 音声速度 = 推定尺`
+- セリフ数: **24〜27行を基本**（22〜28行は許容、31行以上禁止）
+- セリフ本文の文字数: **280〜330文字を目標 / 260文字未満は禁止**（背景・テロップ・メタ情報は含めない。21行・190文字前後はnative実尺で短くなりやすい）
+- 1セリフ: **原則11〜15文字 / 平均11.5文字以上**（10文字以下は最大4行、7文字以下は原則禁止）
+- 尺計算式（native）: `各セリフ本文の文字数 ÷ (5.4 × 音声速度) + 0.1 × 音声速度 = 推定尺`
 - 背景枚数: 6〜9枚
 - 再生速度（YMM4）: イントロ2.0x（最初5秒）/ 本編1.65x
 - 再生速度（native）: イントロ1.40x / 本編1.25x
@@ -383,10 +384,15 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_LONG_BODY_VOICE_SPEED` | 1.20 | Long本編再生速度（native） |
 | `NATIVE_LONG_INTRO_VOICE_SPEED` | 1.40 | Longイントロ再生速度（native） |
 | `NATIVE_SHORTS_ESTIMATE_BASE_CPS` | 5.4 | Shorts native推定の基準文字/秒 |
-| `NATIVE_SHORTS_TARGET_CHARS_MIN` | 260 | Shorts native文字数 理想下限 |
-| `NATIVE_SHORTS_TARGET_CHARS_MAX` | 360 | Shorts native文字数 理想上限 |
+| `NATIVE_SHORTS_CHARS_MUST_FIX_MIN` | 260 | Shorts native文字数 must_fix 下限 |
+| `NATIVE_SHORTS_TARGET_CHARS_MIN` | 280 | Shorts native文字数 目標下限 |
+| `NATIVE_SHORTS_TARGET_CHARS_MAX` | 330 | Shorts native文字数 目標上限 |
+| `NATIVE_SHORTS_AVG_CHARS_MIN` | 11.5 | Shorts native平均文字数 必須下限 |
+| `NATIVE_SHORTS_SHORT_LINE_MAX` | 4 | 10文字以下の短文セリフ 許容上限 |
 | `NATIVE_SHORTS_LINES_IDEAL_MIN` | 22 | Shorts nativeセリフ数 理想下限 |
 | `NATIVE_SHORTS_LINES_IDEAL_MAX` | 28 | Shorts nativeセリフ数 理想上限 |
+| `NATIVE_SHORTS_LINES_TARGET_MIN` | 24 | Shorts nativeセリフ数 目標下限 |
+| `NATIVE_SHORTS_LINES_TARGET_MAX` | 27 | Shorts nativeセリフ数 目標上限 |
 | `NATIVE_SHORTS_LINES_WARNING` | 29 | Shorts nativeセリフ数 warning閾値 |
 | `NATIVE_SHORTS_LINES_MUST_FIX` | 31 | Shorts nativeセリフ数 must_fix閾値 |
 | `DEFAULT_SHORTS_RENDER_ENGINE` | `native` | Shortsのデフォルトレンダラー（native/ymm4） |
@@ -424,7 +430,7 @@ Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を�
 
 | 項目 | YMM4 | native |
 |---|---|---|
-| Shorts セリフ数（理想） | 17〜20行 | 22〜28行 |
+| Shorts セリフ数（理想） | 17〜20行 | 24〜27行（22〜28行は許容） |
 | Shorts セリフ数（warning） | 20行（21+ は must_fix） | 29〜30行 |
 | Shorts セリフ数（must_fix） | 21行以上 | 31行以上 |
 | Shorts 推定尺チェック | 35s未満または55s超で停止 | 参考値のみ表示（停止しない） |
