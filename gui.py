@@ -1528,8 +1528,8 @@ class YMM4AutoGui:
                         native_duration = duration_review(native_result.duration_sec, _native_is_shorts)
                         native_duration["source"] = "native_mp4"
                         save_duration_review(output_dir, native_duration)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        self.log(f"⚠ native実尺メタ保存に失敗: {e}", "warning")
                     msg = (
                         f"{msg}\n"
                         f"✅ native MP4出力済み: {native_result.output_path}\n"
