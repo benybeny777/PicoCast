@@ -1664,16 +1664,25 @@ class YMM4AutoGui:
                         voice_speed_intro=NATIVE_SHORTS_INTRO_VOICE_SPEED if _native_is_shorts else NATIVE_LONG_INTRO_VOICE_SPEED,
                         voice_speed_body=NATIVE_SHORTS_BODY_VOICE_SPEED if _native_is_shorts else NATIVE_LONG_BODY_VOICE_SPEED,
                     )
+                    _nd_status = "unknown"
                     try:
                         native_duration = duration_review(native_result.duration_sec, _native_is_shorts)
                         native_duration["source"] = "native_mp4"
                         save_duration_review(output_dir, native_duration)
+                        _nd_status = native_duration.get("status", "unknown")
                     except Exception as e:
                         self.log(f"⚠ native実尺メタ保存に失敗: {e}", "warning")
+                    _nd_label = duration_status_label(_nd_status)
+                    _nd_tag = self._duration_tag(_nd_status)
+                    _dur_sec = native_result.duration_sec
+                    self.log(
+                        f"━━━━━━━━ 実尺チェック {_dur_sec:.1f}秒 / {_nd_label} ━━━━━━━━",
+                        _nd_tag,
+                    )
                     msg = (
                         f"{msg}\n"
                         f"✅ native MP4出力済み: {native_result.output_path}\n"
-                        f"📏 実動画尺: {native_result.duration_sec:.1f}秒（音声合計: {native_result.audio_duration_sec:.1f}秒）"
+                        f"📏 実動画尺: {_dur_sec:.1f}秒（音声合計: {native_result.audio_duration_sec:.1f}秒）/ {_nd_label}"
                     )
                     if report:
                         report.elapsed_sec = getattr(report, "elapsed_sec", 0) or 0
