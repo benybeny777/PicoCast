@@ -34,6 +34,10 @@
 - 状態フィルタ追加: すべて / 予定 / 公開済
 - 公開済み行を緑色で表示。カウント表示に「公開済 N 件 (直近90日・YouTube同期値)」を追加
 
+### 投稿テンプレート終盤のCTA記述を修正
+
+- `core/prompt_parts/local/script_generation_prompt.txt`: 投稿テンプレートの「終盤: 真相 → オチ → 他動画誘導 → 登録誘導」を「真相 → オチ → 冒頭キーワードに戻す」へ修正し、Shortsループ優先ルールと完全に整合
+
 ### Shorts CTAルールとレス読み上げ風ルールを整理
 
 - `core/prompt_parts/local/script_generation_prompt.txt`: Shorts理想構成に残っていた「他動画誘導・登録・高評価誘導を2〜3行に凝縮」という古いCTA記述を削除
