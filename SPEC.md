@@ -440,6 +440,19 @@ Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を�
 
 native では尺ではなく**語り速度（chars/sec）と台本量**で調整するため、推定尺による停止は行わない。
 
+### 実尺チェック（native MP4 生成後）
+
+`render_native_test()` 完了後、`gui.py` が ffprobe で計測した MP4 の実尺に対して `duration_review()` を実行し、YMM4 パスと同じ基準で判定を表示する。
+
+```
+━━━━━━━━ 実尺チェック 44.3秒 / 理想（38〜50秒） ━━━━━━━━   ← 緑
+━━━━━━━━ 実尺チェック 53.1秒 / OKだけど長め ━━━━━━━━      ← 黄
+━━━━━━━━ 実尺チェック 60.2秒 / 要確認 ━━━━━━━━            ← 赤
+```
+
+- 結果は `_meta/duration_review.json` に `"source": "native_mp4"` 付きで上書き保存する
+- 判定基準は YMM4 パスと共通（ideal: 38〜50s / ok_but_short: 35〜37s / ok_but_long: 51〜55s / warning: 32〜34s or 56〜58s / needs_review: それ以外）
+
 ### 詳細ログ（`render_native_test` 完了時）
 
 ```

@@ -14,6 +14,12 @@
 
 ## 2026-05-23
 
+### native MP4生成後に実尺チェックを追加
+
+- `gui.py`: `render_native_test()` 完了後に `duration_review()` で実尺を判定し、`━━ 実尺チェック XX.X秒 / [ラベル] ━━` 形式でログ表示（ideal→緑 / warning→黄 / needs_review→赤）
+- 判定結果を `_meta/duration_review.json`（`source: native_mp4`）に保存
+- 完了メッセージにも判定ラベルを追記
+
 ### 5/16以前の音切れリスク動画をAnalyticsで品質改善版候補化
 
 - `core/analytics_score.py`: 2026-05-16以前の公開動画に `audio_cutoff_risk` を付与し、実績シグナルがある Shorts / ShortLong の action に `音切れ改善候補` を補足
