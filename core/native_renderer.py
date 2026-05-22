@@ -42,6 +42,33 @@ class NativeRenderResult:
     background_count: int
 
 
+def _safe_output_stem(output_dir: str) -> str:
+    stem = os.path.basename(os.path.abspath(output_dir)).strip() or "video"
+    stem = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", stem)
+    stem = re.sub(r"\s+", "_", stem).strip(" ._")
+    return (stem or "video")[:80]
+
+
+def _native_output_path(output_dir: str) -> str:
+    return os.path.join(output_dir, f"{_safe_output_stem(output_dir)}_native.mp4")
+
+
+def _clear_native_work_dir(work_dir: str) -> None:
+    if not os.path.isdir(work_dir):
+        return
+    for name in os.listdir(work_dir):
+        if (
+            name.startswith("segment_")
+            or name.startswith("subtitle_")
+            or name in {"audio_concat.txt", "segment_concat.txt", "video_with_narration.mp4"}
+        ):
+            path = os.path.join(work_dir, name)
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
 def _run_ffmpeg(args: list[str]) -> None:
     startupinfo = None
     if os.name == "nt":
@@ -209,6 +236,18 @@ def _background_for_audio(audio_path: str, bg_files: list[str]) -> str:
     return bg_files[min(max(bg_idx - 1, 0), len(bg_files) - 1)]
 
 
+def _thumbnail_path(output_dir: str) -> str | None:
+    candidates = [
+        os.path.join(output_dir, "thumbnails", "thumbnail.png"),
+        os.path.join(output_dir, "thumbnail.png"),
+    ]
+    existing = [path for path in candidates if os.path.exists(path)]
+    if not existing:
+        return None
+    existing.sort(key=lambda path: os.path.getmtime(path), reverse=True)
+    return existing[0]
+
+
 def _video_encode_args(encoder_override: str | None = None) -> list[str]:
     encoder = str(encoder_override or NATIVE_FFMPEG_ENCODER or "libx264").strip()
     preset = str(NATIVE_FFMPEG_PRESET or "").strip()
@@ -237,6 +276,43 @@ def _segment_encode_args() -> list[list[str]]:
         fallback = ["-c:v", "libx264", "-preset", "veryfast", "-crf", str(NATIVE_FFMPEG_CRF).strip() or "20"]
         return [primary, fallback]
     return [primary]
+
+
+def _encode_thumbnail_frame_segment(
+    thumbnail_path: str,
+    segment_path: str,
+    width: int,
+    height: int,
+    duration: float,
+    progress_callback=None,
+) -> None:
+    segment_duration = max(1 / VIDEO_FPS, duration)
+    filter_complex = f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[vout]"
+    encode_candidates = _segment_encode_args()
+    last_error = None
+    for enc_idx, encode_args in enumerate(encode_candidates):
+        try:
+            _run_ffmpeg([
+                FFMPEG_BIN, "-y",
+                "-loop", "1", "-t", f"{segment_duration:.6f}", "-i", thumbnail_path,
+                "-f", "lavfi", "-t", f"{segment_duration:.6f}", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+                "-filter_complex", filter_complex,
+                "-map", "[vout]", "-map", "1:a",
+                "-r", str(VIDEO_FPS), "-pix_fmt", "yuv420p",
+                *encode_args,
+                "-c:a", "aac", "-ar", "48000", "-ac", "2",
+                "-shortest", segment_path,
+            ])
+            if enc_idx > 0 and progress_callback:
+                progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました")
+            return
+        except Exception as e:
+            last_error = e
+            if enc_idx == 0 and len(encode_candidates) > 1:
+                continue
+            raise
+    if last_error:
+        raise last_error
 
 
 def _character_inputs(width: int, height: int) -> list[CharacterVariantSet]:
@@ -443,10 +519,11 @@ def render_native_test(
 
     work_dir = os.path.join(output_dir, "_native_test")
     os.makedirs(work_dir, exist_ok=True)
+    _clear_native_work_dir(work_dir)
     audio_list = os.path.join(work_dir, "audio_concat.txt")
     segment_list = os.path.join(work_dir, "segment_concat.txt")
     video_path = os.path.join(work_dir, "video_with_narration.mp4")
-    output_path = os.path.join(output_dir, "video_native.mp4")
+    output_path = _native_output_path(output_dir)
 
     durations = [_wav_duration(path) for path in audio_files]
     total_audio = sum(durations)
@@ -468,6 +545,15 @@ def render_native_test(
     captions = _captions_for_audio_files(script_path, audio_files)
 
     segment_paths: list[str] = []
+    is_shorts = height > width
+    if is_shorts:
+        thumb_path = _thumbnail_path(output_dir)
+        if thumb_path:
+            thumb_segment_path = os.path.join(work_dir, "segment_0000_thumbnail.mp4")
+            _encode_thumbnail_frame_segment(thumb_path, thumb_segment_path, width, height, 1 / VIDEO_FPS, progress_callback)
+            segment_paths.append(thumb_segment_path)
+            if progress_callback:
+                progress_callback(f"   🖼 先頭1フレームにサムネイルを挿入: {os.path.basename(thumb_path)}")
     prev_bg_path: str | None = None
     for idx, (audio_path, duration, caption) in enumerate(zip(audio_files, durations, captions), start=1):
         bg_path = _background_for_audio(audio_path, bg_files)

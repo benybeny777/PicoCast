@@ -12,15 +12,46 @@
 
 ---
 
+## 2026-05-23
+
+### 5/16以前の音切れリスク動画をAnalyticsで品質改善版候補化
+
+- `core/analytics_score.py`: 2026-05-16以前の公開動画に `audio_cutoff_risk` を付与し、実績シグナルがある Shorts / ShortLong の action に `音切れ改善候補` を補足
+- Analytics TSV / GUI一覧 / タイトル案プロンプトの実績データヘッダーに `audio_cutoff_risk` を追加
+- タイトル案プロンプトに、音切れリスク動画をネタ弱いと即断せず「品質改善版」候補として扱う指示を追加
+- `tests/test_analytics_score.py`: 音切れリスク境界日、候補付与条件、TSV列のテストを追加
+
+### native MP4の先頭フレームにサムネイル挿入・固定ファイル名で上書き
+
+- `core/native_renderer.py`: Shorts の native MP4 先頭1フレームに `thumbnails/thumbnail.png` を挿入（Long は挿入しない）
+- `core/native_renderer.py`: native MP4出力名を `{履歴フォルダ名}_native.mp4` に固定。タイムスタンプなし・再生成時は上書き
+- native MP4化前に `_native_test` の古い中間ファイルを削除し、再生成画像を使った出力になるように整理
+- `gui.py`: 画像再生成時に対象画像を上書きし、更新時刻も明示的に更新
+
+### アップロードスケジュール画面に公開済み動画の YouTube 公開日時を表示
+
+- `gui.py`: `📅 スケジュール` 画面に公開済み動画（直近90日）を追加表示。日時列は YouTube 側の `published_at`（API同期値）を使用
+- 状態フィルタ追加: すべて / 予定 / 公開済
+- 公開済み行を緑色で表示。カウント表示に「公開済 N 件 (直近90日・YouTube同期値)」を追加
+
+### 画像SD生成モードを追加（GUIチェックボックス）
+
+- `core/image_generator.py`: `sd_size_mode=True` で `SD_SIZE_IMAGE_SCALE`（デフォルト0.5）倍サイズで生成し元サイズに拡大してセット
+- `config.py`: `SD_SIZE_IMAGE_SCALE` 環境変数を追加（デフォルト0.5）
+- `gui.py`: 「SD生成」チェックボックス追加（デフォルトOFF）。生成・画像確認再生成・サムネイル再生成の全パスに伝播
+- `main.py`: `run_pipeline()` / `regenerate_thumbnail_only()` に `sd_size_mode` パラメータを追加
+
+---
+
 ## 2026-05-22（続き4）
 
 ### Shorts台本文字数ガイドラインをnative速度に合わせて更新
 
 - `core/prompt_parts/local/script_generation_prompt.txt`
   - 尺計算式を旧YMM4式（×0.11＋×1.2）→ native式（÷3.75＋×0.25）に更新
-  - 例示を平均11文字 → 平均7〜8文字に変更
-  - `1セリフ15文字以内` → `10文字以内（平均7〜8文字を目標）` に変更
-  - `総文字数190〜220文字` → `130〜165文字` に変更
+  - 1セリフは原則11〜15文字、平均11.5文字以上を維持するルールに更新
+  - Shorts nativeでは24〜27行、本文280〜330文字を目標にし、260文字未満は禁止
+  - 10文字以下の短文は最大4行まで、7文字以下は原則禁止
 - `SPEC.md`: 台本作成ルール・Shorts セリフ数・尺計算式を同様に更新
 - `gui.py` / `main.py`: `_estimate_duration` / `_estimate_script_duration` の `native_render` パラメータを削除し、Shorts=native速度/Long=YMM4速度で分岐
 
@@ -47,8 +78,8 @@
   - YMM4プロジェクト生成は継続（保険・確認・再編集用）
   - `RENDER_WITH_YMM4 = False` でYMM4本番書き出しをデフォルト無効化
 - **GenerationReport.native_render_used** を追加し、GUIがnativeレンダリングを自動トリガー
-- **出力ファイル名を `video_native.mp4` に変更**（旧: `{folder名}_native_test.mp4`）
-- **アップロード優先順位を更新**: `video_native.mp4` を最優先で選択
+- **出力ファイル名を `video_native.mp4` に変更**（旧: `{folder名}_native_test.mp4`。2026-05-23に `{フォルダ名}_native.mp4` 固定へ再変更）
+- **アップロード優先順位を更新**: 履歴フォルダ内の最新 MP4 を選択（固定ファイル名のため常に1本）
 - **冒頭速度切り替えをline_countモードに変更**（native Shorts）
   - 旧: フレーム上の5秒経過で切り替え
   - 新: 冒頭3行（`VOICE_INTRO_FAST_LINES=3`）がintro速度、4行目以降がbody速度

@@ -1,14 +1,18 @@
 import os
 import time
 from google import genai
-from config import GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL
+from config import GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL, SD_SIZE_IMAGE_SCALE
 
 class ImageGenerator:
-    def __init__(self, width=1920, height=1080, debug=False, image_style="通常"):
+    def __init__(self, width=1920, height=1080, debug=False, image_style="通常", sd_size_mode=False):
         self.width = width
         self.height = height
         self.debug = debug
         self.image_style = image_style
+        self.sd_size_mode = sd_size_mode
+        scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
+        self.request_width = max(64, int(round(self.width * scale))) if sd_size_mode else self.width
+        self.request_height = max(64, int(round(self.height * scale))) if sd_size_mode else self.height
 
         self.client = None
         if GOOGLE_API_KEY:
@@ -69,7 +73,15 @@ class ImageGenerator:
         with open(path, "wb") as f:
             f.write(part.inline_data.data)
         with Image.open(path) as img:
-            if img.size != (self.width, self.height):
+            if self.sd_size_mode:
+                small = img.resize((self.request_width, self.request_height), Image.LANCZOS)
+                resized = small.resize((self.width, self.height), Image.LANCZOS)
+                try:
+                    resized.save(path)
+                finally:
+                    small.close()
+                    resized.close()
+            elif img.size != (self.width, self.height):
                 resized = img.resize((self.width, self.height), Image.LANCZOS)
                 try:
                     resized.save(path)
@@ -88,7 +100,8 @@ class ImageGenerator:
         model_name = NANOBANANA_PRO_MODEL if (force_nanobanana_pro or "pro" in self.image_style) else NANOBANANA_FLASH_MODEL
 
         if self.debug:
-            print(f"  [AI] Google {model_name} (Nano Banana) で描画を開始します: {description[:40]}...")
+            size_note = f" SDサイズ生成({self.request_width}x{self.request_height}→{self.width}x{self.height})" if self.sd_size_mode else f" {self.width}x{self.height}"
+            print(f"  [AI] Google {model_name} (Nano Banana){size_note} で描画を開始します: {description[:40]}...")
 
         try:
             full_prompt = self._build_full_prompt(description, raw)

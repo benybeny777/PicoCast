@@ -269,7 +269,7 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 | 画像確認 | サムネイル・背景画像を確認し、選択した画像だけ再生成 |
 | YouTubeアップ | 複数動画の一括スケジュールアップロード |
 | 固定コメント | アップロード済み動画へ固定コメント用コメントを投稿し、動画URLを表示 |
-| スケジュール | 予約中の一覧確認、削除、公開予定変更。YouTube API同期で予約状態を確認。ラジオボタンで Shorts/Long 絞り込み |
+| スケジュール | 予約中＋直近90日の公開済み動画一覧。公開日時は YouTube API 同期値（`published_at`）を表示。Shorts/Long・予定/公開済みで絞り込み可 |
 | アナリティクス | YouTube Analytics取得、横展開候補や改善対象を評価 |
 | サービス確認 | VOICEVOX / Nano Banana 起動状態チェック |
 
@@ -420,8 +420,9 @@ Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を�
 
 - **デフォルト動作**: `DEFAULT_SHORTS_RENDER_ENGINE = "native"` が設定されているため、Shorts の `run_pipeline()` は `native_render=None` を受け取ると自動で `native_render=True` に切り替わる。
 - `run_pipeline()` は native/YMM4 どちらでも通常通り `.ymmp` プロジェクトを生成する（保険・確認・再編集用）。
-- `render_native_test(output_dir, voice_speed_intro, voice_speed_body)` が音声・背景を結合して `video_native.mp4` を出力する。
-- YouTubeアップロード時は `video_native.mp4` を優先して選択する。
+- `render_native_test(output_dir, voice_speed_intro, voice_speed_body)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
+- YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
+- **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭1フレームにサムネイル画像を挿入する（Long は挿入しない）。
 - `_meta/render_info.json` に render_engine・voice_speed・line_rule・ymm4_project_generated を保存する。
 
 `DEFAULT_SHORTS_RENDER_ENGINE=ymm4` (.env) で YMM4 本番レンダリングに戻せる。
@@ -469,6 +470,12 @@ YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案�
 ### タイトルA/Bテスト
 
 `_meta/title_ab_test.json` でタイトルバリアントを管理（手動切り替え）。YouTube APIアップロード時はA案タイトルを既定として使い、B/C案はYouTube Studioで手動テスト。
+
+### 画像 SD 生成モード
+
+GUI オプション行の **「SD生成」チェックボックス**（デフォルト OFF）で制御。Shorts / Long 両方に適用される。
+
+ON にすると `SD_SIZE_IMAGE_SCALE`（デフォルト 0.5、`.env` で変更可）倍の小サイズで画像を生成し、元の解像度に拡大してセットする。API トークン消費とコストを削減できる反面、解像度が粗くなる。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
 
 ### Long画像節約モード
 
@@ -738,6 +745,7 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 
 - 公開予約中・データ待ちは **分析（横展開判定）には使わない** が、タイトル案生成の重複除外には使う
 - `build_performance_summary` は `analysis_status == "analyzable"` の動画のみ対象
+- `published_at` が 2026-05-16 以前の動画は `audio_cutoff_risk = true` として、音声末尾切れの可能性がある動画として扱う
 
 スコアは `S / A / B / C / D / 未計測 / 対象外` の7段階です。
 
@@ -759,6 +767,7 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 | `like_rate >= 1.5%` かつ `score in (C, D)` | action `テーマ有望・冒頭/構成改善` |
 | `comments >= 1` かつ弱いスコア | action に `反応あり` を補足 |
 | `views < 500` かつ公開後24時間未満 | `is_provisional = true`。横展開系actionには `(判定保留)` を付ける |
+| `audio_cutoff_risk = true` かつ公開済み・分析可能な Shorts / ShortLong で `views >= 1000`、`average_percentage_viewed >= 55`、`like_rate >= 1.0`、`comments >= 1`、`subscribers_net >= 1` のいずれか | score は変えず、既存 action に `音切れ改善候補` を補足 |
 
 views 上位20% ルール（`score_items` でまとめて適用）：
 
@@ -768,6 +777,7 @@ views 上位20% ルール（`score_items` でまとめて適用）：
 - ただし action が `横展開` の場合は維持
 
 TSVには `publish_status` / `analysis_status` / `is_provisional` / `render_engine` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複や判定保留を考慮できます。`render_engine` は `_meta/render_info.json` から取得し、アップロード記録に保存されます。
+TSVには `audio_cutoff_risk` 列も含み、2026-05-16以前の動画を品質改善版候補として再評価できるようにします。
 
 YouTube Studio 側で予約動画を手動公開した場合:
 
@@ -802,7 +812,7 @@ Future scheduled slots can be packed forward from the earliest available slot. r
 ### 最優先ルール
 1. 冒頭1秒で衝撃事実を断言
 2. 前置き・挨拶禁止
-3. 1セリフ10文字以内（平均7〜8文字を目標）
+3. Shortsは1セリフ原則11〜15文字。24〜27行、本文280〜330文字を目標にし、260文字未満は禁止。平均11.5文字以上を維持する。10文字以下の短文は最大4行まで、7文字以下は原則禁止。
 4. AI説明口調禁止
 5. 掛け合い会話
 

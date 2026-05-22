@@ -3,7 +3,7 @@
 from pathlib import Path
 
 TITLE_ANALYTICS_TSV_HEADER = (
-    "title\tpublished_at\tvideo_type\tduration\tduration_status\tpublish_status\tanalysis_status\tis_provisional\tgeneration_kind\tsource_video_title\tgeneration_purpose\tcharacter_pattern\tgenre_group\tviews\timpressions\tctr\t"
+    "title\tpublished_at\tvideo_type\tduration\tduration_status\tpublish_status\tanalysis_status\tis_provisional\taudio_cutoff_risk\tgeneration_kind\tsource_video_title\tgeneration_purpose\tcharacter_pattern\tgenre_group\trender_engine\tviews\timpressions\tctr\t"
     "average_view_duration\taverage_percentage_viewed\tlikes\tlike_rate\tcomments\tsubscribers_net\tscore\taction"
 )
 
@@ -627,6 +627,7 @@ YouTube Analytics実績データ活用ルール
 ・subscribers_net
 ・score
 ・action
+・audio_cutoff_risk
 ・ctr ※取得できる場合のみ
 ・impressions ※取得できる場合のみ
 
@@ -655,6 +656,12 @@ action が「要見直し」「サムネ/冒頭改善」でも、
 views / average_percentage_viewed / subscribers_net が強い場合は、
 テーマや勝ちパターン自体は横展開候補として扱う。
 action は「動画の改善点」であり、「テーマの失敗」とは限らない。
+
+2026-05-16以前の動画は音切れリスクありとして扱う。
+audio_cutoff_risk=True の動画は、平均視聴率が低くてもネタ弱いと即断しない。
+audio_cutoff_risk=True かつ views・平均視聴率・高評価率・コメント・登録者増のいずれかが強い動画は、
+ネタが弱いのではなく「品質改善版」候補として扱う。
+同じタイトルの単純再投稿ではなく、タイトル・サムネ・冒頭・尺・音切れを改善した品質改善版として提案する。
 
 ━━━━━━━━━━━━━━━━━━
 実績データの読み取り方

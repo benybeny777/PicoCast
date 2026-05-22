@@ -10,6 +10,8 @@ import time
 import shutil
 import queue
 import json
+import hashlib
+import io
 from main import (
     OutputDirectoryLockedError,
     run_pipeline,
@@ -24,7 +26,16 @@ from core.output_paths import UPLOADED_TITLES_FILE, analytics_paths, ensure_outp
 from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review, opening_score_tag, save_duration_review
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
-from config import DEFAULT_SHORTS_RENDER_ENGINE, VOICEVOX_URL, VOICEVOX_PATH, THUMBNAIL_CHARACTER_PNGS
+from config import (
+    DEFAULT_SHORTS_RENDER_ENGINE,
+    FFMPEG_BIN,
+    NATIVE_FFMPEG_ENCODER,
+    NATIVE_FFMPEG_PRESET,
+    SD_SIZE_IMAGE_SCALE,
+    THUMBNAIL_CHARACTER_PNGS,
+    VOICEVOX_PATH,
+    VOICEVOX_URL,
+)
 import requests
 
 APP_VERSION_BASE = "2026.05.19"
@@ -121,12 +132,73 @@ def unified_check(name, primary_url, path):
         "path": path
     }
 
+
+def ffmpeg_native_status():
+    configured = str(NATIVE_FFMPEG_ENCODER or "libx264").strip() or "libx264"
+    preset = str(NATIVE_FFMPEG_PRESET or "").strip()
+    result = {
+        "bin": FFMPEG_BIN,
+        "configured": configured,
+        "preset": preset,
+        "available": False,
+        "gpu": configured not in ("", "libx264"),
+        "hw_encoders": [],
+        "error": "",
+    }
+    try:
+        proc = subprocess.run(
+            [FFMPEG_BIN, "-hide_banner", "-encoders"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        text = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        for enc in ("h264_nvenc", "hevc_nvenc", "av1_nvenc", "h264_qsv", "hevc_qsv", "h264_amf", "hevc_amf"):
+            if enc in text:
+                result["hw_encoders"].append(enc)
+        result["available"] = configured == "libx264" or configured in text
+        if proc.returncode != 0 and not result["available"]:
+            result["error"] = (proc.stderr or proc.stdout or "").strip().splitlines()[-1:]
+            result["error"] = result["error"][0] if result["error"] else f"exit {proc.returncode}"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+
+def _file_digest(path):
+    try:
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return ""
+
+
+def _load_image_copy(path):
+    with open(path, "rb") as f:
+        data = f.read()
+    with Image.open(io.BytesIO(data)) as src:
+        return src.copy()
+
 print(f"\n--- [System Startup Check] ---")
 for n, u, p in [("VOICEVOX", VOICEVOX_URL, VOICEVOX_PATH)]:
     res = unified_check(n, u, p)
     c_status = f"[Conn: OK ({res['url']})]" if res['connected'] else "[Conn: ERR]"
     f_status = "[File: OK]" if res['file_ok'] else "[File: ERR]"
     print(f"{res['name']:<10}: {c_status:<35} {f_status}")
+_ffmpeg_boot = ffmpeg_native_status()
+_ffmpeg_mode = "GPU" if _ffmpeg_boot["gpu"] and _ffmpeg_boot["available"] else "CPU" if _ffmpeg_boot["available"] else "ERR"
+_ffmpeg_preset = f" / preset {_ffmpeg_boot['preset']}" if _ffmpeg_boot["preset"] else ""
+_ffmpeg_hw = f" / HW: {', '.join(_ffmpeg_boot['hw_encoders'][:4])}" if _ffmpeg_boot["hw_encoders"] else ""
+print(f"ffmpeg   : [{_ffmpeg_mode}: {_ffmpeg_boot['configured']}{_ffmpeg_preset}]{_ffmpeg_hw}")
+if _ffmpeg_boot["error"]:
+    print(f"           {_ffmpeg_boot['error']}")
 print(f"------------------------------\n")
 
 
@@ -270,6 +342,10 @@ class YMM4AutoGui:
         ttk.Checkbutton(opt_frame, text="LongサムネAB", variable=self.long_thumbnail_ab_var).pack(side=tk.LEFT, padx=4)
         self.long_budget_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(opt_frame, text="Long節約", variable=self.long_budget_var).pack(side=tk.LEFT, padx=4)
+        self.sd_size_var = tk.BooleanVar(value=False)
+        sd_cb = ttk.Checkbutton(opt_frame, text="SD生成", variable=self.sd_size_var)
+        sd_cb.pack(side=tk.LEFT, padx=4)
+        self._add_tooltip(sd_cb, f"画像を縮小サイズ(×{SD_SIZE_IMAGE_SCALE})で生成して拡大セット。API負荷・コスト削減。デフォルトOFF。")
 
         ttk.Label(opt_frame, text="画風:").pack(side=tk.LEFT, padx=(12, 2))
         self.style_var = tk.StringVar(value="nanobanana2")
@@ -384,6 +460,23 @@ class YMM4AutoGui:
             status = "OK" if res['connected'] else "ERR"
             style = "success" if res['connected'] else "error"
             self.log(f"{res['name']:<10}: {status} ({res['url']})", style)
+        ffmpeg_status = ffmpeg_native_status()
+        preset_text = f" / preset {ffmpeg_status['preset']}" if ffmpeg_status["preset"] else ""
+        if ffmpeg_status["available"]:
+            mode = "GPU" if ffmpeg_status["gpu"] else "CPU"
+            hw_text = f" / HW: {', '.join(ffmpeg_status['hw_encoders'][:4])}" if ffmpeg_status["hw_encoders"] else ""
+            self.log(
+                f"ffmpeg   : OK ({mode}: {ffmpeg_status['configured']}{preset_text}){hw_text}",
+                "success" if ffmpeg_status["gpu"] else "info",
+            )
+            if ffmpeg_status["gpu"]:
+                self.log("           GPU失敗時は libx264(CPU) に自動フォールバック", "info")
+        else:
+            err = f" / {ffmpeg_status['error']}" if ffmpeg_status["error"] else ""
+            self.log(
+                f"ffmpeg   : ERR ({ffmpeg_status['bin']} / encoder {ffmpeg_status['configured']} が利用不可{err})",
+                "error",
+            )
         self.log("----------------------")
 
     def copy_script_generation_prompt(self):
@@ -546,6 +639,7 @@ class YMM4AutoGui:
             "use_batch_api": self.batch_api_var.get(),
             "long_thumbnail_ab_test": self.long_thumbnail_ab_var.get(),
             "long_budget_mode": self.long_budget_var.get(),
+            "sd_size_mode": self.sd_size_var.get(),
             "native_render": False,
         }
 
@@ -798,8 +892,7 @@ class YMM4AutoGui:
             for f in os.listdir(output_dir)
             if f.lower().endswith(".mp4")
         ]
-        # video_native.mp4 を優先（render_engine=native の本番出力）
-        candidates.sort(key=lambda p: (0 if os.path.basename(p) == "video_native.mp4" else 1, -os.path.getmtime(p)))
+        candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
         return candidates
 
     def _external_mp4_candidate(self, output_dir):
@@ -1514,6 +1607,7 @@ class YMM4AutoGui:
                             existing_titles=existing_titles,
                             long_thumbnail_ab_test=settings.get("long_thumbnail_ab_test", False),
                             long_budget_mode=settings.get("long_budget_mode", False),
+                            sd_size_mode=settings.get("sd_size_mode", False),
                             native_render=settings.get("native_render"),  # None=auto, True=force native
                         )
                         break
@@ -2211,7 +2305,7 @@ class YMM4AutoGui:
             "title", "published_at", "video_type", "duration", "duration_status", "analysis_status", "is_provisional", "views", "impressions", "ctr",
             "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
             "comments", "subscribers_net", "score", "action",
-            "generation_kind", "source_video_title", "generation_purpose",
+            "audio_cutoff_risk", "generation_kind", "source_video_title", "generation_purpose",
             "character_pattern", "genre_group",
         )
         headings = {
@@ -2233,6 +2327,7 @@ class YMM4AutoGui:
             "subscribers_net": "登録者増減",
             "score": "評価",
             "action": "対応",
+            "audio_cutoff_risk": "音切れリスク",
             "generation_kind": "生成区分",
             "source_video_title": "元動画",
             "generation_purpose": "目的",
@@ -2271,6 +2366,7 @@ class YMM4AutoGui:
             "subscribers_net": 90,
             "score": 55,
             "action": 130,
+            "audio_cutoff_risk": 90,
             "generation_kind": 90,
             "source_video_title": 220,
             "generation_purpose": 160,
@@ -2339,6 +2435,8 @@ class YMM4AutoGui:
                 return order.get(str(item.get(col) or ""), -2)
             if col == "is_provisional":
                 return 1 if item.get(col) else 0
+            if col == "audio_cutoff_risk":
+                return 1 if item.get(col) else 0
             if col in {
                 "duration", "views", "impressions", "ctr", "average_view_duration",
                 "average_percentage_viewed", "likes", "like_rate", "comments", "subscribers_net",
@@ -2369,7 +2467,7 @@ class YMM4AutoGui:
                 state["sort_reverse"] = col in {
                     "published_at", "duration", "views", "impressions", "ctr",
                     "average_view_duration", "average_percentage_viewed", "likes",
-                    "like_rate", "comments", "subscribers_net", "score",
+                    "like_rate", "comments", "subscribers_net", "score", "audio_cutoff_risk",
                 }
             state["items"].sort(key=lambda item: _sort_value(item, col), reverse=state["sort_reverse"])
             _refresh_headings()
@@ -2399,6 +2497,7 @@ class YMM4AutoGui:
                     item.get("subscribers_net", 0),
                     item.get("score", ""),
                     item.get("action", ""),
+                    "あり" if item.get("audio_cutoff_risk") else "",
                     item.get("generation_kind", ""),
                     item.get("source_video_title", ""),
                     item.get("generation_purpose", ""),
@@ -2568,7 +2667,32 @@ class YMM4AutoGui:
                 char_pat = rec.get("character_pattern", "") or ""
                 new_rows.append((dt, label, title, "予定", vt, dt.isoformat(), gen_kind, char_pat))
                 seen_schedule_rows.add(row_key)
-            new_rows.sort(key=lambda r: r[0])
+            # 公開済み（YouTube側のpublished_at）を追加
+            cutoff_dt = current_now - timedelta(days=90)
+            for rec in upload_records:
+                vt = str(rec.get("video_type") or "").lower()
+                if vt not in ("shorts", "long"):
+                    continue
+                if str(rec.get("publish_status") or "").lower() != "published":
+                    continue
+                published_at_str = str(rec.get("published_at") or "").strip()
+                if not published_at_str:
+                    continue
+                dt = _schedule_dt(published_at_str)
+                if not dt or dt < cutoff_dt:
+                    continue
+                title = str(rec.get("title") or "").split("\n")[0].strip()
+                if not title:
+                    continue
+                row_key = (vt, dt.isoformat()[:16], _schedule_title_key(title))
+                if row_key in seen_schedule_rows:
+                    continue
+                seen_schedule_rows.add(row_key)
+                label = "Shorts" if vt == "shorts" else "Long"
+                gen_kind = rec.get("generation_kind", "") or ""
+                char_pat = rec.get("character_pattern", "") or ""
+                new_rows.append((dt, label, title, "公開済", vt, published_at_str, gen_kind, char_pat))
+            new_rows.sort(key=lambda r: r[0], reverse=True)
             return new_rows
 
         rows = [] if auto_sync else build_rows()
@@ -2585,29 +2709,68 @@ class YMM4AutoGui:
         filter_frame = ttk.Frame(dialog)
         filter_frame.pack(anchor=tk.W, padx=12, pady=(0, 4))
         filter_var = tk.StringVar(value="すべて")
+        status_filter_var = tk.StringVar(value="予定")
         for _txt in ("すべて", "Shorts", "Long"):
             ttk.Radiobutton(filter_frame, text=_txt, variable=filter_var, value=_txt,
                             command=lambda: refresh_tree()).pack(side=tk.LEFT, padx=(0, 16))
+        ttk.Separator(filter_frame, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=8)
+        ttk.Label(filter_frame, text="状態:").pack(side=tk.LEFT, padx=(0, 4))
+        def _on_status_filter_change():
+            # 予定→昇順（近い順）、公開済み/すべて→降順（新しい順）
+            if sort_state["col"] == "日時":
+                sort_state["reverse"] = status_filter_var.get() != "予定"
+                _update_headings()
+            refresh_tree()
+
+        for _txt in ("すべて", "予定", "公開済"):
+            ttk.Radiobutton(filter_frame, text=_txt, variable=status_filter_var, value=_txt,
+                            command=_on_status_filter_change).pack(side=tk.LEFT, padx=(0, 12))
         frame = ttk.Frame(dialog)
         frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=4)
 
         cols = ("日時", "種別", "タイトル", "状態", "区分", "パターン")
+        _heading_base = {
+            "日時":     "公開/予約日時 (JST)",
+            "種別":     "種別",
+            "タイトル": "タイトル",
+            "状態":     "状態",
+            "区分":     "生成区分",
+            "パターン": "キャラ",
+        }
+        # col → row tuple index
+        _col_data_idx = {"日時": 0, "種別": 1, "タイトル": 2, "状態": 3, "区分": 6, "パターン": 7}
+        # default: 日時 昇順（予定表示時は近い順、公開済み切替時はヘッダーで変更）
+        sort_state = {"col": "日時", "reverse": False}
+
         tree = ttk.Treeview(frame, columns=cols, show="headings", height=14)
-        tree.heading("日時",   text="予約日時 (JST)", anchor=tk.CENTER)
-        tree.heading("種別",   text="種別",           anchor=tk.CENTER)
-        tree.heading("タイトル", text="タイトル",     anchor=tk.W)
-        tree.heading("状態",   text="状態",           anchor=tk.CENTER)
-        tree.heading("区分",   text="生成区分",       anchor=tk.CENTER)
-        tree.heading("パターン", text="キャラ",       anchor=tk.CENTER)
         tree.column("日時",    width=160, stretch=False, anchor=tk.CENTER)
         tree.column("種別",    width=60,  stretch=False, anchor=tk.CENTER)
         tree.column("タイトル", width=380, stretch=True,  anchor=tk.W)
-        tree.column("状態",    width=48,  stretch=False, anchor=tk.CENTER)
+        tree.column("状態",    width=62,  stretch=False, anchor=tk.CENTER)
         tree.column("区分",    width=90,  stretch=False, anchor=tk.CENTER)
         tree.column("パターン", width=110, stretch=False, anchor=tk.CENTER)
 
-        tree.tag_configure("done",     foreground="#aaaaaa", background="#f5f5f5")
-        tree.tag_configure("upcoming", foreground="#0984e3", font=("Meiryo", 9, "bold"))
+        tree.tag_configure("done",      foreground="#aaaaaa", background="#f5f5f5")
+        tree.tag_configure("upcoming",  foreground="#0984e3", font=("Meiryo", 9, "bold"))
+        tree.tag_configure("published", foreground="#27ae60")
+
+        def _update_headings():
+            for col in cols:
+                ind = (" ▼" if sort_state["reverse"] else " ▲") if sort_state["col"] == col else ""
+                anchor = tk.W if col == "タイトル" else tk.CENTER
+                tree.heading(col, text=_heading_base[col] + ind, anchor=anchor,
+                             command=lambda c=col: _on_header_click(c))
+
+        def _on_header_click(col):
+            if sort_state["col"] == col:
+                sort_state["reverse"] = not sort_state["reverse"]
+            else:
+                sort_state["col"] = col
+                sort_state["reverse"] = col == "日時"  # 日時だけデフォルト降順
+            _update_headings()
+            refresh_tree()
+
+        _update_headings()
 
         sb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(yscrollcommand=sb.set)
@@ -2623,12 +2786,26 @@ class YMM4AutoGui:
             tree.delete(*tree.get_children())
             row_by_iid.clear()
             filt = filter_var.get()
-            for idx, (dt, label, title, status, vt, iso, gen_kind, char_pat) in enumerate(rows):
-                if filt != "すべて" and label != filt:
-                    continue
+            status_filt = status_filter_var.get()
+            visible_rows = [
+                r for r in rows
+                if (filt == "すべて" or r[1] == filt)
+                and (status_filt == "すべて" or r[3] == status_filt)
+            ]
+            idx = _col_data_idx[sort_state["col"]]
+            visible_rows.sort(
+                key=lambda r: (r[idx] if r[idx] is not None else ""),
+                reverse=sort_state["reverse"],
+            )
+            for enum_idx, (dt, label, title, status, vt, iso, gen_kind, char_pat) in enumerate(visible_rows):
                 dt_str = dt.strftime("%Y/%m/%d %H:%M")
-                tag = "done" if status == "済" else "upcoming"
-                iid = str(idx)
+                if status == "公開済":
+                    tag = "published"
+                elif status == "済":
+                    tag = "done"
+                else:
+                    tag = "upcoming"
+                iid = str(enum_idx)
                 row_by_iid[iid] = {
                     "dt": dt,
                     "label": label,
@@ -2638,9 +2815,10 @@ class YMM4AutoGui:
                     "iso": iso,
                 }
                 tree.insert("", tk.END, iid=iid, values=(dt_str, label, title, status, gen_kind, char_pat), tags=(tag,))
-            visible = list(row_by_iid.values())
+            n_upcoming  = sum(1 for r in visible_rows if r[3] == "予定")
+            n_published = sum(1 for r in visible_rows if r[3] == "公開済")
             count_var.set(
-                f"合計 {len(visible)} 件  /  予定 {sum(1 for r in visible if r['status']=='予定')} 件  /  済 {sum(1 for r in visible if r['status']=='済')} 件"
+                f"合計 {len(visible_rows)} 件  /  予定 {n_upcoming} 件  /  公開済 {n_published} 件 (直近90日・YouTube同期値)"
             )
 
         if auto_sync:
@@ -3711,7 +3889,7 @@ class YMM4AutoGui:
         self.log(f"🔄 画像確認: {os.path.basename(output_dir)}")
         threading.Thread(
             target=self._run_image_review,
-            args=(output_dir, self.debug_var.get(), self.style_var.get()),
+            args=(output_dir, self.debug_var.get(), self.style_var.get(), self.sd_size_var.get()),
             daemon=True,
         ).start()
 
@@ -3866,7 +4044,7 @@ class YMM4AutoGui:
                 })
         return specs
 
-    def _run_image_review(self, output_dir, debug_mode=False, image_style="通常"):
+    def _run_image_review(self, output_dir, debug_mode=False, image_style="通常", sd_size_mode=False):
         try:
             specs = self._collect_image_review_specs(output_dir)
             if not specs:
@@ -3882,17 +4060,26 @@ class YMM4AutoGui:
                 for idx in sorted(regen_set):
                     spec = specs[idx]
                     try:
+                        before_hash = _file_digest(spec["path"])
                         width, height = (1080, 1920) if spec.get("is_shorts") else (1920, 1080)
-                        img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style)
+                        img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style, sd_size_mode=sd_size_mode)
                         target_dir = os.path.dirname(spec["path"])
+                        regen_stamp = time.strftime("%Y%m%d_%H%M%S")
+                        regen_prompt = (
+                            f"{spec['prompt']}\n\n"
+                            f"【再生成指示】前回画像の単純な焼き直しにしない。構図、カメラ距離、主役の配置、"
+                            f"背景小物、文字配置、色の印象を明確に変えた別案にする。"
+                            f"再生成ID: {regen_stamp}-{idx}"
+                        )
                         if spec["kind"] in ("thumbnail", "thumbnail_variant"):
                             char_refs = [p for p in THUMBNAIL_CHARACTER_PNGS.values() if os.path.exists(p)]
-                            thumb_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style="nanobanana2")
+                            thumb_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style="nanobanana2", sd_size_mode=sd_size_mode)
                             generated = thumb_gen.generate_background(
-                                spec["prompt"],
+                                regen_prompt,
                                 target_dir=target_dir,
                                 raw=True,
                                 reference_image_paths=char_refs or None,
+                                fname=os.path.basename(spec["path"]),
                             )
                         else:
                             all_bgs = sorted(
@@ -3905,21 +4092,32 @@ class YMM4AutoGui:
                                 None
                             )
                             generated = img_gen.generate_background(
-                                spec["prompt"],
+                                regen_prompt,
                                 target_dir=target_dir,
                                 raw=False,
                                 reference_image_path=style_ref,
+                                fname=os.path.basename(spec["path"]),
                             )
                         if generated:
                             src = os.path.join(target_dir, generated)
-                            shutil.copy2(src, spec["path"])
+                            if os.path.abspath(src) != os.path.abspath(spec["path"]):
+                                shutil.copyfile(src, spec["path"])
+                            try:
+                                os.utime(spec["path"], None)
+                            except OSError:
+                                pass
                             if os.path.abspath(src) != os.path.abspath(spec["path"]):
                                 try:
                                     os.remove(src)
                                 except OSError:
                                     pass
                             if spec["kind"] == "thumbnail_variant" and spec.get("variant") == "A":
-                                shutil.copy2(spec["path"], os.path.join(output_dir, "thumbnail.png"))
+                                root_thumb = os.path.join(output_dir, "thumbnail.png")
+                                shutil.copyfile(spec["path"], root_thumb)
+                                try:
+                                    os.utime(root_thumb, None)
+                                except OSError:
+                                    pass
                             # プロンプトをファイルに保存
                             try:
                                 if spec["kind"] == "background":
@@ -3930,10 +4128,23 @@ class YMM4AutoGui:
                                 else:
                                     prompt_file = os.path.join(target_dir, "thumbnail_prompt.txt")
                                 with open(prompt_file, "w", encoding="utf-8") as pf:
-                                    pf.write(spec["prompt"])
+                                    pf.write(regen_prompt)
                             except Exception:
                                 pass
-                            self.log(f"  ✅ 再生成: {spec['label']}", "success")
+                            after_hash = _file_digest(spec["path"])
+                            try:
+                                updated_at = time.strftime("%H:%M:%S", time.localtime(os.path.getmtime(spec["path"])))
+                                size_kb = os.path.getsize(spec["path"]) // 1024
+                            except OSError:
+                                updated_at = "?"
+                                size_kb = 0
+                            if before_hash and after_hash and before_hash == after_hash:
+                                self.log(f"  ⚠ 再生成後も画像内容が同一です: {spec['label']}", "warning")
+                            else:
+                                self.log(
+                                    f"  ✅ 再生成: {spec['label']} ({updated_at} / {size_kb}KB / {after_hash[:8]})",
+                                    "success",
+                                )
                     except Exception as e:
                         self.log(f"  ❌ 再生成失敗: {spec['label']}: {e}", "error")
 
@@ -3959,8 +4170,11 @@ class YMM4AutoGui:
         display_sizes = []
         for spec in specs:
             try:
-                with Image.open(spec["path"]) as img:
+                img = _load_image_copy(spec["path"])
+                try:
                     w, h = img.size
+                finally:
+                    img.close()
                 scale = max_display_h / h
                 display_sizes.append((int(w * scale), int(h * scale)))
             except Exception:
@@ -4024,10 +4238,10 @@ class YMM4AutoGui:
             win.title("拡大表示")
             win.transient(dialog)
             try:
-                with Image.open(path) as src:
-                    img = src.copy()
+                img = _load_image_copy(path)
                 img.thumbnail((900, 900), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
+                img.close()
                 lbl = tk.Label(win, image=photo)
                 lbl.image = photo
                 lbl.pack()
@@ -4088,10 +4302,10 @@ class YMM4AutoGui:
             img_frame.pack()
 
             try:
-                with Image.open(spec["path"]) as src:
-                    img = src.copy()
+                img = _load_image_copy(spec["path"])
                 img.thumbnail((cell_w, cell_h), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
+                img.close()
                 photo_refs.append(photo)
                 lbl = ttk.Label(img_frame, image=photo, cursor="hand2", anchor="center")
                 lbl.place(relx=0.5, rely=0.5, anchor="center")
@@ -4104,6 +4318,14 @@ class YMM4AutoGui:
             if scene:
                 display_scene = scene if len(scene) <= 60 else scene[:58] + "…"
                 ttk.Label(cell, text=display_scene, wraplength=cell_w, foreground="#0984e3").pack()
+            try:
+                file_info = (
+                    f"{time.strftime('%H:%M:%S', time.localtime(os.path.getmtime(spec['path'])))} / "
+                    f"{os.path.getsize(spec['path']) // 1024}KB / {_file_digest(spec['path'])[:8]}"
+                )
+                ttk.Label(cell, text=file_info, font=("Meiryo", 8), foreground="#636e72").pack()
+            except Exception:
+                pass
             btn = ttk.Button(cell, text="✅ OK", style="OK.TButton", command=lambda i=idx: toggle(i))
             btn.pack(pady=4)
             btn_refs[idx] = btn

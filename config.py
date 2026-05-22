@@ -84,6 +84,7 @@ AUTO_FULL_REWRITE_ENABLED = os.environ.get("AUTO_FULL_REWRITE_ENABLED", "0").str
 GEMINI_MODEL = "gemini-3.1-pro-preview"
 NANOBANANA_PRO_MODEL = "gemini-3-pro-image-preview"
 NANOBANANA_FLASH_MODEL = "gemini-3.1-flash-image-preview"
+SD_SIZE_IMAGE_SCALE = float(os.environ.get("SD_SIZE_IMAGE_SCALE", "0.5"))
 
 # Character Mapping
 # Speaker IDs:

@@ -1,13 +1,14 @@
-import csv
 import json
 import os
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from typing import Any
 
 from core.output_paths import ANALYTICS_DIR
 
 
 SCORE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "未計測": 0, "対象外": -1}
+AUDIO_CUTOFF_RISK_DATE = date(2026, 5, 16)
+AUDIO_CUTOFF_ACTION_SUFFIX = "音切れ改善候補"
 DURATION_STATUS_LABELS = {
     "ideal": "理想",
     "ok": "OK",
@@ -29,6 +30,55 @@ def _num(value, default=0.0):
 
 def _int(value, default=0):
     return int(_num(value, default))
+
+
+def is_audio_cutoff_risk(published_at) -> bool:
+    if not published_at:
+        return False
+    if isinstance(published_at, datetime):
+        published_date = published_at.date()
+    elif isinstance(published_at, date):
+        published_date = published_at
+    else:
+        text = str(published_at).strip()
+        try:
+            published_date = date.fromisoformat(text[:10])
+        except (TypeError, ValueError):
+            return False
+    return published_date <= AUDIO_CUTOFF_RISK_DATE
+
+
+def _append_action_suffix(action: str, suffix: str) -> str:
+    action = str(action or "")
+    if not action:
+        return suffix
+    if suffix in action:
+        return action
+    return f"{action}・{suffix}"
+
+
+def _should_mark_audio_cutoff_improvement(item: dict[str, Any]) -> bool:
+    if item.get("analysis_status") != "analyzable":
+        return False
+    if item.get("publish_status") != "published":
+        return False
+    if not item.get("audio_cutoff_risk"):
+        return False
+    if item.get("video_type") not in ("Shorts", "ShortLong"):
+        return False
+    return (
+        _int(item.get("views")) >= 1000
+        or _num(item.get("average_percentage_viewed")) >= 55
+        or _num(item.get("like_rate")) >= 1.0
+        or _int(item.get("comments")) >= 1
+        or _int(item.get("subscribers_net")) >= 1
+    )
+
+
+def apply_audio_cutoff_improvement_action(item: dict[str, Any]) -> dict[str, Any]:
+    if _should_mark_audio_cutoff_improvement(item):
+        item["action"] = _append_action_suffix(item.get("action"), AUDIO_CUTOFF_ACTION_SUFFIX)
+    return item
 
 
 def detect_video_type(item: dict[str, Any]) -> str:
@@ -86,6 +136,7 @@ def format_duration_status(status: str) -> str:
 
 def score_item(item: dict[str, Any]) -> dict[str, Any]:
     video_type = detect_video_type(item)
+    audio_cutoff_risk = is_audio_cutoff_risk(item.get("published_at"))
     views = _int(item.get("views"))
     impressions = _int(item.get("impressions"))
     ctr = item.get("ctr")
@@ -94,9 +145,14 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     avg_percent = _num(item.get("average_percentage_viewed"))
     likes = _int(item.get("likes"))
     comments = _int(item.get("comments"))
-    gained = _int(item.get("subscribers_gained"))
-    lost = _int(item.get("subscribers_lost"))
-    subscribers_net = gained - lost
+    gained_raw = item.get("subscribers_gained")
+    lost_raw = item.get("subscribers_lost")
+    gained = _int(gained_raw)
+    lost = _int(lost_raw)
+    if gained_raw is None and lost_raw is None and item.get("subscribers_net") is not None:
+        subscribers_net = _int(item.get("subscribers_net"))
+    else:
+        subscribers_net = gained - lost
     like_rate = (likes / views * 100) if views > 0 else 0.0
 
     publish_status = str(item.get("publish_status") or "published")
@@ -114,6 +170,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "video_type": video_type,
             "publish_status": publish_status,
             "analysis_status": "excluded",
+            "audio_cutoff_risk": audio_cutoff_risk,
             "is_topic_exclusion_target": False,
             "is_provisional": False,
             "views": views, "impressions": impressions, "ctr": None,
@@ -136,6 +193,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "video_type": video_type,
             "publish_status": publish_status,
             "analysis_status": "scheduled",
+            "audio_cutoff_risk": audio_cutoff_risk,
             "is_topic_exclusion_target": True,
             "is_provisional": False,
             "views": 0, "impressions": 0, "ctr": None,
@@ -158,6 +216,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "video_type": video_type,
             "publish_status": publish_status,
             "analysis_status": "data_wait",
+            "audio_cutoff_risk": audio_cutoff_risk,
             "is_topic_exclusion_target": True,
             "is_provisional": False,
             "analytics_available": analytics_available,
@@ -277,6 +336,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "video_type": video_type,
         "publish_status": publish_status,
         "analysis_status": "analyzable",
+        "audio_cutoff_risk": audio_cutoff_risk,
         "is_topic_exclusion_target": True,
         "is_provisional": is_provisional,
         "views": views,
@@ -293,7 +353,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "score": score,
         "action": action,
     })
-    return result
+    return apply_audio_cutoff_improvement_action(result)
 
 
 def score_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -321,6 +381,9 @@ def score_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             ):
                 item["action"] = "横展開・微改善"
 
+    for item in scored:
+        apply_audio_cutoff_improvement_action(item)
+
     scored.sort(key=lambda x: (SCORE_ORDER.get(x.get("score"), 0), _int(x.get("views"))), reverse=True)
     return scored
 
@@ -337,7 +400,7 @@ def format_duration(seconds) -> str:
 def to_tsv(items: list[dict[str, Any]]) -> str:
     cols = [
         "title", "published_at", "video_type", "duration", "duration_status",
-        "publish_status", "analysis_status", "is_provisional",
+        "publish_status", "analysis_status", "is_provisional", "audio_cutoff_risk",
         "generation_kind", "source_video_title", "generation_purpose",
         "character_pattern", "genre_group", "render_engine",
         "views", "impressions", "ctr",

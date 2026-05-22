@@ -432,7 +432,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     # サムネイルは常に nanobanana2 で生成（背景と統一）
     thumb_img_gen = ImageGenerator(
         width=img_gen.width, height=img_gen.height,
-        debug=img_gen.debug, image_style="nanobanana2",
+        debug=img_gen.debug, image_style="nanobanana2", sd_size_mode=img_gen.sd_size_mode,
     )
 
     def _generate_one(one_prompt, final_path, label):
@@ -603,7 +603,7 @@ def normalize_background_order(items):
     return normalized
 
 
-def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None):
+def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None, sd_size_mode=False):
     """既存の出力フォルダのサムネイルのみ再生成する。"""
     def update_status(msg, tag="info"):
         if progress_callback:
@@ -626,7 +626,7 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     theme_bg_dir = os.path.join(output_dir, "backgrounds")
     os.makedirs(theme_bg_dir, exist_ok=True)
 
-    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style)
+    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode)
     thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
                                     update_status, script_content=script_content, debug_mode=debug,
                                     long_thumbnail_ab_test=long_thumbnail_ab_test)
@@ -639,7 +639,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
-                 long_budget_mode=None, native_render=None):
+                 long_budget_mode=None, native_render=None, sd_size_mode=False):
     report = GenerationReport()
     pipeline_start = time.time()
 
@@ -1244,7 +1244,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status(f"📂 OPテンプレート読み込み完了 ({current_frame}フレーム)")
     intro_fast_until_frame = current_frame + round(VOICE_INTRO_FAST_SECONDS * editor.fps)
 
-    img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style)
+    img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style, sd_size_mode=sd_size_mode)
 
     thumbnail_title = meta.get("video_title", topic)
     if _has_saved_bgs:
