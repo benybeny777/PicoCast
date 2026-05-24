@@ -23,7 +23,7 @@ from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
 from core.analytics_score import analytics_period_label, build_performance_summary, format_duration, format_duration_status, save_score_files, score_items, to_tsv
 from core.output_paths import UPLOADED_TITLES_FILE, analytics_paths, ensure_output_dirs, migrate_root_file
-from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review, opening_score_tag, save_duration_review
+from core.opening_quality import check_openai_final_review_connection, duration_review, duration_status_label, llm_opening_review, local_opening_review, opening_score_tag, save_duration_review
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
 from config import (
@@ -1271,6 +1271,27 @@ class YMM4AutoGui:
         total = len(scripts)
         self.log(f"🤖 生成前スコアリング開始: 合計 {total} 件", "batch")
         self._set_batch_progress_text(f"スコアリング: 0/{total} 完了")
+        self.log("🧑‍⚖️ ChatGPT生成前レビュー接続チェック中...", "batch")
+        openai_check = check_openai_final_review_connection()
+        if not openai_check.get("ok"):
+            ng_count += 1
+            error = openai_check.get("error", "unknown error")
+            self.log(f"❌ ChatGPT生成前レビュー接続チェック失敗: {error}", "error")
+            self._set_batch_progress_text("生成前チェック停止: ChatGPT接続失敗")
+            ai_report.extend([
+                "",
+                "## ChatGPT生成前レビュー接続チェック",
+                "- 判定: チェック失敗",
+                f"- エラー: {error}",
+            ])
+            report_text = "\n".join(ai_report)
+            self.root.after(0, lambda text=report_text: self._copy_bulk_check_report(text))
+            return False
+        if openai_check.get("skipped"):
+            reason = openai_check.get("reason", "disabled")
+            self.log(f"🧑‍⚖️ ChatGPT生成前レビュー接続チェックをスキップ: {reason}", "warning")
+        else:
+            self.log("✅ ChatGPT生成前レビュー接続OK", "success")
 
         for idx, script in enumerate(scripts, 1):
             if cancel_event.is_set():
@@ -1636,12 +1657,11 @@ class YMM4AutoGui:
                 pipeline_failed = msg.lstrip().startswith(("❌", "⏹"))
                 if pipeline_failed:
                     self.log(f"要修正: {topic}", "error")
-                    if not is_batch:
-                        self.root.after(0, lambda m=msg, r=report, gid=gen_id:
-                            self.finish_generation(m, r, is_error=True) if gid == self._gen_id else None)
-                        return
-                    self._set_batch_progress_text(f"一括生成: {idx+1}/{count} 完了")
-                    continue
+                    if is_batch:
+                        self._set_batch_progress_text(f"一括生成停止: {idx+1}/{count}")
+                    self.root.after(0, lambda m=msg, r=report, gid=gen_id:
+                        self.finish_generation(m, r, is_error=True) if gid == self._gen_id else None)
+                    return
                 _should_native_render = getattr(report, "native_render_used", False) or settings.get("native_render") is True
                 if _should_native_render:
                     project_path = self._project_path_from_message(msg)

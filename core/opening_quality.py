@@ -742,6 +742,31 @@ def _filter_obsolete_dialogue_must_fix(must_fix: list[str], dialogue_count: int)
     ] if dialogue_count <= 28 else must_fix
 
 
+def check_openai_final_review_connection(timeout: int = 10) -> dict[str, Any]:
+    if not OPENAI_FINAL_REVIEW_ENABLED:
+        return {"ok": True, "skipped": True, "reason": "OPENAI_FINAL_REVIEW_ENABLED is false"}
+    if not OPENAI_API_KEY:
+        return {
+            "ok": False,
+            "error": "OPENAI_API_KEY is not set",
+            "model": OPENAI_FINAL_REVIEW_MODEL,
+        }
+    try:
+        with requests.get(
+            "https://api.openai.com/v1/models",
+            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            timeout=timeout,
+        ) as response:
+            response.raise_for_status()
+        return {"ok": True, "model": OPENAI_FINAL_REVIEW_MODEL}
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e),
+            "model": OPENAI_FINAL_REVIEW_MODEL,
+        }
+
+
 def final_chatgpt_review(
     *,
     title: str,

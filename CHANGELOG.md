@@ -14,6 +14,11 @@
 
 ## 2026-05-25 (3)
 
+### 生成前レビュー失敗時に一括生成を即停止
+
+- `gui.py`: `run_pipeline()` が `❌` / `⏹` を返した場合、一括生成でも次の動画へ進まず即終了するよう変更。ChatGPT生成前レビューの接続失敗などを「要修正」ログだけで継続しない
+- `core/opening_quality.py` / `gui.py`: 生成前スコアリング開始時にChatGPT生成前レビューのOpenAI接続を確認し、DNS失敗・認証失敗・API接続失敗時は生成開始前に即停止するよう変更
+
 ### APIクライアントの明示解放を追加
 
 - `core/youtube_uploader.py` / `core/youtube_analytics.py`: YouTube Data API / Analytics API の googleapiclient resource を処理後に `close()` するよう変更
