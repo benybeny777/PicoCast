@@ -2601,6 +2601,7 @@ class YMM4AutoGui:
         from core.upload_scheduler import format_slot
         from datetime import datetime, timedelta, timezone
         JST = timezone(timedelta(hours=9))
+        now = datetime.now(JST)
 
         def _schedule_dt(value):
             try:
