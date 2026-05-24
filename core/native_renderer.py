@@ -475,8 +475,8 @@ def _write_subtitles(
     )
     inner_outline_colors = {
         "Default": "&H00000000",
-        "Zundamon": "&H00208020",
-        "Metan": "&H00802A8A",
+        "Zundamon": "&H002B9C26",
+        "Metan": "&H009137BE",
     }
     lines = [
         "[Script Info]",
@@ -498,7 +498,7 @@ def _write_subtitles(
                 font_size=font_size,
                 primary="&H00FFFFFF",
                 outline_color="&H00000000",
-                outline_width=10,
+                outline_width=12,
                 shadow_depth=2,
                 margin_v=margin_v,
                 alignment=alignment,
@@ -511,7 +511,7 @@ def _write_subtitles(
                 font_size=font_size,
                 primary="&H00FFFFFF",
                 outline_color=inner_outline,
-                outline_width=5,
+                outline_width=8,
                 shadow_depth=0,
                 margin_v=margin_v,
                 alignment=alignment,

@@ -1,17 +1,16 @@
-# YMMなし生成(test) 実装メモ
+# ffmpeg/native レンダラー実装メモ
 
-この文書は、YMM4を使わずにffmpegで簡易MP4を出力する実験機能の引き継ぎメモです。
+この文書は、YMM4を使わずにffmpeg/nativeでMP4を出力するレンダラーの引き継ぎメモです。
 
 ## 目的
 
-既存のYMM4生成フローを壊さず、別ルートとして「YMM4なしで動画ファイルを得る」ための第一段階を追加しています。
-
-現時点では完全なYMM4代替ではなく、次の最小構成です。
+既存のYMM4生成フローを壊さず、Shorts本番レンダリングをffmpeg/nativeで行うための経路です。
+YMM4プロジェクトは保険・確認・再編集用に引き続き生成します。
 
 - 背景画像
-- 静止立ち絵
+- 静止立ち絵（PSD抽出キャッシュ/PNG）
 - VOICEVOX音声
-- 話者別色付き字幕
+- 白文字 + 話者別キャラ色フチ + 黒外フチ + 必要時の半透明黒帯
 - BGM
 - ffmpegによるMP4出力
 - 簡易口パク
@@ -23,23 +22,23 @@
 
 実装箇所: `gui.py`
 
-### YMMなし生成(test)
+### 通常生成（Shorts）
 
-貼り付けた台本から通常生成と同じ入口で処理します。
+通常の生成フローでShortsを作ると、`DEFAULT_SHORTS_RENDER_ENGINE = "native"` によりnativeレンダリングが自動選択されます。
 
 流れ:
 
 1. 台本をテキスト欄に貼る
-2. `YMMなし生成(test)` を押す
-3. 既存の `run_pipeline()` で台本、音声、背景、サムネ、YMM4プロジェクトまで生成
+2. 通常の生成ボタンを押す
+3. `run_pipeline()` で台本、音声、背景、サムネ、YMM4プロジェクトまで生成
 4. 生成フォルダを特定
 5. `core.native_renderer.render_native_test()` を実行
-6. 生成フォルダ直下に `*_native_test.mp4` を出力
+6. 生成フォルダ直下に `{履歴フォルダ名}_native.mp4` を出力
 
 注意:
 
 - 現段階では `run_pipeline()` 自体はYMM4プロジェクトも保存します。
-- ただし、YMM4アプリを起動して動画出力する処理はここでは走りません。
+- native選択時は、YMM4アプリを起動して動画出力する処理は走りません。
 - 画像生成や音声生成も走るため、通常生成と同じくらい時間がかかります。
 
 ### YMMなしMP4化(test)
@@ -52,7 +51,7 @@
 2. 履歴選択ダイアログで既存履歴を選択
 3. 選択した履歴フォルダの `script.txt`、`audio/`、`backgrounds/` を読む
 4. `core.native_renderer.render_native_test()` を実行
-5. 各履歴フォルダ直下に `*_native_test.mp4` を出力
+5. 各履歴フォルダ直下に `{履歴フォルダ名}_native.mp4` を出力
 
 これは素材生成を飛ばすため、字幕やffmpeg合成の調整確認に使います。
 
@@ -63,7 +62,12 @@
 主関数:
 
 ```python
-render_native_test(output_dir: str, progress_callback=None) -> NativeRenderResult
+render_native_test(
+    output_dir: str,
+    progress_callback=None,
+    voice_speed_intro: float | None = None,
+    voice_speed_body: float | None = None,
+) -> NativeRenderResult
 ```
 
 入力として期待する履歴フォルダ構成:
@@ -82,13 +86,12 @@ output/{履歴名}/
 出力:
 
 ```text
-output/{履歴名}/{履歴名}_native_test.mp4
+output/{履歴名}/{履歴名}_native.mp4
 output/{履歴名}/_native_test/
-  audio_concat.txt
-  image_concat.txt
-  narration.wav
-  subtitles.ass
-  video.mp4
+  segment_0000_thumbnail.mp4
+  segment_0001.mp4
+  subtitle_0001.ass
+  segment_concat.txt
 ```
 
 `_native_test/` は中間生成物です。現状は残します。不要なら後で自動削除設定を追加できます。
@@ -109,11 +112,11 @@ FFMPEG_BIN=C:\path\to\ffmpeg.exe
 
 処理順:
 
-1. `audio/*.wav` をファイル名順にconcatして `narration.wav` を作る
+1. `audio/*.wav` をファイル名順に読み、各WAVの長さを取得する
 2. `backgrounds/bg_*.png` を音声の背景番号に合わせて割り当てる
-3. `subtitles.ass` を生成する
-4. 画像concat + subtitles filter で無音動画 `video.mp4` を作る
-5. `video.mp4` + `narration.wav` + BGMを合成して最終MP4にする
+3. 各セリフごとにASS字幕を生成し、背景・立ち絵・口パク・まばたきと合成したセグメントMP4を作る
+4. Shortsでは `thumbnails/thumbnail.png` があれば先頭1フレームのサムネイルセグメントを挿入する
+5. セグメントをconcatし、BGMを合成して `{履歴フォルダ名}_native.mp4` に上書き出力する
 
 ## 字幕仕様
 
@@ -127,9 +130,11 @@ FFMPEG_BIN=C:\path\to\ffmpeg.exe
 
 話者別スタイル:
 
-- ずんだもん: `Zundamon`、緑系
-- めたん/四国めたん: `Metan`、ピンク系
-- 判別不能: `Default`、白
+- ずんだもん: `Zundamon`、白文字 + 濃緑の内フチ + 黒外フチ
+- めたん/四国めたん: `Metan`、白文字 + 濃ピンク紫の内フチ + 黒外フチ
+- 判別不能: `Default`、白文字 + 黒フチ
+
+Shortsの通常字幕は背景に左右されない可読性を優先します。半透明黒帯を有効にした場合も残し、キャラ差は本文色ではなくフチ色で表現します。
 
 台本の話者名からスタイルを判定します。
 
