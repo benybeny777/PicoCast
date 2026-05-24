@@ -335,7 +335,10 @@ def _character_inputs(width: int, height: int) -> list[CharacterVariantSet]:
 def _character_position(name: str, portrait: bool = False) -> str:
     side = NATIVE_CHARACTER_SIDE_MARGIN_SHORTS if portrait else NATIVE_CHARACTER_SIDE_MARGIN_LONG
     bottom = NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS if portrait else NATIVE_CHARACTER_BOTTOM_MARGIN_LONG
-    return f"{side}:H-h-{bottom}" if name == "zundamon" else f"W-w-{side}:H-h-{bottom}"
+    y = f"H-h+{-bottom}" if bottom < 0 else f"H-h-{bottom}"
+    x_zunda = str(side)
+    x_metan = f"W-w+{-side}" if side < 0 else f"W-w-{side}"
+    return f"{x_zunda}:{y}" if name == "zundamon" else f"{x_metan}:{y}"
 
 
 def _speaker_name(style: str) -> str | None:

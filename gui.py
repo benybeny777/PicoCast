@@ -3242,6 +3242,8 @@ class YMM4AutoGui:
 
                 updated_yt = 0
                 no_id = []
+                records_for_update = load_upload_records()
+                records_dirty = False
                 for change in all_changes:
                     vt, old_iso, new_iso, title, change_video_id, *rest = change
                     change_record_index = rest[0] if rest else None
@@ -3253,12 +3255,11 @@ class YMM4AutoGui:
                         local_updated = False
                         if change_record_index is not None:
                             try:
-                                records = load_upload_records()
                                 idx = int(change_record_index)
-                                if 0 <= idx < len(records):
-                                    records[idx]["publish_at"] = new_iso
-                                    records[idx]["publish_status"] = "scheduled"
-                                    save_upload_records(records)
+                                if 0 <= idx < len(records_for_update):
+                                    records_for_update[idx]["publish_at"] = new_iso
+                                    records_for_update[idx]["publish_status"] = "scheduled"
+                                    records_dirty = True
                                     local_updated = True
                             except Exception as e:
                                 self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
@@ -3278,18 +3279,17 @@ class YMM4AutoGui:
                             if record_path:
                                 try:
                                     if os.path.abspath(record_path) == os.path.abspath(UPLOAD_RECORDS_FILE):
-                                        records = load_upload_records()
                                         rec_idx = None
                                         if change_record_index is not None:
                                             idx = int(change_record_index)
-                                            if 0 <= idx < len(records):
+                                            if 0 <= idx < len(records_for_update):
                                                 rec_idx = idx
                                         if rec_idx is None:
-                                            rec_idx = next((i for i, r in enumerate(records) if r.get("video_id") == video_id), None)
+                                            rec_idx = next((i for i, r in enumerate(records_for_update) if r.get("video_id") == video_id), None)
                                         if rec_idx is not None:
-                                            records[rec_idx]["publish_at"] = new_iso
-                                            records[rec_idx]["publish_status"] = "scheduled"
-                                            save_upload_records(records)
+                                            records_for_update[rec_idx]["publish_at"] = new_iso
+                                            records_for_update[rec_idx]["publish_status"] = "scheduled"
+                                            records_dirty = True
                                             rec = None
                                         else:
                                             rec = {"video_id": video_id}
@@ -3316,6 +3316,11 @@ class YMM4AutoGui:
                         self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str, e=e: self.log(
                             f"  ❌ [{label}] YouTube更新失敗: {t} ({o} → {n}) / {e}", "error",
                         ))
+                if records_dirty:
+                    try:
+                        save_upload_records(records_for_update)
+                    except Exception as e:
+                        self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_records一括保存失敗: {e}", "warning"))
 
                 def done():
                     msg = f"YouTube更新: {updated_yt}/{len(all_changes)}件"

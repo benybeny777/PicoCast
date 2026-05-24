@@ -256,7 +256,7 @@ def rebalance_slots(video_type: str) -> list[tuple[str, str, str]]:
     return build_rebalanced_entries(entries, video_type)
 
 
-def rebalance_slots_detailed(video_type: str) -> list[tuple]:
+def rebalance_slots_detailed(video_type: str) -> list[tuple[str, str, str, str, int | None]]:
     """Like rebalance_slots(), with video_id and record index for unambiguous callers."""
     from core.upload_records import load_upload_records
 
