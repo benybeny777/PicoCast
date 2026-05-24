@@ -4151,20 +4151,10 @@ class YMM4AutoGui:
                                 fname=os.path.basename(spec["path"]),
                             )
                         else:
-                            all_bgs = sorted(
-                                f for f in os.listdir(target_dir)
-                                if f.lower().endswith(".png") and f.lower().startswith("bg_")
-                            )
-                            style_ref = next(
-                                (os.path.join(target_dir, b) for b in all_bgs
-                                 if os.path.abspath(os.path.join(target_dir, b)) != os.path.abspath(spec["path"])),
-                                None
-                            )
                             generated = img_gen.generate_background(
                                 regen_prompt,
                                 target_dir=target_dir,
                                 raw=False,
-                                reference_image_path=style_ref,
                                 fname=os.path.basename(spec["path"]),
                             )
                         if generated:
