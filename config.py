@@ -24,6 +24,27 @@ CHARACTER_UPPER_BODY_MODE = os.environ.get("CHARACTER_UPPER_BODY_MODE", "1").str
 CHARACTER_UPPER_BODY_SCALE = float(os.environ.get("CHARACTER_UPPER_BODY_SCALE", "1.55"))
 CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET = int(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET", "250"))
 CHARACTER_UPPER_BODY_LONG_Y_OFFSET = int(os.environ.get("CHARACTER_UPPER_BODY_LONG_Y_OFFSET", "400"))
+
+# YMM4 tachie (立ち絵) base positions: (x, y, zoom%) per character per mode
+YMM4_TACHIE_BASE: dict = {
+    "ずんだもん": {"long": (-696, 430, 66.9),  "shorts": (-364.5, 850, 60.3)},
+    "めたん":     {"long": ( 751, 430, 52.95), "shorts": ( 348.0, 850, 50.1)},
+}
+if CHARACTER_UPPER_BODY_MODE:
+    YMM4_TACHIE_PARAMS: dict = {
+        char: {
+            m: (
+                x,
+                y + (CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET if m == "shorts" else CHARACTER_UPPER_BODY_LONG_Y_OFFSET),
+                round(z * CHARACTER_UPPER_BODY_SCALE, 2),
+            )
+            for m, (x, y, z) in modes.items()
+        }
+        for char, modes in YMM4_TACHIE_BASE.items()
+    }
+else:
+    YMM4_TACHIE_PARAMS = YMM4_TACHIE_BASE
+
 NATIVE_SHORTS_ESTIMATE_BASE_CPS = float(os.environ.get("NATIVE_SHORTS_ESTIMATE_BASE_CPS", "5.4"))
 NATIVE_SHORTS_CHARS_MUST_FIX_MIN = int(os.environ.get("NATIVE_SHORTS_CHARS_MUST_FIX_MIN", "260"))
 NATIVE_SHORTS_TARGET_CHARS_MIN = int(os.environ.get("NATIVE_SHORTS_TARGET_CHARS_MIN", "280"))
@@ -143,6 +164,9 @@ NATIVE_SUBTITLE_BOX_OPACITY_SHORTS = NATIVE_SUBTITLE_BOX_ALPHA
 NATIVE_SUBTITLE_STROKE_WIDTH = int(os.environ.get("NATIVE_SUBTITLE_STROKE_WIDTH", "9"))
 NATIVE_SUBTITLE_OUTER_STROKE_WIDTH = int(os.environ.get("NATIVE_SUBTITLE_OUTER_STROKE_WIDTH", str(NATIVE_SUBTITLE_STROKE_WIDTH + 4)))
 NATIVE_SUBTITLE_PADDING_Y = int(os.environ.get("NATIVE_SUBTITLE_PADDING_Y", "8"))
+NATIVE_SUBTITLE_FONT_SIZE_SHORTS = int(os.environ.get("NATIVE_SUBTITLE_FONT_SIZE_SHORTS", "64"))
+NATIVE_SUBTITLE_FONT_SIZE_LONG = int(os.environ.get("NATIVE_SUBTITLE_FONT_SIZE_LONG", "52"))
+NATIVE_SUBTITLE_BOX_LINE_HEIGHT = float(os.environ.get("NATIVE_SUBTITLE_BOX_LINE_HEIGHT", "1.75"))
 NATIVE_SUBTITLE_FONT_SCALE = float(os.environ.get("NATIVE_SUBTITLE_FONT_SCALE", "1.4"))
 NATIVE_SUBTITLE_ALIGNMENT_SHORTS = int(os.environ.get("NATIVE_SUBTITLE_ALIGNMENT_SHORTS", "5"))
 NATIVE_SUBTITLE_ALIGNMENT_LONG = int(os.environ.get("NATIVE_SUBTITLE_ALIGNMENT_LONG", "2"))

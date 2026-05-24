@@ -41,6 +41,9 @@ from config import (
     NATIVE_SUBTITLE_BOX_OPACITY_SHORTS,
     NATIVE_SUBTITLE_BOX_SHORTS,
     NATIVE_SUBTITLE_MARGIN_V_LONG,
+    NATIVE_SUBTITLE_BOX_LINE_HEIGHT,
+    NATIVE_SUBTITLE_FONT_SIZE_LONG,
+    NATIVE_SUBTITLE_FONT_SIZE_SHORTS,
     NATIVE_SUBTITLE_MARGIN_V_SHORTS,
     NATIVE_SUBTITLE_OFFSET_SEC,
     NATIVE_SUBTITLE_OUTER_STROKE_WIDTH,
@@ -577,7 +580,7 @@ def _write_subtitles(
     height: int,
     offset_sec: float = 0.0,
 ) -> None:
-    font_size = int(round((64 if height >= 1600 else 52) * float(NATIVE_SUBTITLE_FONT_SCALE or 1.0)))
+    font_size = int(round((NATIVE_SUBTITLE_FONT_SIZE_SHORTS if height >= 1600 else NATIVE_SUBTITLE_FONT_SIZE_LONG) * float(NATIVE_SUBTITLE_FONT_SCALE or 1.0)))
     margin_v = NATIVE_SUBTITLE_MARGIN_V_SHORTS if height >= 1600 else NATIVE_SUBTITLE_MARGIN_V_LONG
     alignment = NATIVE_SUBTITLE_ALIGNMENT_SHORTS if height >= 1600 else NATIVE_SUBTITLE_ALIGNMENT_LONG
     y_offset = NATIVE_SUBTITLE_Y_OFFSET_SHORTS if height >= 1600 else NATIVE_SUBTITLE_Y_OFFSET_LONG
@@ -651,7 +654,7 @@ def _write_subtitles(
             override = f"{{\\pos({width // 2},{text_y})}}" if alignment == 5 and y_offset else ""
             if box_enabled and alignment == 5:
                 box_w = int(width * 0.88)
-                box_h = int(font_size * 1.75) + NATIVE_SUBTITLE_PADDING_Y * 2
+                box_h = int(font_size * NATIVE_SUBTITLE_BOX_LINE_HEIGHT) + NATIVE_SUBTITLE_PADDING_Y * 2
                 box_path = f"m {-box_w // 2} {-box_h // 2} l {box_w // 2} {-box_h // 2} {box_w // 2} {box_h // 2} {-box_w // 2} {box_h // 2}"
                 lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},SubtitleBox,,0,0,0,,{{\\pos({width // 2},{text_y})\\p1}}{box_path}{{\\p0}}")
             lines.append(f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},{style_name}Outer,,0,0,0,,{override}{escaped_text}")
