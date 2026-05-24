@@ -406,6 +406,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_AUDIO_LOUDNORM_I` | -15 | native loudnorm Integrated loudness目標 |
 | `NATIVE_AUDIO_LOUDNORM_TP` | -1.5 | native loudnorm True Peak上限 |
 | `NATIVE_AUDIO_LOUDNORM_LRA` | 6 | native loudnorm Loudness Range目標 |
+| `NATIVE_BGM_VOLUME_DB` | -20 | native出力のBGM音量(dB)。YMM4の `BGM_VOLUME` とは独立 |
+| `NATIVE_SHORTS_CHARACTER_SCALE` | 1.05 | native Shortsのキャラ表示倍率。Long/YMM4には影響しない |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
@@ -426,12 +428,17 @@ Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を�
 
 - **デフォルト動作**: `DEFAULT_SHORTS_RENDER_ENGINE = "native"` が設定されているため、Shorts の `run_pipeline()` は `native_render=None` を受け取ると自動で `native_render=True` に切り替わる。
 - `run_pipeline()` は native/YMM4 どちらでも通常通り `.ymmp` プロジェクトを生成する（保険・確認・再編集用）。
-- `render_native_test(output_dir, voice_speed_intro, voice_speed_body)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
+- `render_native_test(output_dir, voice_speed_intro, voice_speed_body, estimated_duration_sec)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
 - 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。YMM4出力には適用しない。
+- native出力のBGM音量は `NATIVE_BGM_VOLUME_DB=-20` (dB) で管理する。YMM4が使う `BGM_VOLUME` (%) とは独立。
 - 出力後に ffmpeg `ebur128=peak=true` で最終MP4の音量解析を行い、Integrated loudness / LRA / True peak の要約をログに出す。
+- MP4生成後、ffprobe で実尺を取得し `📏 native実尺評価: Xs [理想/やや短い/OKだけど長め/警告/要確認]` をログ表示する。評価基準はShortsと同じ（38〜50s=理想 / 35〜37s=やや短い / 51〜55s=OKだけど長め / 32〜34s or 56〜58s=警告）。
+- `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
+- **Shorts のみ**: キャラ表示は `NATIVE_SHORTS_CHARACTER_SCALE`(デフォルト 1.05) 倍で拡大する。Long/YMM4には影響しない。
+- 字幕フチ幅は `NATIVE_SUBTITLE_STROKE_WIDTH`(内フチ, デフォルト 9) / `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(外フチ, デフォルト 13) で調整可能。字幕帯のパディングは `NATIVE_SUBTITLE_PADDING_Y` で調整。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭1フレームにサムネイル画像を挿入する（Long は挿入しない）。
-- `_meta/render_info.json` に render_engine・voice_speed・line_rule・ymm4_project_generated を保存する。
+- `_meta/render_info.json` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra。
 
 `DEFAULT_SHORTS_RENDER_ENGINE=ymm4` (.env) で YMM4 本番レンダリングに戻せる。
 
@@ -739,7 +746,7 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 `YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には、アップロード可能な `.mp4` がある履歴だけを表示します。各履歴フォルダから最新の `.mp4` を探し、`_meta/metadata.txt` のタイトル・説明文・タグを使ってアップロードします。アップロード成功後は、その履歴フォルダを `output/000_uploaded/` に移動し、各動画フォルダの `_meta/upload_record.json` へ記録します。予約枠の空き判断はローカル台帳ではなくYouTube側の予約状態を参照します。
 
-YouTubeタグは `core/youtube_metadata.py` で一元管理します。AIO/SEO補完として共通タグ（`食べ物雑学`、`食べ物 雑学`、`食べ物の歴史`、`ゆっくり解説`、`ゆっくり解説 食べ物`、`ずんだもん`、`ずんだもん解説`、`四国めたん`、`VOICEVOX`、`雑学ショート` など）を入れ、`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。寿司、コンビニ、お菓子、マック、トマト、コーラ、ドリア/洋食などはタイトルや `script.txt` から題材別タグを追加し、タグ欄は500文字以内に調整します。アップロード時に実際に使ったタグを `_meta/youtube_metadata.json` へ保存します。
+YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや `script.txt` から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。アップロード時に実際に使ったタグを `_meta/youtube_metadata.json` へ保存します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
 
 Long動画のアップロード成功後は、`LONG_UPLOAD_PLAYLIST_NAME` の名前と完全一致する自チャンネルの再生リストへ動画を自動追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。既に同じ動画が入っている場合は重複追加せず、結果を `_meta/upload_record.json` の `playlist_*` フィールドに保存します。Shortsには適用しません。再生リストが見つからない場合、アップロード自体は成功扱いのまま警告ログを出します。
 

@@ -12,6 +12,23 @@
 
 ---
 
+## 2026-05-25 (4)
+
+### native/ffmpegレンダラー改善（音量・字幕・キャラ・実尺ログ）
+
+- `core/native_renderer.py`: native出力のBGM音量を `NATIVE_BGM_VOLUME_DB=-20dB` で指定するよう変更（従来の `BGM_VOLUME` パーセント指定はYMM4専用に分離）
+- `core/native_renderer.py`: native MP4生成後に ffprobe で実尺を取得し `📏 native実尺評価: Xs [理想/やや短い/OKだけど長め/警告/要確認]` をログ表示。`estimated_duration_sec` 引数があれば推定尺との差分も表示
+- `core/native_renderer.py`: `_meta/render_info.json` に render_engine / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i/tp/lra を保存
+- `core/native_renderer.py`: native Shorts のキャラ表示に `NATIVE_SHORTS_CHARACTER_SCALE`(デフォルト 1.05)を適用。Long/YMM4には影響しない
+- `core/native_renderer.py`: 字幕フチ幅を `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(13) / `NATIVE_SUBTITLE_STROKE_WIDTH`(9) に変更（従来ハードコードの 12/8 より少し太め）、字幕帯高さに `NATIVE_SUBTITLE_PADDING_Y`×2 を加算
+- `config.py` / `README.md` / `SPEC.md`: `NATIVE_BGM_VOLUME_DB` / `NATIVE_SHORTS_CHARACTER_SCALE` を追加
+
+### YouTubeタグ共通タグ見直し（vidIQ分析に基づく）
+
+- `core/youtube_metadata.py`: `VIDEO_DEFAULT_TAGS` の先頭を `ずんだもん,ゆっくり解説,VOICEVOX` に固定し、`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`VOICEVOX解説`/`トリビア` 等を追加。需要の低い `コンビニ 雑学`/`料理 歴史`/`面白い 雑学`/`食べ物` を削除
+- `core/youtube_metadata.py`: 題材別タグルールを更新。アイス系・寿司系・飲み物系・お菓子系・調味料系を追加・整理
+- `SPEC.md`: YouTubeタグポリシーの最新ルールを反映
+
 ## 2026-05-25 (3)
 
 ### native/ffmpeg音声にloudnormを追加

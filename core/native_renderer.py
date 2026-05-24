@@ -1,3 +1,4 @@
+import json
 import os
 import gc
 import re
@@ -7,7 +8,6 @@ from dataclasses import dataclass
 
 from config import (
     BGM_PATH,
-    BGM_VOLUME,
     FFMPEG_BIN,
     NATIVE_AUDIO_LOUDNORM_ENABLED,
     NATIVE_AUDIO_LOUDNORM_I,
@@ -15,6 +15,7 @@ from config import (
     NATIVE_AUDIO_LOUDNORM_TP,
     NATIVE_BACKGROUND_TRANSITION,
     NATIVE_BACKGROUND_TRANSITION_SEC,
+    NATIVE_BGM_VOLUME_DB,
     NATIVE_CHARACTER_HEIGHT_LONG,
     NATIVE_CHARACTER_HEIGHT_SHORTS,
     NATIVE_CHARACTER_BOTTOM_MARGIN_LONG,
@@ -28,6 +29,7 @@ from config import (
     NATIVE_FFMPEG_ENCODER,
     NATIVE_FFMPEG_PRESET,
     NATIVE_RENDER_CHARACTERS,
+    NATIVE_SHORTS_CHARACTER_SCALE,
     NATIVE_SUBTITLE_FONT,
     NATIVE_SUBTITLE_FONT_SCALE,
     NATIVE_SUBTITLE_ALIGNMENT_LONG,
@@ -37,6 +39,9 @@ from config import (
     NATIVE_SUBTITLE_MARGIN_V_LONG,
     NATIVE_SUBTITLE_MARGIN_V_SHORTS,
     NATIVE_SUBTITLE_OFFSET_SEC,
+    NATIVE_SUBTITLE_OUTER_STROKE_WIDTH,
+    NATIVE_SUBTITLE_PADDING_Y,
+    NATIVE_SUBTITLE_STROKE_WIDTH,
     NATIVE_SUBTITLE_Y_OFFSET_LONG,
     NATIVE_SUBTITLE_Y_OFFSET_SHORTS,
     VIDEO_FPS,
@@ -167,6 +172,35 @@ def _native_loudnorm_filter() -> str:
         f"TP={NATIVE_AUDIO_LOUDNORM_TP:g}:"
         f"LRA={NATIVE_AUDIO_LOUDNORM_LRA:g}"
     )
+
+
+def _duration_status(sec: float) -> tuple[str, str]:
+    """Returns (status_key, display_label) for Shorts duration evaluation."""
+    if 38 <= sec <= 50:
+        return "ideal", "✅ 理想"
+    if 35 <= sec < 38:
+        return "ok_but_short", "⚠ やや短い"
+    if 50 < sec <= 55:
+        return "ok_but_long", "⚠ OKだけど長め"
+    if (32 <= sec < 35) or (55 < sec <= 58):
+        return "warning", "🔶 警告"
+    return "needs_review", "❌ 要確認"
+
+
+def _save_render_info(output_dir: str, info: dict) -> None:
+    meta_dir = os.path.join(output_dir, "_meta")
+    os.makedirs(meta_dir, exist_ok=True)
+    path = os.path.join(meta_dir, "render_info.json")
+    existing: dict = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                existing = json.load(f)
+        except Exception:
+            pass
+    existing.update(info)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(existing, f, ensure_ascii=False, indent=2)
 
 
 def _audio_analysis_summary(path: str) -> str:
@@ -465,9 +499,11 @@ def _segment_filter(
         chains.append("[bg_current]copy[base0]")
     current = "base0"
     overlay_num = 1
+    char_scale = NATIVE_SHORTS_CHARACTER_SCALE if portrait else 1.0
+    scaled_char_h = int(round(char_h * char_scale))
     for char_idx, character in enumerate(characters):
         position = _character_position(character.name, portrait=portrait)
-        chains.append(f"[{input_index}:v]scale=-1:{char_h}[{character.name}_base]")
+        chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_base]")
         chains.append(f"[{current}][{character.name}_base]overlay={position}[base{overlay_num}]")
         current = f"base{overlay_num}"
         overlay_num += 1
@@ -475,7 +511,7 @@ def _segment_filter(
 
         if NATIVE_ENABLE_LIPSYNC and speaking == character.name:
             if character.mouth_half and os.path.exists(character.mouth_half):
-                chains.append(f"[{input_index}:v]scale=-1:{char_h}[{character.name}_mouth_half]")
+                chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_mouth_half]")
                 chains.append(
                     f"[{current}][{character.name}_mouth_half]overlay={position}:"
                     f"enable='between(mod(t,0.24),0.12,0.20)'[base{overlay_num}]"
@@ -484,7 +520,7 @@ def _segment_filter(
                 overlay_num += 1
                 input_index += 1
             if character.mouth_open and os.path.exists(character.mouth_open):
-                chains.append(f"[{input_index}:v]scale=-1:{char_h}[{character.name}_mouth_open]")
+                chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_mouth_open]")
                 chains.append(
                     f"[{current}][{character.name}_mouth_open]overlay={position}:"
                     f"enable='between(mod(t,0.24),0.00,0.12)'[base{overlay_num}]"
@@ -495,7 +531,7 @@ def _segment_filter(
 
         blink_expr = _blink_enable_expr(duration, character.name, speaking)
         if NATIVE_ENABLE_BLINK and blink_expr and character.eye_closed and os.path.exists(character.eye_closed):
-            chains.append(f"[{input_index}:v]scale=-1:{char_h}[{character.name}_eye_closed]")
+            chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_eye_closed]")
             chains.append(
                 f"[{current}][{character.name}_eye_closed]overlay={position}:"
                 f"enable='{blink_expr}'[base{overlay_num}]"
@@ -567,7 +603,7 @@ def _write_subtitles(
                 font_size=font_size,
                 primary="&H00FFFFFF",
                 outline_color="&H00000000",
-                outline_width=12,
+                outline_width=NATIVE_SUBTITLE_OUTER_STROKE_WIDTH,
                 shadow_depth=2,
                 margin_v=margin_v,
                 alignment=alignment,
@@ -580,7 +616,7 @@ def _write_subtitles(
                 font_size=font_size,
                 primary="&H00FFFFFF",
                 outline_color=inner_outline,
-                outline_width=8,
+                outline_width=NATIVE_SUBTITLE_STROKE_WIDTH,
                 shadow_depth=0,
                 margin_v=margin_v,
                 alignment=alignment,
@@ -603,7 +639,7 @@ def _write_subtitles(
             override = f"{{\\pos({width // 2},{text_y})}}" if alignment == 5 and y_offset else ""
             if box_enabled and alignment == 5:
                 box_w = int(width * 0.88)
-                box_h = int(font_size * 1.75)
+                box_h = int(font_size * 1.75) + NATIVE_SUBTITLE_PADDING_Y * 2
                 box_path = f"m {-box_w // 2} {-box_h // 2} l {box_w // 2} {-box_h // 2} {box_w // 2} {box_h // 2} {-box_w // 2} {box_h // 2}"
                 lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},SubtitleBox,,0,0,0,,{{\\pos({width // 2},{text_y})\\p1}}{box_path}{{\\p0}}")
             lines.append(f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},{style_name}Outer,,0,0,0,,{override}{escaped_text}")
@@ -631,6 +667,7 @@ def render_native_test(
     progress_callback=None,
     voice_speed_intro: float | None = None,
     voice_speed_body: float | None = None,
+    estimated_duration_sec: float | None = None,
 ) -> NativeRenderResult:
     """Create a simple YMM-free MP4 from generated audio/background assets."""
     output_dir = os.path.abspath(output_dir)
@@ -737,9 +774,8 @@ def render_native_test(
 
     loudnorm_filter = _native_loudnorm_filter()
     if BGM_PATH and os.path.exists(BGM_PATH):
-        bgm_volume = max(0.0, float(BGM_VOLUME)) / 100.0
         audio_filter = (
-            f"[0:a]volume=1.0[a0];[1:a]volume={bgm_volume:.3f}[a1];"
+            f"[0:a]volume=1.0[a0];[1:a]volume={NATIVE_BGM_VOLUME_DB:.1f}dB[a1];"
             "[a0][a1]amix=inputs=2:duration=first:dropout_transition=0"
         )
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
@@ -764,8 +800,21 @@ def render_native_test(
             _run_ffmpeg([FFMPEG_BIN, "-y", "-i", video_path, "-c", "copy", output_path])
 
     actual_duration = media_duration_sec(output_path) or total_audio
+    is_shorts = height > width
+    dur_key, dur_label = _duration_status(actual_duration)
     if progress_callback:
         progress_callback(f"✅ native MP4出力: {output_path}")
+        if estimated_duration_sec is not None:
+            diff = actual_duration - estimated_duration_sec
+            progress_callback(
+                f"📏 native実尺: {actual_duration:.1f}秒"
+                f" / 推定尺: {estimated_duration_sec:.1f}秒"
+                f" / 差分: {diff:+.1f}秒"
+            )
+        if is_shorts:
+            progress_callback(f"📏 native実尺評価: {actual_duration:.1f}秒 {dur_label}")
+        if NATIVE_RENDER_CHARACTERS and is_shorts:
+            progress_callback(f"🧍 nativeキャラ倍率: {NATIVE_SHORTS_CHARACTER_SCALE:g}")
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
             progress_callback(
                 "🔊 native audio loudnorm: "
@@ -775,6 +824,18 @@ def render_native_test(
             progress_callback("🔊 native audio loudnorm: disabled")
         progress_callback(f"🔊 native audio ebur128:\n{_audio_analysis_summary(output_path)}")
 
+    _save_render_info(output_dir, {
+        "render_engine": "native",
+        "estimated_duration_sec": estimated_duration_sec,
+        "actual_duration_sec": round(actual_duration, 2),
+        "actual_duration_status": dur_key,
+        "loudnorm_enabled": bool(NATIVE_AUDIO_LOUDNORM_ENABLED),
+        "loudnorm_i": NATIVE_AUDIO_LOUDNORM_I,
+        "loudnorm_tp": NATIVE_AUDIO_LOUDNORM_TP,
+        "loudnorm_lra": NATIVE_AUDIO_LOUDNORM_LRA,
+    })
+
+    if progress_callback:
         # silence計測（セグメント間のINTER_DIALOGUE_GAP_SEC合計）
         silence_total = INTER_DIALOGUE_GAP_SEC * max(0, len(durations) - 1)
         median_silence = INTER_DIALOGUE_GAP_SEC
