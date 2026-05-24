@@ -411,7 +411,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `CHARACTER_UPPER_BODY_MODE` | 1 | `1` でnative/YMM4両方で腰から上表示モードを有効化 |
 | `CHARACTER_UPPER_BODY_SCALE` | 1.35 | 腰から上モード時のキャラ拡大倍率 |
 | `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
-| `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 300 | 腰から上モード: Long の下方向シフト量(px) |
+| `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 400 | 腰から上モード: Long の下方向シフト量(px) |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
