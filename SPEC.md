@@ -169,6 +169,9 @@ for item in dialogue_items:
 - 出力: `final_score` / `publish_ok` / `risk` / `must_fix` / `nice_to_fix`
 - **自動修正なし** — ログ表示と `_meta/final_review.json` 保存のみ
 - `must_fix` がある場合、または `final_score` が `OPENING_SCORE_HARD_ABORT_THRESHOLD` 未満の場合は、音声・画像生成へ進まず中止する
+- `render_engine` を入力に含め、native Shorts では「31行以上のみ must_fix」の基準で判定させる（22〜28行は可、24〜27行は理想）
+- ChatGPT 応答に旧 YMM4 基準由来の「21行以上 must_fix」が返ってきた場合、native かつ dialogue_count <= 28 なら自動で除去する
+- 冒頭1行目の食べ物名チェック: タイトル由来キーワードだけでなく `FOOD_HINT_WORDS`（コーヒー・コーラ・牛乳・紅茶等の飲み物を含む）が初行に直接あればOKとする。N選型は初行に代表食材1つがあればOK（全食材の列挙は不要）
 
 ### 保存ファイル（`_meta/` 配下）
 

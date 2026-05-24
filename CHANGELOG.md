@@ -14,6 +14,14 @@
 
 ## 2026-05-25
 
+### ChatGPT生成前レビューのnative Shorts基準を修正
+
+- `core/opening_quality.py`: ChatGPT生成前レビュープロンプトに `render_engine` を渡し、native Shortsでは「31行以上のみmust_fix / 24〜27行が理想」に修正。旧YMM4基準「21行以上=must_fix」は完全削除
+- `core/opening_quality.py`: native Shorts かつ dialogue_count <= 28 の場合、ChatGPT応答に旧基準由来の「21行以上 must_fix」が返ってきても自動で除去するポストフィルタを追加
+- `main.py`: `final_chatgpt_review()` に `render_engine=_render_engine` を渡すよう修正
+- `core/opening_quality.py`: 冒頭1行目の食べ物名チェックを改善。タイトルが抽象的でも `FOOD_HINT_WORDS`（コーヒー・コーラ・牛乳等の飲み物含む）が初行に直接あればOKとした。N選型タイトルは代表食材1つあればOKで、全食材名列挙は不要に変更
+- `SPEC.md`: 上記基準を反映
+
 ### native Shorts字幕のキャラ色フチを強化
 
 - `core/native_renderer.py`: 半透明黒帯と白文字を維持したまま、ずんだもん/めたんのキャラ色内フチを太くし、黒外フチも少し太くして可読性を保ったまま話者色を見やすく調整

@@ -1097,6 +1097,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             local_review=opening_review,
             ollama_review=llm_review,
             duration_result=estimated_duration_result,
+            render_engine=_render_engine,
         )
         final_review_path = save_final_review(theme_dir, final_review)
         if final_review and final_review.get("skipped"):

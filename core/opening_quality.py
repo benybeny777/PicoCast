@@ -135,16 +135,27 @@ def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool
     checks = {}
 
     has_food = bool(keywords and any(keyword in opening_text for keyword in keywords))
-    first_line_has_food = bool(food_keywords and any(keyword in first_line for keyword in food_keywords))
+    # タイトル由来 food_keywords に加え、FOOD_HINT_WORDS が直接 first_line にあればOK
+    # （「コーヒーは口臭を招くのよ」のようにタイトルが抽象的でも食材名が初行にある場合を拾う）
+    first_line_has_food = (
+        bool(food_keywords and any(keyword in first_line for keyword in food_keywords))
+        or any(word in first_line for word in FOOD_HINT_WORDS)
+    )
+    # N選型（「〇〇3選」「5選」等）は代表食材1つが冒頭にあればOK
+    is_n_sen = bool(re.search(r"[2-9][選]|[2-9０-９][〜~]?[0-9０-９]*選", str(title or "")))
     checks["food_keyword_in_opening"] = has_food
     checks["food_keyword_in_first_line"] = first_line_has_food
+    checks["is_n_sen"] = is_n_sen
     checks["keywords"] = keywords
     checks["food_keywords"] = food_keywords
     if not has_food:
         score -= 20
         issues.append("冒頭にタイトル/食べ物名との接続が弱い")
     if not first_line_has_food:
-        critical_errors.append("冒頭1行目に食べ物名がない")
+        if is_n_sen:
+            issues.append("N選型: 冒頭1行目に代表食材の言及が弱い")
+        else:
+            critical_errors.append("冒頭1行目に食べ物名がない")
 
     has_thumbnail_text = bool(thumbnail_text and thumbnail_text in opening_text)
     checks["thumbnail_text_in_opening"] = has_thumbnail_text
@@ -647,6 +658,7 @@ def _build_final_review_prompt(
     local_review: dict[str, Any],
     ollama_review: dict[str, Any] | None,
     duration_result: dict[str, Any],
+    render_engine: str = "native",
 ) -> str:
     opening_lines = "\n".join(
         f"{line.get('speaker', '')}: {line.get('text', '')}"
@@ -665,6 +677,7 @@ title: {title}
 thumbnail_text: {thumbnail_text}
 fixed_comment: {fixed_comment}
 video_type: {"Shorts" if is_shorts else "Long"}
+render_engine: {render_engine if is_shorts else "ymm4"}
 estimated_duration_sec: {estimated_duration:.2f}
 duration_check: {json.dumps(duration_result, ensure_ascii=False)}
 local_opening_review: {json.dumps(local_review, ensure_ascii=False)}
@@ -684,8 +697,8 @@ Check:
 
 Stop the pipeline only for must_fix-level problems:
 - estimated Shorts duration under 39 seconds or over 52 seconds (53s or more is error-level)
-- Shorts dialogue count 21 or more
-- first dialogue lacks the food name
+- native Shorts dialogue count 31 or more (29-30 is warning only; 22-28 is acceptable; 24-27 is ideal — do NOT flag must_fix for dialogue_count 28 or under)
+- first dialogue lacks the food name (drinks like coffee/cola/milk also count as food for this channel)
 - first dialogue is incomplete or split mid-phrase
 - factual error or risky unsupported assertion
 - unhandled YouTube NG wording
@@ -720,6 +733,15 @@ def _extract_openai_response_text(data: dict[str, Any]) -> str:
     return "\n".join(parts).strip()
 
 
+def _filter_obsolete_dialogue_must_fix(must_fix: list[str], dialogue_count: int) -> list[str]:
+    """native Shorts で dialogue_count <= 28 の場合、YMM4時代の '21行以上' 系 must_fix を除去する。"""
+    OLD_PATTERNS = ("21以上", "21行以上", "対話数が21", "Shorts dialogue count", "dialogue_count: 2")
+    return [
+        item for item in must_fix
+        if not any(pat in str(item) for pat in OLD_PATTERNS)
+    ] if dialogue_count <= 28 else must_fix
+
+
 def final_chatgpt_review(
     *,
     title: str,
@@ -732,6 +754,7 @@ def final_chatgpt_review(
     local_review: dict[str, Any],
     ollama_review: dict[str, Any] | None,
     duration_result: dict[str, Any],
+    render_engine: str = "native",
 ) -> dict[str, Any] | None:
     if not OPENAI_FINAL_REVIEW_ENABLED:
         return None
@@ -752,6 +775,7 @@ def final_chatgpt_review(
         local_review=local_review,
         ollama_review=ollama_review,
         duration_result=duration_result,
+        render_engine=render_engine,
     )
     body = {
         "model": OPENAI_FINAL_REVIEW_MODEL,
@@ -771,6 +795,12 @@ def final_chatgpt_review(
         text = _extract_openai_response_text(response.json())
     result = json.loads(_strip_json_text(text))
     result["model"] = OPENAI_FINAL_REVIEW_MODEL
+    # native Shorts かつ dialogue_count <= 28 の場合、旧 YMM4 基準由来の誤 must_fix を除去
+    if is_shorts and render_engine == "native":
+        dialogue_count = int((local_review.get("checks") or {}).get("dialogue_count") or 0)
+        if dialogue_count <= 28 and dialogue_count > 0:
+            must_fix = result.get("must_fix") or []
+            result["must_fix"] = _filter_obsolete_dialogue_must_fix(must_fix, dialogue_count)
     return result
 
 
