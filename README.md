@@ -28,6 +28,8 @@
 
 ## セットアップ
 
+Windows / Mac の両方を想定しています。基本処理はMacでも動作想定ですが、YMM4 GUI自動操作（`pywinauto`）はWindows依存です。Macではffmpeg/native生成やプロンプト・メタデータ関連の運用を主経路にします。
+
 1. VOICEVOX をインストール
 2. YukkuriMovieMaker v4 をインストール
 3. APIキーとOAuth設定を用意
@@ -44,6 +46,8 @@
 ```bash
 pip install requests google-genai python-dotenv pywinauto Pillow google-api-python-client google-auth-oauthlib
 ```
+
+Macで `pywinauto` が入らない場合は、YMM4 GUI自動操作を使わない前提でその依存だけ除外してください。
 
 ### APIキー・OAuth
 

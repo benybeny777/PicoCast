@@ -31,7 +31,7 @@
 
 ## 実行環境
 
-- Windows専用（pywinauto / YMM4 GUI自動操作を使用）
+- Windows / Mac を想定する。基本処理はMacでも動作想定だが、`pywinauto` とYMM4 GUI自動操作はWindows依存。
 - Python 仮想環境: `.venv/`
 - 起動: `python gui.py`
 - VOICEVOX をローカルで起動しておく必要がある（`http://localhost:50021`）
