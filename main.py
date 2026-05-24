@@ -19,6 +19,7 @@ from core.youtube_metadata import optimize_description, optimize_tags
 from core.image_generator import ImageGenerator
 from core.opening_quality import (
     apply_opening_rewrite_to_script,
+    check_openai_final_review_connection,
     duration_review,
     duration_status_label,
     final_chatgpt_review,
@@ -1103,6 +1104,20 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         f"🧑‍⚖️ ChatGPTで生成前レビュー中... 推定尺 {estimated_sec:.1f}秒"
         f"（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
     )
+    openai_check = check_openai_final_review_connection()
+    if not openai_check.get("ok"):
+        error = openai_check.get("error", "unknown error")
+        final_review_path = save_final_review(
+            theme_dir,
+            {"error": error, "stage": "pre_generation_connection_check"},
+        )
+        msg = (
+            f"❌ ChatGPT生成前レビュー接続チェック失敗: {error}\n"
+            f"保存先: {final_review_path}"
+        )
+        update_status(msg, "error")
+        report.elapsed_sec = time.time() - pipeline_start
+        return finish_result(msg)
     try:
         final_review = final_chatgpt_review(
             title=meta.get("video_title", topic),
