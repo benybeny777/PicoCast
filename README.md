@@ -123,7 +123,7 @@ python gui.py
 
 - YMM4を使わない実験レンダラーの実装概要と段階別ロードマップは `docs/YMM_FREE_RENDERER.md` を参照してください。
 - `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
-- アップロード記録は `output/000_data/upload_records.json` に残します。`output/000_uploaded/` はアップロード済み生成物の保管場所なので、容量整理で削除しても運用上の台帳は残ります。
+- アップロード記録は各動画フォルダの `_meta/upload_record.json` に残します。予約・公開状態の正はYouTube側なので、スケジュール画面や詰め直しはYouTube APIの状態を参照します。`output/000_uploaded/` はアップロード済み生成物の保管場所です。
 - `OUTPUT_DIR` / `OUTPUT_DATA_DIR` / `OUTPUT_ANALYTICS_DIR` / `OUTPUT_LEGACY_DIR` / `UPLOAD_RECORDS_FILE` / `UPLOADED_TITLES_FILE` は `.env` または環境変数で変更できます。
 - `output/000_backups/` は再生成時の退避先です。同一テーマは最新1世代だけ残し、アップロード成功後はそのテーマのバックアップを自動削除します。
 - `core/prompt_parts/local/` は個人用プロンプト差し替え欄です。Git管理外なので、別ジャンル担当者のネタ設定と混ざりません。

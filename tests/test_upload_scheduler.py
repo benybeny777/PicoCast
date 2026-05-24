@@ -6,6 +6,18 @@ from core import upload_scheduler
 
 
 class UploadSchedulerTests(unittest.TestCase):
+    def _youtube_statuses(self, records):
+        statuses = {}
+        for idx, record in enumerate(records):
+            video_id = str(record.get("video_id") or f"auto-{idx}")
+            statuses[video_id] = {
+                "video_type": record.get("video_type"),
+                "title": record.get("title"),
+                "privacyStatus": record.get("privacy_status") or record.get("privacyStatus") or "private",
+                "publishAt": record.get("publish_at"),
+            }
+        return statuses
+
     def test_rebalance_builds_schedule_without_duplicate_slots(self):
         now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
         schedule = {
@@ -55,7 +67,7 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots("shorts")
@@ -87,14 +99,14 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots("shorts")
 
         self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "future b")])
 
-    def test_rebalance_detailed_includes_record_index_for_duplicate_slots_without_video_id(self):
+    def test_rebalance_detailed_includes_youtube_video_id_for_duplicate_slots(self):
         records = [
             {
                 "video_type": "shorts",
@@ -117,14 +129,14 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots_detailed("shorts")
 
         self.assertEqual(
             changes,
-            [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "same title", "", 1)],
+            [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "same title", "auto-1", None)],
         )
 
     def test_long_rebalance_preserves_duplicate_record_slots(self):
@@ -152,14 +164,14 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots("long")
 
         self.assertEqual(changes, [("2026-05-23T12:00:00+09:00", "2026-05-23T21:00:00+09:00", "long b")])
 
-    def test_rebalance_prioritizes_records_with_generation_kind(self):
+    def test_rebalance_uses_youtube_order_without_local_generation_kind_priority(self):
         records = [
             {
                 "video_id": "v1",
@@ -185,20 +197,14 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots("shorts")
 
-        self.assertEqual(
-            changes,
-            [
-                ("2026-05-21T19:00:00+09:00", "2026-05-21T12:00:00+09:00", "derived later"),
-                ("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "normal first"),
-            ],
-        )
+        self.assertEqual(changes, [])
 
-    def test_rebalance_keeps_generation_kind_record_first_when_slots_are_duplicated(self):
+    def test_rebalance_preserves_youtube_order_when_slots_are_duplicated(self):
         records = [
             {
                 "video_id": "v1",
@@ -224,12 +230,12 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots("shorts")
 
-        self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "normal duplicate")])
+        self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "derived duplicate")])
 
     def test_rebalance_includes_unlisted_records_with_publish_at(self):
         records = [
@@ -249,7 +255,7 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots("shorts")
@@ -273,7 +279,7 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots("shorts")
@@ -331,7 +337,7 @@ class UploadSchedulerTests(unittest.TestCase):
                 return now
 
         with (
-            patch("core.upload_records.load_upload_records", return_value=records),
+            patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value=self._youtube_statuses(records)),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             changes = upload_scheduler.rebalance_slots_detailed("shorts")

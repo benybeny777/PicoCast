@@ -14,6 +14,11 @@
 
 ## 2026-05-25 (3)
 
+### YouTubeソース化後のテストとドキュメントを整備
+
+- `tests/test_upload_scheduler.py`: `rebalance_slots()` 系テストをYouTube予約一覧のモックに変更し、テスト実行時に実YouTube APIへアクセスしないよう修正
+- `SPEC.md` / `README.md`: 中央 `upload_records.json` 前提の古い説明を、YouTube APIを予約・公開状態の正とする現行仕様へ更新
+
 ### ローカルスケジュール管理を完全廃止・YouTube をソースオブトゥルースに
 
 **廃止**:
