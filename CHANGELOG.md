@@ -14,6 +14,12 @@
 
 ## 2026-05-25 (3)
 
+### native/ffmpeg音声にloudnormを追加
+
+- `core/native_renderer.py`: native MP4の最終音声出力に `loudnorm=I=-15:TP=-1.5:LRA=6` を追加。BGM/VOICEミックス後、最終出力直前の音声だけに適用し、映像はコピーする
+- `core/native_renderer.py`: native MP4出力後に ffmpeg `ebur128=peak=true` で音量解析し、Integrated loudness / LRA / True peak の要約をログ出力
+- `config.py` / `README.md` / `SPEC.md`: `NATIVE_AUDIO_LOUDNORM_ENABLED` / `NATIVE_AUDIO_LOUDNORM_I` / `NATIVE_AUDIO_LOUDNORM_TP` / `NATIVE_AUDIO_LOUDNORM_LRA` を追加
+
 ### 外部APIモデル設定を点検・更新
 
 - `config.py` / `README.md` / `SPEC.md`: ChatGPT生成前レビューの既定モデルを公式モデル一覧で確認できる `gpt-5.2` へ更新

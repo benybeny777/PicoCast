@@ -9,6 +9,10 @@ from config import (
     BGM_PATH,
     BGM_VOLUME,
     FFMPEG_BIN,
+    NATIVE_AUDIO_LOUDNORM_ENABLED,
+    NATIVE_AUDIO_LOUDNORM_I,
+    NATIVE_AUDIO_LOUDNORM_LRA,
+    NATIVE_AUDIO_LOUDNORM_TP,
     NATIVE_BACKGROUND_TRANSITION,
     NATIVE_BACKGROUND_TRANSITION_SEC,
     NATIVE_CHARACTER_HEIGHT_LONG,
@@ -99,6 +103,22 @@ def _run_ffmpeg(args: list[str]) -> None:
         raise RuntimeError(f"ffmpeg failed ({proc.returncode})\n{tail}")
 
 
+def _run_ffmpeg_capture(args: list[str]) -> subprocess.CompletedProcess:
+    startupinfo = None
+    if os.name == "nt":
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    return subprocess.run(
+        args,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        startupinfo=startupinfo,
+    )
+
+
 def _ffprobe_bin() -> str:
     base = os.path.basename(str(FFMPEG_BIN or "ffmpeg")).lower()
     if base in {"ffmpeg", "ffmpeg.exe"}:
@@ -139,6 +159,55 @@ def media_duration_sec(path: str) -> float | None:
 def _wav_duration(path: str) -> float:
     with wave.open(path, "rb") as wr:
         return wr.getnframes() / float(wr.getframerate())
+
+
+def _native_loudnorm_filter() -> str:
+    return (
+        f"loudnorm=I={NATIVE_AUDIO_LOUDNORM_I:g}:"
+        f"TP={NATIVE_AUDIO_LOUDNORM_TP:g}:"
+        f"LRA={NATIVE_AUDIO_LOUDNORM_LRA:g}"
+    )
+
+
+def _audio_analysis_summary(path: str) -> str:
+    if not path or not os.path.exists(path):
+        return "音量解析対象が見つかりません"
+    proc = None
+    try:
+        proc = _run_ffmpeg_capture([
+            FFMPEG_BIN,
+            "-hide_banner",
+            "-nostats",
+            "-i", path,
+            "-filter_complex", "ebur128=peak=true",
+            "-f", "null",
+            "-",
+        ])
+        text = proc.stderr or proc.stdout or ""
+        summary_lines = []
+        capture = False
+        in_true_peak = False
+        for line in text.splitlines():
+            stripped = line.strip()
+            if "Summary:" in stripped:
+                capture = True
+                in_true_peak = False
+                summary_lines = ["Summary:"]
+                continue
+            if capture and stripped:
+                summary_lines.append(stripped)
+                if stripped == "True peak:":
+                    in_true_peak = True
+                elif in_true_peak and stripped.startswith("Peak:"):
+                    break
+        if proc.returncode != 0:
+            tail = "\n".join(text.splitlines()[-8:])
+            return f"音量解析失敗 ({proc.returncode}): {tail}"
+        return "\n".join(summary_lines[-12:]) if summary_lines else "音量解析結果を取得できませんでした"
+    except Exception as e:
+        return f"音量解析失敗: {e}"
+    finally:
+        proc = None
 
 
 def _concat_escape(path: str) -> str:
@@ -666,21 +735,45 @@ def render_native_test(
     _write_concat_list(segment_list, segment_paths)
     _run_ffmpeg([FFMPEG_BIN, "-y", "-f", "concat", "-safe", "0", "-i", segment_list, "-c", "copy", video_path])
 
+    loudnorm_filter = _native_loudnorm_filter()
     if BGM_PATH and os.path.exists(BGM_PATH):
         bgm_volume = max(0.0, float(BGM_VOLUME)) / 100.0
+        audio_filter = (
+            f"[0:a]volume=1.0[a0];[1:a]volume={bgm_volume:.3f}[a1];"
+            "[a0][a1]amix=inputs=2:duration=first:dropout_transition=0"
+        )
+        if NATIVE_AUDIO_LOUDNORM_ENABLED:
+            audio_filter += f"[mixed];[mixed]{loudnorm_filter}[a]"
+        else:
+            audio_filter += "[a]"
         _run_ffmpeg([
             FFMPEG_BIN, "-y", "-i", video_path, "-stream_loop", "-1", "-i", BGM_PATH,
-            "-filter_complex",
-            f"[0:a]volume=1.0[a0];[1:a]volume={bgm_volume:.3f}[a1];"
-            "[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[a]",
-            "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-shortest", output_path,
+            "-filter_complex", audio_filter,
+            "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-ar", "48000", "-ac", "2", "-shortest", output_path,
         ])
     else:
-        _run_ffmpeg([FFMPEG_BIN, "-y", "-i", video_path, "-c", "copy", output_path])
+        if NATIVE_AUDIO_LOUDNORM_ENABLED:
+            _run_ffmpeg([
+                FFMPEG_BIN, "-y", "-i", video_path,
+                "-map", "0:v", "-map", "0:a",
+                "-c:v", "copy", "-af", loudnorm_filter,
+                "-c:a", "aac", "-ar", "48000", "-ac", "2",
+                output_path,
+            ])
+        else:
+            _run_ffmpeg([FFMPEG_BIN, "-y", "-i", video_path, "-c", "copy", output_path])
 
     actual_duration = media_duration_sec(output_path) or total_audio
     if progress_callback:
         progress_callback(f"✅ native MP4出力: {output_path}")
+        if NATIVE_AUDIO_LOUDNORM_ENABLED:
+            progress_callback(
+                "🔊 native audio loudnorm: "
+                f"I={NATIVE_AUDIO_LOUDNORM_I:g} / TP={NATIVE_AUDIO_LOUDNORM_TP:g} / LRA={NATIVE_AUDIO_LOUDNORM_LRA:g}"
+            )
+        else:
+            progress_callback("🔊 native audio loudnorm: disabled")
+        progress_callback(f"🔊 native audio ebur128:\n{_audio_analysis_summary(output_path)}")
 
         # silence計測（セグメント間のINTER_DIALOGUE_GAP_SEC合計）
         silence_total = INTER_DIALOGUE_GAP_SEC * max(0, len(durations) - 1)

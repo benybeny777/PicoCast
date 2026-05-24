@@ -402,6 +402,10 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `RENDER_WITH_YMM4` | `false` | YMM4による本番動画書き出しを行うか |
 | `VOICE_INTRO_FAST_MODE` | `line_count` | 冒頭速度切り替えモード（line_count/seconds） |
 | `VOICE_INTRO_FAST_LINES` | 3 | native: 冒頭N行がintro速度 |
+| `NATIVE_AUDIO_LOUDNORM_ENABLED` | `true` | native MP4最終音声へ loudnorm を適用するか |
+| `NATIVE_AUDIO_LOUDNORM_I` | -15 | native loudnorm Integrated loudness目標 |
+| `NATIVE_AUDIO_LOUDNORM_TP` | -1.5 | native loudnorm True Peak上限 |
+| `NATIVE_AUDIO_LOUDNORM_LRA` | 6 | native loudnorm Loudness Range目標 |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
@@ -423,6 +427,8 @@ Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を�
 - **デフォルト動作**: `DEFAULT_SHORTS_RENDER_ENGINE = "native"` が設定されているため、Shorts の `run_pipeline()` は `native_render=None` を受け取ると自動で `native_render=True` に切り替わる。
 - `run_pipeline()` は native/YMM4 どちらでも通常通り `.ymmp` プロジェクトを生成する（保険・確認・再編集用）。
 - `render_native_test(output_dir, voice_speed_intro, voice_speed_body)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
+- 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。YMM4出力には適用しない。
+- 出力後に ffmpeg `ebur128=peak=true` で最終MP4の音量解析を行い、Integrated loudness / LRA / True peak の要約をログに出す。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭1フレームにサムネイル画像を挿入する（Long は挿入しない）。
 - `_meta/render_info.json` に render_engine・voice_speed・line_rule・ymm4_project_generated を保存する。
@@ -1002,6 +1008,10 @@ OPENAI_FINAL_REVIEW_MODEL=gpt-5.2
 GEMINI_MODEL=gemini-3.1-pro-preview
 NANOBANANA_PRO_MODEL=gemini-3-pro-image-preview
 NANOBANANA_FLASH_MODEL=gemini-3.1-flash-image-preview
+NATIVE_AUDIO_LOUDNORM_ENABLED=1
+NATIVE_AUDIO_LOUDNORM_I=-15
+NATIVE_AUDIO_LOUDNORM_TP=-1.5
+NATIVE_AUDIO_LOUDNORM_LRA=6
 LONG_FULL_SCRIPT_REVIEW=0
 LONG_UPLOAD_PLAYLIST_NAME=ロング動画
 ```
