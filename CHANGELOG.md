@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-05-25 (2)
+
+### アップロードスロット割り当てを YouTube 参照に変更
+
+- `core/upload_scheduler.py`: `assign_slots_from_youtube(count, video_type)` を追加。YouTube チャンネルの予約投稿済み動画（private + 未来の publishAt）を取得し、同タイプの使用済みスロットとして扱う。YouTube API が失敗した場合のみローカルレコードにフォールバック
+- `gui.py`: アップロード時のスロット割り当てを `assign_slots_from_youtube` に切り替え。ローカルの `upload_records.json` を空き枠判断に使わなくなったため、ローカル状態のズレによる重複スロットが発生しない
+- `core/upload_records.py`: `upsert_upload_record` に重複スロット検出ログを追加（同タイプ・同 publish_at が別 video_id にある場合 WARNING）
+
+---
+
 ## 2026-05-25
 
 ### ChatGPT生成前レビューのnative Shorts基準を修正

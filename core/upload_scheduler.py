@@ -88,6 +88,40 @@ def assign_slots(count: int, video_type: str) -> list[datetime]:
     return _assign_slots_from_used(count, video_type, set(schedule.keys()))
 
 
+def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
+    """Return empty slots using YouTube scheduled videos as the source of truth.
+
+    Queries the channel's upload list and treats any private/unlisted video
+    with a future publishAt of matching video_type as an occupied slot.
+    Falls back to local records if the YouTube API call fails.
+    """
+    from core.youtube_uploader import get_channel_upload_video_statuses
+
+    now = _as_jst(datetime.now(JST))
+    used: set[str] = set()
+    try:
+        statuses = get_channel_upload_video_statuses()
+        for _vid_id, status in statuses.items():
+            privacy = str(status.get("privacyStatus") or "").lower()
+            pub_at_raw = str(status.get("publishAt") or "").strip()
+            vt = str(status.get("video_type") or "").lower()
+            if vt != video_type:
+                continue
+            if privacy not in ("private", "unlisted") or not pub_at_raw:
+                continue
+            try:
+                dt = _as_jst(datetime.fromisoformat(pub_at_raw.replace("Z", "+00:00")))
+                if dt > now + timedelta(minutes=5):
+                    used.add(dt.isoformat())
+            except Exception:
+                continue
+    except Exception:
+        schedule = schedule_from_records().get(video_type, {})
+        used = set(schedule.keys())
+
+    return _assign_slots_from_used(count, video_type, used, now)
+
+
 def mark_slot_used(slot_dt: datetime, title: str, video_type: str):
     """Compatibility no-op. upload_records.json is the schedule source."""
     return None

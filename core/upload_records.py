@@ -56,6 +56,24 @@ def upsert_upload_record(record: dict[str, Any]) -> str:
 
     merged = dict(records[match_index]) if match_index is not None else {}
     merged.update(record)
+
+    # 重複スロット検出: 同じ (video_type, publish_at) が別の video_id に存在していたら警告ログ
+    new_pub = str(merged.get("publish_at") or "").strip()
+    new_vt = str(merged.get("video_type") or "").lower()
+    new_vid = str(merged.get("video_id") or "").strip()
+    if new_pub and new_vt:
+        for i, r in enumerate(records):
+            if match_index is not None and i == match_index:
+                continue
+            if str(r.get("publish_at") or "") == new_pub and str(r.get("video_type") or "").lower() == new_vt:
+                existing_id = str(r.get("video_id") or "")
+                if existing_id and existing_id != new_vid:
+                    import logging as _logging
+                    _logging.warning(
+                        "DUPLICATE SLOT: %s / %s already used by %s (new: %s)",
+                        new_vt, new_pub, existing_id, new_vid or title,
+                    )
+
     if match_index is None:
         records.append(merged)
     else:

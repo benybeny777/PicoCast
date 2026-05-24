@@ -1777,14 +1777,15 @@ class YMM4AutoGui:
             messagebox.showwarning("MP4なし", "選択した履歴フォルダにアップロード可能なMP4がありません。")
             return
 
-        # Shorts / Long をタイプ別にスロット割り当て
-        from core.upload_scheduler import assign_slots, format_slot
+        # Shorts / Long をタイプ別にスロット割り当て（YouTube の実態を参照）
+        from core.upload_scheduler import assign_slots_from_youtube, format_slot
 
+        self.log("📡 YouTubeのスケジュール済み動画を確認中...", "info")
         shorts_jobs = [(j, "shorts") for j in base_jobs if os.path.basename(j[5]).startswith("[Shorts]")]
         long_jobs   = [(j, "long")   for j in base_jobs if not os.path.basename(j[5]).startswith("[Shorts]")]
 
-        shorts_slots = assign_slots(len(shorts_jobs), "shorts")
-        long_slots   = assign_slots(len(long_jobs),   "long")
+        shorts_slots = assign_slots_from_youtube(len(shorts_jobs), "shorts")
+        long_slots   = assign_slots_from_youtube(len(long_jobs),   "long")
 
         # (job, video_type, slot) を結合して元の選択順に並べ替え
         slot_map = {}
