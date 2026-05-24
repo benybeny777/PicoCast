@@ -21,6 +21,18 @@ class ImageGenerator:
             except Exception as e:
                 print(f"  [Warning] Failed to initialize Google GenAI Client: {e}")
 
+    def close(self):
+        if self.client is not None and hasattr(self.client, "close"):
+            self.client.close()
+        self.client = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
+
     def _build_full_prompt(self, description, raw=False):
         if raw:
             return description
@@ -218,4 +230,7 @@ class ImageGenerator:
                 if self.debug:
                     print(f"  [Batch] 結果[{i}]処理エラー: {e}")
 
+        inline_requests = None
+        batch_prompts = None
+        batch_job = None
         return results

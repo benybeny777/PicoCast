@@ -70,6 +70,11 @@ def get_youtube_client():
     return build("youtube", "v3", credentials=creds)
 
 
+def _close_youtube_client(youtube):
+    if youtube is not None and hasattr(youtube, "close"):
+        youtube.close()
+
+
 def post_comment(video_id: str, comment_text: str, progress_callback=None) -> str | None:
     """動画にコメントを投稿する。成功時はコメントスレッドIDを返す。"""
     def _log(msg):
@@ -78,6 +83,7 @@ def post_comment(video_id: str, comment_text: str, progress_callback=None) -> st
         else:
             print(msg, flush=True)
 
+    youtube = None
     try:
         youtube = get_youtube_client()
         response = youtube.commentThreads().insert(
@@ -97,33 +103,41 @@ def post_comment(video_id: str, comment_text: str, progress_callback=None) -> st
         if "forbidden" in str(e).lower() or "403" in str(e):
             _log("  💡 token.json を削除して再認証すると解決する場合があります")
         return None
+    finally:
+        _close_youtube_client(youtube)
 
 
-def get_video_statuses(video_ids: list[str]) -> dict[str, dict]:
+def get_video_statuses(video_ids: list[str], youtube=None) -> dict[str, dict]:
     """video_id のリストを渡し、{video_id: {"privacyStatus": ..., "publishAt": ...}} を返す。
     見つからない動画は結果に含まれない。50件ずつバッチ処理。
     """
     if not video_ids:
         return {}
-    youtube = get_youtube_client()
+    owns_client = youtube is None
+    if owns_client:
+        youtube = get_youtube_client()
     result = {}
-    for i in range(0, len(video_ids), 50):
-        chunk = video_ids[i:i + 50]
-        resp = youtube.videos().list(part="snippet,status,contentDetails", id=",".join(chunk)).execute()
-        for item in resp.get("items", []):
-            vid = item.get("id")
-            st = item.get("status", {})
-            sn = item.get("snippet", {})
-            cd = item.get("contentDetails", {})
-            if vid:
-                result[vid] = {
-                    "privacyStatus": st.get("privacyStatus"),
-                    "publishAt": st.get("publishAt"),
-                    "title": sn.get("title"),
-                    "publishedAt": sn.get("publishedAt"),
-                    "duration": cd.get("duration"),
-                }
-    return result
+    try:
+        for i in range(0, len(video_ids), 50):
+            chunk = video_ids[i:i + 50]
+            resp = youtube.videos().list(part="snippet,status,contentDetails", id=",".join(chunk)).execute()
+            for item in resp.get("items", []):
+                vid = item.get("id")
+                st = item.get("status", {})
+                sn = item.get("snippet", {})
+                cd = item.get("contentDetails", {})
+                if vid:
+                    result[vid] = {
+                        "privacyStatus": st.get("privacyStatus"),
+                        "publishAt": st.get("publishAt"),
+                        "title": sn.get("title"),
+                        "publishedAt": sn.get("publishedAt"),
+                        "duration": cd.get("duration"),
+                    }
+        return result
+    finally:
+        if owns_client:
+            _close_youtube_client(youtube)
 
 
 def _duration_seconds(duration: str | None) -> int | None:
@@ -173,43 +187,47 @@ def _youtube_publish_at(publish_at) -> tuple[str, str]:
 
 def get_channel_upload_video_statuses() -> dict[str, dict]:
     """Return status/snippet data for videos in the authenticated channel uploads playlist."""
-    youtube = get_youtube_client()
-    channel = youtube.channels().list(part="contentDetails", mine=True, maxResults=1).execute()
-    items = channel.get("items", [])
-    if not items:
-        return {}
-    uploads_id = (
-        items[0]
-        .get("contentDetails", {})
-        .get("relatedPlaylists", {})
-        .get("uploads")
-    )
-    if not uploads_id:
-        return {}
+    youtube = None
+    try:
+        youtube = get_youtube_client()
+        channel = youtube.channels().list(part="contentDetails", mine=True, maxResults=1).execute()
+        items = channel.get("items", [])
+        if not items:
+            return {}
+        uploads_id = (
+            items[0]
+            .get("contentDetails", {})
+            .get("relatedPlaylists", {})
+            .get("uploads")
+        )
+        if not uploads_id:
+            return {}
 
-    video_ids = []
-    page_token = None
-    while True:
-        kwargs = {
-            "part": "contentDetails",
-            "playlistId": uploads_id,
-            "maxResults": 50,
-        }
-        if page_token:
-            kwargs["pageToken"] = page_token
-        resp = youtube.playlistItems().list(**kwargs).execute()
-        for item in resp.get("items", []):
-            vid = item.get("contentDetails", {}).get("videoId")
-            if vid:
-                video_ids.append(vid)
-        page_token = resp.get("nextPageToken")
-        if not page_token:
-            break
+        video_ids = []
+        page_token = None
+        while True:
+            kwargs = {
+                "part": "contentDetails",
+                "playlistId": uploads_id,
+                "maxResults": 50,
+            }
+            if page_token:
+                kwargs["pageToken"] = page_token
+            resp = youtube.playlistItems().list(**kwargs).execute()
+            for item in resp.get("items", []):
+                vid = item.get("contentDetails", {}).get("videoId")
+                if vid:
+                    video_ids.append(vid)
+            page_token = resp.get("nextPageToken")
+            if not page_token:
+                break
 
-    statuses = get_video_statuses(video_ids)
-    for data in statuses.values():
-        data["video_type"] = infer_video_type(data.get("title"), data.get("duration"))
-    return statuses
+        statuses = get_video_statuses(video_ids, youtube=youtube)
+        for data in statuses.values():
+            data["video_type"] = infer_video_type(data.get("title"), data.get("duration"))
+        return statuses
+    finally:
+        _close_youtube_client(youtube)
 
 
 def update_video_publish_time(video_id: str, publish_at, progress_callback=None) -> bool:
@@ -220,6 +238,7 @@ def update_video_publish_time(video_id: str, publish_at, progress_callback=None)
         else:
             print(msg, flush=True)
 
+    youtube = None
     try:
         publish_at_str, publish_at_display = _youtube_publish_at(publish_at)
         youtube = get_youtube_client()
@@ -254,6 +273,8 @@ def update_video_publish_time(video_id: str, publish_at, progress_callback=None)
         if "forbidden" in str(e).lower() or "403" in str(e):
             _log("  💡 token.json を削除して再認証すると解決する場合があります")
         return False
+    finally:
+        _close_youtube_client(youtube)
 
 
 def _find_playlist_id_by_name(youtube, playlist_name: str) -> str | None:
@@ -316,6 +337,7 @@ def add_video_to_playlist_by_name(video_id: str, playlist_name: str, progress_ca
         result["reason"] = "再生リスト名が未設定です"
         return result
 
+    youtube = None
     try:
         youtube = get_youtube_client()
         playlist_id = _find_playlist_id_by_name(youtube, playlist_name)
@@ -355,6 +377,8 @@ def add_video_to_playlist_by_name(video_id: str, playlist_name: str, progress_ca
         if "forbidden" in str(e).lower() or "403" in str(e):
             _log("  💡 token.json を削除して再認証すると解決する場合があります。")
         return result
+    finally:
+        _close_youtube_client(youtube)
 
 
 def _read_script_text_for_tags(mp4_path: str) -> str:
@@ -433,65 +457,72 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
         policy_data["long_policy"] = long_policy
 
     _log("🔑 YouTube 認証中...")
-    youtube = get_youtube_client()
+    youtube = None
 
-    tag_list = split_tags(tags)
-    metadata_path = _write_youtube_metadata(os.path.dirname(os.path.abspath(mp4_path)), title, tag_list, extra=policy_data)
-    if metadata_path:
-        _log(f"  🏷 YouTubeタグ記録: {metadata_path}")
+    try:
+        youtube = get_youtube_client()
 
-    # publish_at が指定されていれば ISO8601 文字列に統一
-    publish_at_str = None
-    if publish_at is not None:
-        publish_at_str, _publish_at_display = _youtube_publish_at(publish_at)
+        tag_list = split_tags(tags)
+        metadata_path = _write_youtube_metadata(os.path.dirname(os.path.abspath(mp4_path)), title, tag_list, extra=policy_data)
+        if metadata_path:
+            _log(f"  🏷 YouTubeタグ記録: {metadata_path}")
 
-    status_body = {
-        "privacyStatus": "private" if publish_at_str else privacy,
-        "selfDeclaredMadeForKids": False,
-        "containsSyntheticMedia": False,
-    }
-    if publish_at_str:
-        status_body["publishAt"] = publish_at_str
+        # publish_at が指定されていれば ISO8601 文字列に統一
+        publish_at_str = None
+        if publish_at is not None:
+            publish_at_str, _publish_at_display = _youtube_publish_at(publish_at)
 
-    body = {
-        "snippet": {
-            "title": title,
-            "description": description,
-            "tags": tag_list,
-            "categoryId": "24",  # Entertainment
-            "defaultLanguage": "ja",
-            "defaultAudioLanguage": "ja",
-        },
-        "status": status_body,
-    }
+        status_body = {
+            "privacyStatus": "private" if publish_at_str else privacy,
+            "selfDeclaredMadeForKids": False,
+            "containsSyntheticMedia": False,
+        }
+        if publish_at_str:
+            status_body["publishAt"] = publish_at_str
 
-    media = MediaFileUpload(mp4_path, chunksize=5 * 1024 * 1024, resumable=True)
-    _log(f"📤 アップロード開始: {os.path.basename(mp4_path)}")
-    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
-    response = None
-    while response is None:
-        status, response = request.next_chunk()
-        if status:
-            pct = int(status.progress() * 100)
-            _log(f"  ... {pct}%")
-    del media
+        body = {
+            "snippet": {
+                "title": title,
+                "description": description,
+                "tags": tag_list,
+                "categoryId": "24",  # Entertainment
+                "defaultLanguage": "ja",
+                "defaultAudioLanguage": "ja",
+            },
+            "status": status_body,
+        }
 
-    video_id = response["id"]
-    _log(f"✅ アップロード完了: https://youtu.be/{video_id}")
-
-    if thumbnail_path and os.path.exists(thumbnail_path):
-        _log("🖼  サムネイルを設定中...")
-        upload_thumb = _compress_thumbnail(thumbnail_path)
-        thumb_media = MediaFileUpload(upload_thumb)
+        media = MediaFileUpload(mp4_path, chunksize=5 * 1024 * 1024, resumable=True)
+        _log(f"📤 アップロード開始: {os.path.basename(mp4_path)}")
         try:
-            youtube.thumbnails().set(
-                videoId=video_id,
-                media_body=thumb_media
-            ).execute()
+            request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
+            response = None
+            while response is None:
+                status, response = request.next_chunk()
+                if status:
+                    pct = int(status.progress() * 100)
+                    _log(f"  ... {pct}%")
         finally:
-            del thumb_media
-            if upload_thumb != thumbnail_path and os.path.exists(upload_thumb):
-                os.remove(upload_thumb)
-        _log("  ✅ サムネイル設定完了")
+            del media
 
-    return video_id
+        video_id = response["id"]
+        _log(f"✅ アップロード完了: https://youtu.be/{video_id}")
+
+        if thumbnail_path and os.path.exists(thumbnail_path):
+            _log("🖼  サムネイルを設定中...")
+            upload_thumb = _compress_thumbnail(thumbnail_path)
+            thumb_media = MediaFileUpload(upload_thumb)
+            try:
+                youtube.thumbnails().set(
+                    videoId=video_id,
+                    media_body=thumb_media
+                ).execute()
+            finally:
+                del thumb_media
+                if upload_thumb != thumbnail_path and os.path.exists(upload_thumb):
+                    os.remove(upload_thumb)
+            _log("  ✅ サムネイル設定完了")
+
+        return video_id
+    finally:
+        _close_youtube_client(youtube)

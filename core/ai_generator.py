@@ -15,6 +15,18 @@ class AIGenerator:
         if GOOGLE_API_KEY:
             self.client = genai.Client(api_key=GOOGLE_API_KEY)
 
+    def close(self):
+        if self.client is not None and hasattr(self.client, "close"):
+            self.client.close()
+        self.client = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+        return False
+
     def generate_script(self, topic, reference_script=None, existing_titles=None):
         ref_rule = ""
         if reference_script:

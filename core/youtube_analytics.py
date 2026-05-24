@@ -18,6 +18,11 @@ CLIENT_SECRETS = os.path.join(ROOT_DIR, "client_secrets.json")
 TOKEN_FILE = os.path.join(ROOT_DIR, "token_analytics.json")
 
 
+def _close_google_resource(resource):
+    if resource is not None and hasattr(resource, "close"):
+        resource.close()
+
+
 def _get_credentials():
     creds = None
     if os.path.exists(TOKEN_FILE):
@@ -204,84 +209,88 @@ def fetch_video_analytics(days=28):
     youtube = build("youtube", "v3", credentials=creds)
     analytics = build("youtubeAnalytics", "v2", credentials=creds)
 
-    jst = timezone(timedelta(hours=9))
-    end = datetime.now(jst).date()
-    start = end - timedelta(days=int(days))
-    start_date = start.isoformat()
-    end_date = end.isoformat()
-
-    metrics = [
-        "views",
-        "estimatedMinutesWatched",
-        "averageViewDuration",
-        "averageViewPercentage",
-        "likes",
-        "comments",
-        "subscribersGained",
-        "subscribersLost",
-        "impressions",
-        "impressionClickThroughRate",
-    ]
     try:
-        report = _query_report(analytics, start_date, end_date, metrics)
-    except Exception:
-        metrics = metrics[:-2]
-        report = _query_report(analytics, start_date, end_date, metrics)
+        jst = timezone(timedelta(hours=9))
+        end = datetime.now(jst).date()
+        start = end - timedelta(days=int(days))
+        start_date = start.isoformat()
+        end_date = end.isoformat()
 
-    headers = [h.get("name") for h in report.get("columnHeaders", [])]
-    rows = report.get("rows", [])
+        metrics = [
+            "views",
+            "estimatedMinutesWatched",
+            "averageViewDuration",
+            "averageViewPercentage",
+            "likes",
+            "comments",
+            "subscribersGained",
+            "subscribersLost",
+            "impressions",
+            "impressionClickThroughRate",
+        ]
+        try:
+            report = _query_report(analytics, start_date, end_date, metrics)
+        except Exception:
+            metrics = metrics[:-2]
+            report = _query_report(analytics, start_date, end_date, metrics)
 
-    # Analytics期間内にアクティブだった動画のデータを組み立て
-    analytics_map = {}
-    for row in rows:
-        data = dict(zip(headers, row))
-        video_id = data.get("video")
-        if video_id:
-            analytics_map[video_id] = data
+        headers = [h.get("name") for h in report.get("columnHeaders", [])]
+        rows = report.get("rows", [])
 
-    # チャンネルの全動画IDを取得してメタデータを補完
-    all_ids = _all_channel_video_ids(youtube)
-    # analyticsにあるがall_idsにないIDも含める（削除済み等の例外対応）
-    combined_ids = list(dict.fromkeys(all_ids + list(analytics_map.keys())))
-    meta = _video_metadata(youtube, combined_ids)
-    local_records = _local_upload_records_by_video_id()
+        # Analytics期間内にアクティブだった動画のデータを組み立て
+        analytics_map = {}
+        for row in rows:
+            data = dict(zip(headers, row))
+            video_id = data.get("video")
+            if video_id:
+                analytics_map[video_id] = data
 
-    items = []
-    for video_id in combined_ids:
-        m = meta.get(video_id, {})
-        data = analytics_map.get(video_id, {})
-        local_record = local_records.get(video_id, {})
-        analytics_available = video_id in analytics_map
-        ctr = data.get("impressionClickThroughRate")
-        items.append({
-            "video_id": video_id,
-            "title": m.get("title") or video_id,
-            "published_at": m.get("published_at"),
-            "duration": m.get("duration"),
-            "video_type": m.get("video_type"),
-            "publish_status": m.get("publish_status", "published"),
-            "analytics_available": analytics_available,
-            "views": data.get("views", m.get("stats_views", 0)),
-            "impressions": data.get("impressions", 0),
-            "ctr": ctr,
-            "average_view_duration": data.get("averageViewDuration", 0),
-            "average_percentage_viewed": data.get("averageViewPercentage", 0),
-            "likes": data.get("likes", m.get("stats_likes", 0)),
-            "comments": data.get("comments", m.get("stats_comments", 0)),
-            "subscribers_gained": data.get("subscribersGained", 0),
-            "subscribers_lost": data.get("subscribersLost", 0),
-            "generation_kind": local_record.get("generation_kind", ""),
-            "source_video_title": local_record.get("source_video_title", ""),
-            "generation_purpose": local_record.get("generation_purpose", ""),
-            "character_pattern": local_record.get("character_pattern", ""),
-            "genre_group": local_record.get("genre_group", ""),
-        })
+        # チャンネルの全動画IDを取得してメタデータを補完
+        all_ids = _all_channel_video_ids(youtube)
+        # analyticsにあるがall_idsにないIDも含める（削除済み等の例外対応）
+        combined_ids = list(dict.fromkeys(all_ids + list(analytics_map.keys())))
+        meta = _video_metadata(youtube, combined_ids)
+        local_records = _local_upload_records_by_video_id()
 
-    summary = {
-        "days": days,
-        "start_date": start_date,
-        "end_date": end_date,
-        "video_count": len(items),
-        "views": sum(int(float(item.get("views") or 0)) for item in items),
-    }
-    return {"summary": summary, "items": items}
+        items = []
+        for video_id in combined_ids:
+            m = meta.get(video_id, {})
+            data = analytics_map.get(video_id, {})
+            local_record = local_records.get(video_id, {})
+            analytics_available = video_id in analytics_map
+            ctr = data.get("impressionClickThroughRate")
+            items.append({
+                "video_id": video_id,
+                "title": m.get("title") or video_id,
+                "published_at": m.get("published_at"),
+                "duration": m.get("duration"),
+                "video_type": m.get("video_type"),
+                "publish_status": m.get("publish_status", "published"),
+                "analytics_available": analytics_available,
+                "views": data.get("views", m.get("stats_views", 0)),
+                "impressions": data.get("impressions", 0),
+                "ctr": ctr,
+                "average_view_duration": data.get("averageViewDuration", 0),
+                "average_percentage_viewed": data.get("averageViewPercentage", 0),
+                "likes": data.get("likes", m.get("stats_likes", 0)),
+                "comments": data.get("comments", m.get("stats_comments", 0)),
+                "subscribers_gained": data.get("subscribersGained", 0),
+                "subscribers_lost": data.get("subscribersLost", 0),
+                "generation_kind": local_record.get("generation_kind", ""),
+                "source_video_title": local_record.get("source_video_title", ""),
+                "generation_purpose": local_record.get("generation_purpose", ""),
+                "character_pattern": local_record.get("character_pattern", ""),
+                "genre_group": local_record.get("genre_group", ""),
+            })
+
+        summary = {
+            "days": days,
+            "start_date": start_date,
+            "end_date": end_date,
+            "video_count": len(items),
+            "views": sum(int(float(item.get("views") or 0)) for item in items),
+        }
+        return {"summary": summary, "items": items}
+    finally:
+        _close_google_resource(analytics)
+        _close_google_resource(youtube)

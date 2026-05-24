@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import wave
 import math
@@ -435,6 +435,10 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         debug=img_gen.debug, image_style="nanobanana2", sd_size_mode=img_gen.sd_size_mode,
     )
 
+    def _finish_thumbnail(value):
+        thumb_img_gen.close()
+        return value
+
     def _generate_one(one_prompt, final_path, label):
         _log(f"サムネイル生成中: {label}")
         if debug_mode:
@@ -460,12 +464,12 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             saved_path = _generate_one(prompt, thumb_path, "thumbnail")
         except Exception as e:
             _log(f"  サムネイル生成失敗: {e}")
-            return None
+            return _finish_thumbnail(None)
         if not saved_path:
             _log("  サムネイル生成をスキップしました")
-            return None
+            return _finish_thumbnail(None)
         _log(f"  サムネイル保存: {saved_path}")
-        return saved_path
+        return _finish_thumbnail(saved_path)
 
     manifest_variants = []
     first_variant_path = None
@@ -496,7 +500,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
             if not saved_path:
                 _log(f"  サムネイル案{variant_id}をスキップしました")
-                return None
+                return _finish_thumbnail(None)
             if first_variant_path is None:
                 first_variant_path = saved_path
             manifest_variants.append({
@@ -507,11 +511,11 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             })
     except Exception as e:
         _log(f"  サムネイル生成失敗: {e}")
-        return None
+        return _finish_thumbnail(None)
 
     if not first_variant_path:
         _log("  サムネイル生成をスキップしました")
-        return None
+        return _finish_thumbnail(None)
     if os.path.exists(thumb_path):
         os.remove(thumb_path)
     shutil.copy2(first_variant_path, thumb_path)
@@ -519,7 +523,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         manifest_path = _write_long_thumbnail_manifest(theme_dir, topic, manifest_variants)
         _log(f"  サムネイルA/B管理ファイル保存: {manifest_path}")
     _log(f"  アップロード用サムネイル保存: {thumb_path}")
-    return thumb_path
+    return _finish_thumbnail(thumb_path)
 
 
 def _read_ymmp_duration(path):
@@ -627,12 +631,15 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     os.makedirs(theme_bg_dir, exist_ok=True)
 
     img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode)
-    thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
-                                    update_status, script_content=script_content, debug_mode=debug,
-                                    long_thumbnail_ab_test=long_thumbnail_ab_test)
-    if not thumb_path:
-        raise Exception("サムネイル生成に失敗しました")
-    return thumb_path
+    try:
+        thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
+                                        update_status, script_content=script_content, debug_mode=debug,
+                                        long_thumbnail_ab_test=long_thumbnail_ab_test)
+        if not thumb_path:
+            raise Exception("サムネイル生成に失敗しました")
+        return thumb_path
+    finally:
+        img_gen.close()
 
 
 def run_pipeline(topic, reference_script=None, debug_mode=False,
@@ -642,6 +649,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  long_budget_mode=None, native_render=None, sd_size_mode=False):
     report = GenerationReport()
     pipeline_start = time.time()
+    img_gen = None
 
     def update_status(msg, tag="info"):
         if progress_callback:
@@ -653,23 +661,33 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         return bool(cancel_event and cancel_event.is_set())
 
     def cancel_result():
+        if img_gen is not None:
+            img_gen.close()
         report.elapsed_sec = time.time() - pipeline_start
         msg = "⏹ 作業を中止しました。"
         update_status(msg)
         return msg, report
 
+    def finish_result(msg):
+        if img_gen is not None:
+            img_gen.close()
+        return msg, report
+
     # Step 1: スクリプト取得（形式判定のために先に行う）
     ai = AIGenerator(debug=debug_mode)
-    if pregenerated_script:
-        script_content = pregenerated_script
-        update_status("台本を読み込み中...")
-    else:
-        # NOTE: GUIからは常に pregenerated_script が渡されるためここには到達しない（CLIのみ）
-        update_status(f"AI台本を生成中: {topic}...")
-        script_content = ai.generate_script(topic, reference_script=reference_script, existing_titles=existing_titles)
-        if script_content.startswith("Error"):
-            report.elapsed_sec = time.time() - pipeline_start
-            return script_content, report
+    try:
+        if pregenerated_script:
+            script_content = pregenerated_script
+            update_status("台本を読み込み中...")
+        else:
+            # NOTE: GUIからは常に pregenerated_script が渡されるためここには到達しない（CLIのみ）
+            update_status(f"AI台本を生成中: {topic}...")
+            script_content = ai.generate_script(topic, reference_script=reference_script, existing_titles=existing_titles)
+            if script_content.startswith("Error"):
+                report.elapsed_sec = time.time() - pipeline_start
+                return script_content, report
+    finally:
+        ai.close()
     if is_cancelled():
         return cancel_result()
 
@@ -683,7 +701,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         report.elapsed_sec = time.time() - pipeline_start
         msg = "❌ 台本形式エラー:\n" + "\n".join(_messages)
         update_status(msg)
-        return msg, report
+        return finish_result(msg)
     if is_cancelled():
         return cancel_result()
 
@@ -867,7 +885,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     )
                     update_status(msg, "error")
                     report.elapsed_sec = time.time() - pipeline_start
-                    return msg, report
+                    return finish_result(msg)
             else:
                 update_status("  ⚠ Ollama冒頭レビューはスキップされました")
         except Exception as e:
@@ -892,7 +910,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             )
             update_status(msg, "error")
             report.elapsed_sec = time.time() - pipeline_start
-            return msg, report
+            return finish_result(msg)
     final_opening = llm_review or opening_review
 
     if should_auto_rewrite_opening(final_opening):
@@ -1034,7 +1052,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         )
         update_status(msg, "error")
         report.elapsed_sec = time.time() - pipeline_start
-        return msg, report
+        return finish_result(msg)
 
     estimated_sec, estimated_lines, estimated_avg_chars = _estimate_script_duration(items, is_shorts)
     estimated_sec = float(estimated_sec or 0.0)
@@ -1065,7 +1083,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             )
             update_status(msg, "error")
             report.elapsed_sec = time.time() - pipeline_start
-            return msg, report
+            return finish_result(msg)
         # native版では推定尺は参考値のみ。尺は台本量で調整するため停止しない。
         update_status(
             f"📐 native推定: {estimated_sec:.1f}秒（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
@@ -1080,7 +1098,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         )
         update_status(msg, "error")
         report.elapsed_sec = time.time() - pipeline_start
-        return msg, report
+        return finish_result(msg)
     update_status(
         f"🧑‍⚖️ ChatGPTで生成前レビュー中... 推定尺 {estimated_sec:.1f}秒"
         f"（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
@@ -1104,7 +1122,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             msg = f"❌ ChatGPT生成前レビュー skipped: {final_review.get('reason')} ({final_review_path})"
             update_status(msg, "error")
             report.elapsed_sec = time.time() - pipeline_start
-            return msg, report
+            return finish_result(msg)
         elif final_review:
             pre_score = int(final_review.get("final_score") or 0)
             pre_score_tag = opening_score_tag(pre_score)
@@ -1130,18 +1148,18 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 )
                 update_status(msg, "error")
                 report.elapsed_sec = time.time() - pipeline_start
-                return msg, report
+                return finish_result(msg)
         else:
             msg = f"❌ ChatGPT生成前レビュー結果が空です ({final_review_path})"
             update_status(msg, "error")
             report.elapsed_sec = time.time() - pipeline_start
-            return msg, report
+            return finish_result(msg)
     except Exception as e:
         final_review_path = save_final_review(theme_dir, {"error": str(e), "stage": "pre_generation"})
         msg = f"❌ ChatGPT生成前レビュー失敗: {e} ({final_review_path})"
         update_status(msg, "error")
         report.elapsed_sec = time.time() - pipeline_start
-        return msg, report
+        return finish_result(msg)
 
     if not is_shorts:
         base_title = meta.get("video_title", topic)
@@ -1460,7 +1478,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                         f"理由: {e}"
                     )
                     update_status(msg, "error")
-                    return msg, report
+                    return finish_result(msg)
                 if is_cancelled():
                     return cancel_result()
 
@@ -1498,7 +1516,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                         f"理由: {e}"
                     )
                     update_status(msg, "error")
-                    return msg, report
+                    return finish_result(msg)
 
                 voice_item_frames = duration_frames + math.ceil(VOICE_TAIL_SAFETY_SEC * editor.fps)
                 dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + voice_item_frames))
@@ -1516,7 +1534,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "VOICEVOXの失敗行を修正して再実行してください。"
         )
         update_status(msg, "error")
-        return msg, report
+        return finish_result(msg)
     current_frame += editor.fps
 
     # Finalize
@@ -1644,7 +1662,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             update_status(f"📏 動画尺: {total_sec:.1f}秒 🚨 要カット（58秒超え）", "error")
 
     update_status(report.summary())
-    return msg, report
+    return finish_result(msg)
 
 def main():
     if sys.platform == 'win32':

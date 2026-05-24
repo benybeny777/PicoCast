@@ -446,8 +446,11 @@ class YMM4AutoGui:
     def check_engines_startup(self, debug_mode=False):
         self.log("--- システム接続確認 ---")
         ai = AIGenerator(debug=debug_mode)
-        g_status = "接続OK (Gemini / Nano Banana)" if ai.client else "未設定 (configを確認してください)"
-        self.log(f"Google AI : {g_status}", "info" if ai.client else "error")
+        try:
+            g_status = "接続OK (Gemini / Nano Banana)" if ai.client else "未設定 (configを確認してください)"
+            self.log(f"Google AI : {g_status}", "info" if ai.client else "error")
+        finally:
+            ai.close()
 
         for n, u, p in [("VOICEVOX", VOICEVOX_URL, VOICEVOX_PATH)]:
             res = unified_check(n, u, p)
@@ -1964,8 +1967,9 @@ class YMM4AutoGui:
     def _enrich_comment_candidate_statuses(self, rows):
         if not rows:
             return rows
+        youtube = None
         try:
-            from core.youtube_uploader import get_youtube_client
+            from core.youtube_uploader import get_youtube_client, _close_youtube_client
             youtube = get_youtube_client()
             ids = [row["video_id"] for row in rows if row.get("video_id")]
             status_by_id = {}
@@ -1999,6 +2003,9 @@ class YMM4AutoGui:
                 row.setdefault("video_status_label", "未確認")
                 row.setdefault("is_public", True)
                 row.setdefault("made_for_kids", False)
+        finally:
+            from core.youtube_uploader import _close_youtube_client
+            _close_youtube_client(youtube)
         return rows
 
     def select_uploaded_comments_dialog(self):
@@ -2121,13 +2128,14 @@ class YMM4AutoGui:
 
     def _run_post_fixed_comments(self, rows):
         try:
-            from core.youtube_uploader import get_youtube_client, post_comment
+            from core.youtube_uploader import get_youtube_client, post_comment, _close_youtube_client
             total = len(rows)
             posted = 0
             skipped = 0
             failed = 0
             posted_links = []
             status_by_id = {}
+            youtube = None
             try:
                 youtube = get_youtube_client()
                 ids = [row["video_id"] for row in rows if row.get("video_id")]
@@ -2142,6 +2150,8 @@ class YMM4AutoGui:
                 self.log(f"  ⚠ 動画状態の確認に失敗したため、固定コメント投稿を中止します: {e}", "warning")
                 self.log(f"💬 固定コメント投稿完了: 投稿 0 / スキップ {total} / 失敗 0", "warning")
                 return
+            finally:
+                _close_youtube_client(youtube)
 
             for idx, row in enumerate(rows, 1):
                 title = row["title"]
@@ -3941,6 +3951,8 @@ class YMM4AutoGui:
                 self.log(f"🔄 選択画像を再生成中: {len(regen_set)}枚", "batch")
                 for idx in sorted(regen_set):
                     spec = specs[idx]
+                    img_gen = None
+                    thumb_gen = None
                     try:
                         before_hash = _file_digest(spec["path"])
                         width, height = (1080, 1920) if spec.get("is_shorts") else (1920, 1080)
@@ -4019,6 +4031,11 @@ class YMM4AutoGui:
                                 )
                     except Exception as e:
                         self.log(f"  ❌ 再生成失敗: {spec['label']}: {e}", "error")
+                    finally:
+                        if thumb_gen is not None:
+                            thumb_gen.close()
+                        if img_gen is not None:
+                            img_gen.close()
 
                 specs = self._collect_image_review_specs(output_dir)
 

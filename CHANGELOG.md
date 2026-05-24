@@ -14,6 +14,12 @@
 
 ## 2026-05-25 (3)
 
+### APIクライアントの明示解放を追加
+
+- `core/youtube_uploader.py` / `core/youtube_analytics.py`: YouTube Data API / Analytics API の googleapiclient resource を処理後に `close()` するよう変更
+- `core/ai_generator.py` / `core/image_generator.py`: Google GenAI クライアントに `close()` / context manager を追加
+- `main.py` / `gui.py`: 短命の Gemini / Nano Banana 生成器を使用後に明示的に閉じるよう変更
+
 ### 作業ガイドと環境説明を更新
 
 - `AGENTS.md` / `CLAUDE.md`: リソース明示解放、メモリ解放、認証情報の記載・コミット禁止を恒久ルールに追加
