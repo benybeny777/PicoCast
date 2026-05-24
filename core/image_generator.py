@@ -63,6 +63,14 @@ class ImageGenerator:
             f"マスターピース、精細なデジタルアート、劇的な照明、鮮烈な色彩、映画的構図。"
         )
 
+    def _image_generation_config(self):
+        from google.genai import types
+        aspect_ratio = "9:16" if self.height > self.width else "16:9"
+        return types.GenerateContentConfig(
+            response_modalities=["IMAGE"],
+            image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
+        )
+
     def _save_prompt_log(self, save_dir, fname, prompt):
         log_path = os.path.join(save_dir, "image_prompts.txt")
         with open(log_path, "a", encoding="utf-8") as f:
@@ -144,6 +152,7 @@ class ImageGenerator:
             response = self.client.models.generate_content(
                 model=model_name,
                 contents=contents,
+                config=self._image_generation_config(),
             )
 
             for part in response.parts:
@@ -181,10 +190,15 @@ class ImageGenerator:
         inline_requests = []
         batch_prompts = []
         batch_job = None
+        aspect_ratio = "9:16" if self.height > self.width else "16:9"
         for req in requests_list:
             prompt = self._build_full_prompt(req["description"], req.get("raw", False))
             inline_requests.append({
-                "contents": [{"role": "user", "parts": [{"text": prompt}]}]
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+                "config": {
+                    "response_modalities": ["IMAGE"],
+                    "image_config": {"aspect_ratio": aspect_ratio},
+                },
             })
             batch_prompts.append(prompt)
 

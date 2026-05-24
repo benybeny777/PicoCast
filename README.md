@@ -44,7 +44,7 @@ Windows / Mac の両方を想定しています。ffmpeg/native生成を主経�
 5. Python 依存を入れる
 
 ```bash
-pip install requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib
+pip install --upgrade requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib openai
 ```
 
 ### APIキー・OAuth
@@ -54,11 +54,16 @@ pip install requests google-genai python-dotenv Pillow google-api-python-client 
 ```env
 GOOGLE_API_KEY=...
 OPENAI_API_KEY=...
+OPENAI_FINAL_REVIEW_MODEL=gpt-5.2
+GEMINI_MODEL=gemini-3.1-pro-preview
+NANOBANANA_PRO_MODEL=gemini-3-pro-image-preview
+NANOBANANA_FLASH_MODEL=gemini-3.1-flash-image-preview
 LONG_UPLOAD_PLAYLIST_NAME=ロング動画
 ```
 
 - `GOOGLE_API_KEY`: Google AI Studio の API keys で作成します。台本生成・画像生成で使います。
 - `OPENAI_API_KEY`: OpenAI Platform の API keys で作成します。ChatGPT生成前レビューで使います。
+- `OPENAI_FINAL_REVIEW_MODEL` / `GEMINI_MODEL` / `NANOBANANA_*_MODEL`: 任意。外部API側のモデル更新に追随するため、`.env` で差し替えできます。
 - `LONG_UPLOAD_PLAYLIST_NAME`: 任意。Longアップロード成功後、名前が完全一致する自チャンネルの再生リストへ自動追加します。未設定時は `ロング動画` を使います。空にすると無効です。
 - `client_secrets.json`: Google Cloud Console で YouTube Data API v3 / YouTube Analytics API を有効化し、OAuthクライアントID（デスクトップアプリ）を作成してJSONをダウンロードします。ファイル名を `client_secrets.json` にしてリポジトリ直下へ置きます。
 - 初回の `YouTubeアップ` / `📊 アナリティクス` 実行時にブラウザ認証が開き、`token.json` / `token_analytics.json` が自動作成されます。

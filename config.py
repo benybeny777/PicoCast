@@ -75,15 +75,15 @@ OLLAMA_REWRITE_MODEL = os.environ.get("OLLAMA_REWRITE_MODEL", "qwen3:8b")
 OLLAMA_REWRITE_FALLBACK_MODEL = os.environ.get("OLLAMA_REWRITE_FALLBACK_MODEL", "gemma4:e4b")
 OPENING_REWRITE_MAX_FALLBACKS = int(os.environ.get("OPENING_REWRITE_MAX_FALLBACKS", "1"))
 OPENAI_FINAL_REVIEW_ENABLED = os.environ.get("OPENAI_FINAL_REVIEW_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")
-OPENAI_FINAL_REVIEW_MODEL = os.environ.get("OPENAI_FINAL_REVIEW_MODEL", "gpt-5.4-mini")
+OPENAI_FINAL_REVIEW_MODEL = os.environ.get("OPENAI_FINAL_REVIEW_MODEL", "gpt-5.2")
 SHORT_FULL_SCRIPT_REVIEW = os.environ.get("SHORT_FULL_SCRIPT_REVIEW", "1").strip().lower() in ("1", "true", "yes", "on")
 LONG_FULL_SCRIPT_REVIEW = os.environ.get("LONG_FULL_SCRIPT_REVIEW", "0").strip().lower() in ("1", "true", "yes", "on")
 AUTO_FULL_REWRITE_ENABLED = os.environ.get("AUTO_FULL_REWRITE_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")
 
 # Google AI Models (Nano Banana Suite)
-GEMINI_MODEL = "gemini-3.1-pro-preview"
-NANOBANANA_PRO_MODEL = "gemini-3-pro-image-preview"
-NANOBANANA_FLASH_MODEL = "gemini-3.1-flash-image-preview"
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview")
+NANOBANANA_PRO_MODEL = os.environ.get("NANOBANANA_PRO_MODEL", "gemini-3-pro-image-preview")
+NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-flash-image-preview")
 SD_SIZE_IMAGE_SCALE = float(os.environ.get("SD_SIZE_IMAGE_SCALE", "0.5"))
 
 # Character Mapping

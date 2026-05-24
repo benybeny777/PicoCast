@@ -164,7 +164,7 @@ for item in dialogue_items:
 
 ### ChatGPT生成前レビュー
 
-- モデル: `OPENAI_FINAL_REVIEW_MODEL`（デフォルト `gpt-5.4-mini`）
+- モデル: `OPENAI_FINAL_REVIEW_MODEL`（デフォルト `gpt-5.2`）
 - 入力: タイトル / サムネ文字 / 固定コメント / 台本 / 各レビュー結果 / 推定尺
 - 出力: `final_score` / `publish_ok` / `risk` / `must_fix` / `nice_to_fix`
 - **自動修正なし** — ログ表示と `_meta/final_review.json` 保存のみ
@@ -405,7 +405,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
-| `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.4-mini` | ChatGPT生成前レビューモデル |
+| `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.2` | ChatGPT生成前レビューモデル |
 | `OPENING_SCORE_ABORT_THRESHOLD` | 80 | pass / warning 表示の目安 |
 | `OPENING_SCORE_HARD_ABORT_THRESHOLD` | 70 | 処理中止スコア閾値 |
 | `MAX_BACKGROUNDS_SHORTS` | 9 | Shorts最大背景枚数 |
@@ -979,9 +979,9 @@ YouTube OAuth:
 | `SHORT_FULL_SCRIPT_REVIEW` | `.env` | Shortsの全文レビューを行うか |
 | `LONG_FULL_SCRIPT_REVIEW` | `.env` | Longの全文レビューを行うか |
 | `AUTO_FULL_REWRITE_ENABLED` | `.env` | 全文自動リライトを有効化するか |
-| `GEMINI_MODEL` | `config.py` | 台本生成で使うGeminiモデル |
-| `NANOBANANA_PRO_MODEL` | `config.py` | 高品質画像生成モデル |
-| `NANOBANANA_FLASH_MODEL` | `config.py` | 速い画像生成モデル |
+| `GEMINI_MODEL` | `.env` / `config.py` | 台本生成で使うGeminiモデル |
+| `NANOBANANA_PRO_MODEL` | `.env` / `config.py` | 高品質画像生成モデル |
+| `NANOBANANA_FLASH_MODEL` | `.env` / `config.py` | 速い画像生成モデル |
 | `CHARACTERS` | `config.py` | VOICEVOX話者ID・スタイルID |
 | `CHARACTER_PNGS` | `config.py` | YMM4キャラ立ち絵 |
 | `THUMBNAIL_CHARACTER_PNGS` | `config.py` | サムネ生成用参照画像 |
@@ -998,7 +998,10 @@ OPENING_REVIEW_USE_LLM=1
 OLLAMA_REVIEW_MODEL=qwen3:8b
 OPENING_SCORE_ABORT_THRESHOLD=80
 OPENAI_FINAL_REVIEW_ENABLED=1
-OPENAI_FINAL_REVIEW_MODEL=gpt-5.4-mini
+OPENAI_FINAL_REVIEW_MODEL=gpt-5.2
+GEMINI_MODEL=gemini-3.1-pro-preview
+NANOBANANA_PRO_MODEL=gemini-3-pro-image-preview
+NANOBANANA_FLASH_MODEL=gemini-3.1-flash-image-preview
 LONG_FULL_SCRIPT_REVIEW=0
 LONG_UPLOAD_PLAYLIST_NAME=ロング動画
 ```
