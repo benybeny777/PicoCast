@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-05-25 (5)
+
+### キャラ腰から上表示モード（native/YMM4共通）
+
+- `config.py`: `CHARACTER_UPPER_BODY_MODE`(デフォルト ON) / `CHARACTER_UPPER_BODY_SCALE`(1.35) / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET`(250) / `CHARACTER_UPPER_BODY_LONG_Y_OFFSET`(300) を追加。`.env` で上書き可能
+- `core/native_renderer.py`: `CHARACTER_UPPER_BODY_MODE=1` のとき Shorts/Long 両方でキャラを 1.35 倍に拡大し、Y座標を下方向へオフセットして腰から上が画面に映る構図にする。OFF のとき従来通り（Shorts は `NATIVE_SHORTS_CHARACTER_SCALE`、Long は無拡大）
+- `main.py`: `_TACHIE_BASE` → `TACHIE_PARAMS` の生成ロジックを変更。`CHARACTER_UPPER_BODY_MODE=1` のとき YMM4 のずんだもん/めたん立ち絵を同スケール・同オフセットで調整する
+- `SPEC.md`: `CHARACTER_UPPER_BODY_*` 環境変数を追加
+
 ## 2026-05-25 (4)
 
 ### native/ffmpegレンダラー改善（音量・字幕・キャラ・実尺ログ）

@@ -37,6 +37,10 @@ from config import (
     BGM_LAYER,
     BGM_PATH,
     BGM_VOLUME,
+    CHARACTER_UPPER_BODY_LONG_Y_OFFSET,
+    CHARACTER_UPPER_BODY_MODE,
+    CHARACTER_UPPER_BODY_SCALE,
+    CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET,
     CHARACTERS,
     DEFAULT_SHORTS_RENDER_ENGINE,
     GENERATE_YMM4_PROJECT,
@@ -1564,10 +1568,24 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     for char, emotion, start, end in dialogue_tachie_info:
         char_dialogues[char].append((emotion, start, end))
 
-    TACHIE_PARAMS = {
+    _TACHIE_BASE = {
         "ずんだもん": {"long": (-696, 430, 66.9),   "shorts": (-364.5, 850, 60.3)},
         "めたん":     {"long": ( 751, 430, 52.95),  "shorts": ( 348.0, 850, 50.1)},
     }
+    if CHARACTER_UPPER_BODY_MODE:
+        TACHIE_PARAMS = {
+            char: {
+                m: (
+                    x,
+                    y + (CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET if m == "shorts" else CHARACTER_UPPER_BODY_LONG_Y_OFFSET),
+                    round(z * CHARACTER_UPPER_BODY_SCALE, 2),
+                )
+                for m, (x, y, z) in modes.items()
+            }
+            for char, modes in _TACHIE_BASE.items()
+        }
+    else:
+        TACHIE_PARAMS = _TACHIE_BASE
     for i, char_name in enumerate(char_order):
         if is_cancelled():
             return cancel_result()

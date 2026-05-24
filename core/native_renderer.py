@@ -15,6 +15,10 @@ from config import (
     NATIVE_AUDIO_LOUDNORM_TP,
     NATIVE_BACKGROUND_TRANSITION,
     NATIVE_BACKGROUND_TRANSITION_SEC,
+    CHARACTER_UPPER_BODY_LONG_Y_OFFSET,
+    CHARACTER_UPPER_BODY_MODE,
+    CHARACTER_UPPER_BODY_SCALE,
+    CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET,
     NATIVE_BGM_VOLUME_DB,
     NATIVE_CHARACTER_HEIGHT_LONG,
     NATIVE_CHARACTER_HEIGHT_SHORTS,
@@ -438,6 +442,9 @@ def _character_inputs(width: int, height: int) -> list[CharacterVariantSet]:
 def _character_position(name: str, portrait: bool = False) -> str:
     side = NATIVE_CHARACTER_SIDE_MARGIN_SHORTS if portrait else NATIVE_CHARACTER_SIDE_MARGIN_LONG
     bottom = NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS if portrait else NATIVE_CHARACTER_BOTTOM_MARGIN_LONG
+    if CHARACTER_UPPER_BODY_MODE:
+        y_offset = CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET if portrait else CHARACTER_UPPER_BODY_LONG_Y_OFFSET
+        bottom = bottom - y_offset
     y = f"H-h+{-bottom}" if bottom < 0 else f"H-h-{bottom}"
     x_zunda = str(side)
     x_metan = f"W-w+{-side}" if side < 0 else f"W-w-{side}"
@@ -499,7 +506,12 @@ def _segment_filter(
         chains.append("[bg_current]copy[base0]")
     current = "base0"
     overlay_num = 1
-    char_scale = NATIVE_SHORTS_CHARACTER_SCALE if portrait else 1.0
+    if CHARACTER_UPPER_BODY_MODE:
+        char_scale = CHARACTER_UPPER_BODY_SCALE
+    elif portrait:
+        char_scale = NATIVE_SHORTS_CHARACTER_SCALE
+    else:
+        char_scale = 1.0
     scaled_char_h = int(round(char_h * char_scale))
     for char_idx, character in enumerate(characters):
         position = _character_position(character.name, portrait=portrait)
