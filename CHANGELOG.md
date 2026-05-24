@@ -14,6 +14,11 @@
 
 ## 2026-05-25 (3)
 
+### 作業ガイドと環境説明を更新
+
+- `AGENTS.md` / `CLAUDE.md`: リソース明示解放、メモリ解放、認証情報の記載・コミット禁止を恒久ルールに追加
+- `AGENTS.md` / `CLAUDE.md` / `README.md` / `SPEC.md`: YMM4 GUI自動操作を廃止済みとして、ffmpeg/native MP4を主経路、YMM4は確認用 `.ymmp` 生成までの説明に更新
+
 ### YouTubeソース化後のテストとドキュメントを整備
 
 - `tests/test_upload_scheduler.py`: `rebalance_slots()` 系テストをYouTube予約一覧のモックに変更し、テスト実行時に実YouTube APIへアクセスしないよう修正

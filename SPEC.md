@@ -41,7 +41,7 @@ yukkurijidou/
 │   ├── image_generator.py  # Nano Banana背景画像生成
 │   ├── parser.py           # 台本パーサー (ScriptParser)
 │   ├── ymmp_editor.py      # YMM4プロジェクト編集
-│   ├── ymm4_renderer.py    # YMM4レンダリング制御
+│   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
 │   ├── opening_quality.py  # 冒頭品質レビュー
 │   ├── script_prompts.py   # 台本生成プロンプト (Python)
 │   ├── script_generation_prompt.txt  # 台本生成プロンプト (テキスト)
@@ -727,7 +727,7 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 ### 動画出力
 
-`動画出力` は現在選択中または直近生成した `.ymmp` を YMM4 で開き、MP4 出力を自動操作します。YMM4 のUIが変わった場合は `core/ymm4_renderer.py` のボタン検出を見直してください。
+動画出力は ffmpeg/native MP4 を主経路にします。YMM4 GUI自動操作によるMP4出力は廃止済みで、`.ymmp` は確認・再編集用のプロジェクトとして生成します。
 
 ### YouTubeアップロード
 

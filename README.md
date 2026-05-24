@@ -28,10 +28,10 @@
 
 ## セットアップ
 
-Windows / Mac の両方を想定しています。基本処理はMacでも動作想定ですが、YMM4 GUI自動操作（`pywinauto`）はWindows依存です。Macではffmpeg/native生成やプロンプト・メタデータ関連の運用を主経路にします。
+Windows / Mac の両方を想定しています。ffmpeg/native生成を主経路とし、YMM4は確認用 `.ymmp` 生成までを扱います。
 
 1. VOICEVOX をインストール
-2. YukkuriMovieMaker v4 をインストール
+2. 必要に応じて YukkuriMovieMaker v4 をインストール（確認用 `.ymmp` を開く場合）
 3. APIキーとOAuth設定を用意
 4. プロンプト設定を確認する
    - 初期状態は食べ物用設定でそのまま動きます
@@ -44,10 +44,8 @@ Windows / Mac の両方を想定しています。基本処理はMacでも動作
 5. Python 依存を入れる
 
 ```bash
-pip install requests google-genai python-dotenv pywinauto Pillow google-api-python-client google-auth-oauthlib
+pip install requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib
 ```
-
-Macで `pywinauto` が入らない場合は、YMM4 GUI自動操作を使わない前提でその依存だけ除外してください。
 
 ### APIキー・OAuth
 
@@ -88,7 +86,7 @@ python gui.py
 4. GUI の台本欄に貼り付け
 5. `🎬 生成` を押す
 6. 必要なら `画像確認` で画像を見直す
-7. `動画出力` で YMM4 から MP4 を書き出す
+7. native MP4を確認する（YMM4は必要に応じて `.ymmp` 確認に使う）
 8. `YouTubeアップ` で履歴から動画を選んでアップロード（MP4なしの履歴は表示されません）
 9. 必要なら `💬 固定コメント` で公開済み動画へコメントを投稿し、Studio側でピン留め
 

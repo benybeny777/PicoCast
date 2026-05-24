@@ -17,6 +17,7 @@
 - 既に未コミット変更がある場合は、ユーザーまたは別エージェントの作業として扱い、勝手に巻き戻さない。コミット時は目的に関係する差分だけをステージする。
 - 手作業のファイル編集は原則 `apply_patch` で行い、検索はまず `rg` / `rg --files` を使う。
 - フォールバック処理は、ユーザーが明示した場合または既存仕様で明記されている場合を除き、基本的に追加しない。失敗時は原因が分かるエラーとして止める。
+- ファイルポインタ、ネットワーク接続、画像/動画オブジェクト、subprocess、ブラウザ/GUIハンドルなどのリソースは明示的に解放する。`with`、`close()`、`terminate()`、一時ファイル削除などを使い、長時間処理では不要な大きい参照を手放してメモリも解放する。
 - このリポジトリは開発環境として扱うため、`core/prompt_parts/local/` を更新したら常に対応する `samples/prompt_parts/` へコピーして同期する。localだけに残さない。
 - ChatGPT API と Google API（Gemini / Nano Banana 画像生成など）を使う動画生成・画像生成・レビューは、費用に注意して必要時だけ実行する。ローカルLLMとYouTube APIは必要な検証・運用であれば積極的に使ってよい。
 
@@ -29,7 +30,7 @@
 
 ## 実行環境
 
-- Windows / Mac を想定する。基本処理はMacでも動作想定だが、`pywinauto` とYMM4 GUI自動操作はWindows依存。
+- Windows / Mac を想定する。ffmpeg/native生成を主経路とし、YMM4は確認用 `.ymmp` 生成までを扱う。
 - Python 仮想環境: `.venv/`
 - 起動: `python gui.py`
 - VOICEVOX をローカルで起動しておく必要がある（`http://localhost:50021`）
@@ -97,16 +98,13 @@ output/{テーマ名}/
 - 背景が複雑でも読めるよう、半透明黒帯は残す
 - 色付き字幕は全文ではなく重要語の強調に限定する
 
-### YMM4自動操作
-- `core/ymm4_renderer.py` はGUI操作自動化。YMM4のUIが変わると壊れる
-- テストやデバッグで `.ymmp` 生成だけ試す場合は `run_pipeline(..., render=False)` 相当の流れで
-
 ### gitignore対象（コミット禁止）
 - `output/` 全体
 - `.env`
 - `client_secrets.json`
 - `token.json`
 - `token_analytics.json`
+- 認証情報、APIキー、OAuthトークン、秘密鍵、Cookie、個人用設定などのシークレットはファイル名に関わらずコミット禁止。ドキュメントやログにも値を記載しない。
 
 ## 2026-05-18 Note
 
