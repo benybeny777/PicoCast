@@ -17,7 +17,7 @@
 ### キャラ腰から上表示モード（native/YMM4共通）
 
 - `config.py`: `CHARACTER_UPPER_BODY_MODE`(デフォルト ON) / `CHARACTER_UPPER_BODY_SCALE`(1.35) / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET`(250) / `CHARACTER_UPPER_BODY_LONG_Y_OFFSET`(300) を追加。`.env` で上書き可能
-- `core/native_renderer.py`: `CHARACTER_UPPER_BODY_MODE=1` のとき Shorts/Long 両方でキャラを 1.35 倍に拡大し、Y座標を下方向へオフセットして腰から上が画面に映る構図にする。OFF のとき従来通り（Shorts は `NATIVE_SHORTS_CHARACTER_SCALE`、Long は無拡大）
+- `core/native_renderer.py`: `CHARACTER_UPPER_BODY_MODE=1` のとき native Shorts/Long でキャラを拡大し、Y座標を下方向へオフセットして腰から上が画面に映る構図にする
 - `main.py`: `_TACHIE_BASE` → `TACHIE_PARAMS` の生成ロジックを変更。`CHARACTER_UPPER_BODY_MODE=1` のとき YMM4 のずんだもん/めたん立ち絵を同スケール・同オフセットで調整する
 - `SPEC.md`: `CHARACTER_UPPER_BODY_*` 環境変数を追加
 
@@ -28,7 +28,8 @@
 - `core/native_renderer.py`: native出力のBGM音量を `NATIVE_BGM_VOLUME_DB=-20dB` で指定するよう変更（従来の `BGM_VOLUME` パーセント指定はYMM4専用に分離）
 - `core/native_renderer.py`: native MP4生成後に ffprobe で実尺を取得し `📏 native実尺評価: Xs [理想/やや短い/OKだけど長め/警告/要確認]` をログ表示。`estimated_duration_sec` 引数があれば推定尺との差分も表示
 - `core/native_renderer.py`: `_meta/render_info.json` に render_engine / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i/tp/lra を保存
-- `core/native_renderer.py`: native Shorts のキャラ表示に `NATIVE_SHORTS_CHARACTER_SCALE`(デフォルト 1.05)を適用。Long/YMM4には影響しない
+- `gui.py`: native MP4生成時に推定尺を `render_native_test()` へ渡し、実尺との差分と `render_info.json` の `estimated_duration_sec` が埋まるよう変更。アップロード候補のスコア欄にも native 実尺を表示
+- `core/native_renderer.py`: native Shorts のキャラ表示に `NATIVE_SHORTS_CHARACTER_SCALE`(デフォルト 1.05)を適用。`CHARACTER_UPPER_BODY_MODE=1` の場合は native Shorts/Long の腰から上表示モードを優先
 - `core/native_renderer.py`: 字幕フチ幅を `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(13) / `NATIVE_SUBTITLE_STROKE_WIDTH`(9) に変更（従来ハードコードの 12/8 より少し太め）、字幕帯高さに `NATIVE_SUBTITLE_PADDING_Y`×2 を加算
 - `config.py` / `README.md` / `SPEC.md`: `NATIVE_BGM_VOLUME_DB` / `NATIVE_SHORTS_CHARACTER_SCALE` を追加
 

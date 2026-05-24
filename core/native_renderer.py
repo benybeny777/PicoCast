@@ -829,7 +829,8 @@ def render_native_test(
         if is_shorts:
             progress_callback(f"📏 native実尺評価: {actual_duration:.1f}秒 {dur_label}")
         if NATIVE_RENDER_CHARACTERS and is_shorts:
-            progress_callback(f"🧍 nativeキャラ倍率: {NATIVE_SHORTS_CHARACTER_SCALE:g}")
+            char_scale = CHARACTER_UPPER_BODY_SCALE if CHARACTER_UPPER_BODY_MODE else NATIVE_SHORTS_CHARACTER_SCALE
+            progress_callback(f"🧍 nativeキャラ倍率: {char_scale:g}")
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
             progress_callback(
                 "🔊 native audio loudnorm: "

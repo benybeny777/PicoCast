@@ -1509,7 +1509,22 @@ class YMM4AutoGui:
                 self._set_batch_progress_text(f"YMMなしMP4化(test): {idx}/{total}")
                 self.root.after(0, lambda v=int(((idx - 1) / max(total, 1)) * 100): self.progress.config(value=v))
                 self.log(f"🎞 YMMなしMP4化(test): {name}", "batch")
-                result = render_native_test(output_dir, progress_callback=self.log)
+                estimated_duration_sec = None
+                try:
+                    script_path = os.path.join(output_dir, "script.txt")
+                    items = ScriptParser.parse(script_path)
+                    is_shorts = any(
+                        it["type"] == "video_format" and it["text"].strip().lower() in ("shorts", "short", "ショート")
+                        for it in items
+                    )
+                    estimated_duration_sec, _n, _avg = self._estimate_duration(items, is_shorts)
+                except Exception as e:
+                    self.log(f"⚠ native推定尺取得に失敗: {e}", "warning")
+                result = render_native_test(
+                    output_dir,
+                    progress_callback=self.log,
+                    estimated_duration_sec=estimated_duration_sec,
+                )
                 self.log(
                     f"✅ YMMなしMP4化完了: {os.path.basename(result.output_path)} "
                     f"(実尺{result.duration_sec:.1f}s / 音声合計{result.audio_duration_sec:.1f}s / 音声{result.audio_count} / 背景{result.background_count})",
@@ -1680,12 +1695,18 @@ class YMM4AutoGui:
                         )
                     except Exception:
                         _native_is_shorts = False
+                    _estimated_duration_sec = None
+                    try:
+                        _estimated_duration_sec, _n, _avg = self._estimate_duration(_items_for_topic, _native_is_shorts)
+                    except Exception as e:
+                        self.log(f"⚠ native推定尺取得に失敗: {e}", "warning")
                     self.log(f"🎞 native MP4出力開始: {os.path.basename(output_dir)}", "batch")
                     native_result = render_native_test(
                         output_dir,
                         progress_callback=self.log,
                         voice_speed_intro=NATIVE_SHORTS_INTRO_VOICE_SPEED if _native_is_shorts else NATIVE_LONG_INTRO_VOICE_SPEED,
                         voice_speed_body=NATIVE_SHORTS_BODY_VOICE_SPEED if _native_is_shorts else NATIVE_LONG_BODY_VOICE_SPEED,
+                        estimated_duration_sec=_estimated_duration_sec,
                     )
                     _nd_status = "unknown"
                     try:
@@ -3679,9 +3700,17 @@ class YMM4AutoGui:
         if duration:
             sec = duration.get("seconds")
             status = duration.get("status", "")
-            mark = "✅" if status == "ok" else "⚠"
+            mark = "✅" if status in ("ok", "ideal") else "⚠"
             if sec is not None:
                 parts.append(f"{sec}s{mark}")
+
+        render_info = _read("render_info.json")
+        if render_info.get("render_engine") == "native":
+            actual = render_info.get("actual_duration_sec")
+            status = render_info.get("actual_duration_status", "")
+            mark = "✅" if status == "ideal" else "⚠"
+            if actual is not None:
+                parts.append(f"実尺{float(actual):.1f}s{mark}")
 
         final = _read("final_review.json")
         if final and not final.get("skipped") and not final.get("error"):
