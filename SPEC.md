@@ -626,6 +626,13 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 - 横展開では「毒だと思われていた」「危険だった」「薬だった」系、袋・容器・穴・形・名前の理由、寿司/魚の価値逆転・名前の罠を優先
 - viewsだけで判断せず、平均視聴率・平均視聴時間・高評価率・登録者増を重視。高再生だけの発祥説明型は優先度を下げる
 - タイトル本文へ `雑学 ショート` / `食べ物 雑学` / `ゆっくり解説 食べ物` を不自然に入れない。SEO語はタグ・説明欄で補完する
+- AIO/SEO補完はタイトルではなく、説明文冒頭の自然文要約、タグ、ハッシュタグ、固定コメントで行う
+- 説明文冒頭1〜2行には動画の答えが分かる要約を入れ、固定コメントは要約1文 + 答えやすい質問1文にする
+- vidIQ方針として当面はShorts集中。Longは主力にせず、Shortsで実績が出たネタの深掘り候補を優先する
+- Shorts案は冒頭1〜3行または5秒以内にタイトルの核心を回収できるものを優先する
+- Shorts案は15〜30秒地点に2つ目の驚き、逆転、具体例を入れられる構造を加点する
+- コメントしやすい質問（どっち派 / 他にも知ってる / これ知ってた）へ自然につながる案を加点する
+- 3選・クイズ形式は実験枠として許可するが、通常の1ネタ深掘りを主力にする
 - `analysis_status=data_wait` の動画は優先度A止まり（views 3000以上・likes 30以上・comments 3以上のみ暫定S可）。実績根拠には `暫定` と明記する
 - 改善再挑戦枠: views 1000以上かつ平均視聴率30〜49%（条件A）、またはviews 500以上かつlike_rate 1.5%以上（条件B）の既存食材は最大2案まで再挑戦可
 - 新規開拓枠は採点7点未満を出力しない
@@ -716,7 +723,7 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 `YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には、アップロード可能な `.mp4` がある履歴だけを表示します。各履歴フォルダから最新の `.mp4` を探し、`_meta/metadata.txt` のタイトル・説明文・タグを使ってアップロードします。アップロード成功後は、その履歴フォルダを `output/000_uploaded/` に移動し、同時に中央台帳 `output/000_data/upload_records.json` へ記録します。
 
-YouTubeタグは `core/youtube_metadata.py` で一元管理します。vidIQキーワード分析に基づく共通タグ（`食べ物 雑学`、`雑学 ショート`、`ゆっくり解説 食べ物`、`VOICEVOX解説` など）を入れ、`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。寿司、コンビニ、お菓子、マック、トマト、コーラなどはタイトルや `script.txt` から題材別タグを追加し、タグ欄は500文字以内に調整します。アップロード時に実際に使ったタグを `_meta/youtube_metadata.json` へ保存します。
+YouTubeタグは `core/youtube_metadata.py` で一元管理します。AIO/SEO補完として共通タグ（`食べ物雑学`、`食べ物 雑学`、`食べ物の歴史`、`ゆっくり解説`、`ゆっくり解説 食べ物`、`ずんだもん`、`ずんだもん解説`、`四国めたん`、`VOICEVOX`、`雑学ショート` など）を入れ、`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。寿司、コンビニ、お菓子、マック、トマト、コーラ、ドリア/洋食などはタイトルや `script.txt` から題材別タグを追加し、タグ欄は500文字以内に調整します。アップロード時に実際に使ったタグを `_meta/youtube_metadata.json` へ保存します。
 
 Long動画のアップロード成功後は、`LONG_UPLOAD_PLAYLIST_NAME` の名前と完全一致する自チャンネルの再生リストへ動画を自動追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。既に同じ動画が入っている場合は重複追加せず、結果を `_meta/upload_record.json` の `playlist_*` フィールドに保存します。Shortsには適用しません。再生リストが見つからない場合、アップロード自体は成功扱いのまま警告ログを出します。
 
@@ -724,7 +731,7 @@ Long動画のアップロード成功後は、`LONG_UPLOAD_PLAYLIST_NAME` の名
 
 台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。アップロード時に `_meta/upload_record.json` と `output/000_data/upload_records.json` へ保存し、Analytics一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。
 
-Analytics画面には `高評価率` に加えて `生成区分` / `元動画` / `目的` を表示します。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、再生数上位・平均視聴率上位・高評価率上位をまとめた実績サマリーを付けます。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
+Analytics画面には `高評価率` に加えて `生成区分` / `元動画` / `目的` を表示します。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、対象期間・取得日時、再生数上位・平均視聴率上位・高評価率上位・data_wait注目動画をまとめた実績サマリーを付けます。`AI分析用にコピー` では `analysis_status=data_wait` の動画にも暫定評価コメントを入れるよう指示します。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
 
 Analytics一覧は各列のヘッダークリックで昇順/降順ソートできます。数値列は数値として、公開日時は日時として、評価列は `S > A > B > C > D > 未計測 > 対象外` の順で並び替えます。
 
@@ -816,7 +823,9 @@ This operation updates YouTube publishAt, output/000_data/upload_records.json, a
 1. `📅 スケジュール` を開く
 2. `スロット詰め直し` を押す
 
-Future scheduled slots can be packed forward from the earliest available slot. rebalance_slots() uses upload_records publish_at/video_id data, updates YouTube publish times, and updates output/000_data/upload_records.json / upload_record.json. If video_id is missing, that video is skipped with a warning log.
+Future scheduled slots can be packed forward from the earliest available slot. rebalance_slots() uses upload_records publish_at/video_id data, updates YouTube publish times, and updates output/000_data/upload_records.json / upload_record.json. Shorts and Long may share the same publish_at, but duplicate publish_at values within the same video type are treated as rebalance targets. Within each video type, records with generation_kind set are assigned earlier slots before records without generation_kind. rebalance_slots_detailed() also returns the upload_records index so local records can be updated even when video_id is missing; YouTube updates still require video_id.
+
+Native Shorts rendering places zundamon/metan smaller and slightly higher than the old bottom-aligned layout to reduce overlap with captions. Shorts dialogue captions are center-aligned, use a 1.4x font scale by default, and prioritize readability: white text, speaker-colored inner outline (dark green for zundamon / dark purple-pink for metan), black outer outline, and an optional semi-transparent black band behind captions (`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`). Captions are nudged slightly downward with `NATIVE_SUBTITLE_Y_OFFSET_SHORTS`. These can be adjusted with `NATIVE_CHARACTER_HEIGHT_SHORTS`, `NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`, `NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`, `NATIVE_SUBTITLE_FONT_SCALE`, `NATIVE_SUBTITLE_ALIGNMENT_SHORTS`, and `NATIVE_SUBTITLE_Y_OFFSET_SHORTS`.
 
 ---
 
@@ -846,6 +855,20 @@ Future scheduled slots can be packed forward from the earliest available slot. r
 ### Shortsループ構成
 
 最後の1〜2セリフが冒頭の衝撃事実に自然につながる。視聴者が無意識にもう一周見たくなる構成。
+
+### vidIQ反映ルール
+
+- 当面はShorts集中。Longは主力にせず、Shortsで実績が出たネタの深掘りを優先する
+- Longを増やすより、Shortsの維持率とコメント率を優先する
+- Shorts冒頭1〜3行でタイトルの核心を必ず出し、「今日は〜」「今回は〜」などの導入は禁止する
+- タイトルで期待させた内容は5秒以内に回収する
+- 冒頭の驚きだけで最後まで引っ張らず、15〜30秒地点に2つ目の驚き、逆転、具体例を入れる
+- Shorts本編CTAは最後1行を基本とし、登録お願いよりコメントしやすい質問を優先する
+- 3選・クイズ形式は実験枠として許可するが、主力は通常の1ネタ深掘りにする
+- SEO語（食べ物雑学 / ゆっくり解説 / ずんだもん）はタイトルへ無理に入れず、タグ・説明欄・ハッシュタグで補完する
+- 説明文冒頭1〜2行には答えが分かる自然文の要約を入れる
+- Shorts冒頭1〜5秒以内に、題材と結論が分かる一文を掛け合いの中で自然に入れる
+- 固定コメントは動画内容の要約1文 + コメントしやすい質問1文で構成する
 
 ### CTA優先順位
 

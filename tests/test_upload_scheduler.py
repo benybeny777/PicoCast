@@ -94,6 +94,143 @@ class UploadSchedulerTests(unittest.TestCase):
 
         self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "future b")])
 
+    def test_rebalance_detailed_includes_record_index_for_duplicate_slots_without_video_id(self):
+        records = [
+            {
+                "video_type": "shorts",
+                "title": "same title",
+                "publish_at": "2026-05-21T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+            {
+                "video_type": "shorts",
+                "title": "same title",
+                "publish_at": "2026-05-21T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+        ]
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            changes = upload_scheduler.rebalance_slots_detailed("shorts")
+
+        self.assertEqual(
+            changes,
+            [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "same title", "", 1)],
+        )
+
+    def test_long_rebalance_preserves_duplicate_record_slots(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "long",
+                "title": "long a",
+                "publish_at": "2026-05-23T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+            {
+                "video_id": "v2",
+                "video_type": "long",
+                "title": "long b",
+                "publish_at": "2026-05-23T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+        ]
+        now = datetime(2026, 5, 22, 22, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            changes = upload_scheduler.rebalance_slots("long")
+
+        self.assertEqual(changes, [("2026-05-23T12:00:00+09:00", "2026-05-23T21:00:00+09:00", "long b")])
+
+    def test_rebalance_prioritizes_records_with_generation_kind(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "shorts",
+                "title": "normal first",
+                "publish_at": "2026-05-21T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+            {
+                "video_id": "v2",
+                "video_type": "shorts",
+                "title": "derived later",
+                "generation_kind": "横展開",
+                "publish_at": "2026-05-21T19:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+        ]
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            changes = upload_scheduler.rebalance_slots("shorts")
+
+        self.assertEqual(
+            changes,
+            [
+                ("2026-05-21T19:00:00+09:00", "2026-05-21T12:00:00+09:00", "derived later"),
+                ("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "normal first"),
+            ],
+        )
+
+    def test_rebalance_keeps_generation_kind_record_first_when_slots_are_duplicated(self):
+        records = [
+            {
+                "video_id": "v1",
+                "video_type": "shorts",
+                "title": "normal duplicate",
+                "publish_at": "2026-05-21T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+            {
+                "video_id": "v2",
+                "video_type": "shorts",
+                "title": "derived duplicate",
+                "generation_kind": "品質改善版",
+                "publish_at": "2026-05-21T12:00:00+09:00",
+                "publish_status": "scheduled",
+            },
+        ]
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
+
+        with (
+            patch("core.upload_records.load_upload_records", return_value=records),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
+        ):
+            changes = upload_scheduler.rebalance_slots("shorts")
+
+        self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "normal duplicate")])
+
     def test_rebalance_includes_unlisted_records_with_publish_at(self):
         records = [
             {
@@ -152,6 +289,12 @@ class UploadSchedulerTests(unittest.TestCase):
             }
         ]
         saved_records = []
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
 
         with (
             patch("core.upload_records.load_upload_records", return_value=records),
@@ -159,6 +302,7 @@ class UploadSchedulerTests(unittest.TestCase):
             patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={
                 "v1": {"privacyStatus": "unlisted", "publishAt": "2026-05-23T03:00:00Z"}
             }),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             result = upload_scheduler.sync_schedule_from_youtube()
 
@@ -272,6 +416,12 @@ class UploadSchedulerTests(unittest.TestCase):
             }
         ]
         saved_records = []
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
 
         with (
             patch("core.upload_records.load_upload_records", return_value=records),
@@ -279,6 +429,7 @@ class UploadSchedulerTests(unittest.TestCase):
             patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={
                 "v1": {"privacyStatus": "private", "publishAt": "2026-05-23T03:00:00Z"}
             }),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             result = upload_scheduler.sync_schedule_from_youtube()
 
@@ -341,6 +492,12 @@ class UploadSchedulerTests(unittest.TestCase):
     def test_sync_imports_scheduled_video_missing_from_local_records(self):
         records = []
         saved_records = []
+        now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
+
+        class FixedDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return now
 
         with (
             patch("core.upload_records.load_upload_records", return_value=records),
@@ -354,6 +511,7 @@ class UploadSchedulerTests(unittest.TestCase):
                     "publishedAt": "2026-05-20T00:00:00Z",
                 }
             }),
+            patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
             result = upload_scheduler.sync_schedule_from_youtube()
 

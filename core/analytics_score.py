@@ -419,7 +419,27 @@ def to_tsv(items: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def build_performance_summary(items: list[dict[str, Any]], limit: int = 5) -> str:
+def _analytics_date_range(days: int, generated_at: str | None = None) -> tuple[str, str]:
+    if generated_at:
+        try:
+            end = datetime.fromisoformat(str(generated_at).replace("Z", "+00:00")).date()
+        except Exception:
+            end = datetime.now(timezone(timedelta(hours=9))).date()
+    else:
+        end = datetime.now(timezone(timedelta(hours=9))).date()
+    start = end - timedelta(days=int(days))
+    return start.isoformat(), end.isoformat()
+
+
+def analytics_period_label(days: int | None = None, start_date: str | None = None, end_date: str | None = None, generated_at: str | None = None) -> str:
+    days = int(days or 28)
+    if not start_date or not end_date:
+        start_date, end_date = _analytics_date_range(days, generated_at)
+    generated_text = f" / 取得日時: {generated_at}" if generated_at else ""
+    return f"対象期間: {start_date}〜{end_date} ({days}日){generated_text}"
+
+
+def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta: dict[str, Any] | None = None) -> str:
     if not items:
         return "実績データが空です。"
 
@@ -429,6 +449,7 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5) -> st
 
     # 実績ありのみ分析対象（予約中・データ待ち・対象外は除外）
     scored = [item for item in items if item.get("analysis_status") == "analyzable"]
+    data_wait = [item for item in items if item.get("analysis_status") == "data_wait"]
     strong = [
         item for item in scored
         if item.get("score") in ("S", "A") or _num(item.get("average_percentage_viewed")) >= 70
@@ -440,11 +461,29 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5) -> st
         key=lambda x: _num(x.get("like_rate")),
         reverse=True,
     )[:limit]
+    data_wait_notable = sorted(
+        [
+            item for item in data_wait
+            if (
+                _int(item.get("views")) >= 1000
+                or _int(item.get("likes")) >= 10
+                or _num(item.get("like_rate")) >= 1.0
+                or _int(item.get("comments")) >= 1
+            )
+        ],
+        key=lambda x: (_int(x.get("views")), _int(x.get("likes")), _int(x.get("comments"))),
+        reverse=True,
+    )[:limit]
 
-    lines = [
-        "今回の実績データから見える優先横展開:",
-        f"・対象動画: {len(scored)}件 / 強い候補: {len(strong)}件",
-    ]
+    lines = ["今回の実績データから見える優先横展開:"]
+    if meta:
+        lines.append("・" + analytics_period_label(
+            days=meta.get("days"),
+            start_date=meta.get("start_date"),
+            end_date=meta.get("end_date"),
+            generated_at=meta.get("generated_at"),
+        ))
+    lines.append(f"・対象動画: {len(scored)}件 / 強い候補: {len(strong)}件 / データ待ち: {len(data_wait)}件")
     if top_views:
         lines.append("・再生数上位: " + " / ".join(
             f"{_fmt_title(item)} views{_int(item.get('views'))}" for item in top_views[:3]
@@ -457,20 +496,34 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5) -> st
         lines.append("・高評価率上位: " + " / ".join(
             f"{_fmt_title(item)} {_num(item.get('like_rate')):.2f}%" for item in top_like_rate[:3]
         ))
+    if data_wait_notable:
+        lines.append("・data_wait注目: " + " / ".join(
+            f"{_fmt_title(item)} views{_int(item.get('views'))} likes{_int(item.get('likes'))} comments{_int(item.get('comments'))}"
+            for item in data_wait_notable[:3]
+        ))
     lines.append("・viewsだけで判断せず、平均視聴率、平均視聴時間、登録者増減、高評価率を合わせて横展開する。")
+    lines.append("・data_waitは平均視聴率未取得のため暫定扱いにし、views / likes / like_rate / comments が強い動画には必ず短いコメントを付ける。")
     return "\n".join(lines)
 
 
-def save_score_files(items: list[dict[str, Any]], days: int, output_dir=ANALYTICS_DIR) -> tuple[str, str]:
+def save_score_files(items: list[dict[str, Any]], days: int, output_dir=ANALYTICS_DIR, summary: dict[str, Any] | None = None) -> tuple[str, str]:
     os.makedirs(output_dir, exist_ok=True)
     jst = timezone(timedelta(hours=9))
     now = datetime.now(jst)
+    summary = dict(summary or {})
+    start_date = summary.get("start_date")
+    end_date = summary.get("end_date")
+    if not start_date or not end_date:
+        start_date, end_date = _analytics_date_range(days, now.isoformat())
     stamp = now.strftime("%Y%m%d")
     json_path = os.path.join(output_dir, f"analytics_score_{stamp}.json")
     tsv_path = os.path.join(output_dir, f"analytics_score_{stamp}.tsv")
     data = {
         "generated_at": now.isoformat(),
         "days": days,
+        "start_date": start_date,
+        "end_date": end_date,
+        "summary": summary,
         "items": items,
     }
     with open(json_path, "w", encoding="utf-8") as f:

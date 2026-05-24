@@ -14,6 +14,27 @@
 
 ## 2026-05-23
 
+### vidIQ方針を台本・タイトル案プロンプトへ反映
+
+- `core/prompt_parts/local/script_generation_prompt.txt`: Shorts集中、冒頭1〜3行でタイトル核心回収、15〜30秒地点の二段フック、コメント誘発、3選/クイズ実験枠、SEO語はタイトルへ無理に入れない方針を追加
+- `core/prompt_parts/local/title_dynamic_context_food.md` / `core/script_prompts.py`: タイトル案生成でShorts維持率・コメント率を優先し、LongはShorts実績ネタの深掘り候補に限定する方針を追加
+- `core/youtube_metadata.py`: AIO/SEO補完用の共通タグを強化し、説明文のSEO補完文を冒頭側に入れるよう変更。ドリア/洋食系の題材別タグを追加
+- `core/prompt_parts/local/script_generation_prompt.txt` / `core/script_prompts.py` / `core/ai_generator.py`: 説明文冒頭の自然文要約、固定コメントの要約1文+質問1文、Shorts冒頭1〜5秒で題材と結論を明文化するルールを追加
+- `SPEC.md`: 台本作成ルールとタイトル案運用にvidIQ反映ルールを追記
+
+### native Shortsのキャラ配置と字幕位置を調整
+
+- `config.py`: Shortsのずんだもん/めたん立ち絵をやや大きめ・外側配置・下側クロップにし、腰から上が見える構図へ調整
+- `core/native_renderer.py`: Shorts字幕を中央寄せにし、字幕フォントサイズを既存比40%拡大。通常字幕は白文字＋話者別の濃色内フチ（ずんだもん=濃緑、めたん=濃紫ピンク）＋黒外フチに変更し、必要時に半透明黒帯を背面へ出せるようにした。字幕を少し下げ、環境変数で `NATIVE_SUBTITLE_FONT_SCALE` / `NATIVE_SUBTITLE_ALIGNMENT_SHORTS` / `NATIVE_SUBTITLE_Y_OFFSET_SHORTS` / `NATIVE_SUBTITLE_BOX_SHORTS` / `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS` / キャラ余白を調整可能に変更
+
+### アップロード公開時刻の同タイプ重複を詰め直しで解消
+
+- `core/upload_scheduler.py`: `rebalance_slots_detailed()` が `video_id` に加えて upload_records のレコード番号を返し、同時刻・同タイトル・video_idなしの重複でも対象レコードを特定できるように変更
+- `core/upload_scheduler.py`: スロット詰め直し時、`generation_kind` が入っている動画（横展開・品質改善版・再挑戦など）を同タイプ内で優先して早い枠へ割り当てるように変更
+- `gui.py`: スロット詰め直し適用時にレコード番号を使って `output/000_data/upload_records.json` を直接更新。`video_id` がない場合もローカルの予約時刻は詰め直す
+- Shorts と Long は従来通り同時刻を許容。同タイプ内（Shorts同士 / Long同士）の同時刻重複を解消する
+- `tests/test_upload_scheduler.py`: Shorts / Long の同時刻重複と video_id なし重複のテストを追加
+
 ### native MP4生成後に実尺チェックを追加
 
 - `gui.py`: `render_native_test()` 完了後に `duration_review()` で実尺を判定し、`━━ 実尺チェック XX.X秒 / [ラベル] ━━` 形式でログ表示（ideal→緑 / warning→黄 / needs_review→赤）
@@ -68,6 +89,14 @@
 - `config.py`: `SD_SIZE_IMAGE_SCALE` 環境変数を追加（デフォルト0.5）
 - `gui.py`: 「SD生成」チェックボックス追加（デフォルトOFF）。生成・画像確認再生成・サムネイル再生成の全パスに伝播
 - `main.py`: `run_pipeline()` / `regenerate_thumbnail_only()` に `sd_size_mode` パラメータを追加
+
+### data_wait動画にもAI分析コメントを出すように変更
+
+- `core/analytics_score.py`: 実績サマリーに data_wait 件数と注目動画を追加
+- `core/analytics_score.py`: Analytics保存JSONに `start_date` / `end_date` / `summary` を保存し、実績サマリーに対象期間・取得日時を表示
+- `gui.py`: Analyticsの「AI分析用にコピー」に、data_wait動画へ暫定評価コメントを必ず入れる指示を追加
+- `gui.py`: Analytics画面の取得結果表示に対象期間を追加
+- `core/script_prompts.py`: タイトル案プロンプトで data_wait 動画にも「暫定横展開候補」「要追跡」「判断保留」などの短い評価コメントを書くよう明記
 
 ---
 

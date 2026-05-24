@@ -13,6 +13,10 @@ from config import (
     NATIVE_BACKGROUND_TRANSITION_SEC,
     NATIVE_CHARACTER_HEIGHT_LONG,
     NATIVE_CHARACTER_HEIGHT_SHORTS,
+    NATIVE_CHARACTER_BOTTOM_MARGIN_LONG,
+    NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS,
+    NATIVE_CHARACTER_SIDE_MARGIN_LONG,
+    NATIVE_CHARACTER_SIDE_MARGIN_SHORTS,
     NATIVE_ENABLE_BLINK,
     NATIVE_ENABLE_LIPSYNC,
     NATIVE_FFMPEG_CQ,
@@ -21,9 +25,16 @@ from config import (
     NATIVE_FFMPEG_PRESET,
     NATIVE_RENDER_CHARACTERS,
     NATIVE_SUBTITLE_FONT,
+    NATIVE_SUBTITLE_FONT_SCALE,
+    NATIVE_SUBTITLE_ALIGNMENT_LONG,
+    NATIVE_SUBTITLE_ALIGNMENT_SHORTS,
+    NATIVE_SUBTITLE_BOX_OPACITY_SHORTS,
+    NATIVE_SUBTITLE_BOX_SHORTS,
     NATIVE_SUBTITLE_MARGIN_V_LONG,
     NATIVE_SUBTITLE_MARGIN_V_SHORTS,
     NATIVE_SUBTITLE_OFFSET_SEC,
+    NATIVE_SUBTITLE_Y_OFFSET_LONG,
+    NATIVE_SUBTITLE_Y_OFFSET_SHORTS,
     VIDEO_FPS,
 )
 from core.native_character_assets import CharacterVariantSet, load_character_variants
@@ -321,8 +332,10 @@ def _character_inputs(width: int, height: int) -> list[CharacterVariantSet]:
     return [item for item in load_character_variants() if item.base and os.path.exists(item.base)]
 
 
-def _character_position(name: str) -> str:
-    return "40:H-h-40" if name == "zundamon" else "W-w-40:H-h-40"
+def _character_position(name: str, portrait: bool = False) -> str:
+    side = NATIVE_CHARACTER_SIDE_MARGIN_SHORTS if portrait else NATIVE_CHARACTER_SIDE_MARGIN_LONG
+    bottom = NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS if portrait else NATIVE_CHARACTER_BOTTOM_MARGIN_LONG
+    return f"{side}:H-h-{bottom}" if name == "zundamon" else f"W-w-{side}:H-h-{bottom}"
 
 
 def _speaker_name(style: str) -> str | None:
@@ -366,7 +379,8 @@ def _segment_filter(
     duration: float,
     has_background_transition: bool = False,
 ) -> str:
-    char_h = NATIVE_CHARACTER_HEIGHT_SHORTS if height > width else NATIVE_CHARACTER_HEIGHT_LONG
+    portrait = height > width
+    char_h = NATIVE_CHARACTER_HEIGHT_SHORTS if portrait else NATIVE_CHARACTER_HEIGHT_LONG
     chains = [f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg_current]"]
     input_index = 2
     if has_background_transition:
@@ -380,7 +394,7 @@ def _segment_filter(
     current = "base0"
     overlay_num = 1
     for char_idx, character in enumerate(characters):
-        position = _character_position(character.name)
+        position = _character_position(character.name, portrait=portrait)
         chains.append(f"[{input_index}:v]scale=-1:{char_h}[{character.name}_base]")
         chains.append(f"[{current}][{character.name}_base]overlay={position}[base{overlay_num}]")
         current = f"base{overlay_num}"
@@ -443,13 +457,24 @@ def _write_subtitles(
     height: int,
     offset_sec: float = 0.0,
 ) -> None:
-    font_size = 64 if height >= 1600 else 52
+    font_size = int(round((64 if height >= 1600 else 52) * float(NATIVE_SUBTITLE_FONT_SCALE or 1.0)))
     margin_v = NATIVE_SUBTITLE_MARGIN_V_SHORTS if height >= 1600 else NATIVE_SUBTITLE_MARGIN_V_LONG
+    alignment = NATIVE_SUBTITLE_ALIGNMENT_SHORTS if height >= 1600 else NATIVE_SUBTITLE_ALIGNMENT_LONG
+    y_offset = NATIVE_SUBTITLE_Y_OFFSET_SHORTS if height >= 1600 else NATIVE_SUBTITLE_Y_OFFSET_LONG
     font_name = str(NATIVE_SUBTITLE_FONT or "Meiryo").replace(",", " ")
+    box_enabled = bool(NATIVE_SUBTITLE_BOX_SHORTS) if height >= 1600 else False
+    box_opacity = max(0.0, min(1.0, float(NATIVE_SUBTITLE_BOX_OPACITY_SHORTS or 0.0)))
+    box_alpha = int(round((1.0 - box_opacity) * 255))
+    box_color = f"&H{box_alpha:02X}000000"
     style_body = (
-        "{name},{font_name},{font_size},{primary},&H00FFFFFF,&H00181818,&H80000000,"
-        "1,0,0,0,100,100,0,0,1,5,1,2,70,70,{margin_v},1"
+        "{name},{font_name},{font_size},{primary},&H00FFFFFF,{outline_color},&H80000000,"
+        "1,0,0,0,100,100,0,0,1,{outline_width},{shadow_depth},{alignment},70,70,{margin_v},1"
     )
+    inner_outline_colors = {
+        "Default": "&H00000000",
+        "Zundamon": "&H00208020",
+        "Metan": "&H00802A8A",
+    }
     lines = [
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -460,20 +485,57 @@ def _write_subtitles(
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, "
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
-        "Style: " + style_body.format(name="Default", font_name=font_name, font_size=font_size, primary="&H00FFFFFF", margin_v=margin_v),
-        "Style: " + style_body.format(name="Zundamon", font_name=font_name, font_size=font_size, primary="&H0067F28B", margin_v=margin_v),
-        "Style: " + style_body.format(name="Metan", font_name=font_name, font_size=font_size, primary="&H00F6A0FF", margin_v=margin_v),
+        f"Style: SubtitleBox,Arial,1,{box_color},&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
+    ]
+    for name, inner_outline in inner_outline_colors.items():
+        lines.append(
+            "Style: " + style_body.format(
+                name=f"{name}Outer",
+                font_name=font_name,
+                font_size=font_size,
+                primary="&H00FFFFFF",
+                outline_color="&H00000000",
+                outline_width=10,
+                shadow_depth=2,
+                margin_v=margin_v,
+                alignment=alignment,
+            )
+        )
+        lines.append(
+            "Style: " + style_body.format(
+                name=name,
+                font_name=font_name,
+                font_size=font_size,
+                primary="&H00FFFFFF",
+                outline_color=inner_outline,
+                outline_width=5,
+                shadow_depth=0,
+                margin_v=margin_v,
+                alignment=alignment,
+            )
+        )
+    lines.extend([
         "",
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
-    ]
+    ])
     t = 0.0
     for idx, dur in enumerate(audio_durations):
         text, style = chunks[idx] if idx < len(chunks) else ("", "Default")
         if text:
             start = max(0.0, t + offset_sec)
             end = max(start + 0.1, t + max(0.1, dur) + offset_sec)
-            lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},{style},,0,0,0,,{_ass_escape(text)}")
+            style_name = style if style in inner_outline_colors else "Default"
+            escaped_text = _ass_escape(text)
+            text_y = height // 2 + int(y_offset)
+            override = f"{{\\pos({width // 2},{text_y})}}" if alignment == 5 and y_offset else ""
+            if box_enabled and alignment == 5:
+                box_w = int(width * 0.88)
+                box_h = int(font_size * 1.75)
+                box_path = f"m {-box_w // 2} {-box_h // 2} l {box_w // 2} {-box_h // 2} {box_w // 2} {box_h // 2} {-box_w // 2} {box_h // 2}"
+                lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},SubtitleBox,,0,0,0,,{{\\pos({width // 2},{text_y})\\p1}}{box_path}{{\\p0}}")
+            lines.append(f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},{style_name}Outer,,0,0,0,,{override}{escaped_text}")
+            lines.append(f"Dialogue: 2,{_ass_time(start)},{_ass_time(end)},{style_name},,0,0,0,,{override}{escaped_text}")
         t += max(0.0, dur) + INTER_DIALOGUE_GAP_SEC
     with open(path, "w", encoding="utf-8-sig", newline="\n") as f:
         f.write("\n".join(lines))

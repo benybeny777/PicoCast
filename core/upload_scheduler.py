@@ -43,6 +43,11 @@ def _is_scheduled_record(record: dict) -> bool:
     return status in SCHEDULED_STATUSES or privacy == "unlisted"
 
 
+def _has_generation_kind(value) -> bool:
+    text = str(value or "").strip()
+    return bool(text) and text.lower() not in {"none", "null", "n/a", "na", "-"} and text not in {"なし", "未設定"}
+
+
 def _assign_slots_from_used(
     count: int,
     video_type: str,
@@ -121,6 +126,7 @@ def build_rebalanced_schedule(
     schedule: dict,
     video_type: str,
     now: datetime | None = None,
+    used_slots: set[str] | None = None,
 ) -> tuple[dict, list[tuple[str, str, str]]]:
     """Build a rebalanced schedule without saving it."""
     now = _as_jst(now or datetime.now(JST))
@@ -144,7 +150,9 @@ def build_rebalanced_schedule(
     if not future_sorted:
         return dict(schedule), []
 
-    new_slots = _assign_slots_from_used(len(future_sorted), video_type, set(fixed.keys()), now)
+    used = set(used_slots or set())
+    used.update(fixed.keys())
+    new_slots = _assign_slots_from_used(len(future_sorted), video_type, used, now)
     if len(new_slots) != len(future_sorted):
         raise RuntimeError("Not enough available upload slots within 90 days.")
 
@@ -188,6 +196,7 @@ def _scheduled_entries_from_records(records: list[dict], video_type: str) -> lis
             "slot_dt": slot_dt,
             "title": title,
             "video_id": str(record.get("video_id") or "").strip(),
+            "generation_kind": str(record.get("generation_kind") or "").strip(),
         })
     return entries
 
@@ -197,12 +206,14 @@ def build_rebalanced_entries(
     video_type: str,
     now: datetime | None = None,
     include_video_id: bool = False,
+    used_slots: set[str] | None = None,
+    include_record_index: bool = False,
 ) -> list[tuple]:
     """Build rebalance changes from record entries, preserving duplicate slots."""
     now = _as_jst(now or datetime.now(JST))
     cutoff = now + timedelta(minutes=5)
 
-    used = set()
+    used = set(used_slots or set())
     future = []
     for entry in entries:
         slot_dt = entry["slot_dt"]
@@ -212,7 +223,7 @@ def build_rebalanced_entries(
         else:
             future.append(entry)
 
-    future.sort(key=lambda item: (item["slot_dt"], item["index"]))
+    future.sort(key=lambda item: (0 if _has_generation_kind(item.get("generation_kind")) else 1, item["slot_dt"], item["index"]))
     if not future:
         return []
 
@@ -226,7 +237,10 @@ def build_rebalanced_entries(
         new_iso = new_dt.isoformat()
         if old_iso != new_iso:
             if include_video_id:
-                changes.append((old_iso, new_iso, entry["title"], entry.get("video_id") or ""))
+                change = (old_iso, new_iso, entry["title"], entry.get("video_id") or "")
+                if include_record_index:
+                    change = (*change, entry.get("index"))
+                changes.append(change)
             else:
                 changes.append((old_iso, new_iso, entry["title"]))
     return changes
@@ -242,13 +256,18 @@ def rebalance_slots(video_type: str) -> list[tuple[str, str, str]]:
     return build_rebalanced_entries(entries, video_type)
 
 
-def rebalance_slots_detailed(video_type: str) -> list[tuple[str, str, str, str]]:
-    """Like rebalance_slots(), but includes video_id for unambiguous callers."""
+def rebalance_slots_detailed(video_type: str) -> list[tuple]:
+    """Like rebalance_slots(), with video_id and record index for unambiguous callers."""
     from core.upload_records import load_upload_records
 
     records = load_upload_records()
     entries = _scheduled_entries_from_records(records, video_type)
-    return build_rebalanced_entries(entries, video_type, include_video_id=True)
+    return build_rebalanced_entries(
+        entries,
+        video_type,
+        include_video_id=True,
+        include_record_index=True,
+    )
 
 
 def count_rebalance_candidates(video_type: str) -> int:

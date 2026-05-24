@@ -21,7 +21,7 @@ from main import (
 )
 from core.ai_generator import AIGenerator
 from core.image_generator import ImageGenerator
-from core.analytics_score import build_performance_summary, format_duration, format_duration_status, save_score_files, score_items, to_tsv
+from core.analytics_score import analytics_period_label, build_performance_summary, format_duration, format_duration_status, save_score_files, score_items, to_tsv
 from core.output_paths import UPLOADED_TITLES_FILE, analytics_paths, ensure_output_dirs, migrate_root_file
 from core.opening_quality import duration_review, duration_status_label, llm_opening_review, local_opening_review, opening_score_tag, save_duration_review
 from core.parser import ScriptParser
@@ -523,11 +523,17 @@ class YMM4AutoGui:
                 data = json.load(f)
         except Exception:
             return [], latest
-        return data.get("items") or [], latest
+        meta = {
+            "generated_at": data.get("generated_at"),
+            "days": data.get("days"),
+            "start_date": data.get("start_date") or (data.get("summary") or {}).get("start_date"),
+            "end_date": data.get("end_date") or (data.get("summary") or {}).get("end_date"),
+        }
+        return data.get("items") or [], latest, meta
 
     def _read_latest_analytics_summary(self):
-        items, _path = self._read_latest_analytics_items()
-        return build_performance_summary(items) if items else ""
+        items, _path, meta = self._read_latest_analytics_items()
+        return build_performance_summary(items, meta=meta) if items else ""
 
     @staticmethod
     def _read_latest_analytics_tsv(max_rows=80):
@@ -2294,6 +2300,7 @@ class YMM4AutoGui:
         state = {
             "items": [],
             "days": 28,
+            "analytics_meta": {},
             "sort_col": None,
             "sort_reverse": False,
         }
@@ -2527,20 +2534,32 @@ class YMM4AutoGui:
                     from core.youtube_analytics import fetch_video_analytics
                     data = fetch_video_analytics(days)
                     items = score_items(data.get("items", []))
-                    json_path, tsv_path = save_score_files(items, days)
+                    api_summary = data.get("summary", {})
+                    json_path, tsv_path = save_score_files(items, days, summary=api_summary)
 
                     def done():
                         if not _widget_alive(tree):
                             return
                         state["items"] = items
-                        summary = data.get("summary", {})
+                        state["analytics_meta"] = {
+                            "days": api_summary.get("days", days),
+                            "start_date": api_summary.get("start_date"),
+                            "end_date": api_summary.get("end_date"),
+                            "generated_at": None,
+                        }
+                        summary = api_summary
+                        period_text = analytics_period_label(
+                            days=summary.get("days", days),
+                            start_date=summary.get("start_date"),
+                            end_date=summary.get("end_date"),
+                        )
                         published_count = sum(1 for item in items if item.get("publish_status") == "published")
                         scheduled_count = sum(1 for item in items if item.get("publish_status") == "scheduled")
                         analyzable_count = sum(1 for item in items if item.get("analysis_status") == "analyzable")
                         data_wait_count = sum(1 for item in items if item.get("analysis_status") == "data_wait")
                         summary_var.set(
                             f"{days}日 / 全{len(items)}件（公開{published_count} / 予約{scheduled_count} / 分析{analyzable_count} / 待ち{data_wait_count}）"
-                            f" / 再生 {summary.get('views', 0)} / 保存: {os.path.basename(json_path)}"
+                            f" / {period_text} / 再生 {summary.get('views', 0)} / 保存: {os.path.basename(json_path)}"
                         )
                         render()
                         self.log(f"📊 Analytics評価一覧を保存: {json_path} / {tsv_path}", "success")
@@ -2572,9 +2591,11 @@ class YMM4AutoGui:
             self.log(f"📋 評価一覧をコピーしました: {len(state['items'])}件", "success")
 
         def copy_ai_analysis():
-            summary = build_performance_summary(state["items"])
+            summary = build_performance_summary(state["items"], meta=state.get("analytics_meta") or {"days": state.get("days")})
             lines = [
                 "以下はYouTube Analyticsの動画別成績です。改善候補と横展開候補を分析してください。",
+                "analysis_status=data_wait の動画も無視せず、平均視聴率未取得の暫定評価として必ずコメントしてください。",
+                "data_wait は views / likes / like_rate / comments を見て、強い反応がある場合は「暫定横展開候補」「要追跡」「まだ判断保留」など短く分類してください。",
                 "",
                 summary,
                 "",
@@ -3121,7 +3142,7 @@ class YMM4AutoGui:
                 from core.upload_scheduler import count_rebalance_candidates, rebalance_slots_detailed
                 from core.upload_scheduler import sync_schedule_from_youtube as _sync_schedule_from_youtube
                 from core.youtube_uploader import update_video_publish_time
-                from core.upload_records import UPLOAD_RECORDS_FILE, find_upload_record, load_upload_records
+                from core.upload_records import UPLOAD_RECORDS_FILE, find_upload_record, load_upload_records, save_upload_records
 
                 def _record_title(value):
                     value = str(value or "").strip()
@@ -3210,10 +3231,10 @@ class YMM4AutoGui:
                 def fmt_iso(iso):
                     return iso[:16].replace("T", " ") if iso else "未設定"
 
-                plan_lines = [
-                    f"  ・[{type_label(vt)}] {title[:45]}: {fmt_iso(old_iso)} → {fmt_iso(new_iso)}"
-                    for vt, old_iso, new_iso, title, _video_id in all_changes
-                ]
+                plan_lines = []
+                for change in all_changes:
+                    vt, old_iso, new_iso, title, _video_id, *_rest = change
+                    plan_lines.append(f"  ・[{type_label(vt)}] {title[:45]}: {fmt_iso(old_iso)} → {fmt_iso(new_iso)}")
                 self.root.after(0, lambda lines=plan_lines: (
                     self.log(f"📅 スロット詰め直し 移動予定: {len(lines)}件", "info"),
                     [self.log(line, "info") for line in lines],
@@ -3221,16 +3242,34 @@ class YMM4AutoGui:
 
                 updated_yt = 0
                 no_id = []
-                for vt, old_iso, new_iso, title, change_video_id in all_changes:
+                for change in all_changes:
+                    vt, old_iso, new_iso, title, change_video_id, *rest = change
+                    change_record_index = rest[0] if rest else None
                     video_id, record_path = (change_video_id, UPLOAD_RECORDS_FILE) if change_video_id else find_record_for_rebalance(old_iso, title, vt)
                     short_title = title[:30]
                     old_dt_str = old_iso[:16].replace("T", " ") if old_iso else "未設定"
                     new_dt_str = new_iso[:16].replace("T", " ")
                     if not video_id:
+                        local_updated = False
+                        if change_record_index is not None:
+                            try:
+                                records = load_upload_records()
+                                idx = int(change_record_index)
+                                if 0 <= idx < len(records):
+                                    records[idx]["publish_at"] = new_iso
+                                    records[idx]["publish_status"] = "scheduled"
+                                    save_upload_records(records)
+                                    local_updated = True
+                            except Exception as e:
+                                self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
                         no_id.append(short_title)
                         self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str: self.log(
                             f"  ⚠ [{label}] video_id未発見・ローカルのみ: {t} ({o} → {n})", "warning",
                         ))
+                        if local_updated:
+                            self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str: self.log(
+                                f"  ✅ [{label}] ローカル詰め直し完了: {t} ({o} → {n})", "success",
+                            ))
                         continue
                     try:
                         new_dt = datetime.fromisoformat(new_iso)
@@ -3239,12 +3278,28 @@ class YMM4AutoGui:
                             if record_path:
                                 try:
                                     if os.path.abspath(record_path) == os.path.abspath(UPLOAD_RECORDS_FILE):
-                                        rec = next((dict(r) for r in load_upload_records() if r.get("video_id") == video_id), {"video_id": video_id})
+                                        records = load_upload_records()
+                                        rec_idx = None
+                                        if change_record_index is not None:
+                                            idx = int(change_record_index)
+                                            if 0 <= idx < len(records):
+                                                rec_idx = idx
+                                        if rec_idx is None:
+                                            rec_idx = next((i for i, r in enumerate(records) if r.get("video_id") == video_id), None)
+                                        if rec_idx is not None:
+                                            records[rec_idx]["publish_at"] = new_iso
+                                            records[rec_idx]["publish_status"] = "scheduled"
+                                            save_upload_records(records)
+                                            rec = None
+                                        else:
+                                            rec = {"video_id": video_id}
                                     else:
                                         with open(record_path, "r", encoding="utf-8") as f:
                                             rec = _json.load(f)
-                                    rec["publish_at"] = new_iso
-                                    self._write_upload_record_data(record_path, rec)
+                                    if rec is not None:
+                                        rec["publish_at"] = new_iso
+                                        rec["publish_status"] = "scheduled"
+                                        self._write_upload_record_data(record_path, rec)
                                 except Exception as e:
                                     self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
                             updated_yt += 1
@@ -3372,7 +3427,7 @@ class YMM4AutoGui:
                                 record["publish_status"] = "published"
                                 self._write_upload_record_data(record_path, record)
                             except Exception as e:
-                                self.log(f"  ? upload_record????: {e}", "warning")
+                                self.log(f"  ⚠ upload_record更新失敗: {e}", "warning")
                         if row["title"]:
                             published_titles.append(row["title"].strip())
                         self.log(f"  📢 手動公開済み検出: {row['title'][:35]}", "info")

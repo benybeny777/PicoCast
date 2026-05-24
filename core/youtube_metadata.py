@@ -14,8 +14,14 @@ CHANNEL_DEFAULT_TAGS = [
 # Safe default: sushi-specific tags are added by build_topic_tags() only.
 VIDEO_DEFAULT_TAGS = [
     "ずんだもん",
+    "ゆっくり解説",
+    "VOICEVOX",
+    "食べ物雑学",
+    "ずんだもん解説",
     "四国めたん",
     "食べ物 雑学",
+    "食べ物の歴史",
+    "雑学ショート",
     "雑学 ショート",
     "ゆっくり解説 食べ物",
     "VOICEVOX解説",
@@ -165,6 +171,10 @@ def build_topic_tags(title: str, script_text: str = "") -> list[str]:
             ["カレー", "ナポリタン", "ラーメン"],
             ["料理 歴史", "日本の食文化", "食文化", "食べ物 雑学"],
         ),
+        (
+            ["ドリア", "洋食", "ファミレス", "ホテル料理"],
+            ["ドリア", "洋食", "日本生まれ", "ファミレス", "ホテル料理"],
+        ),
     ]
 
     for keywords, add_tags in rules:
@@ -206,7 +216,7 @@ def ensure_seo_description_sentence(description: str, is_shorts: bool | None = N
     if _has_any(body_without_hashtags, ("雑学ショート", "食べ物雑学", "ゆっくり解説 食べ物", "食べ物の歴史")):
         return desc
     sentence = SEO_DESCRIPTION_SENTENCE_SHORTS if is_shorts is not False else SEO_DESCRIPTION_SENTENCE_LONG
-    return f"{desc}\n\n{sentence}"
+    return f"{sentence}\n\n{desc}"
 
 
 def ensure_fixed_hashtags(description: str) -> str:
