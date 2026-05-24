@@ -12,6 +12,29 @@
 
 ---
 
+## 2026-05-25 (3)
+
+### ローカルスケジュール管理を完全廃止・YouTube をソースオブトゥルースに
+
+**廃止**:
+- `output/000_data/upload_records.json`（中央アップロード台帳）を廃止
+- `save_upload_records()` / `upsert_upload_record()` を no-op 化
+- スケジュールに関わるローカルファイル読み書きをすべて除去
+
+**変更**:
+- `core/upload_records.py`: `load_upload_records()` を出力フォルダ配下の `_meta/upload_record.json` をスキャンする実装に置き換え。各レコードに `_local_path` を付加して固定コメント書き戻し先を特定可能に
+- `core/upload_scheduler.py`: `schedule_from_youtube()` / `_scheduled_entries_from_youtube()` を追加。`list_schedule()` / `rebalance_slots()` / `rebalance_slots_detailed()` / `count_rebalance_candidates()` を YouTube API ベースに切り替え
+- `gui.py` スケジュールダイアログ: `build_rows()` を YouTube `get_channel_upload_video_statuses()` 直接参照に書き換え。ローカル台帳参照を廃止
+- `gui.py` リバランスワーカー: ローカルレコード更新処理を全削除。YouTube 更新のみ実行
+- `gui.py` 固定コメント候補収集: `_local_path` を使ってスレッドID書き戻し先を特定
+- `gui.py` `_write_upload_record_data`: 中央ファイルパス宛の書き込みを no-op 化
+
+**維持**:
+- 動画ごとの `_meta/upload_record.json`（スコア・メタデータ）は引き続き書き込み
+- Analytics は `load_upload_records()` 経由でフォルダスキャン結果を参照（関数シグネチャ変更なし）
+
+---
+
 ## 2026-05-25 (2)
 
 ### アップロードスロット割り当てを YouTube 参照に変更

@@ -1,84 +1,44 @@
+import glob as _glob
 import json
 import os
 from datetime import datetime
 from typing import Any
 
-from core.output_paths import UPLOAD_RECORDS_FILE, migrate_root_file
+from core.output_paths import UPLOAD_RECORDS_FILE
 
 ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
 def load_upload_records() -> list[dict[str, Any]]:
-    migrate_root_file("upload_records.json", os.path.dirname(UPLOAD_RECORDS_FILE))
-    if not os.path.exists(UPLOAD_RECORDS_FILE):
-        return []
-    try:
-        with open(UPLOAD_RECORDS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            records = data.get("records", [])
-        else:
-            records = data
-        return records if isinstance(records, list) else []
-    except Exception:
-        return []
+    """Scan per-video _meta/upload_record.json files in the output tree.
+    Central upload_records.json is abolished; YouTube is the schedule source of truth.
+    Each returned record has a '_local_path' key with the source file path.
+    """
+    output_dir = os.path.join(ROOT_DIR, "output")
+    seen: dict[str, dict] = {}
+    for path in sorted(_glob.glob(
+        os.path.join(output_dir, "**", "_meta", "upload_record.json"), recursive=True
+    )):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                record = json.load(f)
+        except Exception:
+            continue
+        vid = str(record.get("video_id") or "").strip()
+        if vid and vid not in seen:
+            record["_local_path"] = path
+            seen[vid] = record
+    return list(seen.values())
 
 
 def save_upload_records(records: list[dict[str, Any]]) -> str:
-    migrate_root_file("upload_records.json", os.path.dirname(UPLOAD_RECORDS_FILE))
-    payload = {
-        "updated_at": datetime.now().astimezone().isoformat(),
-        "records": records,
-    }
-    with open(UPLOAD_RECORDS_FILE, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
+    """No-op: central upload_records.json is abolished."""
     return UPLOAD_RECORDS_FILE
 
 
 def upsert_upload_record(record: dict[str, Any]) -> str:
-    if not record:
-        return UPLOAD_RECORDS_FILE
-    records = load_upload_records()
-    video_id = str(record.get("video_id") or "").strip()
-    title = str(record.get("title") or "").strip()
-    publish_at = str(record.get("publish_at") or "").strip()
-
-    match_index = None
-    for idx, current in enumerate(records):
-        current_video_id = str(current.get("video_id") or "").strip()
-        if video_id and current_video_id == video_id:
-            match_index = idx
-            break
-        if not video_id and title and publish_at:
-            if str(current.get("title") or "").strip() == title and str(current.get("publish_at") or "").strip() == publish_at:
-                match_index = idx
-                break
-
-    merged = dict(records[match_index]) if match_index is not None else {}
-    merged.update(record)
-
-    # 重複スロット検出: 同じ (video_type, publish_at) が別の video_id に存在していたら警告ログ
-    new_pub = str(merged.get("publish_at") or "").strip()
-    new_vt = str(merged.get("video_type") or "").lower()
-    new_vid = str(merged.get("video_id") or "").strip()
-    if new_pub and new_vt:
-        for i, r in enumerate(records):
-            if match_index is not None and i == match_index:
-                continue
-            if str(r.get("publish_at") or "") == new_pub and str(r.get("video_type") or "").lower() == new_vt:
-                existing_id = str(r.get("video_id") or "")
-                if existing_id and existing_id != new_vid:
-                    import logging as _logging
-                    _logging.warning(
-                        "DUPLICATE SLOT: %s / %s already used by %s (new: %s)",
-                        new_vt, new_pub, existing_id, new_vid or title,
-                    )
-
-    if match_index is None:
-        records.append(merged)
-    else:
-        records[match_index] = merged
-    return save_upload_records(records)
+    """No-op: records are managed per-video in _meta/upload_record.json."""
+    return UPLOAD_RECORDS_FILE
 
 
 def _norm_title(value: str) -> str:
@@ -142,38 +102,5 @@ def find_upload_record(title: str | None = None, video_type: str | None = None, 
 
 
 def migrate_from_uploaded_dir() -> int:
-    uploaded_dir = os.path.join(ROOT_DIR, "output", "000_uploaded")
-    if not os.path.isdir(uploaded_dir):
-        return 0
-    migrated = 0
-    for root, _dirs, files in os.walk(uploaded_dir):
-        if "upload_record.json" not in files:
-            continue
-        path = os.path.join(root, "upload_record.json")
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                record = json.load(f)
-        except Exception:
-            continue
-        if not record.get("video_id"):
-            continue
-        script_path = os.path.join(os.path.dirname(root), "script.txt") if os.path.basename(root) == "_meta" else os.path.join(root, "script.txt")
-        if os.path.exists(script_path):
-            try:
-                from core.parser import ScriptParser
-                script_meta = {
-                    it["type"]: it["text"]
-                    for it in ScriptParser.parse(script_path)
-                    if it["type"] in ScriptParser.META_TYPES
-                }
-                record.setdefault("generation_kind", script_meta.get("generation_kind", ""))
-                record.setdefault("source_video_title", script_meta.get("source_video_title", ""))
-                record.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
-                record.setdefault("character_pattern", script_meta.get("character_pattern", ""))
-                record.setdefault("genre_group", script_meta.get("genre_group", ""))
-                record.setdefault("fixed_comment_text", script_meta.get("fixed_comment", ""))
-            except Exception:
-                pass
-        upsert_upload_record(record)
-        migrated += 1
-    return migrated
+    """No-op: migration to central file is abolished."""
+    return 0

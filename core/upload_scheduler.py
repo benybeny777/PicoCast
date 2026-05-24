@@ -123,8 +123,80 @@ def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
 
 
 def mark_slot_used(slot_dt: datetime, title: str, video_type: str):
-    """Compatibility no-op. upload_records.json is the schedule source."""
+    """Compatibility no-op."""
     return None
+
+
+def schedule_from_youtube() -> dict[str, dict]:
+    """Build schedule from YouTube API (source of truth).
+    Returns {"shorts": {iso: title, ...}, "long": {...}}.
+    """
+    from core.youtube_uploader import get_channel_upload_video_statuses
+
+    now = _as_jst(datetime.now(JST))
+    schedules: dict[str, dict] = {vt: {} for vt in VIDEO_TYPES}
+    try:
+        statuses = get_channel_upload_video_statuses()
+    except Exception:
+        return schedules
+    for _vid_id, status in statuses.items():
+        vt = str(status.get("video_type") or "").lower()
+        if vt not in schedules:
+            continue
+        privacy = str(status.get("privacyStatus") or "").lower()
+        pub_at_raw = str(status.get("publishAt") or "").strip()
+        if privacy not in ("private", "unlisted") or not pub_at_raw:
+            continue
+        try:
+            dt = _as_jst(datetime.fromisoformat(pub_at_raw.replace("Z", "+00:00")))
+            if dt <= now:
+                continue
+            iso = dt.isoformat()
+        except Exception:
+            continue
+        title = str(status.get("title") or "").strip()
+        if not title:
+            continue
+        if iso not in schedules[vt]:
+            schedules[vt][iso] = title
+    return schedules
+
+
+def _scheduled_entries_from_youtube(video_type: str) -> list[dict]:
+    """Get scheduled entries from YouTube for rebalancing."""
+    from core.youtube_uploader import get_channel_upload_video_statuses
+
+    now = datetime.now(JST)
+    entries = []
+    try:
+        statuses = get_channel_upload_video_statuses()
+    except Exception:
+        return entries
+    for video_id, status in statuses.items():
+        vt = str(status.get("video_type") or "").lower()
+        if vt != video_type:
+            continue
+        privacy = str(status.get("privacyStatus") or "").lower()
+        pub_at_raw = str(status.get("publishAt") or "").strip()
+        if privacy not in ("private", "unlisted") or not pub_at_raw:
+            continue
+        try:
+            iso = _as_jst(datetime.fromisoformat(pub_at_raw.replace("Z", "+00:00"))).isoformat()
+            slot_dt = _parse_slot(iso)
+        except Exception:
+            continue
+        if slot_dt <= now:
+            continue
+        title = str(status.get("title") or "").strip()
+        entries.append({
+            "index": None,
+            "iso": iso,
+            "slot_dt": slot_dt,
+            "title": title or video_id,
+            "video_id": video_id,
+            "generation_kind": "",
+        })
+    return entries
 
 
 def schedule_from_records(records: list[dict] | None = None) -> dict[str, dict]:
@@ -281,21 +353,15 @@ def build_rebalanced_entries(
 
 
 def rebalance_slots(video_type: str) -> list[tuple[str, str, str]]:
-    """Compute changes needed to repack future slots. Does not write anything.
-    The caller is responsible for applying each change to YouTube and upload_records."""
-    from core.upload_records import load_upload_records
-
-    records = load_upload_records()
-    entries = _scheduled_entries_from_records(records, video_type)
+    """Compute changes needed to repack future slots using YouTube as source.
+    Does not write anything; caller applies each change to YouTube."""
+    entries = _scheduled_entries_from_youtube(video_type)
     return build_rebalanced_entries(entries, video_type)
 
 
 def rebalance_slots_detailed(video_type: str) -> list[tuple[str, str, str, str, int | None]]:
-    """Like rebalance_slots(), with video_id and record index for unambiguous callers."""
-    from core.upload_records import load_upload_records
-
-    records = load_upload_records()
-    entries = _scheduled_entries_from_records(records, video_type)
+    """Like rebalance_slots(), with video_id. Uses YouTube as source."""
+    entries = _scheduled_entries_from_youtube(video_type)
     return build_rebalanced_entries(
         entries,
         video_type,
@@ -305,14 +371,12 @@ def rebalance_slots_detailed(video_type: str) -> list[tuple[str, str, str, str, 
 
 
 def count_rebalance_candidates(video_type: str) -> int:
-    from core.upload_records import load_upload_records
-
-    return len(_scheduled_entries_from_records(load_upload_records(), video_type))
+    return len(_scheduled_entries_from_youtube(video_type))
 
 
 def list_schedule() -> dict:
-    """Return {"shorts": {...}, "long": {...}}."""
-    return schedule_from_records()
+    """Return {"shorts": {...}, "long": {...}} from YouTube."""
+    return schedule_from_youtube()
 
 
 def _title_key(value: str) -> str:

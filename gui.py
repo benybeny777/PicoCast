@@ -438,13 +438,7 @@ class YMM4AutoGui:
         return widget
 
     def _migrate_upload_records_once(self):
-        try:
-            from core.upload_records import migrate_from_uploaded_dir
-            migrated = migrate_from_uploaded_dir()
-            if migrated:
-                self.log(f"📚 アップロード中央台帳を更新: {migrated}件", "info")
-        except Exception as e:
-            self.log(f"  ⚠ アップロード中央台帳の更新に失敗: {e}", "warning")
+        pass  # central upload_records.json abolished
 
     def _set_batch_progress_text(self, text):
         self.root.after(0, lambda t=text: self.batch_progress_var.set(t))
@@ -1836,15 +1830,12 @@ class YMM4AutoGui:
             return {}, path
 
     def _write_upload_record_data(self, path, data):
-        from core.upload_records import UPLOAD_RECORDS_FILE, upsert_upload_record
+        from core.upload_records import UPLOAD_RECORDS_FILE
         if os.path.abspath(path) == os.path.abspath(UPLOAD_RECORDS_FILE):
-            upsert_upload_record(data)
-            return
+            return  # central file abolished
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        if data.get("video_id"):
-            upsert_upload_record(data)
 
     def _update_upload_record_fields(self, path, fields):
         if not path:
@@ -1912,57 +1903,42 @@ class YMM4AutoGui:
         return None, None
 
     def _collect_uploaded_comment_candidates(self):
-        from core.upload_records import UPLOAD_RECORDS_FILE, load_upload_records
+        from core.upload_records import load_upload_records
         uploaded_dir = os.path.join("output", "000_uploaded")
         rows = []
         seen_video_ids = set()
-        if not os.path.isdir(uploaded_dir):
-            for record in sorted(load_upload_records(), key=lambda r: r.get("uploaded_at") or "", reverse=True):
-                fixed_comment = (record.get("fixed_comment_text") or "").strip()
+
+        # Primary source: scan 000_uploaded folders
+        if os.path.isdir(uploaded_dir):
+            folders = sorted(
+                (d for d in os.listdir(uploaded_dir) if os.path.isdir(os.path.join(uploaded_dir, d))),
+                key=lambda d: os.path.getmtime(os.path.join(uploaded_dir, d)),
+                reverse=True,
+            )
+            for name in folders:
+                output_dir = os.path.join(uploaded_dir, name)
+                meta = self._read_meta_from_dir(output_dir)
+                fixed_comment = (meta.get("fixed_comment") or "").strip()
+                if not fixed_comment:
+                    continue
+                record, record_path = self._read_upload_record(output_dir)
                 video_id = (record.get("video_id") or "").strip()
-                if not fixed_comment or not video_id:
+                if not video_id:
                     continue
                 seen_video_ids.add(video_id)
                 rows.append({
-                    "name": record.get("title") or video_id,
-                    "output_dir": "",
-                    "title": record.get("title") or video_id,
+                    "name": name,
+                    "output_dir": output_dir,
+                    "title": meta.get("title") or record.get("title") or self._folder_name_to_title(name),
                     "fixed_comment": fixed_comment,
                     "video_id": video_id,
-                    "record": dict(record),
-                    "record_path": UPLOAD_RECORDS_FILE,
+                    "record": record,
+                    "record_path": record_path,
                     "posted_id": record.get("fixed_comment_thread_id") or record.get("fixed_comment_id"),
                     "pinned_at": record.get("fixed_comment_pinned_at"),
                 })
-            return rows
 
-        folders = sorted(
-            (d for d in os.listdir(uploaded_dir) if os.path.isdir(os.path.join(uploaded_dir, d))),
-            key=lambda d: os.path.getmtime(os.path.join(uploaded_dir, d)),
-            reverse=True,
-        )
-        for name in folders:
-            output_dir = os.path.join(uploaded_dir, name)
-            meta = self._read_meta_from_dir(output_dir)
-            fixed_comment = (meta.get("fixed_comment") or "").strip()
-            if not fixed_comment:
-                continue
-            record, record_path = self._read_upload_record(output_dir)
-            video_id = (record.get("video_id") or "").strip()
-            if not video_id:
-                continue
-            seen_video_ids.add(video_id)
-            rows.append({
-                "name": name,
-                "output_dir": output_dir,
-                "title": meta.get("title") or record.get("title") or self._folder_name_to_title(name),
-                "fixed_comment": fixed_comment,
-                "video_id": video_id,
-                "record": record,
-                "record_path": record_path,
-                "posted_id": record.get("fixed_comment_thread_id") or record.get("fixed_comment_id"),
-                "pinned_at": record.get("fixed_comment_pinned_at"),
-            })
+        # Supplemental: per-video records from folder scan (for videos not in 000_uploaded)
         for record in sorted(load_upload_records(), key=lambda r: r.get("uploaded_at") or "", reverse=True):
             video_id = (record.get("video_id") or "").strip()
             if not video_id or video_id in seen_video_ids:
@@ -1970,14 +1946,16 @@ class YMM4AutoGui:
             fixed_comment = (record.get("fixed_comment_text") or "").strip()
             if not fixed_comment:
                 continue
+            # Use _local_path from folder scan so thread IDs can be written back
+            record_path = record.get("_local_path") or ""
             rows.append({
                 "name": record.get("title") or video_id,
-                "output_dir": "",
+                "output_dir": os.path.dirname(os.path.dirname(record_path)) if record_path else "",
                 "title": record.get("title") or video_id,
                 "fixed_comment": fixed_comment,
                 "video_id": video_id,
                 "record": dict(record),
-                "record_path": UPLOAD_RECORDS_FILE,
+                "record_path": record_path,
                 "posted_id": record.get("fixed_comment_thread_id") or record.get("fixed_comment_id"),
                 "pinned_at": record.get("fixed_comment_pinned_at"),
             })
@@ -2620,17 +2598,9 @@ class YMM4AutoGui:
         fetch()
 
     def show_upload_schedule_dialog(self, auto_sync=True):
-        from core.upload_scheduler import list_schedule, format_slot, sync_schedule_from_youtube
+        from core.upload_scheduler import format_slot
         from datetime import datetime, timedelta, timezone
         JST = timezone(timedelta(hours=9))
-        now = datetime.now(JST)
-
-        def _schedule_title_key(value):
-            value = str(value or "").split("\n")[0].strip()
-            for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
-                if value.startswith(prefix):
-                    return value[len(prefix):].strip().lower()
-            return value.lower()
 
         def _schedule_dt(value):
             try:
@@ -2638,91 +2608,52 @@ class YMM4AutoGui:
             except Exception:
                 return None
 
-        def build_rows():
+        def build_rows(statuses: dict | None = None):
+            """Build rows from YouTube video statuses (source of truth)."""
+            from core.youtube_uploader import get_channel_upload_video_statuses
             current_now = datetime.now(JST)
-            schedule = list_schedule()
-            try:
-                from core.upload_records import load_upload_records
-                rec_lookup = {}
-                upload_records = load_upload_records()
-                for rec in upload_records:
-                    t = _schedule_title_key(rec.get("title") or "")
-                    dt = _schedule_dt(rec.get("publish_at"))
-                    vt = str(rec.get("video_type") or "").lower()
-                    if t and dt:
-                        rec_lookup[(vt, t, dt.isoformat()[:16])] = rec
-            except Exception:
-                rec_lookup = {}
-                upload_records = []
+            cutoff_dt = current_now - timedelta(days=90)
+            if statuses is None:
+                try:
+                    statuses = get_channel_upload_video_statuses()
+                except Exception:
+                    statuses = {}
 
             new_rows = []
-            seen_schedule_rows = set()
-            for vt, entries in schedule.items():
-                label = "Shorts" if vt == "shorts" else "Long"
-                for iso, title in entries.items():
-                    try:
-                        dt = datetime.fromisoformat(iso)
-                    except ValueError:
-                        continue
-                    status = "済" if dt < current_now else "予定"
-                    if status == "済":
-                        continue
-                    clean_title = title.split("\n")[0]
-                    meta_rec = rec_lookup.get((vt, _schedule_title_key(clean_title), dt.isoformat()[:16]), {})
-                    gen_kind = meta_rec.get("generation_kind", "") or ""
-                    char_pat = meta_rec.get("character_pattern", "") or ""
-                    new_rows.append((dt, label, clean_title, status, vt, iso, gen_kind, char_pat))
-                    seen_schedule_rows.add((vt, dt.isoformat()[:16], _schedule_title_key(clean_title)))
-            for rec in upload_records:
-                vt = str(rec.get("video_type") or "").lower()
+            seen: set[tuple] = set()
+            for video_id, status in statuses.items():
+                vt = str(status.get("video_type") or "").lower()
                 if vt not in ("shorts", "long"):
                     continue
-                publish_status = str(rec.get("publish_status") or "").lower()
-                privacy_status = str(rec.get("privacy_status") or rec.get("privacyStatus") or "").lower()
-                if publish_status in ("published", "public", "manual_published", "deleted", "failed") or privacy_status == "public":
-                    continue
-                if not rec.get("publish_at"):
-                    continue
-                dt = _schedule_dt(rec.get("publish_at"))
-                if not dt or dt <= current_now:
-                    continue
-                title = str(rec.get("title") or "").split("\n")[0].strip()
+                title = str(status.get("title") or "").strip()
                 if not title:
                     continue
-                title_key = _schedule_title_key(title)
-                row_key = (vt, dt.isoformat()[:16], title_key)
-                if row_key in seen_schedule_rows:
+                privacy = str(status.get("privacyStatus") or "").lower()
+                pub_at_raw = str(status.get("publishAt") or "").strip()
+                published_at_raw = str(status.get("publishedAt") or "").strip()
+
+                if privacy == "public":
+                    dt = _schedule_dt(published_at_raw) if published_at_raw else None
+                    if not dt or dt < cutoff_dt:
+                        continue
+                    row_status = "公開済"
+                    iso_key = dt.isoformat()
+                elif privacy in ("private", "unlisted") and pub_at_raw:
+                    dt = _schedule_dt(pub_at_raw)
+                    if not dt or dt <= current_now:
+                        continue
+                    row_status = "予定"
+                    iso_key = dt.isoformat()
+                else:
                     continue
+
+                key = (vt, iso_key[:16])
+                if key in seen:
+                    continue
+                seen.add(key)
                 label = "Shorts" if vt == "shorts" else "Long"
-                gen_kind = rec.get("generation_kind", "") or ""
-                char_pat = rec.get("character_pattern", "") or ""
-                new_rows.append((dt, label, title, "予定", vt, dt.isoformat(), gen_kind, char_pat))
-                seen_schedule_rows.add(row_key)
-            # 公開済み（YouTube側のpublished_at）を追加
-            cutoff_dt = current_now - timedelta(days=90)
-            for rec in upload_records:
-                vt = str(rec.get("video_type") or "").lower()
-                if vt not in ("shorts", "long"):
-                    continue
-                if str(rec.get("publish_status") or "").lower() != "published":
-                    continue
-                published_at_str = str(rec.get("published_at") or "").strip()
-                if not published_at_str:
-                    continue
-                dt = _schedule_dt(published_at_str)
-                if not dt or dt < cutoff_dt:
-                    continue
-                title = str(rec.get("title") or "").split("\n")[0].strip()
-                if not title:
-                    continue
-                row_key = (vt, dt.isoformat()[:16], _schedule_title_key(title))
-                if row_key in seen_schedule_rows:
-                    continue
-                seen_schedule_rows.add(row_key)
-                label = "Shorts" if vt == "shorts" else "Long"
-                gen_kind = rec.get("generation_kind", "") or ""
-                char_pat = rec.get("character_pattern", "") or ""
-                new_rows.append((dt, label, title, "公開済", vt, published_at_str, gen_kind, char_pat))
+                new_rows.append((dt, label, title, row_status, vt, iso_key, "", ""))
+
             new_rows.sort(key=lambda r: r[0], reverse=True)
             return new_rows
 
@@ -2859,29 +2790,24 @@ class YMM4AutoGui:
 
         if auto_sync:
             if self._schedule_sync_running:
-                self.log("YouTube同期はすでに実行中です。", "info")
+                self.log("YouTube取得はすでに実行中です。", "info")
             else:
                 self._schedule_sync_running = True
 
                 def sync_worker():
+                    from core.youtube_uploader import get_channel_upload_video_statuses
                     try:
-                        sync_result = sync_schedule_from_youtube(
-                            progress_callback=lambda msg: self.root.after(0, lambda m=msg: self.log(m, "info"))
-                        )
-                        def done():
-                            if sync_result.get("checked"):
-                                self.log(
-                                    f"YouTube同期: 確認 {sync_result.get('checked', 0)} / 予約 {sync_result.get('scheduled', 0)} / 公開済み {sync_result.get('published', 0)}",
-                                    "info",
-                                )
+                        statuses = get_channel_upload_video_statuses()
+                        def done(statuses=statuses):
+                            self.log(f"YouTube確認: {len(statuses)}件", "info")
                             if dialog.winfo_exists():
-                                rows[:] = build_rows()
+                                rows[:] = build_rows(statuses)
                                 refresh_tree()
                         self.root.after(0, done)
                     except Exception as e:
                         def failed(e=e):
-                            self.log(f"YouTube同期に失敗しました。ローカル台帳の内容を表示します: {e}", "warning")
-                            rows[:] = build_rows()
+                            self.log(f"YouTube取得に失敗しました: {e}", "warning")
+                            rows[:] = build_rows({})
                             refresh_tree()
                         self.root.after(0, failed)
                     finally:
@@ -3139,72 +3065,18 @@ class YMM4AutoGui:
                 return
 
             def worker():
-                import json as _json
                 from core.upload_scheduler import count_rebalance_candidates, rebalance_slots_detailed
-                from core.upload_scheduler import sync_schedule_from_youtube as _sync_schedule_from_youtube
                 from core.youtube_uploader import update_video_publish_time
-                from core.upload_records import UPLOAD_RECORDS_FILE, find_upload_record, load_upload_records, save_upload_records
 
-                def _record_title(value):
-                    value = str(value or "").strip()
-                    for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
-                        if value.startswith(prefix):
-                            return value[len(prefix):].strip()
-                    return value
+                def type_label(vt):
+                    return "Shorts" if vt == "shorts" else "Long"
 
-                def _record_type_matches(data, vt):
-                    rec_type = str(data.get("video_type") or "").lower()
-                    return not rec_type or rec_type == vt
-
-                def find_record_for_rebalance(iso_key, title, vt):
-                    record = find_upload_record(title=title, video_type=vt, publish_at=iso_key)
-                    if record and record.get("video_id"):
-                        return record.get("video_id"), UPLOAD_RECORDS_FILE
-
-                    title_key = _record_title(title)
-                    candidates = []
-                    for data in load_upload_records():
-                        if data.get("publish_at") == iso_key and _record_type_matches(data, vt):
-                            candidates.append(data)
-                            if _record_title(data.get("title")) == title_key and data.get("video_id"):
-                                return data.get("video_id"), UPLOAD_RECORDS_FILE
-                    if len(candidates) == 1 and candidates[0].get("video_id"):
-                        return candidates[0].get("video_id"), UPLOAD_RECORDS_FILE
-
-                    uploaded_matches = []
-                    uploaded_title_matches = []
-                    uploaded_dir = os.path.join("output", "000_uploaded")
-                    if not os.path.exists(uploaded_dir):
-                        return None, None
-                    for root_dir, _dirs, files in os.walk(uploaded_dir):
-                        if "upload_record.json" in files:
-                            path = os.path.join(root_dir, "upload_record.json")
-                            try:
-                                with open(path, "r", encoding="utf-8") as f:
-                                    data = _json.load(f)
-                                if data.get("publish_at") == iso_key and _record_type_matches(data, vt):
-                                    row = (data, path)
-                                    uploaded_matches.append(row)
-                                    if _record_title(data.get("title")) == title_key:
-                                        uploaded_title_matches.append(row)
-                            except Exception:
-                                pass
-                    if len(uploaded_title_matches) == 1 and uploaded_title_matches[0][0].get("video_id"):
-                        data, path = uploaded_title_matches[0]
-                        return data.get("video_id"), path
-                    if len(uploaded_matches) == 1 and uploaded_matches[0][0].get("video_id"):
-                        data, path = uploaded_matches[0]
-                        return data.get("video_id"), path
-                    return None, None
+                def fmt_iso(iso):
+                    return iso[:16].replace("T", " ") if iso else "未設定"
 
                 all_changes = []
                 candidate_counts = {}
                 try:
-                    sync_result = _sync_schedule_from_youtube(progress_callback=self.log)
-                    self.root.after(0, lambda r=sync_result: self.log(
-                        f"YouTube同期後に詰め直し: 確認 {r.get('checked', 0)} / 予約 {r.get('scheduled', 0)} / 公開済み {r.get('published', 0)}",
-                        "info",
-                    ))
                     for vt in ("shorts", "long"):
                         candidate_counts[vt] = count_rebalance_candidates(vt)
                         changes = rebalance_slots_detailed(vt)
@@ -3226,12 +3098,6 @@ class YMM4AutoGui:
                     ))
                     return
 
-                def type_label(vt):
-                    return "Shorts" if vt == "shorts" else "Long"
-
-                def fmt_iso(iso):
-                    return iso[:16].replace("T", " ") if iso else "未設定"
-
                 plan_lines = []
                 for change in all_changes:
                     vt, old_iso, new_iso, title, _video_id, *_rest = change
@@ -3243,66 +3109,21 @@ class YMM4AutoGui:
 
                 updated_yt = 0
                 no_id = []
-                records_for_update = load_upload_records()
-                records_dirty = False
                 for change in all_changes:
-                    vt, old_iso, new_iso, title, change_video_id, *rest = change
-                    change_record_index = rest[0] if rest else None
-                    video_id, record_path = (change_video_id, UPLOAD_RECORDS_FILE) if change_video_id else find_record_for_rebalance(old_iso, title, vt)
+                    vt, old_iso, new_iso, title, video_id, *_rest = change
                     short_title = title[:30]
-                    old_dt_str = old_iso[:16].replace("T", " ") if old_iso else "未設定"
-                    new_dt_str = new_iso[:16].replace("T", " ")
+                    old_dt_str = fmt_iso(old_iso)
+                    new_dt_str = fmt_iso(new_iso)
                     if not video_id:
-                        local_updated = False
-                        if change_record_index is not None:
-                            try:
-                                idx = int(change_record_index)
-                                if 0 <= idx < len(records_for_update):
-                                    records_for_update[idx]["publish_at"] = new_iso
-                                    records_for_update[idx]["publish_status"] = "scheduled"
-                                    records_dirty = True
-                                    local_updated = True
-                            except Exception as e:
-                                self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
                         no_id.append(short_title)
                         self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str: self.log(
-                            f"  ⚠ [{label}] video_id未発見・ローカルのみ: {t} ({o} → {n})", "warning",
+                            f"  ⚠ [{label}] video_id未発見: {t} ({o} → {n})", "warning",
                         ))
-                        if local_updated:
-                            self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str: self.log(
-                                f"  ✅ [{label}] ローカル詰め直し完了: {t} ({o} → {n})", "success",
-                            ))
                         continue
                     try:
                         new_dt = datetime.fromisoformat(new_iso)
                         ok = update_video_publish_time(video_id, new_dt, progress_callback=self.log)
                         if ok:
-                            if record_path:
-                                try:
-                                    if os.path.abspath(record_path) == os.path.abspath(UPLOAD_RECORDS_FILE):
-                                        rec_idx = None
-                                        if change_record_index is not None:
-                                            idx = int(change_record_index)
-                                            if 0 <= idx < len(records_for_update):
-                                                rec_idx = idx
-                                        if rec_idx is None:
-                                            rec_idx = next((i for i, r in enumerate(records_for_update) if r.get("video_id") == video_id), None)
-                                        if rec_idx is not None:
-                                            records_for_update[rec_idx]["publish_at"] = new_iso
-                                            records_for_update[rec_idx]["publish_status"] = "scheduled"
-                                            records_dirty = True
-                                            rec = None
-                                        else:
-                                            rec = {"video_id": video_id}
-                                    else:
-                                        with open(record_path, "r", encoding="utf-8") as f:
-                                            rec = _json.load(f)
-                                    if rec is not None:
-                                        rec["publish_at"] = new_iso
-                                        rec["publish_status"] = "scheduled"
-                                        self._write_upload_record_data(record_path, rec)
-                                except Exception as e:
-                                    self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_record更新失敗: {e}", "warning"))
                             updated_yt += 1
                             self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str: self.log(
                                 f"  ✅ [{label}] 移動完了: {t} ({o} → {n})", "success",
@@ -3317,11 +3138,6 @@ class YMM4AutoGui:
                         self.root.after(0, lambda label=type_label(vt), t=short_title, o=old_dt_str, n=new_dt_str, e=e: self.log(
                             f"  ❌ [{label}] YouTube更新失敗: {t} ({o} → {n}) / {e}", "error",
                         ))
-                if records_dirty:
-                    try:
-                        save_upload_records(records_for_update)
-                    except Exception as e:
-                        self.root.after(0, lambda e=e: self.log(f"  ⚠ upload_records一括保存失敗: {e}", "warning"))
 
                 def done():
                     msg = f"YouTube更新: {updated_yt}/{len(all_changes)}件"
@@ -3620,11 +3436,6 @@ class YMM4AutoGui:
         path = os.path.join(meta_dir, "upload_record.json")
         with open(path, "w", encoding="utf-8") as f:
             _json.dump(record, f, ensure_ascii=False, indent=2)
-        try:
-            from core.upload_records import upsert_upload_record
-            upsert_upload_record(record)
-        except Exception:
-            pass
         return path
 
     def _run_upload(self, mp4_path, title, description, tags, thumb, output_dir,
