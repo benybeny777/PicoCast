@@ -62,6 +62,7 @@ LONG_UPLOAD_PLAYLIST_NAME=ロング動画
 - `LONG_UPLOAD_PLAYLIST_NAME`: 任意。Longアップロード成功後、名前が完全一致する自チャンネルの再生リストへ自動追加します。未設定時は `ロング動画` を使います。空にすると無効です。
 - `client_secrets.json`: Google Cloud Console で YouTube Data API v3 / YouTube Analytics API を有効化し、OAuthクライアントID（デスクトップアプリ）を作成してJSONをダウンロードします。ファイル名を `client_secrets.json` にしてリポジトリ直下へ置きます。
 - 初回の `YouTubeアップ` / `📊 アナリティクス` 実行時にブラウザ認証が開き、`token.json` / `token_analytics.json` が自動作成されます。
+- Google OAuth設定後、YouTube Studioで本人確認が頻発することがあります。その場合は、チャンネルのGoogleアカウントのセキュリティ項目でOAuth連携が警告扱いになっていないか確認し、警告を確認・承認すると本人確認が出なくなることがあります。
 
 取得先:
 - Google AI Studio API key: https://aistudio.google.com/apikey
