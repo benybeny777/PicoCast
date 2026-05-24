@@ -1,14 +1,14 @@
-# YMM4 Auto Video Factory
+# Native Video Factory
 
-「ずんだもんとめたんの食べ物雑学堂」向けに、食べ物雑学の解説動画を台本から VOICEVOX音声・背景画像・ffmpeg/native動画・YMM4確認用プロジェクトまで自動生成するツールです。
+「ずんだもんとめたんの食べ物雑学堂」向けに、食べ物雑学の解説動画を台本から VOICEVOX音声・背景画像・ffmpeg/native MP4まで自動生成するツールです。
 
 ## 主な機能
 
-- 台本貼り付けから `.ymmp` を自動生成
+- 台本貼り付けから native MP4 を自動生成
 - Shorts / ロングを `動画形式:` から自動判定
 - `━━ 動画1 ━━` や `動画形式:` が複数ある台本を分割して一括生成
 - YouTube NG ワードをマイルド表現へ自動置換
-- VOICEVOX 音声は Shorts(YMM4): 冒頭2.0倍速・本編1.65倍速 / Shorts(native): 冒頭1.40倍速・本編1.25倍速、ロング: 冒頭1.6倍速・本編1.35倍速で生成
+- VOICEVOX 音声は Shorts(native): 冒頭1.40倍速・本編1.25倍速、ロング(native): 冒頭1.40倍速・本編1.20倍速で生成
 - 背景指定がセリフの後に来る台本も自動で補正
 - BGMer「のほほん」を固定 BGM として自動追加
 - 生成履歴から複数選択して再生成 / YouTube アップロード
@@ -28,12 +28,11 @@
 
 ## セットアップ
 
-Windows / Mac の両方を想定しています。ffmpeg/native生成を主経路とし、YMM4は確認用 `.ymmp` 生成までを扱います。
+Windows / Mac の両方を想定しています。ffmpeg/native生成を主経路とし、YMM4プロジェクト出力は廃止済みです。
 
 1. VOICEVOX をインストール
-2. 必要に応じて YukkuriMovieMaker v4 をインストール（確認用 `.ymmp` を開く場合）
-3. APIキーとOAuth設定を用意
-4. プロンプト設定を確認する
+2. APIキーとOAuth設定を用意
+3. プロンプト設定を確認する
    - 初期状態は食べ物用設定でそのまま動きます
    - 別ジャンルで使う場合は、必ず `core/prompt_parts/local/` に個人用プロンプト設定を置きます
    - 食べ物用設定を明示的に復元する場合:
@@ -41,7 +40,7 @@ Windows / Mac の両方を想定しています。ffmpeg/native生成を主経�
      New-Item -ItemType Directory -Force -Path core\prompt_parts\local
      Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
      ```
-5. Python 依存を入れる
+4. Python 依存を入れる
 
 ```bash
 pip install --upgrade requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib openai
@@ -98,7 +97,7 @@ python gui.py
 4. GUI の台本欄に貼り付け
 5. `🎬 生成` を押す
 6. 必要なら `画像確認` で画像を見直す
-7. native MP4を確認する（YMM4は必要に応じて `.ymmp` 確認に使う）
+7. native MP4を確認する
 8. `YouTubeアップ` で履歴から動画を選んでアップロード（MP4なしの履歴は表示されません）
 9. 必要なら `💬 固定コメント` で公開済み動画へコメントを投稿し、Studio側でピン留め
 
@@ -135,7 +134,7 @@ python gui.py
 
 ## 注意
 
-- YMM4を使わない実験レンダラーの実装概要と段階別ロードマップは `docs/YMM_FREE_RENDERER.md` を参照してください。
+- YMM4プロジェクト出力は廃止済みです。生成・アップロード候補は native MP4 のみを対象にします。
 - `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
 - アップロード記録は各動画フォルダの `_meta/upload_record.json` に残します。予約・公開状態の正はYouTube側なので、スケジュール画面や詰め直しはYouTube APIの状態を参照します。`output/000_uploaded/` はアップロード済み生成物の保管場所です。
 - `OUTPUT_DIR` / `OUTPUT_DATA_DIR` / `OUTPUT_ANALYTICS_DIR` / `OUTPUT_LEGACY_DIR` / `UPLOAD_RECORDS_FILE` / `UPLOADED_TITLES_FILE` は `.env` または環境変数で変更できます。

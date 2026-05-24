@@ -39,8 +39,6 @@ from config import (
     BGM_VOLUME,
     CHARACTERS,
     YMM4_TACHIE_PARAMS,
-    DEFAULT_SHORTS_RENDER_ENGINE,
-    GENERATE_YMM4_PROJECT,
     MAX_BACKGROUNDS_LONG,
     MAX_BACKGROUNDS_LONG_BUDGET,
     MAX_BACKGROUNDS_SHORTS,
@@ -359,7 +357,7 @@ class GenerationReport:
         self.backgrounds_generated = 0
         self.backgrounds_failed = 0
         self.elapsed_sec = 0.0
-        self.native_render_used = False  # True if ffmpeg/native was used instead of YMM4-only
+        self.native_render_used = False  # True when ffmpeg/native MP4 is used
 
     def summary(self):
         m, s = divmod(int(self.elapsed_sec), 60)
@@ -375,7 +373,7 @@ def _estimate_script_duration(items, is_shorts: bool):
     """Estimate narration duration before VOICEVOX generation.
 
     Shorts: native速度（1.40x/1.25x、chars_per_sec=3.0）で計算。
-    Long: YMM4速度（1.6x/1.35x）で計算。
+    Long: native速度（1.40x/1.20x）で計算。
     """
     dialogue_items = [it for it in items if it["type"] == "dialogue"]
     if not dialogue_items:
@@ -394,7 +392,7 @@ def _estimate_script_duration(items, is_shorts: bool):
         additional = TRANSITION_SEC + VOICE_TAIL_SAFETY_SEC + INTER_DIALOGUE_GAP_SEC
         for item in dialogue_items:
             chars = len(item.get("text", ""))
-            speed = VOICE_INTRO_SPEED_SCALE_LONG if elapsed < VOICE_INTRO_FAST_SECONDS else VOICE_SPEED_SCALE_LONG
+            speed = NATIVE_LONG_INTRO_VOICE_SPEED if elapsed < VOICE_INTRO_FAST_SECONDS else NATIVE_LONG_BODY_VOICE_SPEED
             elapsed += chars / (5.4 * speed) + 0.1 * speed + additional
     return elapsed, n, avg_chars
 
@@ -731,9 +729,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     else:
         max_backgrounds = MAX_BACKGROUNDS_LONG
 
-    # native_render=None → Shortsはデフォルトエンジン(native)、Longは常にymm4
-    if native_render is None:
-        native_render = is_shorts and (DEFAULT_SHORTS_RENDER_ENGINE == "native")
+    # YMM4出力廃止後は Shorts/Long とも native を既定にする。
+    native_render = True
 
     _render_engine = "native" if native_render else "ymm4"
     report.native_render_used = native_render
@@ -748,7 +745,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if native_render and is_shorts:
         update_status(
             f"🎬 Shorts本番レンダリング: ffmpeg/native\n"
-            f"   🧩 YMM4プロジェクト: 生成のみ\n"
+            f"   🧩 YMM4プロジェクト: 出力しません\n"
             f"   🔊 音声速度: intro {intro_voice_speed:.2f} / body {body_voice_speed:.2f}\n"
             f"   📏 台本基準: {NATIVE_SHORTS_LINES_TARGET_MIN}〜{NATIVE_SHORTS_LINES_TARGET_MAX}行 / "
             f"{NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}字目標"
@@ -762,7 +759,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         safe_topic = f"[Shorts]{safe_topic}"
 
     theme_dir = os.path.join("output", safe_topic)
-    project_file_path = os.path.join(theme_dir, f"{safe_topic}.ymmp")
 
     width = 1080 if is_shorts else 1920
     height = 1920 if is_shorts else 1080
@@ -790,12 +786,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             locker_info = f"\nロック中のプロセス: {locker}" if locker else ""
             raise OutputDirectoryLockedError(
                 f"既存フォルダをバックアップへ退避できませんでした。\n{theme_dir}{locker_info}\n\n"
-                "YMM4やエクスプローラーでプロジェクトファイル・出力フォルダを閉じてからOKを押してください。"
+                "エクスプローラーや動画プレイヤーで出力フォルダ・MP4を閉じてからOKを押してください。"
             ) from e
         except Exception as e:
             raise OutputDirectoryLockedError(
                 f"既存フォルダをバックアップへ退避できませんでした。\n"
-                f"YMM4やエクスプローラーでフォルダを開いていないか確認してください。\n({theme_dir})\n\n{e}"
+                f"エクスプローラーや動画プレイヤーでフォルダを開いていないか確認してください。\n({theme_dir})\n\n{e}"
             ) from e
 
         if reuse_backgrounds:
@@ -1630,8 +1626,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "duration",
         )
 
-    update_status("💾 YMM4プロジェクトを保存中...")
-    editor.save(project_file_path)
+    update_status("💾 YMM4プロジェクト出力は廃止済みです（.ymmpは保存しません）")
 
     # render_info を _meta に保存
     try:
@@ -1645,8 +1640,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "target_dialogue_lines": f"{NATIVE_SHORTS_LINES_IDEAL_MIN}-{NATIVE_SHORTS_LINES_IDEAL_MAX}" if is_shorts else "n/a",
             },
             "ymm4": {
-                "project_generated": GENERATE_YMM4_PROJECT,
-                "rendered": not native_render,
+                "project_generated": False,
+                "rendered": False,
+                "deprecated": True,
             },
         }
         render_info_path = os.path.join(_meta_dir(theme_dir), "render_info.json")
@@ -1656,7 +1652,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         pass
 
     report.elapsed_sec = time.time() - pipeline_start
-    msg = f"✅ 完成! プロジェクト保存済み: {project_file_path}"
+    msg = f"✅ 完成! 出力フォルダ: {theme_dir}"
     update_status(msg)
 
     if is_shorts and not native_render:

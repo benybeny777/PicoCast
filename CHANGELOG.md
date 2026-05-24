@@ -12,6 +12,17 @@
 
 ---
 
+## 2026-05-25 (6)
+
+### YMM4プロジェクト出力廃止
+
+- `main.py`: `run_pipeline()` を Shorts/Long とも native 固定にし、`.ymmp` 保存を行わないよう変更。完了メッセージは出力フォルダを返す形式に統一
+- `gui.py`: 通常生成・履歴MP4化・アップロード候補確認を native MP4 前提に整理し、YMM4外部出力MP4の探索と移動処理を廃止
+- `core/ymm4_renderer.py`: YMM4 GUI自動操作レンダラーを削除
+- `core/native_renderer.py` / `docs/YMM_FREE_RENDERER.md`: 旧「YMMなし(test)」表記を native MP4 表記へ整理し、実験段階の古い設計メモを削除
+- `config.py`: `DEFAULT_SHORTS_RENDER_ENGINE` / `GENERATE_YMM4_PROJECT` / `RENDER_WITH_YMM4` を deprecated 扱いにし、YMM4出力へ戻らない既定値に変更
+- `README.md` / `SPEC.md` / `AGENTS.md`: YMM4確認用 `.ymmp` 生成ありの説明を削除し、ffmpeg/native MP4 を唯一の出力経路として記載
+
 ## 2026-05-25 (5)
 
 ### キャラ腰から上表示モード（native/YMM4共通）

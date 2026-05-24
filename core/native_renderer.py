@@ -715,7 +715,7 @@ def render_native_test(
     total_audio = sum(durations)
 
     if progress_callback:
-        progress_callback(f"🎞 YMMなし(test): 音声{len(audio_files)}件 / 背景{len(bg_files)}枚を結合します")
+        progress_callback(f"🎞 native MP4: 音声{len(audio_files)}件 / 背景{len(bg_files)}枚を結合します")
 
     width, height = _video_size(output_dir, script_path)
     characters = _character_inputs(width, height)

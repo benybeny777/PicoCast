@@ -123,9 +123,9 @@ NATIVE_SHORTS_LINES_MUST_FIX   = 31  # 31行以上: must_fix
 # ───────────────────────────────────────────────
 # レンダリングエンジン選択
 # ───────────────────────────────────────────────
-DEFAULT_SHORTS_RENDER_ENGINE = os.environ.get("DEFAULT_SHORTS_RENDER_ENGINE", "native").strip().lower()  # "native" or "ymm4"
-GENERATE_YMM4_PROJECT        = os.environ.get("GENERATE_YMM4_PROJECT", "1").strip().lower() in ("1", "true", "yes", "on")  # native でも .ymmp を生成するか
-RENDER_WITH_YMM4             = os.environ.get("RENDER_WITH_YMM4", "0").strip().lower() in ("1", "true", "yes", "on")       # YMM4 で実際にレンダリングするか
+DEFAULT_SHORTS_RENDER_ENGINE = "native"  # deprecated: YMM4出力廃止後は常にnative
+GENERATE_YMM4_PROJECT        = False     # deprecated: .ymmp は生成しない
+RENDER_WITH_YMM4             = False     # deprecated: YMM4本番レンダリングは行わない
 
 # ───────────────────────────────────────────────
 # API キー・外部 LLM

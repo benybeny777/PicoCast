@@ -27,7 +27,6 @@ from core.opening_quality import check_openai_final_review_connection, duration_
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
 from config import (
-    DEFAULT_SHORTS_RENDER_ENGINE,
     FFMPEG_BIN,
     NATIVE_FFMPEG_ENCODER,
     NATIVE_FFMPEG_PRESET,
@@ -266,7 +265,7 @@ class YMM4AutoGui:
     def __init__(self, root):
         self.root = root
         self.app_version = build_app_version()
-        self.root.title(f"YMM4 Auto Video Factory v{self.app_version}")
+        self.root.title(f"Native Video Factory v{self.app_version}")
         self.root.geometry("920x780")
         self.root.minsize(800, 620)
         self.root.configure(bg="#f5f7fa")
@@ -300,7 +299,7 @@ class YMM4AutoGui:
         top_frame.pack(fill=tk.X, pady=(0, 4))
         self.generate_btn = ttk.Button(top_frame, text="🎬 生成 🚀", style="Accent.TButton", command=self.start_generation)
         self.generate_btn.pack(side=tk.RIGHT, padx=(4, 0), ipady=4)
-        self._add_tooltip(self.generate_btn, "貼り付けた台本から音声・背景・サムネ・YMM4プロジェクトを生成します。")
+        self._add_tooltip(self.generate_btn, "貼り付けた台本から音声・背景・サムネ・native MP4を生成します。")
         self.cancel_btn = ttk.Button(top_frame, text="作業中止", command=self.request_cancel, state=tk.DISABLED)
         self.cancel_btn.pack(side=tk.RIGHT, padx=(4, 0))
         self._add_tooltip(self.cancel_btn, "実行中の生成処理に中止リクエストを送ります。")
@@ -385,12 +384,12 @@ class YMM4AutoGui:
         test_btn_frame = ttk.Frame(main_frame)
         test_btn_frame.pack(fill=tk.X, pady=(0, 4))
         ttk.Label(test_btn_frame, text="test:").pack(side=tk.LEFT, padx=(0, 6))
-        self.native_generate_btn = ttk.Button(test_btn_frame, text="YMMなし生成(test)", command=self.start_native_generation)
+        self.native_generate_btn = ttk.Button(test_btn_frame, text="native生成", command=self.start_native_generation)
         self.native_generate_btn.pack(side=tk.LEFT, padx=(0, 4), ipady=2)
-        self._add_tooltip(self.native_generate_btn, "貼り付けた台本から素材を生成し、YMM4を使わずffmpegで簡易MP4を出力します。")
-        self.native_render_history_btn = ttk.Button(test_btn_frame, text="YMMなしMP4化(test)", command=self.start_native_render_from_history)
+        self._add_tooltip(self.native_generate_btn, "貼り付けた台本から素材を生成し、ffmpeg/nativeでMP4を出力します。")
+        self.native_render_history_btn = ttk.Button(test_btn_frame, text="native MP4化", command=self.start_native_render_from_history)
         self.native_render_history_btn.pack(side=tk.LEFT, padx=(4, 0), ipady=2)
-        self._add_tooltip(self.native_render_history_btn, "既存履歴の音声・背景を使い、ffmpegのYMMなしMP4出力だけを実行します。")
+        self._add_tooltip(self.native_render_history_btn, "既存履歴の音声・背景を使い、ffmpeg/native MP4出力だけを実行します。")
         # Status + progress
         self.status_var = tk.StringVar(value="Ready")
         self.status_label = ttk.Label(main_frame, textvariable=self.status_var, font=("Meiryo", 8, "italic"), width=110)
@@ -898,23 +897,8 @@ class YMM4AutoGui:
         candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
         return candidates
 
-    def _external_mp4_candidate(self, output_dir):
-        search_dir = self._DOCUMENTS_SEARCH_DIR
-        if not os.path.isdir(search_dir) or not os.path.isdir(output_dir):
-            return None
-        ymmp_stems = [
-            os.path.splitext(f)[0]
-            for f in os.listdir(output_dir)
-            if f.lower().endswith(".ymmp")
-        ]
-        for stem in ymmp_stems:
-            src = os.path.join(search_dir, stem + ".mp4")
-            if os.path.exists(src):
-                return src
-        return None
-
     def _has_uploadable_mp4(self, output_dir):
-        return bool(self._mp4_candidates_in_dir(output_dir) or self._external_mp4_candidate(output_dir))
+        return bool(self._mp4_candidates_in_dir(output_dir))
 
     def select_history_dialog(self, title, action_text, multi=False, require_script=False, require_mp4=False):
         self.refresh_history()
@@ -1077,7 +1061,7 @@ class YMM4AutoGui:
 
     @staticmethod
     def _estimate_duration(items, is_shorts: bool):
-        """推定尺（秒）を返す。Shorts: native速度(1.40x/1.25x)、Long: YMM4速度(1.6x/1.35x)。"""
+        """推定尺（秒）を返す。Shorts/Long とも native 速度で計算する。"""
         dialogue_items = [it for it in items if it["type"] == "dialogue"]
         if not dialogue_items:
             return None, 0, 0
@@ -1088,6 +1072,7 @@ class YMM4AutoGui:
         from config import (
             NATIVE_SHORTS_INTRO_VOICE_SPEED, NATIVE_SHORTS_BODY_VOICE_SPEED,
             NATIVE_SHORTS_ESTIMATE_BASE_CPS, VOICE_INTRO_FAST_LINES,
+            NATIVE_LONG_INTRO_VOICE_SPEED, NATIVE_LONG_BODY_VOICE_SPEED,
         )
 
         elapsed = 0.0
@@ -1100,7 +1085,7 @@ class YMM4AutoGui:
             ADDITIONAL = 0.3 + 0.5 + 0.2
             for item in dialogue_items:
                 chars = len(item.get("text", ""))
-                speed = 1.6 if elapsed < 5.0 else 1.35
+                speed = NATIVE_LONG_INTRO_VOICE_SPEED if elapsed < 5.0 else NATIVE_LONG_BODY_VOICE_SPEED
                 elapsed += chars / (5.4 * speed) + 0.1 * speed + ADDITIONAL
 
         return elapsed, n, avg_chars
@@ -1325,8 +1310,8 @@ class YMM4AutoGui:
 
                 ai_report.extend(["", f"## 台本{idx}: {title}", f"- 動画形式: {'Shorts' if is_shorts else 'Long'}"])
                 self.log(f"{prefix}🤖 生成前Ollama冒頭レビュー中: {title}")
-                # native_render=None → Shortsはdefault engine、Longは常にymm4
-                _effective_native = native_render if native_render is not None else (is_shorts and DEFAULT_SHORTS_RENDER_ENGINE == "native")
+                # YMM4 output is deprecated; score checks evaluate the native path.
+                _effective_native = True if native_render is None else bool(native_render)
                 _render_engine = "native" if _effective_native else "ymm4"
                 local = local_opening_review(body_items, title, thumb_text, is_shorts, render_engine=_render_engine)
                 llm = llm_opening_review(
@@ -1417,7 +1402,7 @@ class YMM4AutoGui:
 
     def start_native_render_from_history(self):
         selected = self.select_history_dialog(
-            "YMMなしMP4化(test)する履歴を選択",
+            "native MP4化する履歴を選択",
             "MP4化する",
             multi=True,
             require_script=True,
@@ -1427,7 +1412,7 @@ class YMM4AutoGui:
         self._toggle_ui(False)
         self.cancel_event = threading.Event()
         self._gen_id += 1
-        self.log(f"YMMなしMP4化(test)開始: 合計 {len(selected)} 件", "batch")
+        self.log(f"native MP4化開始: 合計 {len(selected)} 件", "batch")
         threading.Thread(target=self._run_native_render_histories, args=(selected, self._gen_id, self.cancel_event), daemon=True).start()
 
     def _start_generation(self, native_render=False):
@@ -1491,8 +1476,8 @@ class YMM4AutoGui:
         self.log("⚠ 問題がある場合は「作業中止」ボタンで止めてください", "warning")
         settings = self._generation_settings()
         # native_render=True: 明示的にnative強制 / None: run_pipeline内でShortsはauto-native
-        settings["native_render"] = True if native_render else None
-        mode = "YMMなし生成" if native_render else "一括処理（Shortsはffmpeg/nativeで出力）"
+        settings["native_render"] = True
+        mode = "native生成"
         self.log(f"{mode}開始: 合計 {len(scripts)} 件")
         threading.Thread(target=self._run_batch, args=(scripts, settings, self.cancel_event), daemon=True).start()
 
@@ -1502,13 +1487,13 @@ class YMM4AutoGui:
         total = len(history_names)
         for idx, name in enumerate(history_names, start=1):
             if cancel_event.is_set():
-                self.log("⏹ YMMなしMP4化(test)を中止しました。", "error")
+                self.log("⏹ native MP4化を中止しました。", "error")
                 break
             output_dir = os.path.join("output", name)
             try:
-                self._set_batch_progress_text(f"YMMなしMP4化(test): {idx}/{total}")
+                self._set_batch_progress_text(f"native MP4化: {idx}/{total}")
                 self.root.after(0, lambda v=int(((idx - 1) / max(total, 1)) * 100): self.progress.config(value=v))
-                self.log(f"🎞 YMMなしMP4化(test): {name}", "batch")
+                self.log(f"🎞 native MP4化: {name}", "batch")
                 estimated_duration_sec = None
                 try:
                     script_path = os.path.join(output_dir, "script.txt")
@@ -1526,24 +1511,24 @@ class YMM4AutoGui:
                     estimated_duration_sec=estimated_duration_sec,
                 )
                 self.log(
-                    f"✅ YMMなしMP4化完了: {os.path.basename(result.output_path)} "
+                    f"✅ native MP4化完了: {os.path.basename(result.output_path)} "
                     f"(実尺{result.duration_sec:.1f}s / 音声合計{result.audio_duration_sec:.1f}s / 音声{result.audio_count} / 背景{result.background_count})",
                     "success",
                 )
             except Exception as e:
-                self.log(f"❌ YMMなしMP4化失敗: {name}: {e}", "error")
+                self.log(f"❌ native MP4化失敗: {name}: {e}", "error")
                 if self.debug_var.get():
                     self.log(traceback.format_exc(), "error")
 
         if gen_id == self._gen_id:
             self.root.after(0, lambda: self.progress.config(value=100 if not cancel_event.is_set() else 0))
-            self.root.after(0, lambda: self.status_var.set("YMMなしMP4化(test) 完了" if not cancel_event.is_set() else "Canceled"))
+            self.root.after(0, lambda: self.status_var.set("native MP4化 完了" if not cancel_event.is_set() else "Canceled"))
             self.root.after(0, lambda: self._toggle_ui(True))
-            self._set_batch_progress_text("" if cancel_event.is_set() else f"YMMなしMP4化(test)完了: {total}/{total}")
+            self._set_batch_progress_text("" if cancel_event.is_set() else f"native MP4化完了: {total}/{total}")
 
     @staticmethod
-    def _project_path_from_message(message):
-        marker = "プロジェクト保存済み: "
+    def _output_dir_from_message(message):
+        marker = "出力フォルダ: "
         if marker not in str(message):
             return None
         return str(message).split(marker, 1)[1].strip().splitlines()[0].strip()
@@ -1679,8 +1664,7 @@ class YMM4AutoGui:
                     return
                 _should_native_render = getattr(report, "native_render_used", False) or settings.get("native_render") is True
                 if _should_native_render:
-                    project_path = self._project_path_from_message(msg)
-                    output_dir = os.path.dirname(project_path) if project_path else None
+                    output_dir = self._output_dir_from_message(msg)
                     if not output_dir or not os.path.isdir(output_dir):
                         raise Exception("native MP4出力先フォルダを特定できませんでした")
                     from core.native_renderer import render_native_test
@@ -1784,12 +1768,8 @@ class YMM4AutoGui:
             mp4_candidates = self._mp4_candidates_in_dir(output_dir)
 
             if not mp4_candidates:
-                moved = self._find_and_move_mp4(output_dir, name)
-                if moved:
-                    mp4_candidates = [moved]
-                else:
-                    skipped.append(name)
-                    continue
+                skipped.append(name)
+                continue
 
             mp4_candidates.sort(key=lambda p: os.path.getmtime(p), reverse=True)
             mp4_path = mp4_candidates[0]
@@ -3797,12 +3777,9 @@ class YMM4AutoGui:
             summary = report.summary() if report else ""
             full_msg = f"{message}\n\n{summary}"
 
-            project_path = None
-            if "プロジェクト保存済み: " in message:
-                project_path = message.split("プロジェクト保存済み: ")[1].strip()
-
-            if project_path and os.path.exists(project_path):
-                self.last_output_dir = os.path.dirname(project_path)
+            output_dir = self._output_dir_from_message(message)
+            if output_dir and os.path.isdir(output_dir):
+                self.last_output_dir = output_dir
 
             # 補正済み script.txt をテキストエリアに反映
             if self.last_output_dir:
@@ -4300,20 +4277,6 @@ class YMM4AutoGui:
         self.ref_text.config(state=state)
         if enabled: self.progress.stop()
         else: self.progress.start(10)
-
-    _DOCUMENTS_SEARCH_DIR = r"C:\Users\benyb\OneDrive\Documents"
-
-    def _find_and_move_mp4(self, output_dir, folder_name):
-        """output_dir に MP4 がない場合、Documents から .ymmp と同名の MP4 を探して移動する。"""
-        src = self._external_mp4_candidate(output_dir)
-        if src:
-            os.makedirs(output_dir, exist_ok=True)
-            mp4_name = os.path.basename(src)
-            dest = os.path.join(output_dir, mp4_name)
-            shutil.move(src, dest)
-            self.log(f"📦 MP4 を Documents から移動: {mp4_name}", "info")
-            return dest
-        return None
 
     def open_output_dir(self):
         out_dir = os.path.abspath("output")

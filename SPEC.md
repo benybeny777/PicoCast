@@ -12,7 +12,7 @@
 - **台本生成** → Gemini AI
 - **音声生成** → VOICEVOX (ずんだもん / 四国めたん)
 - **背景画像生成** → Nano Banana (Gemini画像生成)
-- **動画組立** → YMM4 (.ymmpファイル生成)
+- **動画組立** → ffmpeg/native MP4
 - **品質レビュー** → ローカルルール + Ollama LLM + ChatGPT
 - **アップロード** → YouTube Data API v3
 
@@ -40,7 +40,7 @@ yukkurijidou/
 │   ├── voicevox.py         # VOICEVOX音声生成
 │   ├── image_generator.py  # Nano Banana背景画像生成
 │   ├── parser.py           # 台本パーサー (ScriptParser)
-│   ├── ymmp_editor.py      # YMM4プロジェクト編集
+│   ├── ymmp_editor.py      # 旧YMM4タイムライン互換の内部編集ヘルパー
 │   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
 │   ├── opening_quality.py  # 冒頭品質レビュー
 │   ├── script_prompts.py   # 台本生成プロンプト (Python)
@@ -76,7 +76,6 @@ yukkurijidou/
 - 1セリフ: **原則11〜15文字 / 平均11.5文字以上**（10文字以下は最大4行、7文字以下は原則禁止）
 - 尺計算式（native）: `各セリフ本文の文字数 ÷ (5.4 × 音声速度) + 0.1 × 音声速度 = 推定尺`
 - 背景枚数: 6〜9枚
-- 再生速度（YMM4）: イントロ2.0x（最初5秒）/ 本編1.65x
 - 再生速度（native）: イントロ1.40x / 本編1.25x
 - アップロードスロット: 毎日 7:00 / 12:00 / 19:00 (JST)
 
@@ -84,7 +83,6 @@ yukkurijidou/
 - 尺: **5〜10分（理想5〜8分）**
 - セリフ数: 150〜250行
 - 背景枚数: 5〜7秒に1枚（同一背景10秒以上禁止）
-- 再生速度（YMM4）: イントロ1.6x / 本編1.35x
 - 再生速度（native）: イントロ1.40x / 本編1.20x
 - アップロードスロット: 毎日 21:00 / 土日は追加で 12:00 (JST)
 
@@ -111,9 +109,9 @@ yukkurijidou/
 10. 背景画像生成（Nano Banana）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
 11. サムネイル生成（Nano Banana）
-12. YMM4プロジェクト組立 (.ymmp)
+12. 旧タイムライン互換ヘルパーで素材タイミングを組立
 13. BGM追加
-14. YMM4プロジェクト保存
+14. native MP4出力
 15. 実尺レビュー + 完了レポート
 ```
 
@@ -262,7 +260,7 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 | 機能 | 説明 |
 |---|---|
-| 生成 | 貼り付けた台本から音声・背景・サムネ・YMM4プロジェクトを生成 |
+| 生成 | 貼り付けた台本から音声・背景・サムネ・native MP4を生成 |
 | 作業中止 | 実行中の生成処理に中止リクエストを送る |
 | LLM/尺チェック | 複数台本を先に冒頭品質・推定尺・最終品質レビューする |
 | AI台本作成 | 既存タイトル重複を避ける台本生成プロンプトをコピー（生成区分・元動画・目的フィールド含む） |
@@ -376,11 +374,11 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | 設定 | デフォルト | 説明 |
 |---|---|---|
 | `VOICEVOX_URL` | `http://localhost:50021` | VOICEVOX API URL |
-| `VOICE_SPEED_SCALE_SHORTS` | 1.65 | Shorts本編再生速度（YMM4） |
-| `VOICE_INTRO_SPEED_SCALE_SHORTS` | 2.0 | Shortsイントロ再生速度（YMM4） |
+| `VOICE_SPEED_SCALE_SHORTS` | 1.65 | deprecated: 旧YMM4互換値 |
+| `VOICE_INTRO_SPEED_SCALE_SHORTS` | 2.0 | deprecated: 旧YMM4互換値 |
 | `VOICE_INTRO_FAST_SECONDS` | 5.0 | イントロ高速区間（秒） |
-| `VOICE_SPEED_SCALE_LONG` | 1.35 | Long本編再生速度（YMM4） |
-| `VOICE_INTRO_SPEED_SCALE_LONG` | 1.6 | Longイントロ再生速度（YMM4） |
+| `VOICE_SPEED_SCALE_LONG` | 1.35 | deprecated: 旧YMM4互換値 |
+| `VOICE_INTRO_SPEED_SCALE_LONG` | 1.6 | deprecated: 旧YMM4互換値 |
 | `NATIVE_SHORTS_BODY_VOICE_SPEED` | 1.25 | Shorts本編再生速度（native） |
 | `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.40 | Shortsイントロ再生速度（native） |
 | `NATIVE_LONG_BODY_VOICE_SPEED` | 1.20 | Long本編再生速度（native） |
@@ -397,9 +395,9 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_SHORTS_LINES_TARGET_MAX` | 27 | Shorts nativeセリフ数 目標上限 |
 | `NATIVE_SHORTS_LINES_WARNING` | 29 | Shorts nativeセリフ数 warning閾値 |
 | `NATIVE_SHORTS_LINES_MUST_FIX` | 31 | Shorts nativeセリフ数 must_fix閾値 |
-| `DEFAULT_SHORTS_RENDER_ENGINE` | `native` | Shortsのデフォルトレンダラー（native/ymm4） |
-| `GENERATE_YMM4_PROJECT` | `true` | native時でもYMM4プロジェクトを生成するか |
-| `RENDER_WITH_YMM4` | `false` | YMM4による本番動画書き出しを行うか |
+| `DEFAULT_SHORTS_RENDER_ENGINE` | `native` | deprecated: YMM4廃止後は常にnative |
+| `GENERATE_YMM4_PROJECT` | `false` | deprecated: `.ymmp` は生成しない |
+| `RENDER_WITH_YMM4` | `false` | deprecated: YMM4本番レンダリングは行わない |
 | `VOICE_INTRO_FAST_MODE` | `line_count` | 冒頭速度切り替えモード（line_count/seconds） |
 | `VOICE_INTRO_FAST_LINES` | 3 | native: 冒頭N行がintro速度 |
 | `NATIVE_AUDIO_LOUDNORM_ENABLED` | `true` | native MP4最終音声へ loudnorm を適用するか |
@@ -408,7 +406,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_AUDIO_LOUDNORM_LRA` | 6 | native loudnorm Loudness Range目標 |
 | `NATIVE_BGM_VOLUME_DB` | -20 | native出力のBGM音量(dB)。YMM4の `BGM_VOLUME` とは独立 |
 | `NATIVE_SHORTS_CHARACTER_SCALE` | 1.05 | native Shortsのキャラ表示倍率。`CHARACTER_UPPER_BODY_MODE=1` のとき無効 |
-| `CHARACTER_UPPER_BODY_MODE` | 1 | `1` でnative/YMM4両方で腰から上表示モードを有効化 |
+| `CHARACTER_UPPER_BODY_MODE` | 1 | `1` でnative腰から上表示モードを有効化 |
 | `CHARACTER_UPPER_BODY_SCALE` | 1.55 | 腰から上モード時のキャラ拡大倍率 |
 | `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
 | `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 400 | 腰から上モード: Long の下方向シフト量(px) |
@@ -426,15 +424,15 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 
 ---
 
-## ffmpeg ネイティブレンダラー (`core/native_renderer.py`) — Shorts本番レンダラー
+## ffmpeg ネイティブレンダラー (`core/native_renderer.py`) — 本番レンダラー
 
-Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を生成すると自動的に native が選択される。
+Shorts / Long の本番レンダラー。通常の「生成」ボタンで native MP4 を出力する。
 
-- **デフォルト動作**: `DEFAULT_SHORTS_RENDER_ENGINE = "native"` が設定されているため、Shorts の `run_pipeline()` は `native_render=None` を受け取ると自動で `native_render=True` に切り替わる。
-- `run_pipeline()` は native/YMM4 どちらでも通常通り `.ymmp` プロジェクトを生成する（保険・確認・再編集用）。
+- **デフォルト動作**: `run_pipeline()` は `native_render` 指定に関係なく native を使う。YMM4プロジェクト出力とYMM4本番レンダリングは廃止済み。
+- `.ymmp` プロジェクトは生成しない。旧YMM4互換の内部ヘルパーは素材タイミング計算にのみ使う。
 - `render_native_test(output_dir, voice_speed_intro, voice_speed_body, estimated_duration_sec)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
-- 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。YMM4出力には適用しない。
-- native出力のBGM音量は `NATIVE_BGM_VOLUME_DB=-20` (dB) で管理する。YMM4が使う `BGM_VOLUME` (%) とは独立。
+- 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。
+- native出力のBGM音量は `NATIVE_BGM_VOLUME_DB=-20` (dB) で管理する。
 - 出力後に ffmpeg `ebur128=peak=true` で最終MP4の音量解析を行い、Integrated loudness / LRA / True peak の要約をログに出す。
 - MP4生成後、ffprobe で実尺を取得し `📏 native実尺評価: Xs [理想/やや短い/OKだけど長め/警告/要確認]` をログ表示する。評価基準はShortsと同じ（38〜50s=理想 / 35〜37s=やや短い / 51〜55s=OKだけど長め / 32〜34s or 56〜58s=警告）。
 - `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
@@ -444,24 +442,22 @@ Shorts の本番レンダラー。通常の「生成」ボタンで Shorts を�
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭1フレームにサムネイル画像を挿入する（Long は挿入しない）。
 - `_meta/render_info.json` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra。
 
-`DEFAULT_SHORTS_RENDER_ENGINE=ymm4` (.env) で YMM4 本番レンダリングに戻せる。
+### 安定条件
 
-### 安定条件（YMM4 とは別基準）
-
-| 項目 | YMM4 | native |
-|---|---|---|
-| Shorts セリフ数（理想） | 17〜20行 | 24〜27行（22〜28行は許容） |
-| Shorts セリフ数（warning） | 20行（21+ は must_fix） | 29〜30行 |
-| Shorts セリフ数（must_fix） | 21行以上 | 31行以上 |
-| Shorts 推定尺チェック | 35s未満または55s超で停止 | 参考値のみ表示（停止しない） |
-| Shorts 音声速度 | イントロ 2.0x / 本編 1.65x | イントロ 1.40x / 本編 1.25x |
-| Long 音声速度 | イントロ 1.6x / 本編 1.35x | イントロ 1.40x / 本編 1.20x |
+| 項目 | native |
+|---|---|
+| Shorts セリフ数（理想） | 24〜27行（22〜28行は許容） |
+| Shorts セリフ数（warning） | 29〜30行 |
+| Shorts セリフ数（must_fix） | 31行以上 |
+| Shorts 推定尺チェック | 参考値のみ表示（停止しない） |
+| Shorts 音声速度 | イントロ 1.40x / 本編 1.25x |
+| Long 音声速度 | イントロ 1.40x / 本編 1.20x |
 
 native では尺ではなく**語り速度（chars/sec）と台本量**で調整するため、推定尺による停止は行わない。
 
 ### 実尺チェック（native MP4 生成後）
 
-`render_native_test()` 完了後、`gui.py` が ffprobe で計測した MP4 の実尺に対して `duration_review()` を実行し、YMM4 パスと同じ基準で判定を表示する。
+`render_native_test()` 完了後、`gui.py` が ffprobe で計測した MP4 の実尺に対して `duration_review()` を実行し、native基準で判定を表示する。
 
 ```
 ━━━━━━━━ 実尺チェック 44.3秒 / 理想（38〜50秒） ━━━━━━━━   ← 緑
@@ -470,7 +466,7 @@ native では尺ではなく**語り速度（chars/sec）と台本量**で調整
 ```
 
 - 結果は `_meta/duration_review.json` に `"source": "native_mp4"` 付きで上書き保存する
-- 判定基準は YMM4 パスと共通（ideal: 38〜50s / ok_but_short: 35〜37s / ok_but_long: 51〜55s / warning: 32〜34s or 56〜58s / needs_review: それ以外）
+- 判定基準は native 実尺基準（ideal: 38〜50s / ok_but_short: 35〜37s / ok_but_long: 51〜55s / warning: 32〜34s or 56〜58s / needs_review: それ以外）
 
 ### 詳細ログ（`render_native_test` 完了時）
 
@@ -541,7 +537,7 @@ GUI オプション行の **「Long節約」チェックボックス**（デフ�
 背景: 製粉小麦の古い工程（新規生成）
 ```
 
-YMM4 側のズーム・パン・トリミング効果と組み合わせることで、視覚的な変化を維持しながら API 呼び出しを削減できる。
+native 側のズーム・パン・トリミング効果と組み合わせることで、視覚的な変化を維持しながら API 呼び出しを削減できる。
 
 ### チャプターマーカー自動生成
 
@@ -554,7 +550,7 @@ Gemini AIがロング台本からYouTube概要欄用チャプターマーカー�
 ```
 output/{テーマ名}/
 ├── script.txt              # 台本
-├── {テーマ名}.ymmp         # YMM4プロジェクト
+├── {テーマ名}_native.mp4   # native MP4
 ├── thumbnails/
 │   ├── thumbnail.png                       # サムネイル（UploadはこのA案を使用）
 │   ├── {テーマ名}_thumbnail_A.png          # Long: A案
@@ -744,7 +740,7 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 ### 動画出力
 
-動画出力は ffmpeg/native MP4 を主経路にします。YMM4 GUI自動操作によるMP4出力は廃止済みで、`.ymmp` は確認・再編集用のプロジェクトとして生成します。
+動画出力は ffmpeg/native MP4 のみを対象にします。YMM4 GUI自動操作によるMP4出力と `.ymmp` プロジェクト出力は廃止済みです。
 
 ### YouTubeアップロード
 
@@ -907,7 +903,7 @@ Native Shorts rendering places zundamon/metan smaller and slightly higher than t
 - 背景は展開が変わる時に入れる。Shortsは理想3〜5秒ごと、ロングは基本5〜7秒ごとに見た目を変える。同じ背景を10秒以上続けない
 - 台本本編はシーンごとに作る。`# Scene 1: Opening hook` のような見出しを入れ、その下に `背景:`、必要なら `テロップ:`、会話をまとめる
 - `# Scene ...` 行は管理用で、アプリ側では無視される
-- YMM4字幕は常時表示されるため、追加テロップはセリフの丸写しにしない
+- 通常字幕は常時表示されるため、追加テロップはセリフの丸写しにしない
 - 追加テロップは冒頭フック、重要ワード、章・場面転換、オチ・ツッコミだけに絞る
 - Shortsの追加テロップは6〜12個、多くても15個以内。0.8〜1.5秒で短く出す
 - Longの追加テロップは少なめにし、章タイトル・数字・年代・固有名詞・重要語を中心にする
@@ -929,7 +925,6 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 | Ollama (qwen3:8b) | 冒頭品質レビュー・リライト | ローカル起動 |
 | OpenAI API | ChatGPT生成前レビュー | `OPENAI_API_KEY` |
 | YouTube Data API v3 | 動画アップロード | OAuth2 (`client_secrets.json`) |
-| YMM4 | 動画組立・レンダリング | ローカルインストール |
 
 ### APIキー・OAuth取得
 
@@ -1000,7 +995,7 @@ YouTube OAuth:
 | `NANOBANANA_PRO_MODEL` | `.env` / `config.py` | 高品質画像生成モデル |
 | `NANOBANANA_FLASH_MODEL` | `.env` / `config.py` | 速い画像生成モデル |
 | `CHARACTERS` | `config.py` | VOICEVOX話者ID・スタイルID |
-| `CHARACTER_PNGS` | `config.py` | YMM4キャラ立ち絵 |
+| `CHARACTER_PNGS` | `config.py` | native合成用キャラ立ち絵 |
 | `THUMBNAIL_CHARACTER_PNGS` | `config.py` | サムネ生成用参照画像 |
 | `BGM_PATH` | `config.py` | 固定BGMファイル |
 | `BGM_VOLUME` | `config.py` | BGM音量 |

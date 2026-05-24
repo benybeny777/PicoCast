@@ -29,11 +29,11 @@
 ## プロジェクト概要
 
 「ずんだもんとめたんの食べ物雑学堂」YouTube チャンネル向け動画自動生成ツール。
-台本 → VOICEVOX音声 → Nano Banana背景画像 → YMM4プロジェクト/native MP4 → YouTubeアップロード。
+台本 → VOICEVOX音声 → Nano Banana背景画像 → native MP4 → YouTubeアップロード。
 
 ## 実行環境
 
-- Windows / Mac を想定する。ffmpeg/native生成を主経路とし、YMM4は確認用 `.ymmp` 生成までを扱う。
+- Windows / Mac を想定する。ffmpeg/native生成を主経路とし、YMM4プロジェクト出力は廃止済み。
 - Python 仮想環境: `.venv/`
 - 起動: `python gui.py`
 - VOICEVOX をローカルで起動しておく必要がある（`http://localhost:50021`）
@@ -49,7 +49,7 @@
 | `core/ai_generator.py` | Gemini台本生成・画像プロンプト強化 |
 | `core/voicevox.py` | VOICEVOX音声生成 |
 | `core/image_generator.py` | Nano Banana背景・サムネ生成 |
-| `core/ymmp_editor.py` | YMM4 `.ymmp` プロジェクト編集 |
+| `core/ymmp_editor.py` | 旧YMM4タイムライン互換の内部編集ヘルパー |
 | `core/native_renderer.py` | ffmpeg/native MP4レンダラー |
 | `core/opening_quality.py` | 冒頭品質レビュー（ローカル + Ollama + ChatGPT） |
 | `core/upload_scheduler.py` | アップロードスロット管理 |
@@ -61,7 +61,6 @@
 ```text
 output/{テーマ名}/
 ├── script.txt
-├── {テーマ名}.ymmp
 ├── {テーマ名}_native.mp4      ← native出力時
 ├── thumbnails/
 │   ├── thumbnail.png
@@ -146,7 +145,7 @@ output/{テーマ名}/
   - Thumbnail cards in the image review dialog now have a prompt edit button.
   - Saving an edited thumbnail prompt marks that thumbnail for regeneration and writes the prompt file for later reuse.
 - ChatGPT review flow:
-  - ChatGPT review now runs before image/voice/YMM4 generation.
+  - ChatGPT review now runs before image/voice/native MP4 generation.
   - It uses estimated duration, opening review, title/thumbnail, and script content. Must-fix items, score below 70, review failure, or review skip stops before asset generation.
   - Actual VOICEVOX duration is still measured after voice generation and logged for human judgment.
 - LLM check relaxation:
