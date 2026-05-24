@@ -114,3 +114,48 @@ output/{テーマ名}/
 - `token.json`
 - `token_analytics.json`
 - 認証情報、APIキー、OAuthトークン、秘密鍵、Cookie、個人用設定などのシークレットはファイル名に関わらずコミット禁止。ドキュメントやログにも値を記載しない。
+
+## 2026-05-18 Note
+
+- Shorts duration status is now more granular:
+  - `ideal`: 38-50s
+  - `ok_but_short`: 35-37s
+  - `ok_but_long`: 51-55s
+  - `warning`: 32-34s or 56-58s
+  - `needs_review`: outside those ranges
+- GUI pre-run estimate and final duration log both show "OKだけど長め" for 51-55s, so 54-55s no longer looks like plain OK.
+- LLM wait visibility:
+  - `main.py` now logs when Ollama opening review starts/finishes.
+  - `main.py` now logs when Ollama opening rewrite starts.
+  - `main.py` now logs when ChatGPT final review starts.
+- Bulk preflight check:
+  - `gui.py` adds `LLM/尺チェック` button.
+  - It checks all scripts currently pasted in the text area without generating assets.
+  - For each script it runs Ollama opening review and estimated duration review, then logs a summary.
+  - After completion, it copies an AI correction request report to the clipboard.
+- Score log visibility:
+  - `gui.py` score tags now use colored backgrounds: green for strong, yellow for warning, red for low.
+  - Score lines now use `■■■ ... ■■■` markers instead of only line separators.
+  - Opening score threshold is 80. Ollama rewrite candidates are re-scored locally and are only applied when the post-rewrite score is 80 or higher.
+  - Opening scores below 70, or scores with critical errors, are treated as `llm_review_required`.
+  - If the pipeline stops because the opening has critical errors or is below 70, the GUI reports it as `要修正` instead of `成功`.
+  - If the primary Ollama rewrite model fails to produce a 70+ candidate with no critical errors, the pipeline tries one fallback rewrite model (`gemma4:e4b` by default) once.
+- Script prompt:
+  - `core/script_generation_prompt.txt` now includes an "LLM冒頭チェック通過ルール" section.
+  - It requires Shorts first dialogue to include the food name, clear surprise, and a complete conclusion, with thumbnail/telop/opening meaning aligned.
+- Image review:
+  - Thumbnail cards in the image review dialog now have a prompt edit button.
+  - Saving an edited thumbnail prompt marks that thumbnail for regeneration and writes the prompt file for later reuse.
+- ChatGPT review flow:
+  - ChatGPT review now runs before image/voice/YMM4 generation.
+  - It uses estimated duration, opening review, title/thumbnail, and script content. Must-fix items, score below 70, review failure, or review skip stops before asset generation.
+  - Actual VOICEVOX duration is still measured after voice generation and logged for human judgment.
+- LLM check relaxation:
+  - Opening 80+ is a clean pass, 70-79 can pass as warning if there are no critical errors, and below 70 stops.
+  - Critical opening errors are first-line food missing, incomplete first line, no first-line surprise, 4 same-speaker lines in a row, or 21+ Shorts dialogue lines.
+  - Pre-generation ChatGPT review stops on `must_fix` or score below 70. `publish_ok=false` without `must_fix` is logged as a warning instead of stopping.
+  - Estimated Shorts duration under 35s or over 55s still stops before asset generation.
+- Analytics:
+  - `core/youtube_analytics.py` fetches video-level YouTube Analytics for 7/28/90 day windows.
+  - `core/analytics_score.py` scores videos with rule-based S/A/B/C/D ratings and action labels.
+  - GUI has a separate `📊 アナリティクス` window with colored score rows, TSV copy, AI-analysis copy, and `output/analytics_score_YYYYMMDD.{json,tsv}` export.
