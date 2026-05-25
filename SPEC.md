@@ -40,7 +40,6 @@ yukkurijidou/
 │   ├── voicevox.py         # VOICEVOX音声生成
 │   ├── image_generator.py  # Nano Banana背景画像生成
 │   ├── parser.py           # 台本パーサー (ScriptParser)
-│   ├── ymmp_editor.py      # 旧YMM4タイムライン互換の内部編集ヘルパー
 │   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
 │   ├── opening_quality.py  # 冒頭品質レビュー
 │   ├── script_prompts.py   # 台本生成プロンプト (Python)
@@ -374,11 +373,6 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | 設定 | デフォルト | 説明 |
 |---|---|---|
 | `VOICEVOX_URL` | `http://localhost:50021` | VOICEVOX API URL |
-| `VOICE_SPEED_SCALE_SHORTS` | 1.65 | deprecated: 旧YMM4互換値 |
-| `VOICE_INTRO_SPEED_SCALE_SHORTS` | 2.0 | deprecated: 旧YMM4互換値 |
-| `VOICE_INTRO_FAST_SECONDS` | 5.0 | イントロ高速区間（秒） |
-| `VOICE_SPEED_SCALE_LONG` | 1.35 | deprecated: 旧YMM4互換値 |
-| `VOICE_INTRO_SPEED_SCALE_LONG` | 1.6 | deprecated: 旧YMM4互換値 |
 | `NATIVE_SHORTS_BODY_VOICE_SPEED` | 1.25 | Shorts本編再生速度（native） |
 | `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.40 | Shortsイントロ再生速度（native） |
 | `NATIVE_LONG_BODY_VOICE_SPEED` | 1.20 | Long本編再生速度（native） |
@@ -395,16 +389,12 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_SHORTS_LINES_TARGET_MAX` | 27 | Shorts nativeセリフ数 目標上限 |
 | `NATIVE_SHORTS_LINES_WARNING` | 29 | Shorts nativeセリフ数 warning閾値 |
 | `NATIVE_SHORTS_LINES_MUST_FIX` | 31 | Shorts nativeセリフ数 must_fix閾値 |
-| `DEFAULT_SHORTS_RENDER_ENGINE` | `native` | deprecated: YMM4廃止後は常にnative |
-| `GENERATE_YMM4_PROJECT` | `false` | deprecated: `.ymmp` は生成しない |
-| `RENDER_WITH_YMM4` | `false` | deprecated: YMM4本番レンダリングは行わない |
-| `VOICE_INTRO_FAST_MODE` | `line_count` | 冒頭速度切り替えモード（line_count/seconds） |
 | `VOICE_INTRO_FAST_LINES` | 3 | native: 冒頭N行がintro速度 |
 | `NATIVE_AUDIO_LOUDNORM_ENABLED` | `true` | native MP4最終音声へ loudnorm を適用するか |
 | `NATIVE_AUDIO_LOUDNORM_I` | -15 | native loudnorm Integrated loudness目標 |
 | `NATIVE_AUDIO_LOUDNORM_TP` | -1.5 | native loudnorm True Peak上限 |
 | `NATIVE_AUDIO_LOUDNORM_LRA` | 6 | native loudnorm Loudness Range目標 |
-| `NATIVE_BGM_VOLUME_DB` | -20 | native出力のBGM音量(dB)。YMM4の `BGM_VOLUME` とは独立 |
+| `NATIVE_BGM_VOLUME_DB` | -20 | native出力のBGM音量(dB) |
 | `NATIVE_SHORTS_CHARACTER_SCALE` | 1.05 | native Shortsのキャラ表示倍率。`CHARACTER_UPPER_BODY_MODE=1` のとき無効 |
 | `CHARACTER_UPPER_BODY_MODE` | 1 | `1` でnative腰から上表示モードを有効化 |
 | `CHARACTER_UPPER_BODY_SCALE` | 1.55 | 腰から上モード時のキャラ拡大倍率（Long用） |
@@ -421,7 +411,6 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `MAX_BACKGROUNDS_LONG` | 90 | Long最大背景枚数（通常モード） |
 | `MAX_BACKGROUNDS_LONG_BUDGET` | 16 | Long節約モードの最大背景生成枚数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
-| `BGM_VOLUME` | 15.0 | BGM音量(%) |
 
 ---
 
@@ -429,15 +418,15 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 
 Shorts / Long の本番レンダラー。通常の「生成」ボタンで native MP4 を出力する。
 
-- **デフォルト動作**: `run_pipeline()` は `native_render` 指定に関係なく native を使う。YMM4プロジェクト出力とYMM4本番レンダリングは廃止済み。
-- `.ymmp` プロジェクトは生成しない。旧YMM4互換の内部ヘルパーは素材タイミング計算にのみ使う。
+- **デフォルト動作**: `run_pipeline()` は常にnative用素材を生成する。YMM4プロジェクト出力とYMM4本番レンダリングは廃止済み。
+- `.ymmp` プロジェクトは生成しない。素材生成後、GUI側が `render_native_test()` を呼び出してnative MP4を作る。
 - `render_native_test(output_dir, voice_speed_intro, voice_speed_body, estimated_duration_sec)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
 - 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。
 - native出力のBGM音量は `NATIVE_BGM_VOLUME_DB=-20` (dB) で管理する。
 - 出力後に ffmpeg `ebur128=peak=true` で最終MP4の音量解析を行い、Integrated loudness / LRA / True peak の要約をログに出す。
 - MP4生成後、ffprobe で実尺を取得し `📏 native実尺評価: Xs [理想/やや短い/OKだけど長め/警告/要確認]` をログ表示する。評価基準はShortsと同じ（38〜50s=理想 / 35〜37s=やや短い / 51〜55s=OKだけど長め / 32〜34s or 56〜58s=警告）。
 - `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
-- **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。`TACHIE_PARAMS` も同じスケール定数から自動計算される。
+- **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。
 - 字幕フチ幅は `NATIVE_SUBTITLE_STROKE_WIDTH`(内フチ, デフォルト 9) / `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(外フチ, デフォルト 13) で調整可能。字幕帯のパディングは `NATIVE_SUBTITLE_PADDING_Y` で調整。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭に `THUMBNAIL_HOLD_FRAMES_SHORTS`（デフォルト3フレーム≒0.1秒）だけサムネイル画像を挿入する（Long は挿入しない）。保持フレーム数は `.env` の `THUMBNAIL_HOLD_FRAMES_SHORTS` で変更可。1秒以上の静止サムネは設定値に関係なく生じない（上限5フレーム≒0.17秒）。
@@ -590,9 +579,7 @@ output/{テーマ名}/
 
 ## 立ち絵テンプレート
 
-四国めたんの既定ポーズは、`core/character_templates.json` で両手とも普通手に設定しています。YMM4のPSDレイヤーIDでは、右手が `n16`、左手が `n24` です。目レイヤーは感情・アクション適用時も基本レイヤーが残るよう `core/ymmp_editor.py` で保護しています。
-
-台本の感情指定に応じて、立ち絵へ表情レイヤーと軽いアクションを自動付与します。
+台本の音声スタイル指定は丸括弧、画面上の表情指定は角括弧で分離します。nativeレンダラーは生成済み表情PNGをセリフ単位で切り替えます。
 
 ```text
 ずんだもん(あまあま): うれしいのだ！
@@ -603,7 +590,7 @@ output/{テーマ名}/
 四国めたん(ささやき): ここだけの話よ。
 ```
 
-表情と動きの対応は `core/ymmp_editor.py` の `EXPRESSION_LAYER_PRESETS` / `ACTION_PRESETS` で調整できます。
+表情PNGの生成・PSDレイヤー診断は `core/character_expressions.py` で行います。表情PNGの参照先は `config.py` の `CHARACTER_EXPRESSION_PNGS` で調整できます。
 
 ---
 
@@ -987,11 +974,11 @@ YouTube OAuth:
 |---|---|---|
 | `VOICEVOX_URL` | `config.py` | VOICEVOX API のURL |
 | `VOICEVOX_PATH` | `config.py` | VOICEVOX実行ファイルの場所 |
-| `VOICE_SPEED_SCALE_SHORTS` | `config.py` | Shorts本編の音声速度 |
-| `VOICE_INTRO_SPEED_SCALE_SHORTS` | `config.py` | Shorts冒頭の音声速度 |
-| `VOICE_SPEED_SCALE_LONG` | `config.py` | Long本編の音声速度 |
-| `VOICE_INTRO_SPEED_SCALE_LONG` | `config.py` | Long冒頭の音声速度 |
-| `VOICE_INTRO_FAST_SECONDS` | `config.py` | 冒頭高速化する秒数 |
+| `NATIVE_SHORTS_BODY_VOICE_SPEED` | `.env` / `config.py` | native Shorts本編の音声速度 |
+| `NATIVE_SHORTS_INTRO_VOICE_SPEED` | `.env` / `config.py` | native Shorts冒頭の音声速度 |
+| `NATIVE_LONG_BODY_VOICE_SPEED` | `.env` / `config.py` | native Long本編の音声速度 |
+| `NATIVE_LONG_INTRO_VOICE_SPEED` | `.env` / `config.py` | native Long冒頭の音声速度 |
+| `VOICE_INTRO_FAST_LINES` | `.env` / `config.py` | 冒頭高速化するセリフ行数 |
 | `VOICE_POST_PHONEME_LENGTH` | `config.py` | VOICEVOX API に渡す `postPhonemeLength` |
 | `OPENING_REVIEW_USE_LLM` | `.env` | Ollama冒頭レビューを使うか |
 | `OLLAMA_REVIEW_MODEL` | `.env` | 冒頭レビュー用Ollamaモデル |
@@ -1014,7 +1001,7 @@ YouTube OAuth:
 | `THUMBNAIL_CHARACTER_PNGS` | `config.py` | サムネ生成用参照画像 |
 | `THUMBNAIL_HOLD_FRAMES_SHORTS` | `config.py` / `.env` | Shorts先頭サムネ保持フレーム数。1〜5（30fps換算: 1=0.033s / 3=0.100s / 5=0.167s）。デフォルト3。不正値は3、範囲外は1〜5にクランプ。Long非対応 |
 | `BGM_PATH` | `config.py` | 固定BGMファイル |
-| `BGM_VOLUME` | `config.py` | BGM音量 |
+| `NATIVE_BGM_VOLUME_DB` | `.env` / `config.py` | native出力のBGM音量(dB) |
 | `MAX_BACKGROUNDS_SHORTS` | `config.py` | Shortsの最大背景生成枚数 |
 | `MAX_BACKGROUNDS_LONG` | `config.py` | Longの最大背景生成枚数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `.env` | Longアップロード後に自動追加する再生リスト名。未設定時は `ロング動画`。完全一致で検索 |

@@ -121,7 +121,7 @@ def unified_check(name, primary_url, path):
             with requests.get(url, timeout=0.8):
                 found_url = url
                 break
-        except:
+        except Exception:
             continue
     return {
         "name": name,
@@ -185,20 +185,21 @@ def _load_image_copy(path):
     with Image.open(io.BytesIO(data)) as src:
         return src.copy()
 
-print(f"\n--- [System Startup Check] ---")
-for n, u, p in [("VOICEVOX", VOICEVOX_URL, VOICEVOX_PATH)]:
-    res = unified_check(n, u, p)
-    c_status = f"[Conn: OK ({res['url']})]" if res['connected'] else "[Conn: ERR]"
-    f_status = "[File: OK]" if res['file_ok'] else "[File: ERR]"
-    print(f"{res['name']:<10}: {c_status:<35} {f_status}")
-_ffmpeg_boot = ffmpeg_native_status()
-_ffmpeg_mode = "GPU" if _ffmpeg_boot["gpu"] and _ffmpeg_boot["available"] else "CPU" if _ffmpeg_boot["available"] else "ERR"
-_ffmpeg_preset = f" / preset {_ffmpeg_boot['preset']}" if _ffmpeg_boot["preset"] else ""
-_ffmpeg_hw = f" / HW: {', '.join(_ffmpeg_boot['hw_encoders'][:4])}" if _ffmpeg_boot["hw_encoders"] else ""
-print(f"ffmpeg   : [{_ffmpeg_mode}: {_ffmpeg_boot['configured']}{_ffmpeg_preset}]{_ffmpeg_hw}")
-if _ffmpeg_boot["error"]:
-    print(f"           {_ffmpeg_boot['error']}")
-print(f"------------------------------\n")
+def print_startup_check():
+    print("\n--- [System Startup Check] ---")
+    for n, u, p in [("VOICEVOX", VOICEVOX_URL, VOICEVOX_PATH)]:
+        res = unified_check(n, u, p)
+        c_status = f"[Conn: OK ({res['url']})]" if res["connected"] else "[Conn: ERR]"
+        f_status = "[File: OK]" if res["file_ok"] else "[File: ERR]"
+        print(f"{res['name']:<10}: {c_status:<35} {f_status}")
+    ffmpeg_boot = ffmpeg_native_status()
+    ffmpeg_mode = "GPU" if ffmpeg_boot["gpu"] and ffmpeg_boot["available"] else "CPU" if ffmpeg_boot["available"] else "ERR"
+    ffmpeg_preset = f" / preset {ffmpeg_boot['preset']}" if ffmpeg_boot["preset"] else ""
+    ffmpeg_hw = f" / HW: {', '.join(ffmpeg_boot['hw_encoders'][:4])}" if ffmpeg_boot["hw_encoders"] else ""
+    print(f"ffmpeg   : [{ffmpeg_mode}: {ffmpeg_boot['configured']}{ffmpeg_preset}]{ffmpeg_hw}")
+    if ffmpeg_boot["error"]:
+        print(f"           {ffmpeg_boot['error']}")
+    print("------------------------------\n")
 
 
 class ToolTip:
@@ -383,12 +384,9 @@ class ShortsAutoFactory:
 
         test_btn_frame = ttk.Frame(main_frame)
         test_btn_frame.pack(fill=tk.X, pady=(0, 4))
-        ttk.Label(test_btn_frame, text="test:").pack(side=tk.LEFT, padx=(0, 6))
-        self.native_generate_btn = ttk.Button(test_btn_frame, text="native生成", command=self.start_native_generation)
-        self.native_generate_btn.pack(side=tk.LEFT, padx=(0, 4), ipady=2)
-        self._add_tooltip(self.native_generate_btn, "貼り付けた台本から素材を生成し、ffmpeg/nativeでMP4を出力します。")
+        ttk.Label(test_btn_frame, text="ツール:").pack(side=tk.LEFT, padx=(0, 6))
         self.native_render_history_btn = ttk.Button(test_btn_frame, text="native MP4化", command=self.start_native_render_from_history)
-        self.native_render_history_btn.pack(side=tk.LEFT, padx=(4, 0), ipady=2)
+        self.native_render_history_btn.pack(side=tk.LEFT, padx=(0, 0), ipady=2)
         self._add_tooltip(self.native_render_history_btn, "既存履歴の音声・背景を使い、ffmpeg/native MP4出力だけを実行します。")
         # ステータスとプログレスバー
         self.status_var = tk.StringVar(value="Ready")
@@ -642,7 +640,6 @@ class ShortsAutoFactory:
             "long_thumbnail_ab_test": self.long_thumbnail_ab_var.get(),
             "long_budget_mode": self.long_budget_var.get(),
             "sd_size_mode": self.sd_size_var.get(),
-            "native_render": False,
         }
 
     def refresh_history(self):
@@ -1244,7 +1241,7 @@ class ShortsAutoFactory:
         self.root.update()
         self.log("📋 AI修正依頼用チェック結果をクリップボードにコピーしました", "success")
 
-    def _run_generation_score_gate(self, scripts, cancel_event, native_render=None):
+    def _run_generation_score_gate(self, scripts, cancel_event):
         ok_count = 0
         warn_count = 0
         ng_count = 0
@@ -1394,10 +1391,7 @@ class ShortsAutoFactory:
 
 
     def start_generation(self):
-        self._start_generation(native_render=False)
-
-    def start_native_generation(self):
-        self._start_generation(native_render=True)
+        self._start_generation()
 
     def start_native_render_from_history(self):
         selected = self.select_history_dialog(
@@ -1414,7 +1408,7 @@ class ShortsAutoFactory:
         self.log(f"native MP4化開始: 合計 {len(selected)} 件", "batch")
         threading.Thread(target=self._run_native_render_histories, args=(selected, self._gen_id, self.cancel_event), daemon=True).start()
 
-    def _start_generation(self, native_render=False):
+    def _start_generation(self):
         from core.parser import ScriptParser
         raw_scripts = self.ref_text.get("1.0", tk.END).strip()
         scripts = split_input_scripts(raw_scripts)
@@ -1474,8 +1468,6 @@ class ShortsAutoFactory:
 
         self.log("⚠ 問題がある場合は「作業中止」ボタンで止めてください", "warning")
         settings = self._generation_settings()
-        # native_render=True: 明示的にnative強制 / None: run_pipeline内でShortsはauto-native
-        settings["native_render"] = True
         mode = "native生成"
         self.log(f"{mode}開始: 合計 {len(scripts)} 件")
         threading.Thread(target=self._run_batch, args=(scripts, settings, self.cancel_event), daemon=True).start()
@@ -1581,7 +1573,7 @@ class ShortsAutoFactory:
 
         if is_batch:
             self._set_batch_progress_text(f"一括生成: 0/{count} 完了")
-            if not self._run_generation_score_gate(scripts, cancel_event, native_render=settings.get("native_render")):
+            if not self._run_generation_score_gate(scripts, cancel_event):
                 if cancel_event.is_set():
                     self.log("\n⏹ 生成前スコアリング中に中止しました。", "error")
                     self.root.after(0, lambda: self.status_var.set("Canceled"))
@@ -1631,7 +1623,6 @@ class ShortsAutoFactory:
                             long_thumbnail_ab_test=settings.get("long_thumbnail_ab_test", False),
                             long_budget_mode=settings.get("long_budget_mode", False),
                             sd_size_mode=settings.get("sd_size_mode", False),
-                            native_render=settings.get("native_render"),  # None=auto, True=force native
                         )
                         break
                     except OutputDirectoryLockedError as e:
@@ -1661,8 +1652,7 @@ class ShortsAutoFactory:
                     self.root.after(0, lambda m=msg, r=report, gid=gen_id:
                         self.finish_generation(m, r, is_error=True) if gid == self._gen_id else None)
                     return
-                _should_native_render = getattr(report, "native_render_used", False) or settings.get("native_render") is True
-                if _should_native_render:
+                if getattr(report, "native_render_used", False):
                     output_dir = self._output_dir_from_message(msg)
                     if not output_dir or not os.path.isdir(output_dir):
                         raise Exception("native MP4出力先フォルダを特定できませんでした")
@@ -4285,7 +4275,6 @@ class ShortsAutoFactory:
     def _toggle_ui(self, enabled):
         state = tk.NORMAL if enabled else tk.DISABLED
         self.generate_btn.config(state=state)
-        self.native_generate_btn.config(state=state)
         self.llm_check_btn.config(state=state)
         self.history_batch_btn.config(state=state)
         self.cancel_btn.config(state=tk.DISABLED if enabled else tk.NORMAL)
@@ -4302,6 +4291,7 @@ class ShortsAutoFactory:
         os.startfile(out_dir)
 
 if __name__ == "__main__":
+    print_startup_check()
     root = tk.Tk()
     app = ShortsAutoFactory(root)
     root.mainloop()

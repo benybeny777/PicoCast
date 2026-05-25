@@ -1,7 +1,6 @@
 ﻿import os
 import sys
 import wave
-import math
 import time
 import subprocess
 import re
@@ -9,10 +8,8 @@ import uuid
 import json
 import shutil
 import gc
-from collections import defaultdict
 from core.voicevox import VoicevoxAPI
 from core.parser import ScriptParser
-from core.timeline_editor import TimelineEditor
 from core.ai_generator import AIGenerator
 from core.ng_words import apply_ng_word_replacements
 from core.youtube_metadata import optimize_description, optimize_tags
@@ -33,12 +30,7 @@ from core.opening_quality import (
     should_auto_rewrite_opening,
 )
 from config import (
-    ASSETS_DIR,
-    BGM_LAYER,
-    BGM_PATH,
-    BGM_VOLUME,
     CHARACTERS,
-    TACHIE_PARAMS,
     MAX_BACKGROUNDS_LONG,
     MAX_BACKGROUNDS_LONG_BUDGET,
     MAX_BACKGROUNDS_SHORTS,
@@ -68,11 +60,6 @@ from config import (
     TRANSITION_SEC,
     VIDEO_FPS,
     VOICE_INTRO_FAST_LINES,
-    VOICE_INTRO_FAST_SECONDS,
-    VOICE_INTRO_SPEED_SCALE_LONG,
-    VOICE_INTRO_SPEED_SCALE_SHORTS,
-    VOICE_SPEED_SCALE_LONG,
-    VOICE_SPEED_SCALE_SHORTS,
     VOICEVOX_PATH,
     VOICE_TAIL_SAFETY_SEC,
 )
@@ -132,7 +119,6 @@ def _cleanup_old_theme_backups(backup_base: str, safe_topic: str, keep: str | No
 
 
 INTER_DIALOGUE_GAP_SEC = 0.2
-TACHIE_START_FRAME = 3
 
 LONG_THUMBNAIL_VARIANTS = [
     {
@@ -390,9 +376,9 @@ def _estimate_script_duration(items, is_shorts: bool):
             elapsed += chars / (NATIVE_SHORTS_ESTIMATE_BASE_CPS * speed) + 0.1 * speed
     else:
         additional = TRANSITION_SEC + VOICE_TAIL_SAFETY_SEC + INTER_DIALOGUE_GAP_SEC
-        for item in dialogue_items:
+        for i, item in enumerate(dialogue_items):
             chars = len(item.get("text", ""))
-            speed = NATIVE_LONG_INTRO_VOICE_SPEED if elapsed < VOICE_INTRO_FAST_SECONDS else NATIVE_LONG_BODY_VOICE_SPEED
+            speed = NATIVE_LONG_INTRO_VOICE_SPEED if i < VOICE_INTRO_FAST_LINES else NATIVE_LONG_BODY_VOICE_SPEED
             elapsed += chars / (5.4 * speed) + 0.1 * speed + additional
     return elapsed, n, avg_chars
 
@@ -526,36 +512,6 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     return _finish_thumbnail(thumb_path)
 
 
-def _read_template_duration(path):
-    """ymmpファイルの総フレーム数（max Frame+Length）を返す。"""
-    try:
-        with open(path, "r", encoding="utf-8-sig") as f:
-            p = json.load(f)
-        items = p.get("Timelines", [{}])[0].get("Items", [])
-        if not items:
-            return 0
-        return max(it.get("Frame", 0) + it.get("Length", 0) for it in items)
-    except Exception:
-        return 0
-
-
-def _add_fixed_bgm(editor, total_frames, update_status=print):
-    if not BGM_PATH or total_frames <= 0:
-        return
-    if not os.path.exists(BGM_PATH):
-        update_status(f"  BGMなし: {BGM_PATH} が見つかりません")
-        return
-
-    editor.add_audio_item(
-        BGM_PATH,
-        start_frame=0,
-        duration=total_frames,
-        layer=BGM_LAYER,
-        volume=BGM_VOLUME,
-    )
-    update_status(f"  BGM追加: {os.path.basename(BGM_PATH)} 音量{BGM_VOLUME:g}%")
-
-
 def merge_telops_into_backgrounds(items):
     """テロップアイテムを直前の背景プロンプトに折り込み、Nano Bananaにテキストを描画させる。"""
     result = []
@@ -646,7 +602,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
-                 long_budget_mode=None, native_render=None, sd_size_mode=False):
+                 long_budget_mode=None, sd_size_mode=False):
     report = GenerationReport()
     pipeline_start = time.time()
     img_gen = None
@@ -729,20 +685,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     else:
         max_backgrounds = MAX_BACKGROUNDS_LONG
 
-    # YMM4出力廃止後は Shorts/Long とも native を既定にする。
-    native_render = True
-
     _render_engine = "native"
-    report.native_render_used = native_render
+    report.native_render_used = True
 
-    if native_render:
-        intro_voice_speed = NATIVE_SHORTS_INTRO_VOICE_SPEED if is_shorts else NATIVE_LONG_INTRO_VOICE_SPEED
-        body_voice_speed = NATIVE_SHORTS_BODY_VOICE_SPEED if is_shorts else NATIVE_LONG_BODY_VOICE_SPEED
-    else:
-        intro_voice_speed = VOICE_INTRO_SPEED_SCALE_SHORTS if is_shorts else VOICE_INTRO_SPEED_SCALE_LONG
-        body_voice_speed = VOICE_SPEED_SCALE_SHORTS if is_shorts else VOICE_SPEED_SCALE_LONG
+    intro_voice_speed = NATIVE_SHORTS_INTRO_VOICE_SPEED if is_shorts else NATIVE_LONG_INTRO_VOICE_SPEED
+    body_voice_speed = NATIVE_SHORTS_BODY_VOICE_SPEED if is_shorts else NATIVE_LONG_BODY_VOICE_SPEED
 
-    if native_render and is_shorts:
+    if is_shorts:
         update_status(
             f"🎬 Shorts本番レンダリング: ffmpeg/native\n"
             f"   🔊 音声速度: intro {intro_voice_speed:.2f} / body {body_voice_speed:.2f}\n"
@@ -1055,47 +1004,36 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     estimated_sec = float(estimated_sec or 0.0)
     estimated_duration_result = duration_review(estimated_sec, is_shorts)
     estimated_duration_result["estimated"] = True
-    if native_render:
-        estimated_dialogue_chars = sum(len(it.get("text", "")) for it in items if it.get("type") == "dialogue")
-        if (
-            is_shorts
-            and (
-                estimated_lines < NATIVE_SHORTS_LINES_IDEAL_MIN
-                or estimated_lines >= NATIVE_SHORTS_LINES_MUST_FIX
-                or estimated_dialogue_chars < NATIVE_SHORTS_CHARS_MUST_FIX_MIN
-                or estimated_avg_chars < NATIVE_SHORTS_AVG_CHARS_MIN
-                or sum(1 for it in items if it.get("type") == "dialogue" and len(it.get("text", "")) <= 10) > NATIVE_SHORTS_SHORT_LINE_MAX
-            )
-        ):
-            missing_to_target = max(0, NATIVE_SHORTS_TARGET_CHARS_MIN - estimated_dialogue_chars)
-            short_line_count = sum(1 for it in items if it.get("type") == "dialogue" and len(it.get("text", "")) <= 10)
-            msg = (
-                "❌ native Shortsの台本量不足で処理を中止しました\n"
-                f"行数: {estimated_lines}行 / 理想: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行\n"
-                f"セリフ本文: {estimated_dialogue_chars}文字 / 最低: {NATIVE_SHORTS_CHARS_MUST_FIX_MIN}文字以上"
-                f" / 目標: {NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}文字\n"
-                f"平均: {estimated_avg_chars:.1f}文字 / 必須: {NATIVE_SHORTS_AVG_CHARS_MIN:.1f}文字以上\n"
-                f"10文字以下の短文: {short_line_count}行 / 最大: {NATIVE_SHORTS_SHORT_LINE_MAX}行\n"
-                f"不足文字数: 目標{NATIVE_SHORTS_TARGET_CHARS_MIN}文字まであと{missing_to_target}文字"
-            )
-            update_status(msg, "error")
-            report.elapsed_sec = time.time() - pipeline_start
-            return finish_result(msg)
-        # native版では推定尺は参考値のみ。尺は台本量で調整するため停止しない。
-        update_status(
-            f"📐 native推定: {estimated_sec:.1f}秒（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
-            f" ※nativeでは尺ではなく語り速度と台本量で調整"
+    estimated_dialogue_chars = sum(len(it.get("text", "")) for it in items if it.get("type") == "dialogue")
+    if (
+        is_shorts
+        and (
+            estimated_lines < NATIVE_SHORTS_LINES_IDEAL_MIN
+            or estimated_lines >= NATIVE_SHORTS_LINES_MUST_FIX
+            or estimated_dialogue_chars < NATIVE_SHORTS_CHARS_MUST_FIX_MIN
+            or estimated_avg_chars < NATIVE_SHORTS_AVG_CHARS_MIN
+            or sum(1 for it in items if it.get("type") == "dialogue" and len(it.get("text", "")) <= 10) > NATIVE_SHORTS_SHORT_LINE_MAX
         )
-    elif is_shorts and (estimated_sec < 35 or estimated_sec > 55):
-        estimated_duration_path = save_duration_review(theme_dir, estimated_duration_result)
+    ):
+        missing_to_target = max(0, NATIVE_SHORTS_TARGET_CHARS_MIN - estimated_dialogue_chars)
+        short_line_count = sum(1 for it in items if it.get("type") == "dialogue" and len(it.get("text", "")) <= 10)
         msg = (
-            f"❌ 推定尺が許容範囲外のため処理を中止しました"
-            f"（{estimated_sec:.1f}秒 / 許容: 35〜55秒）\n"
-            f"保存先: {estimated_duration_path}"
+            "❌ native Shortsの台本量不足で処理を中止しました\n"
+            f"行数: {estimated_lines}行 / 理想: {NATIVE_SHORTS_LINES_IDEAL_MIN}〜{NATIVE_SHORTS_LINES_IDEAL_MAX}行\n"
+            f"セリフ本文: {estimated_dialogue_chars}文字 / 最低: {NATIVE_SHORTS_CHARS_MUST_FIX_MIN}文字以上"
+            f" / 目標: {NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}文字\n"
+            f"平均: {estimated_avg_chars:.1f}文字 / 必須: {NATIVE_SHORTS_AVG_CHARS_MIN:.1f}文字以上\n"
+            f"10文字以下の短文: {short_line_count}行 / 最大: {NATIVE_SHORTS_SHORT_LINE_MAX}行\n"
+            f"不足文字数: 目標{NATIVE_SHORTS_TARGET_CHARS_MIN}文字まであと{missing_to_target}文字"
         )
         update_status(msg, "error")
         report.elapsed_sec = time.time() - pipeline_start
         return finish_result(msg)
+    # native版では推定尺は参考値のみ。尺は台本量で調整するため停止しない。
+    update_status(
+        f"📐 native推定: {estimated_sec:.1f}秒（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
+        f" ※nativeでは尺ではなく語り速度と台本量で調整"
+    )
     update_status(
         f"🧑‍⚖️ ChatGPTで生成前レビュー中... 推定尺 {estimated_sec:.1f}秒"
         f"（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
@@ -1263,17 +1201,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             if vv.check_connection(): break
             time.sleep(2)
 
-    editor = TimelineEditor(width=width, height=height, fps=VIDEO_FPS, debug=debug_mode)
-
-    TEMPLATES_DIR = os.path.join(ASSETS_DIR, "templates")
-    op_template = os.path.join(TEMPLATES_DIR, "opening_shorts.ymmp" if is_shorts else "opening.ymmp")
-    current_frame = 3  # frame 0-2 reserved for YMM4 init
-    if os.path.exists(op_template):
-        editor.merge_project(op_template, offset_frames=0)
-        current_frame = _read_template_duration(op_template)
-        update_status(f"📂 OPテンプレート読み込み完了 ({current_frame}フレーム)")
-    intro_fast_until_frame = current_frame + round(VOICE_INTRO_FAST_SECONDS * editor.fps)
-
     img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style, sd_size_mode=sd_size_mode)
 
     thumbnail_title = meta.get("video_title", topic)
@@ -1295,22 +1222,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         raise Exception("サムネイル画像を生成できませんでした。\nNano Bananaの接続・残高を確認してください。")
 
     if is_shorts:
-        editor.add_image_item(thumb_path, 0, current_frame, layer=0)
-        update_status("  📌 サムネイルをショート先頭に挿入")
-    # ロングの場合は theme_dir に保存済み（YMM4 挿入なし）
+        update_status("  📌 サムネイルをショート先頭に挿入予定(native)")
+    # ロングの場合は theme_dir に保存済み
 
-    update_status(f"🎬 アセット生成 & タイムライン構築を開始します...")
+    update_status(f"🎬 アセット生成を開始します...")
 
-    current_bg = None
-    bg_start_frame = current_frame
     voice_num = 0
     audio_num = 0
     bg_num = 0
     total_voices = len(dialogue_items)
     total_bgs = len(bg_items)
-    dialogue_tachie_info = []  # (char_name, emotion, start_frame, end_frame)
-    transition_frames = round(TRANSITION_SEC * editor.fps)
-    first_bg_placed = False
 
 
     # Batch API: メインループ前に全背景を一括生成
@@ -1360,26 +1281,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             return cancel_result()
 
         if item["type"] == "background":
-            if current_bg and current_frame > bg_start_frame:
-                bg_path = os.path.join(theme_bg_dir, current_bg)
-                if os.path.exists(bg_path):
-                    editor.add_image_item(bg_path, bg_start_frame, current_frame - bg_start_frame, layer=0)
-                    if first_bg_placed:
-                        editor.add_transition_item(current_frame, transition_frames)
-                    first_bg_placed = True
-
             # 明示的再利用マーカーの検出（「背景: 前と同じ」など）
             _bg_raw = item.get("text", item.get("file", "")).strip()
             _REUSE_MARKERS = ("前と同じ", "[前と同じ]", "[再利用]", "再利用")
             if any(_bg_raw == m or _bg_raw.startswith(m) for m in _REUSE_MARKERS):
                 update_status(f"🖼  背景 再利用指定 — 前の背景を継続")
-                bg_start_frame = current_frame
                 continue
 
             bg_num += 1
             if bg_num > max_backgrounds:
                 update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 上限({max_backgrounds})超過 — 前の背景を継続使用")
-                bg_start_frame = current_frame
                 continue
 
             bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
@@ -1392,24 +1303,19 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 )
                 bg_idx = bg_num - 1
                 if bg_idx < len(existing_bgs):
-                    current_bg = existing_bgs[bg_idx]
-                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 再利用: {current_bg}")
+                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 再利用: {existing_bgs[bg_idx]}")
                     report.backgrounds_generated += 1
                 else:
                     update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 既存ファイル不足 — スキップ")
                     report.backgrounds_failed += 1
-                bg_start_frame = current_frame
                 continue
 
             if use_batch_api:
                 # バッチ結果から割り当て
                 if bg_num in batch_bg_results:
-                    current_bg = batch_bg_results[bg_num]
-                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] バッチ結果使用: {current_bg}")
+                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] バッチ結果使用: {batch_bg_results[bg_num]}")
                 else:
                     update_status(f"  ⚠ 背景 [{bg_num}/{total_bgs}] バッチ結果なし — スキップ")
-                    current_bg = None
-                bg_start_frame = current_frame
                 continue
 
             update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 生成中: {bg_name[:30]}...")
@@ -1439,14 +1345,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 update_status(f"  ❌ 背景生成失敗: {e}")
                 generated_file = None
             if generated_file:
-                current_bg = generated_file
                 report.backgrounds_generated += 1
                 update_status(f"  ✅ 背景生成完了")
             else:
                 report.backgrounds_failed += 1
-                current_bg = None
                 update_status(f"  ⚠ 背景生成スキップ")
-            bg_start_frame = current_frame
             continue
 
         if item["type"] == "dialogue":
@@ -1470,15 +1373,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
                 audio_filename = f"{bg_num:03d}_{audio_num:03d}_{_safe_text}.wav"
                 audio_path = os.path.join(theme_audio_dir, audio_filename)
-                if native_render:
-                    speed_scale = intro_voice_speed if voice_num <= VOICE_INTRO_FAST_LINES else body_voice_speed
-                else:
-                    speed_scale = intro_voice_speed if current_frame < intro_fast_until_frame else body_voice_speed
+                speed_scale = intro_voice_speed if voice_num <= VOICE_INTRO_FAST_LINES else body_voice_speed
 
                 preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
                 update_status(f"🎤 音声 [{voice_num}/{total_voices}] {char_key}({emotion}) x{speed_scale:g}「{preview}」")
                 try:
-                    _, kana = vv.generate_audio(chunk_text, speaker_id, audio_path, speed_scale=speed_scale)
+                    vv.generate_audio(chunk_text, speaker_id, audio_path, speed_scale=speed_scale)
                     report.voices_generated += 1
                 except Exception as e:
                     report.voices_failed += 1
@@ -1513,11 +1413,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
                 try:
                     with wave.open(audio_path, 'rb') as wr:
-                        # character_templates.json の AdditionalTime=0.3s を Length に加算する
-                        # 加算しないと YMM4 内部で WAV 末尾が早期カットされる
-                        _ADDITIONAL_FRAMES = math.ceil(0.3 * editor.fps)
-                        wav_frames = math.ceil(wr.getnframes() / wr.getframerate() * editor.fps)
-                        duration_frames = wav_frames + _ADDITIONAL_FRAMES
+                        wr.getnframes()
                 except Exception as e:
                     report.voices_failed += 1
                     report.elapsed_sec = time.time() - pipeline_start
@@ -1529,15 +1425,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     update_status(msg, "error")
                     return finish_result(msg)
 
-                voice_item_frames = duration_frames + math.ceil(VOICE_TAIL_SAFETY_SEC * editor.fps)
-                dialogue_tachie_info.append((char_key, emotion, current_frame, current_frame + voice_item_frames))
-                editor.add_voice_item(char_key, chunk_text, hatsuon=kana, file_path=audio_path, start_frame=current_frame, duration=voice_item_frames)
-                current_frame += voice_item_frames + math.ceil(INTER_DIALOGUE_GAP_SEC * editor.fps)
-
-    # 終了画面用に1秒延長
     if is_cancelled():
         return cancel_result()
-    if native_render and report.voices_failed:
+    if report.voices_failed:
         report.elapsed_sec = time.time() - pipeline_start
         msg = (
             f"❌ 音声生成に失敗したセリフがあるためnative MP4化を中止しました"
@@ -1546,69 +1436,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         )
         update_status(msg, "error")
         return finish_result(msg)
-    current_frame += editor.fps
-
-    # 最後の背景アイテムを確定
-    if current_bg and current_frame > bg_start_frame:
-        bg_path = os.path.join(theme_bg_dir, current_bg)
-        if os.path.exists(bg_path):
-            editor.add_image_item(bg_path, bg_start_frame, current_frame - bg_start_frame, layer=0)
-            
-    # キャラクターごとに感情セグメントを結合してTachieItemを構築
-    char_order = list(dict.fromkeys(info[0] for info in dialogue_tachie_info))
-    char_dialogues = defaultdict(list)
-    for char, emotion, start, end in dialogue_tachie_info:
-        char_dialogues[char].append((emotion, start, end))
-
-    for i, char_name in enumerate(char_order):
-        if is_cancelled():
-            return cancel_result()
-        mode = "shorts" if is_shorts else "long"
-        key = next((k for k in TACHIE_PARAMS if k in char_name), None)
-        x_pos, y_pos, tachie_zoom = TACHIE_PARAMS[key][mode] if key else (0, 0, 30)
-        layer = 3 + i
-
-        # 台詞間の空白をノーマルで埋め、連続する同感情ブロックをマージする
-        # 全セグメントは最低でもフレーム3（TACHIE_START_FRAME）から開始
-        segs = sorted(char_dialogues[char_name], key=lambda x: x[1])
-        full_segs = []
-        prev_end = TACHIE_START_FRAME
-        for emotion, start, end in segs:
-            effective_start = max(start, TACHIE_START_FRAME)
-            if end <= effective_start:
-                continue
-            if start > prev_end:
-                full_segs.append(["ノーマル", prev_end, effective_start])
-            full_segs.append([emotion, effective_start, end])
-            prev_end = end
-        if prev_end < current_frame:
-            full_segs.append(["ノーマル", prev_end, current_frame])
-
-        merged = []
-        for seg in full_segs:
-            if merged and merged[-1][0] == seg[0]:
-                merged[-1][2] = seg[2]
-            else:
-                merged.append(list(seg))
-
-        for emotion, start, end in merged:
-            if end > start:
-                editor.add_tachie_item(
-                    char_name,
-                    start,
-                    end - start,
-                    layer=layer,
-                    x=x_pos,
-                    y=y_pos,
-                    zoom=tachie_zoom,
-                    emotion=emotion,
-                )
-
-    editor.merge_consecutive_tachie_items()
-    _add_fixed_bgm(editor, current_frame, update_status)
     if is_cancelled():
         return cancel_result()
-    total_sec = current_frame / editor.fps
 
     # render_info を _meta に保存
     try:
@@ -1616,7 +1445,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         render_info = {
             "render_engine": _render_engine,
             "native_renderer": {
-                "enabled": native_render,
+                "enabled": True,
                 "voice_speed_intro": intro_voice_speed,
                 "voice_speed_body": body_voice_speed,
                 "min_silence_between_lines": 0.0,
@@ -1624,17 +1453,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "thumbnail_hold_frames": _thumb_frames,
                 "thumbnail_hold_seconds": round(_thumb_frames / VIDEO_FPS, 3),
             },
-            "ymm4": {
-                "project_generated": False,
-                "rendered": False,
-                "deprecated": True,
-            },
         }
         render_info_path = os.path.join(_meta_dir(theme_dir), "render_info.json")
         with open(render_info_path, "w", encoding="utf-8") as f:
             json.dump(render_info, f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
+    except Exception as e:
+        update_status(f"⚠ render_info.json保存に失敗: {e}", "warning")
 
     report.elapsed_sec = time.time() - pipeline_start
     msg = f"✅ 完成! 出力フォルダ: {theme_dir}"

@@ -9,29 +9,16 @@ VOICEVOX_URL = "http://localhost:50021"                          # VOICEVOX エ�
 VOICEVOX_PATH = r"C:\Users\benyb\AppData\Local\Programs\VOICEVOX\VOICEVOX.exe"  # 自動起動用パス
 
 # ───────────────────────────────────────────────
-# 音声速度（VOICEVOX 読み上げ速度）
-# ───────────────────────────────────────────────
-VOICE_SPEED_SCALE_SHORTS = 1.65       # Shorts 本編速度
-VOICE_INTRO_SPEED_SCALE_SHORTS = 2.0  # Shorts 冒頭速度
-VOICE_SPEED_SCALE_LONG = 1.35         # Long 本編速度
-VOICE_INTRO_SPEED_SCALE_LONG = 1.6    # Long 冒頭速度
-VOICE_INTRO_FAST_SECONDS = 5.0        # seconds モード時: 冒頭何秒を高速読みにするか
-
-# Backward-compatible aliases（旧コードとの互換用。新規参照は Shorts/Long 個別定数を使う）
-VOICE_SPEED_SCALE       = VOICE_SPEED_SCALE_SHORTS
-VOICE_INTRO_SPEED_SCALE = VOICE_INTRO_SPEED_SCALE_SHORTS
-VOICE_POST_PHONEME_LENGTH = 0.0  # 各音声 WAV 末尾に追加する無音（秒）。0 = 無効
-
-# ───────────────────────────────────────────────
 # 音声速度 — native レンダラー用（字幕追従ズレ対策でやや遅め）
 # ───────────────────────────────────────────────
 NATIVE_SHORTS_BODY_VOICE_SPEED  = float(os.environ.get("NATIVE_SHORTS_BODY_VOICE_SPEED",  "1.25"))  # Shorts 本編
 NATIVE_SHORTS_INTRO_VOICE_SPEED = float(os.environ.get("NATIVE_SHORTS_INTRO_VOICE_SPEED", "1.40"))  # Shorts 冒頭
 NATIVE_LONG_BODY_VOICE_SPEED    = float(os.environ.get("NATIVE_LONG_BODY_VOICE_SPEED",    "1.20"))  # Long 本編
 NATIVE_LONG_INTRO_VOICE_SPEED   = float(os.environ.get("NATIVE_LONG_INTRO_VOICE_SPEED",   "1.40"))  # Long 冒頭
+VOICE_SPEED_SCALE = NATIVE_SHORTS_BODY_VOICE_SPEED  # VOICEVOX API のデフォルト値。生成時は用途別速度を明示指定する
+VOICE_POST_PHONEME_LENGTH = 0.0  # 各音声 WAV 末尾に追加する無音（秒）。0 = 無効
 
 # 冒頭速度切り替えモード
-VOICE_INTRO_FAST_MODE  = os.environ.get("VOICE_INTRO_FAST_MODE", "line_count").strip().lower()  # "line_count" or "seconds"
 VOICE_INTRO_FAST_LINES = int(os.environ.get("VOICE_INTRO_FAST_LINES", "3"))                     # line_count モード: 冒頭 N 行をイントロ速度にする
 
 # native Shorts 速度許容範囲（プリフライトチェック用）
@@ -75,29 +62,6 @@ CHARACTER_UPPER_BODY_LONG_Y_OFFSET     = int(os.environ.get("CHARACTER_UPPER_BOD
 NATIVE_SHORTS_CHARACTER_SCALE = float(os.environ.get("NATIVE_SHORTS_CHARACTER_SCALE", "1.05"))
 
 # ───────────────────────────────────────────────
-# 立ち絵パラメータ (x座標, y座標, ズーム%) per キャラ per モード
-# CHARACTER_UPPER_BODY_MODE が ON の場合、Y と zoom を自動調整した TACHIE_PARAMS を使う
-# ───────────────────────────────────────────────
-TACHIE_BASE: dict = {
-    "ずんだもん": {"long": (-696, 430, 66.9),  "shorts": (-364.5, 850, 60.3)},
-    "めたん":     {"long": ( 751, 430, 52.95), "shorts": ( 348.0, 850, 50.1)},
-}
-if CHARACTER_UPPER_BODY_MODE:
-    TACHIE_PARAMS: dict = {
-        char: {
-            m: (
-                x,
-                y + (CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET if m == "shorts" else CHARACTER_UPPER_BODY_LONG_Y_OFFSET),
-                round(z * (CHARACTER_UPPER_BODY_SHORTS_SCALE if m == "shorts" else CHARACTER_UPPER_BODY_SCALE), 2),
-            )
-            for m, (x, y, z) in modes.items()
-        }
-        for char, modes in TACHIE_BASE.items()
-    }
-else:
-    TACHIE_PARAMS = TACHIE_BASE
-
-# ───────────────────────────────────────────────
 # native Shorts スクリプト品質チェック閾値
 # ───────────────────────────────────────────────
 NATIVE_SHORTS_ESTIMATE_BASE_CPS   = float(os.environ.get("NATIVE_SHORTS_ESTIMATE_BASE_CPS",   "5.4"))   # 推定尺計算の基準文字数/秒
@@ -107,7 +71,7 @@ NATIVE_SHORTS_TARGET_CHARS_MAX    = int(os.environ.get("NATIVE_SHORTS_TARGET_CHA
 NATIVE_SHORTS_AVG_CHARS_MIN       = float(os.environ.get("NATIVE_SHORTS_AVG_CHARS_MIN",     "11.5"))   # 1行あたり平均文字数の下限
 NATIVE_SHORTS_SHORT_LINE_MAX      = int(os.environ.get("NATIVE_SHORTS_SHORT_LINE_MAX",      "4"))      # 短すぎる行（≤4文字）の最大許容数
 
-# native Shorts セリフ数ルール（YMM4 とは別基準）
+# native Shorts セリフ数ルール
 NATIVE_SHORTS_LINES_IDEAL_MIN  = 22   # 理想セリフ数: 下限
 NATIVE_SHORTS_LINES_IDEAL_MAX  = 28   # 理想セリフ数: 上限
 NATIVE_SHORTS_LINES_TARGET_MIN = int(os.environ.get("NATIVE_SHORTS_LINES_TARGET_MIN", "24"))  # 目標セリフ数: 下限
@@ -285,8 +249,6 @@ NATIVE_INTER_DIALOGUE_GAP_SEC = 0.0  # nativeレンダラーのセリフ間追�
 # BGM（固定: BGMer「のほほん」）
 # ───────────────────────────────────────────────
 BGM_PATH   = os.path.join(ASSETS_DIR, "bgm", "nohohon_long_BPM97.mp3")
-BGM_VOLUME = 15.0   # YMM4 BGM 音量 (%)。native は NATIVE_BGM_VOLUME_DB を使う
-BGM_LAYER  = 2      # YMM4 プロジェクト内レイヤー番号
 
 # ───────────────────────────────────────────────
 # 出力ディレクトリ・ファイルパス

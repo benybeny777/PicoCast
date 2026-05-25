@@ -58,7 +58,6 @@
 | `core/youtube_analytics.py` | YouTube Analytics API取得 |
 | `core/analytics_score.py` | Analytics評価・スコアリング・TSV保存 |
 | `core/output_paths.py` | 出力パスの集約・マイグレーション |
-| `core/timeline_editor.py` | タイムライン・キャラクターレイヤー・表情プリセット管理（YMM4最終出力は廃止済みだが内部ヘルパーとして現役） |
 
 ## 出力フォルダ構造
 
@@ -124,4 +123,3 @@ output/{テーマ名}/
 - 動作確認用の一時画像・動画・スクリプトなど「リポジトリに入れたくないテスト系ファイル」はすべて `dev/` フォルダに置く。
 - `dev/` は `.gitignore` で除外済みのため、コミットされない。
 - `assets/` 直下やサブフォルダにテスト画像を置かない。テスト用途のものは必ず `dev/` に移動してから使う。
-

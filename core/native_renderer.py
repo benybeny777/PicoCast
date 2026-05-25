@@ -55,7 +55,7 @@ from config import (
     NATIVE_SUBTITLE_Y_OFFSET_SHORTS,
     VIDEO_FPS,
     THUMBNAIL_HOLD_FRAMES_SHORTS,
-    NATIVE_NATIVE_INTER_DIALOGUE_GAP_SEC,
+    NATIVE_INTER_DIALOGUE_GAP_SEC,
 )
 from core.native_character_assets import CharacterVariantSet, load_character_variants
 from core.parser import ScriptParser

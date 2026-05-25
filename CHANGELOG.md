@@ -20,7 +20,12 @@
 - `main.py` / `gui.py`: `native_render=False` 分岐（YMM4尺チェック・Shorts尺表示）をデッドコードとして削除
 - `config.py`: `TRANSITION_SEC` / `VOICE_TAIL_SAFETY_SEC` / `NATIVE_INTER_DIALOGUE_GAP_SEC` を追加。`main.py` / `native_renderer.py` のモジュール内定数定義を廃止してインポートに統一
 - `core/native_renderer.py`: `INTER_DIALOGUE_GAP_SEC` → `NATIVE_INTER_DIALOGUE_GAP_SEC` に改名（`main.py` の YMM4用同名定数との混在を解消）
+- `main.py`: native固定後に残っていた非native分岐と旧YMM4タイムライン構築処理を削除。素材生成は `script.txt` / `audio/` / `backgrounds/` 作成に専念し、MP4化は `core/native_renderer.py` に一本化
+- `gui.py`: `native_render` 設定分岐を削除。import時にVOICEVOX/ffmpeg起動チェックを標準出力へ出す副作用を廃止し、GUI直接起動時だけ表示する関数へ分離
+- `config.py`: 未使用になった旧YMM4用VOICE速度定数、`BGM_VOLUME`、`BGM_LAYER`、`TACHIE_PARAMS` を削除。VOICEVOX APIのデフォルト速度はnative Shorts本編速度を参照
+- `core/timeline_editor.py` / `core/character_templates.json`: YMM4プロジェクト出力廃止後に未使用となった互換ヘルパーを削除
 - 全Pythonファイル: 残存英語コメント・docstringを日本語化（`gui.py` 13件 / `main.py` 5件 / `analytics_score.py` ルール1〜7ラベル / `tests/test_refactor.py` ほか）
+- `SPEC.md` / `AGENTS.md`: 削除済みのYMM4互換ヘルパー参照と旧VOICE/BGM設定名の説明を、native用設定名へ修正し、native MP4のみが最終出力であることと整合させた
 
 ## 2026-05-25 (13)
 
