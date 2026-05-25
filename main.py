@@ -65,6 +65,7 @@ from config import (
     OPENING_REWRITE_MAX_FALLBACKS,
     LONG_THUMBNAIL_AB_TEST,
     THUMBNAIL_CHARACTER_PNGS,
+    THUMBNAIL_HOLD_FRAMES_SHORTS,
     VIDEO_FPS,
     VOICE_INTRO_FAST_LINES,
     VOICE_INTRO_FAST_SECONDS,
@@ -1628,6 +1629,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # render_info を _meta に保存
     try:
+        _thumb_frames = THUMBNAIL_HOLD_FRAMES_SHORTS if is_shorts else 0
         render_info = {
             "render_engine": _render_engine,
             "native_renderer": {
@@ -1636,6 +1638,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "voice_speed_body": body_voice_speed,
                 "min_silence_between_lines": 0.0 if native_render else NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
                 "target_dialogue_lines": f"{NATIVE_SHORTS_LINES_IDEAL_MIN}-{NATIVE_SHORTS_LINES_IDEAL_MAX}" if is_shorts else "n/a",
+                "thumbnail_hold_frames": _thumb_frames,
+                "thumbnail_hold_seconds": round(_thumb_frames / VIDEO_FPS, 3),
             },
             "ymm4": {
                 "project_generated": False,

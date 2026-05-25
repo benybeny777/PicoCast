@@ -54,6 +54,7 @@ from config import (
     NATIVE_SUBTITLE_Y_OFFSET_LONG,
     NATIVE_SUBTITLE_Y_OFFSET_SHORTS,
     VIDEO_FPS,
+    THUMBNAIL_HOLD_FRAMES_SHORTS,
 )
 from core.native_character_assets import CharacterVariantSet, load_character_variants
 from core.parser import ScriptParser
@@ -786,10 +787,14 @@ def render_native_test(
         thumb_path = _thumbnail_path(output_dir)
         if thumb_path:
             thumb_segment_path = os.path.join(work_dir, "segment_0000_thumbnail.mp4")
-            _encode_thumbnail_frame_segment(thumb_path, thumb_segment_path, width, height, 1 / VIDEO_FPS, progress_callback)
+            thumb_hold_sec = THUMBNAIL_HOLD_FRAMES_SHORTS / VIDEO_FPS
+            _encode_thumbnail_frame_segment(thumb_path, thumb_segment_path, width, height, thumb_hold_sec, progress_callback)
             segment_paths.append(thumb_segment_path)
             if progress_callback:
-                progress_callback(f"   🖼 先頭1フレームにサムネイルを挿入: {os.path.basename(thumb_path)}")
+                progress_callback(
+                    f"   🖼 先頭サムネイル挿入: {os.path.basename(thumb_path)}"
+                    f" ({THUMBNAIL_HOLD_FRAMES_SHORTS}フレーム / {thumb_hold_sec:.3f}秒)"
+                )
     prev_bg_path: str | None = None
     warned_expression_fallbacks: set[tuple[str | None, str | None, str]] = set()
     for idx, (audio_path, duration, caption) in enumerate(zip(audio_files, durations, captions), start=1):

@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-05-25 (11)
+
+### Shorts 先頭サムネ保持フレーム数を設定値化
+
+- `config.py`: `THUMBNAIL_HOLD_FRAMES_SHORTS`（デフォルト3、1〜5にクランプ、不正値は3へフォールバック）を追加
+- `core/native_renderer.py`: Shorts先頭サムネセグメントを固定1フレームから `THUMBNAIL_HOLD_FRAMES_SHORTS / VIDEO_FPS` 秒に変更。ログに保持フレーム数と秒数を表示
+- `main.py`: `render_info.json` の `native_renderer` に `thumbnail_hold_frames` / `thumbnail_hold_seconds` を追記
+- 30fps で 3フレーム≒0.1秒、5フレーム≒0.167秒。1秒超の静止サムネは設定上不可
+
 ## 2026-05-25 (10)
 
 ### 表情PNG使用中の口パク・まばたきオーバーレイ干渉を修正

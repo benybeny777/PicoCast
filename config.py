@@ -182,6 +182,15 @@ CHARACTERS = {
 # ───────────────────────────────────────────────
 VIDEO_FPS  = 30                                                  # 出力フレームレート
 FFMPEG_BIN = os.environ.get("FFMPEG_BIN", "ffmpeg")             # ffmpeg バイナリパス
+
+# Shorts 先頭サムネイルフレーム保持数（1〜5フレーム。デフォルト3≒0.1秒）
+# 1=0.033s(最小), 3=0.100s(標準), 5=0.167s(サムネ重視)
+# 不正値・空文字は3にフォールバック。1未満→1、5超→5にクランプ。Long には影響しない
+try:
+    _thumbnail_hold_raw = int(os.environ.get("THUMBNAIL_HOLD_FRAMES_SHORTS", "3"))
+except (ValueError, TypeError):
+    _thumbnail_hold_raw = 3
+THUMBNAIL_HOLD_FRAMES_SHORTS: int = max(1, min(5, _thumbnail_hold_raw))  # Shorts先頭サムネ保持フレーム数
 ASSETS_DIR        = os.path.join(os.path.dirname(__file__), "assets")
 CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")      # キャラ PNG 格納ディレクトリ
 CHARACTER_PSD_DIR = os.path.join(CHARACTER_PNG_DIR, "psd")      # キャラ PSD 格納ディレクトリ
