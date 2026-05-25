@@ -14,6 +14,11 @@
 
 ## 2026-05-26
 
+### Shorts冒頭・サムネ・中盤の勝ち型を追加
+
+- `core/prompt_parts/local/script_generation_prompt.txt` / `samples/prompt_parts/food/script_generation_prompt.txt`: 台本生成プロンプトに、Shortsの1行目フック公式、サムネ文字と1行目の連動公式、15〜25秒地点の第2驚き構造を追加
+- `SPEC.md`: Shorts台本作成ルールに、1行目の結論優先、サムネ文字との連動、中盤の第2驚き配置を追記
+
 ### GUI補助ロジックの分離
 
 - `core/gui_support.py`: GUIから、台本分割、アプリバージョン取得、VOICEVOX/ffmpeg疎通表示用チェック、ファイルハッシュ、Pillow画像読み込み補助を分離

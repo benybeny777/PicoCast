@@ -2052,14 +2052,17 @@ class ShortsAutoFactory:
             "sort_reverse": False,
         }
 
-        top = ttk.Frame(win, padding=8)
+        top = ttk.Frame(win, padding=(8, 8, 8, 2))
         top.pack(fill=tk.X)
-        ttk.Label(top, text="期間:").pack(side=tk.LEFT)
+        controls = ttk.Frame(top)
+        controls.pack(fill=tk.X)
+        ttk.Label(controls, text="期間:").pack(side=tk.LEFT)
         days_var = tk.IntVar(value=28)
-        days_combo = ttk.Combobox(top, textvariable=days_var, values=[7, 28, 90], state="readonly", width=6)
+        days_combo = ttk.Combobox(controls, textvariable=days_var, values=[7, 28, 90], state="readonly", width=6)
         days_combo.pack(side=tk.LEFT, padx=(4, 12))
         summary_var = tk.StringVar(value="未取得")
-        ttk.Label(top, textvariable=summary_var).pack(side=tk.LEFT, padx=(0, 12))
+        summary_label = ttk.Label(top, textvariable=summary_var, wraplength=1120, justify=tk.LEFT)
+        summary_label.pack(fill=tk.X, pady=(4, 0))
         error_var = tk.StringVar(value="")
         error_label = ttk.Label(win, textvariable=error_var, foreground="#c0392b", wraplength=1120)
         error_label.pack(fill=tk.X, padx=8, pady=(0, 2))
@@ -2372,13 +2375,13 @@ class ShortsAutoFactory:
             win.update()
             self.log(f"📋 AI分析用にコピーしました: {len(state['items'])}件", "success")
 
-        fetch_btn = ttk.Button(top, text="取得", style="Accent.TButton", command=fetch)
+        fetch_btn = ttk.Button(controls, text="取得", style="Accent.TButton", command=fetch)
         fetch_btn.pack(side=tk.RIGHT, padx=(4, 0))
         self._add_tooltip(fetch_btn, "YouTube Analyticsから指定期間の動画別成績を取得し、評価ファイルを保存します。")
-        copy_score_btn = ttk.Button(top, text="📋 評価一覧コピー", command=copy_score_list)
+        copy_score_btn = ttk.Button(controls, text="📋 評価一覧コピー", command=copy_score_list)
         copy_score_btn.pack(side=tk.RIGHT, padx=(4, 0))
         self._add_tooltip(copy_score_btn, "表示中の評価一覧をTSV形式でクリップボードにコピーします。")
-        copy_ai_btn = ttk.Button(top, text="📋 AI分析用にコピー", command=copy_ai_analysis)
+        copy_ai_btn = ttk.Button(controls, text="📋 AI分析用にコピー", command=copy_ai_analysis)
         copy_ai_btn.pack(side=tk.RIGHT, padx=(4, 0))
         self._add_tooltip(copy_ai_btn, "Analytics一覧にAI分析用の依頼文を添えてクリップボードにコピーします。")
 
