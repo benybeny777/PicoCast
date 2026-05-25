@@ -12,6 +12,23 @@
 
 ---
 
+## 2026-05-25 (13)
+
+### テスト用ファイル置き場 `dev/` を追加・ルール化
+
+- `.gitignore`: `dev/` を追加（開発用一時ファイルをgit管理外に隔離）
+- `AGENTS.md`: テスト用ファイルは `dev/` フォルダへ置くルールを追記。`assets/` 直下へのテスト画像配置を禁止
+- 既存の `assets/characters/expression_preview*.png` を `dev/` へ移動
+
+## 2026-05-25 (12)
+
+### Analytics チャンネル全体の登録者増減を追加
+
+- `core/youtube_analytics.py`: `_fetch_channel_subscriber_totals()` を追加。dimension なし API でチャンネル全体の `subscribersGained` / `subscribersLost` を取得し `summary` に `channel_subscribers_gained` / `channel_subscribers_lost` / `channel_subscribers_net` を追加
+- `gui.py`: アナリティクス一覧に `登録者増` / `登録者減` 列を追加（既存の `登録者増減` と並列表示）。サマリーバーにチャンネル全体登録者増減を `+gained -lost 純増net` 形式で表示。画面下部に旧チャンネル時代の注記ラベルを常時表示
+- `core/analytics_score.py`: `build_performance_summary()` にチャンネル全体登録者増減と `ANALYTICS_CHANNEL_LEGACY_NOTE` を出力
+- `config.py`: `ANALYTICS_CHANNEL_REMAKE_DATE = "2026-05-15"` / `ANALYTICS_CHANNEL_LEGACY_NOTE` を追加（旧インド広告時代の離脱注記）
+
 ## 2026-05-25 (11)
 
 ### Shorts 先頭サムネ保持フレーム数を設定値化

@@ -273,6 +273,15 @@ NATIVE_SUBTITLE_BOX_ALPHA         = float(os.environ.get("NATIVE_SUBTITLE_BOX_AL
 NATIVE_SUBTITLE_BOX_OPACITY_SHORTS = NATIVE_SUBTITLE_BOX_ALPHA  # 旧名エイリアス
 
 # ───────────────────────────────────────────────
+# アナリティクス — チャンネル固有注記
+# ───────────────────────────────────────────────
+ANALYTICS_CHANNEL_REMAKE_DATE = "2026-05-15"  # チャンネルリメイク実稼働開始日（この日以前は旧チャンネル時代）
+ANALYTICS_CHANNEL_LEGACY_NOTE = (             # 旧チャンネル時代の登録者に関する注記（AI分析・GUI表示用）
+    "旧チャンネル時代にインド向け広告で集めた登録者が離脱している可能性あり。"
+    "チャンネルリメイク実稼働は2026/5/15以降のため、それ以前投稿分の離脱数値は参考値扱い。"
+)
+
+# ───────────────────────────────────────────────
 # BGM（固定: BGMer「のほほん」）
 # ───────────────────────────────────────────────
 BGM_PATH   = os.path.join(ASSETS_DIR, "bgm", "nohohon_long_BPM97.mp3")

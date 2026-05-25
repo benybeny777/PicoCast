@@ -483,6 +483,13 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
             end_date=meta.get("end_date"),
             generated_at=meta.get("generated_at"),
         ))
+        ch_gained = meta.get("channel_subscribers_gained")
+        ch_lost = meta.get("channel_subscribers_lost")
+        ch_net = meta.get("channel_subscribers_net")
+        if ch_gained is not None:
+            from config import ANALYTICS_CHANNEL_LEGACY_NOTE, ANALYTICS_CHANNEL_REMAKE_DATE
+            lines.append(f"・チャンネル登録者増減: +{ch_gained} -{ch_lost} 純増{ch_net}")
+            lines.append(f"・注記: {ANALYTICS_CHANNEL_LEGACY_NOTE}（リメイク開始: {ANALYTICS_CHANNEL_REMAKE_DATE}）")
     lines.append(f"・対象動画: {len(scored)}件 / 強い候補: {len(strong)}件 / データ待ち: {len(data_wait)}件")
     if top_views:
         lines.append("・再生数上位: " + " / ".join(

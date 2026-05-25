@@ -758,6 +758,8 @@ Long動画のアップロード成功後は、`LONG_UPLOAD_PLAYLIST_NAME` の名
 
 Analytics画面には `高評価率` に加えて `生成区分` / `元動画` / `目的` を表示します。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、対象期間・取得日時、再生数上位・平均視聴率上位・高評価率上位・data_wait注目動画をまとめた実績サマリーを付けます。`AI分析用にコピー` では `analysis_status=data_wait` の動画にも暫定評価コメントを入れるよう指示します。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
 
+動画別列には `登録者増`（`subscribers_gained`）と `登録者減`（`subscribers_lost`）を個別表示し、`登録者増減`（純増 = gained - lost）も並べます。サマリーバーにはチャンネル全体の登録者増減（dimension なし API 取得）を `+gained -lost 純増net` 形式で表示します。AI分析コピーの実績サマリーにもチャンネル全体の登録者増減と旧チャンネル注記（`ANALYTICS_CHANNEL_LEGACY_NOTE`）を含めます。Analytics画面下部には固定の注記ラベルとして旧チャンネル時代の文脈（インド広告・リメイク開始日 `ANALYTICS_CHANNEL_REMAKE_DATE`）を常時表示します。
+
 Analytics一覧は各列のヘッダークリックで昇順/降順ソートできます。数値列は数値として、公開日時は日時として、評価列は `S > A > B > C > D > 未計測 > 対象外` の順で並び替えます。
 
 Analytics APIは期間内に再生のある動画しか返さないため、YouTube Data API でチャンネルのアップロード済み全動画を取得してマージします。Analytics APIにまだ出ていない動画は、Data APIの `statistics` から現在の再生数・いいね数・コメント数を補完しつつ、平均視聴率などがないため `data_wait` としてスコア判定は保留します。200件を超える場合は `startIndex` によるページネーションで全件取得します。
@@ -973,6 +975,7 @@ YouTube OAuth:
 - `client_secrets.json`
 - `token.json`
 - `token_analytics.json`
+- `dev/` — 動作確認用の一時画像・動画・スクリプトなど開発用テストファイルの置き場（`assets/` 直下へのテスト画像配置は禁止）
 
 これらはGit管理外です。コミットしないでください。
 

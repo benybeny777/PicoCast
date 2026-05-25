@@ -2325,12 +2325,14 @@ class ShortsAutoFactory:
         ttk.Label(top, textvariable=summary_var).pack(side=tk.LEFT, padx=(0, 12))
         error_var = tk.StringVar(value="")
         error_label = ttk.Label(win, textvariable=error_var, foreground="#c0392b", wraplength=1120)
-        error_label.pack(fill=tk.X, padx=8, pady=(0, 6))
+        error_label.pack(fill=tk.X, padx=8, pady=(0, 2))
+        from config import ANALYTICS_CHANNEL_LEGACY_NOTE
+        ttk.Label(win, text=f"※ {ANALYTICS_CHANNEL_LEGACY_NOTE}", foreground="#7f8c8d", wraplength=1120).pack(fill=tk.X, padx=8, pady=(0, 4))
 
         cols = (
             "title", "published_at", "video_type", "duration", "duration_status", "analysis_status", "is_provisional", "views", "impressions", "ctr",
             "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
-            "comments", "subscribers_net", "score", "action",
+            "comments", "subscribers_gained", "subscribers_lost", "subscribers_net", "score", "action",
             "audio_cutoff_risk", "generation_kind", "source_video_title", "generation_purpose",
             "character_pattern", "genre_group",
         )
@@ -2350,6 +2352,8 @@ class ShortsAutoFactory:
             "likes": "高評価",
             "like_rate": "高評価率",
             "comments": "コメント",
+            "subscribers_gained": "登録者増",
+            "subscribers_lost": "登録者減",
             "subscribers_net": "登録者増減",
             "score": "評価",
             "action": "対応",
@@ -2389,6 +2393,8 @@ class ShortsAutoFactory:
             "likes": 70,
             "like_rate": 80,
             "comments": 80,
+            "subscribers_gained": 80,
+            "subscribers_lost": 80,
             "subscribers_net": 90,
             "score": 55,
             "action": 130,
@@ -2465,7 +2471,8 @@ class ShortsAutoFactory:
                 return 1 if item.get(col) else 0
             if col in {
                 "duration", "views", "impressions", "ctr", "average_view_duration",
-                "average_percentage_viewed", "likes", "like_rate", "comments", "subscribers_net",
+                "average_percentage_viewed", "likes", "like_rate", "comments",
+                "subscribers_gained", "subscribers_lost", "subscribers_net",
             }:
                 try:
                     value = item.get(col)
@@ -2493,7 +2500,8 @@ class ShortsAutoFactory:
                 state["sort_reverse"] = col in {
                     "published_at", "duration", "views", "impressions", "ctr",
                     "average_view_duration", "average_percentage_viewed", "likes",
-                    "like_rate", "comments", "subscribers_net", "score", "audio_cutoff_risk",
+                    "like_rate", "comments", "subscribers_gained", "subscribers_lost",
+                    "subscribers_net", "score", "audio_cutoff_risk",
                 }
             state["items"].sort(key=lambda item: _sort_value(item, col), reverse=state["sort_reverse"])
             _refresh_headings()
@@ -2520,6 +2528,8 @@ class ShortsAutoFactory:
                     item.get("likes", 0),
                     _fmt_ctr(item.get("like_rate")),
                     item.get("comments", 0),
+                    item.get("subscribers_gained", 0),
+                    item.get("subscribers_lost", 0),
                     item.get("subscribers_net", 0),
                     item.get("score", ""),
                     item.get("action", ""),
@@ -2556,6 +2566,9 @@ class ShortsAutoFactory:
                             "start_date": api_summary.get("start_date"),
                             "end_date": api_summary.get("end_date"),
                             "generated_at": None,
+                            "channel_subscribers_gained": api_summary.get("channel_subscribers_gained"),
+                            "channel_subscribers_lost": api_summary.get("channel_subscribers_lost"),
+                            "channel_subscribers_net": api_summary.get("channel_subscribers_net"),
                         }
                         summary = api_summary
                         period_text = analytics_period_label(
@@ -2567,9 +2580,15 @@ class ShortsAutoFactory:
                         scheduled_count = sum(1 for item in items if item.get("publish_status") == "scheduled")
                         analyzable_count = sum(1 for item in items if item.get("analysis_status") == "analyzable")
                         data_wait_count = sum(1 for item in items if item.get("analysis_status") == "data_wait")
+                        ch_gained = summary.get("channel_subscribers_gained")
+                        ch_lost = summary.get("channel_subscribers_lost")
+                        ch_net = summary.get("channel_subscribers_net")
+                        subs_text = ""
+                        if ch_gained is not None:
+                            subs_text = f" / チャンネル登録者 +{ch_gained} -{ch_lost} 純増{ch_net}"
                         summary_var.set(
                             f"{days}日 / 全{len(items)}件（公開{published_count} / 予約{scheduled_count} / 分析{analyzable_count} / 待ち{data_wait_count}）"
-                            f" / {period_text} / 再生 {summary.get('views', 0)} / 保存: {os.path.basename(json_path)}"
+                            f" / {period_text} / 再生 {summary.get('views', 0)}{subs_text} / 保存: {os.path.basename(json_path)}"
                         )
                         render()
                         self.log(f"📊 Analytics評価一覧を保存: {json_path} / {tsv_path}", "success")

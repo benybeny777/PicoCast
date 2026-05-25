@@ -179,6 +179,27 @@ def _all_channel_video_ids(youtube) -> list:
     return video_ids
 
 
+def _fetch_channel_subscriber_totals(analytics, start_date: str, end_date: str) -> dict | None:
+    """チャンネル全体の登録者増減をdimension無しで取得する。"""
+    try:
+        result = analytics.reports().query(
+            ids="channel==MINE",
+            startDate=start_date,
+            endDate=end_date,
+            metrics="subscribersGained,subscribersLost",
+        ).execute()
+        headers = [h.get("name") for h in result.get("columnHeaders", [])]
+        rows = result.get("rows", [])
+        if rows:
+            data = dict(zip(headers, rows[0]))
+            gained = int(float(data.get("subscribersGained", 0) or 0))
+            lost = int(float(data.get("subscribersLost", 0) or 0))
+            return {"gained": gained, "lost": lost}
+    except Exception:
+        pass
+    return None
+
+
 def _query_report(analytics, start_date, end_date, metrics):
     all_rows = []
     headers = None
@@ -283,12 +304,16 @@ def fetch_video_analytics(days=28):
                 "genre_group": local_record.get("genre_group", ""),
             })
 
+        ch_subs = _fetch_channel_subscriber_totals(analytics, start_date, end_date)
         summary = {
             "days": days,
             "start_date": start_date,
             "end_date": end_date,
             "video_count": len(items),
             "views": sum(int(float(item.get("views") or 0)) for item in items),
+            "channel_subscribers_gained": ch_subs["gained"] if ch_subs else None,
+            "channel_subscribers_lost": ch_subs["lost"] if ch_subs else None,
+            "channel_subscribers_net": (ch_subs["gained"] - ch_subs["lost"]) if ch_subs else None,
         }
         return {"summary": summary, "items": items}
     finally:
