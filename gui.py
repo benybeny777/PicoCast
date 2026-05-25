@@ -1311,8 +1311,7 @@ class ShortsAutoFactory:
                 ai_report.extend(["", f"## 台本{idx}: {title}", f"- 動画形式: {'Shorts' if is_shorts else 'Long'}"])
                 self.log(f"{prefix}🤖 生成前Ollama冒頭レビュー中: {title}")
                 # YMM4出力廃止済み。スコアチェックはnativeパスで評価する。
-                _effective_native = True if native_render is None else bool(native_render)
-                _render_engine = "native" if _effective_native else "ymm4"
+                _render_engine = "native"
                 local = local_opening_review(body_items, title, thumb_text, is_shorts, render_engine=_render_engine)
                 llm = llm_opening_review(
                     local,

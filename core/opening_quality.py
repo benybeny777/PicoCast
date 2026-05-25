@@ -119,7 +119,7 @@ def opening_score_tag(score: int, critical_errors: list | None = None) -> str:
     return "score"
 
 
-def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool, render_engine: str = "ymm4") -> dict[str, Any]:
+def local_opening_review(items, title: str, thumbnail_text: str, is_shorts: bool, render_engine: str = "native") -> dict[str, Any]:
     dialogue_items = [item for item in items if item.get("type") == "dialogue"]
     opening = dialogue_items[:_opening_limit(is_shorts)]
     opening_text = "\n".join(_dialogue_text(item) for item in opening)
@@ -677,7 +677,7 @@ title: {title}
 thumbnail_text: {thumbnail_text}
 fixed_comment: {fixed_comment}
 video_type: {"Shorts" if is_shorts else "Long"}
-render_engine: {render_engine if is_shorts else "ymm4"}
+render_engine: {render_engine}
 estimated_duration_sec: {estimated_duration:.2f}
 duration_check: {json.dumps(duration_result, ensure_ascii=False)}
 local_opening_review: {json.dumps(local_review, ensure_ascii=False)}

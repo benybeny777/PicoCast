@@ -732,7 +732,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # YMM4出力廃止後は Shorts/Long とも native を既定にする。
     native_render = True
 
-    _render_engine = "native" if native_render else "ymm4"
+    _render_engine = "native"
     report.native_render_used = native_render
 
     if native_render:

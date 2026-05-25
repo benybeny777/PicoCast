@@ -1,4 +1,4 @@
-"""Quick smoke tests for refactored helpers."""
+"""リファクタリングヘルパーのスモークテスト。"""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
@@ -33,9 +33,9 @@ def test_normalize_meta_description():
             stripped_flag.append(True)
     meta = {"description": "テスト\nVOICEVOX:ずんだもん"}
     main._normalize_meta(meta, True, "test", log)
-    # Hand-written credit stripped (logged)
+    # 手書きクレジットが除去されたことをログで確認
     assert stripped_flag, "should have logged credit removal"
-    # Standard VOICEVOX footer is added back
+    # 標準VOICEVOXフッターが自動付与されること
     assert "VOICEVOX" in meta["description"]
     assert "使用音声合成" in meta["description"]
     print("_normalize_meta description: OK")
