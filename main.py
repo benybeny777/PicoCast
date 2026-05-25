@@ -38,7 +38,7 @@ from config import (
     BGM_PATH,
     BGM_VOLUME,
     CHARACTERS,
-    YMM4_TACHIE_PARAMS,
+    TACHIE_PARAMS,
     MAX_BACKGROUNDS_LONG,
     MAX_BACKGROUNDS_LONG_BUDGET,
     MAX_BACKGROUNDS_SHORTS,
@@ -745,7 +745,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if native_render and is_shorts:
         update_status(
             f"🎬 Shorts本番レンダリング: ffmpeg/native\n"
-            f"   🧩 YMM4プロジェクト: 出力しません\n"
             f"   🔊 音声速度: intro {intro_voice_speed:.2f} / body {body_voice_speed:.2f}\n"
             f"   📏 台本基準: {NATIVE_SHORTS_LINES_TARGET_MIN}〜{NATIVE_SHORTS_LINES_TARGET_MAX}行 / "
             f"{NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}字目標"
@@ -1565,8 +1564,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if is_cancelled():
             return cancel_result()
         mode = "shorts" if is_shorts else "long"
-        key = next((k for k in YMM4_TACHIE_PARAMS if k in char_name), None)
-        x_pos, y_pos, tachie_zoom = YMM4_TACHIE_PARAMS[key][mode] if key else (0, 0, 30)
+        key = next((k for k in TACHIE_PARAMS if k in char_name), None)
+        x_pos, y_pos, tachie_zoom = TACHIE_PARAMS[key][mode] if key else (0, 0, 30)
         layer = 3 + i
 
         # Fill gaps between dialogues with ノーマル, then merge consecutive same-emotion blocks
@@ -1626,7 +1625,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "duration",
         )
 
-    update_status("💾 YMM4プロジェクト出力は廃止済みです（.ymmpは保存しません）")
 
     # render_info を _meta に保存
     try:

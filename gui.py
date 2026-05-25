@@ -261,11 +261,11 @@ class ToolTip:
             self._window = None
 
 
-class YMM4AutoGui:
+class ShortsAutoFactory:
     def __init__(self, root):
         self.root = root
         self.app_version = build_app_version()
-        self.root.title(f"Native Video Factory v{self.app_version}")
+        self.root.title(f"Shorts Auto Factory v{self.app_version}")
         self.root.geometry("920x780")
         self.root.minsize(800, 620)
         self.root.configure(bg="#f5f7fa")
@@ -4285,5 +4285,5 @@ class YMM4AutoGui:
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = YMM4AutoGui(root)
+    app = ShortsAutoFactory(root)
     root.mainloop()
