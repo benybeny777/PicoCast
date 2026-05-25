@@ -1,9 +1,9 @@
 import re
-from config import CHARACTERS
+from config import CHARACTERS, CHARACTER_EXPRESSION_PNGS
 
 class ScriptParser:
     _bg_re = re.compile(r'^(?:背景|Background|シーン|Scene)\d*[:：](.*)$', re.IGNORECASE)
-    _dialogue_re = re.compile(r'^([^:：(（【]+)(?:\s*[（(]([^)）]+)[）)])?\s*[:：]\s*(.*)$')
+    _dialogue_re = re.compile(r'^([^:：(（\[\]【]+)(?:\s*[（(]([^)）]+)[）)])?(?:\s*\[([^\]]+)\])?\s*[:：]\s*(.*)$')
     _telop_re = re.compile(r'^(?:テロップ|Telop)[:：](.*)$', re.IGNORECASE)
     _thumb_re = re.compile(r'^(?:サムネイル|Thumbnail)[:：](.*)$', re.IGNORECASE)
     _thumb_text_re = re.compile(r'^(?:サムネ文字|サムネテキスト)[:：](.*)$', re.IGNORECASE)
@@ -206,7 +206,8 @@ class ScriptParser:
                 if m:
                     char_name = m.group(1).strip()
                     emotion = m.group(2) if m.group(2) else "ノーマル"
-                    text = m.group(3).strip()
+                    expression = m.group(3).strip() if m.group(3) else None
+                    text = m.group(4).strip()
 
                     # Normalize character name
                     found_char_name = "ずんだもん" # default
@@ -224,6 +225,7 @@ class ScriptParser:
                         "type": "dialogue",
                         "character": found_char_name,
                         "emotion": emotion,
+                        "expression": expression,
                         "text": text,
                     }
                     lines.append(new_item)
@@ -305,6 +307,28 @@ class ScriptParser:
                 unknown.add(item["character"])
         if unknown:
             warnings.append(f"不明なキャラクター名が見つかりました: {', '.join(unknown)}")
+
+        known_expressions = {
+            char_name: set(expressions.keys())
+            for char_name, expressions in CHARACTER_EXPRESSION_PNGS.items()
+        }
+        unknown_expressions = set()
+        expression_count = 0
+        for item in items:
+            if item["type"] != "dialogue":
+                continue
+            expression = str(item.get("expression") or "").strip()
+            if not expression:
+                continue
+            expression_count += 1
+            if expression not in known_expressions.get(item.get("character"), set()):
+                unknown_expressions.add(f"{item.get('character')}[{expression}]")
+        if unknown_expressions:
+            warnings.append(f"不明な表情指定が見つかりました（nativeでは既定表情にフォールバックします）: {', '.join(sorted(unknown_expressions))}")
+        if expression_count >= 6:
+            warnings.append(f"表情指定が{expression_count}回あります。Shortsでは強い表情変化は3〜5回までが目安です。")
+        if dialogue_count and expression_count == dialogue_count:
+            warnings.append("全セリフに表情指定があります。意味のある場面だけに絞ってください。")
 
         is_valid = len(errors) == 0
         return is_valid, errors + warnings

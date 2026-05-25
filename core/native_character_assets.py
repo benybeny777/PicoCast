@@ -3,7 +3,7 @@ import gc
 from dataclasses import dataclass
 from typing import Iterable
 
-from config import CHARACTER_PNGS, METAN_PSD_PATH, ZUNDAMON_PSD_PATH
+from config import CHARACTER_EXPRESSION_PNGS, CHARACTER_PNGS, METAN_PSD_PATH, ZUNDAMON_PSD_PATH
 
 
 ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
@@ -19,6 +19,14 @@ class CharacterVariantSet:
     mouth_half: str | None
     mouth_open: str | None
     eye_closed: str | None
+    expressions: dict[str, str]
+
+    def base_for_expression(self, expression: str | None) -> str | None:
+        if expression:
+            path = self.expressions.get(str(expression).strip())
+            if path and os.path.exists(path):
+                return path
+        return self.base
 
 
 def _find_psd(keyword: str) -> str | None:
@@ -234,11 +242,21 @@ def _save_manual_blink_overlay(name: str, base_path: str, out_path: str) -> str 
         gc.collect()
 
 
-def _ensure_variants(name: str, psd_path: str | None, static_path: str | None) -> CharacterVariantSet:
+def _expression_paths(jp_name: str) -> dict[str, str]:
+    configured = CHARACTER_EXPRESSION_PNGS.get(jp_name, {})
+    return {
+        str(expression).strip(): path
+        for expression, path in configured.items()
+        if expression and path and os.path.exists(path)
+    }
+
+
+def _ensure_variants(name: str, jp_name: str, psd_path: str | None, static_path: str | None) -> CharacterVariantSet:
     char_dir = os.path.join(CACHE_DIR, name)
     os.makedirs(char_dir, exist_ok=True)
+    expressions = _expression_paths(jp_name)
     if not psd_path or not os.path.exists(psd_path):
-        return CharacterVariantSet(name, static_path, static_path, static_path, static_path, static_path, static_path)
+        return CharacterVariantSet(name, static_path, static_path, static_path, static_path, static_path, static_path, expressions)
 
     if name == "zundamon":
         mouth_closed = ["んー", "むー"]
@@ -294,11 +312,12 @@ def _ensure_variants(name: str, psd_path: str | None, static_path: str | None) -
         mouth_half=exists("mouth_half_overlay", fallback_static=False),
         mouth_open=exists("mouth_open_overlay", fallback_static=False),
         eye_closed=exists("eye_closed_overlay", fallback_static=False) or exists("eye_closed_manual", fallback_static=False),
+        expressions=expressions,
     )
 
 
 def load_character_variants() -> list[CharacterVariantSet]:
     return [
-        _ensure_variants("zundamon", _find_psd("zundamon"), CHARACTER_PNGS.get("ずんだもん")),
-        _ensure_variants("metan", _find_psd("metan"), CHARACTER_PNGS.get("四国めたん")),
+        _ensure_variants("zundamon", "ずんだもん", _find_psd("zundamon"), CHARACTER_PNGS.get("ずんだもん")),
+        _ensure_variants("metan", "四国めたん", _find_psd("metan"), CHARACTER_PNGS.get("四国めたん")),
     ]

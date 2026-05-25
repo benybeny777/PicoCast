@@ -19,6 +19,7 @@ from config import (
     CHARACTER_UPPER_BODY_MODE,
     CHARACTER_UPPER_BODY_SCALE,
     CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET,
+    CHARACTER_EXPRESSION_PNGS,
     NATIVE_BGM_VOLUME_DB,
     NATIVE_CHARACTER_HEIGHT_LONG,
     NATIVE_CHARACTER_HEIGHT_SHORTS,
@@ -58,6 +59,7 @@ from core.parser import ScriptParser
 
 
 INTER_DIALOGUE_GAP_SEC = 0.0
+CaptionChunk = tuple[str, str, str | None]
 
 
 @dataclass
@@ -292,36 +294,37 @@ def _audio_stem_key(text: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "", str(text or ""))[:20].strip()
 
 
-def _dialogue_captions(script_path: str) -> list[tuple[str, str]]:
+def _dialogue_captions(script_path: str) -> list[CaptionChunk]:
     try:
         with open(script_path, "r", encoding="utf-8") as f:
             items = ScriptParser.parse_string(f.read())
     except Exception:
         return []
-    captions: list[tuple[str, str]] = []
+    captions: list[CaptionChunk] = []
     for item in items:
         if item.get("type") == "dialogue":
             style = _caption_style(item.get("character", ""))
-            captions.extend((text, style) for text in _split_at_punctuation(item.get("text", "")))
+            expression = item.get("expression")
+            captions.extend((text, style, expression) for text in _split_at_punctuation(item.get("text", "")))
     return captions
 
 
-def _captions_for_audio_files(script_path: str, audio_files: list[str]) -> list[tuple[str, str]]:
+def _captions_for_audio_files(script_path: str, audio_files: list[str]) -> list[CaptionChunk]:
     script_captions = _dialogue_captions(script_path)
-    result: list[tuple[str, str]] = []
+    result: list[CaptionChunk] = []
     search_from = 0
     for audio_path in audio_files:
         audio_text = _audio_caption(audio_path)
         audio_key = _audio_stem_key(audio_text)
         matched = None
         for idx in range(search_from, len(script_captions)):
-            script_text, style = script_captions[idx]
+            script_text, style, expression = script_captions[idx]
             if _audio_stem_key(script_text) == audio_key:
-                matched = (script_text, style)
+                matched = (script_text, style, expression)
                 search_from = idx + 1
                 break
         if matched is None:
-            matched = (audio_text, "Default")
+            matched = (audio_text, "Default", None)
         result.append(matched)
     return result
 
@@ -462,6 +465,40 @@ def _speaker_name(style: str) -> str | None:
     return None
 
 
+def _speaker_jp_name(speaking: str | None) -> str | None:
+    if speaking == "zundamon":
+        return "ずんだもん"
+    if speaking == "metan":
+        return "四国めたん"
+    return None
+
+
+def _known_expressions(speaking: str | None) -> set[str]:
+    jp_name = _speaker_jp_name(speaking)
+    if not jp_name:
+        return set()
+    return set(CHARACTER_EXPRESSION_PNGS.get(jp_name, {}).keys())
+
+
+def _expression_fallback_reason(characters: list[CharacterVariantSet], speaking: str | None, expression: str | None) -> str | None:
+    expression = str(expression or "").strip()
+    if not expression or not speaking:
+        return None
+    known = _known_expressions(speaking)
+    if expression not in known:
+        return "unknown"
+    character = next((item for item in characters if item.name == speaking), None)
+    if not character or not character.expressions.get(expression):
+        return "missing_asset"
+    return None
+
+
+def _character_base_path(character: CharacterVariantSet, speaking: str | None, expression: str | None) -> str | None:
+    if character.name == speaking and expression:
+        return character.base_for_expression(expression)
+    return character.base
+
+
 def _background_transition_enabled(prev_bg_path: str | None, current_bg_path: str | None, duration: float) -> bool:
     if str(NATIVE_BACKGROUND_TRANSITION or "").strip().lower() in ("", "none", "off", "0", "false"):
         return False
@@ -492,6 +529,7 @@ def _segment_filter(
     ass_path: str,
     characters: list[CharacterVariantSet],
     speaking: str | None,
+    expression: str | None,
     duration: float,
     has_background_transition: bool = False,
 ) -> str:
@@ -558,10 +596,10 @@ def _segment_filter(
     return ";".join(chains)
 
 
-def _segment_character_inputs(duration: float, characters: list[CharacterVariantSet], speaking: str | None) -> list[str]:
+def _segment_character_inputs(duration: float, characters: list[CharacterVariantSet], speaking: str | None, expression: str | None) -> list[str]:
     args: list[str] = []
     for character in characters:
-        paths = [character.base]
+        paths = [_character_base_path(character, speaking, expression)]
         if NATIVE_ENABLE_LIPSYNC and speaking == character.name:
             paths.extend([character.mouth_half, character.mouth_open])
         if NATIVE_ENABLE_BLINK and _blink_enable_expr(duration, character.name, speaking):
@@ -574,7 +612,7 @@ def _segment_character_inputs(duration: float, characters: list[CharacterVariant
 
 def _write_subtitles(
     path: str,
-    chunks: list[tuple[str, str]],
+    chunks: list[CaptionChunk],
     audio_durations: list[float],
     width: int,
     height: int,
@@ -644,7 +682,7 @@ def _write_subtitles(
     ])
     t = 0.0
     for idx, dur in enumerate(audio_durations):
-        text, style = chunks[idx] if idx < len(chunks) else ("", "Default")
+        text, style, _expression = chunks[idx] if idx < len(chunks) else ("", "Default", None)
         if text:
             start = max(0.0, t + offset_sec)
             end = max(start + 0.1, t + max(0.1, dur) + offset_sec)
@@ -721,7 +759,7 @@ def render_native_test(
     characters = _character_inputs(width, height)
     script_captions_raw = _dialogue_captions(script_path)
     script_caption_count = len(script_captions_raw)
-    script_char_count = sum(len(text) for text, _ in script_captions_raw)
+    script_char_count = sum(len(text) for text, _style, _expression in script_captions_raw)
     if script_caption_count != len(audio_files):
         missing = script_caption_count - len(audio_files)
         raise RuntimeError(
@@ -741,19 +779,29 @@ def render_native_test(
             if progress_callback:
                 progress_callback(f"   🖼 先頭1フレームにサムネイルを挿入: {os.path.basename(thumb_path)}")
     prev_bg_path: str | None = None
+    warned_expression_fallbacks: set[tuple[str | None, str | None, str]] = set()
     for idx, (audio_path, duration, caption) in enumerate(zip(audio_files, durations, captions), start=1):
         bg_path = _background_for_audio(audio_path, bg_files)
         ass_path = os.path.join(work_dir, f"subtitle_{idx:04d}.ass")
         segment_path = os.path.join(work_dir, f"segment_{idx:04d}.mp4")
         _write_subtitles(ass_path, [caption], [duration], width, height, offset_sec=NATIVE_SUBTITLE_OFFSET_SEC)
-        _caption_text, caption_style = caption
+        _caption_text, caption_style, expression = caption
         speaking = _speaker_name(caption_style)
+        fallback_reason = _expression_fallback_reason(characters, speaking, expression)
+        if fallback_reason and progress_callback:
+            key = (speaking, expression, fallback_reason)
+            if key not in warned_expression_fallbacks:
+                warned_expression_fallbacks.add(key)
+                if fallback_reason == "unknown":
+                    progress_callback(f"⚠ native表情指定が未知です: {speaking or 'unknown'}[{expression}] → 既定表情を使用")
+                else:
+                    progress_callback(f"⚠ native表情素材がありません: {speaking or 'unknown'}[{expression}] → 既定表情を使用")
         has_bg_transition = _background_transition_enabled(prev_bg_path, bg_path, duration)
-        filter_complex = _segment_filter(width, height, ass_path, characters, speaking, duration, has_bg_transition)
+        filter_complex = _segment_filter(width, height, ass_path, characters, speaking, expression, duration, has_bg_transition)
         inputs = [FFMPEG_BIN, "-y", "-loop", "1", "-t", f"{max(0.1, duration):.3f}", "-i", bg_path, "-i", audio_path]
         if has_bg_transition and prev_bg_path:
             inputs.extend(["-loop", "1", "-t", f"{max(0.1, duration):.3f}", "-i", prev_bg_path])
-        inputs.extend(_segment_character_inputs(duration, characters, speaking))
+        inputs.extend(_segment_character_inputs(duration, characters, speaking, expression))
         last_error = None
         encode_candidates = _segment_encode_args()
         for enc_idx, encode_args in enumerate(encode_candidates):

@@ -12,6 +12,24 @@
 
 ---
 
+## 2026-05-25 (8)
+
+### native立ち絵の表情指定を追加
+
+- `core/parser.py`: `ずんだもん(ノーマル)[驚き]: ...` のような角括弧表情を `expression` フィールドとして取得。既存の丸括弧VOICEVOXスタイルは維持
+- `config.py` / `core/native_character_assets.py` / `core/native_renderer.py`: native立ち絵の表情PNG対応表を追加し、セリフ単位で表情ベース画像を切り替える。未知表情・素材未配置は警告して既定表情へフォールバック
+- `core/prompt_parts/local/script_generation_prompt.txt`: 表情指定ルールを追加。`四国めたん(きょきょう)` のような新VOICEVOXスタイルは追加せず、声と画面表情を分離
+- `README.md` / `SPEC.md`: 台本フォーマットと表情指定の仕様を追記
+- `tests/test_parser_expressions.py` / `tests/test_native_renderer.py`: 表情パースとnativeフォールバックのテストを追加
+
+## 2026-05-25 (7)
+
+### vidIQ/Analytics高AVP型を台本生成プロンプトへ反映
+
+- `core/prompt_parts/local/script_generation_prompt.txt`: 高AVP台本の型、低AVPの実失敗パターン禁止、1枚目背景VSA特化、再挑戦/品質改善版の改善理由、Shortsループ締めを追加
+- 背景画像内のずんだもん/めたん描画を禁止し、native立ち絵と背景の役割を分離する方針を明記
+- `SPEC.md`: 台本作成ルールに、1行目の数字/期間/場所入り結論型、低AVP型の禁止、VSA背景、再挑戦/品質改善版の目的欄強化を反映
+
 ## 2026-05-25 (6)
 
 ### YMM4プロジェクト出力廃止

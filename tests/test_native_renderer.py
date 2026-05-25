@@ -6,7 +6,8 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from core.native_renderer import _duration_status, _native_loudnorm_filter, _save_render_info
+from core.native_character_assets import CharacterVariantSet
+from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _save_render_info
 
 
 class TestDurationStatus(unittest.TestCase):
@@ -88,6 +89,35 @@ class TestSaveRenderInfo(unittest.TestCase):
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             self.assertAlmostEqual(data["actual_duration_sec"], 45.0)
+
+
+class TestCharacterExpressionFallback(unittest.TestCase):
+    def test_missing_expression_asset_falls_back_to_base(self):
+        character = CharacterVariantSet(
+            name="zundamon",
+            static="static.png",
+            base="base.png",
+            mouth_closed=None,
+            mouth_half=None,
+            mouth_open=None,
+            eye_closed=None,
+            expressions={},
+        )
+        self.assertEqual(_character_base_path(character, "zundamon", "驚き"), "base.png")
+        self.assertEqual(_expression_fallback_reason([character], "zundamon", "驚き"), "missing_asset")
+
+    def test_unknown_expression_reports_unknown(self):
+        character = CharacterVariantSet(
+            name="metan",
+            static="static.png",
+            base="base.png",
+            mouth_closed=None,
+            mouth_half=None,
+            mouth_open=None,
+            eye_closed=None,
+            expressions={},
+        )
+        self.assertEqual(_expression_fallback_reason([character], "metan", "未知顔"), "unknown")
 
 
 if __name__ == "__main__":

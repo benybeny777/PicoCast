@@ -196,6 +196,22 @@ CHARACTER_PNGS = {
     "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
     "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
 }
+CHARACTER_EXPRESSION_PNGS = {
+    "ずんだもん": {
+        "驚き": os.environ.get("ZUNDAMON_EXPRESSION_SURPRISE_PNG", os.path.join(CHARACTER_PNG_DIR, "zundamon_surprise.png")),
+        "焦り": os.environ.get("ZUNDAMON_EXPRESSION_PANIC_PNG", os.path.join(CHARACTER_PNG_DIR, "zundamon_panic.png")),
+        "得意げ": os.environ.get("ZUNDAMON_EXPRESSION_CONFIDENT_PNG", os.path.join(CHARACTER_PNG_DIR, "zundamon_confident.png")),
+        "困惑": os.environ.get("ZUNDAMON_EXPRESSION_CONFUSED_PNG", os.path.join(CHARACTER_PNG_DIR, "zundamon_confused.png")),
+        "にやけ": os.environ.get("ZUNDAMON_EXPRESSION_SMIRK_PNG", os.path.join(CHARACTER_PNG_DIR, "zundamon_smirk.png")),
+    },
+    "四国めたん": {
+        "驚き": os.environ.get("METAN_EXPRESSION_SURPRISE_PNG", os.path.join(CHARACTER_PNG_DIR, "metan_surprise.png")),
+        "呆れ": os.environ.get("METAN_EXPRESSION_EXASPERATED_PNG", os.path.join(CHARACTER_PNG_DIR, "metan_exasperated.png")),
+        "ジト目": os.environ.get("METAN_EXPRESSION_SUSPICIOUS_PNG", os.path.join(CHARACTER_PNG_DIR, "metan_suspicious.png")),
+        "ドン引き": os.environ.get("METAN_EXPRESSION_APPALLED_PNG", os.path.join(CHARACTER_PNG_DIR, "metan_appalled.png")),
+        "ニヤリ": os.environ.get("METAN_EXPRESSION_SMIRK_PNG", os.path.join(CHARACTER_PNG_DIR, "metan_smirk.png")),
+    },
+}
 THUMBNAIL_CHARACTER_PNGS = {                                     # サムネイル生成時に使うキャラ画像
     "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
     "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
