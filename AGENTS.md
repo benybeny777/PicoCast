@@ -1,4 +1,4 @@
-# AGENTS.md — Codex/Claude Code 向け作業ガイド（ルール正本）
+# AGENTS.md — Claude Code / AI エージェント向け作業ガイド（ルール正本）
 
 このファイルが唯一のルール正本です。`CLAUDE.md` はこのファイルへのリダイレクトのみです。ルールを追加・変更する場合はこのファイルだけを編集してください。
 
@@ -10,7 +10,7 @@
 - 基本は `SPEC.md` を最新仕様の正とし、大きめの変更は `CHANGELOG.md` にも履歴を残す。
 - セットアップ、APIキー、設定ファイル、ローカル差し替え運用に影響する変更は `README.md` も更新する。
 - ドキュメント更新が不要な軽微修正の場合でも、不要と判断した理由を作業完了時に明記する。
-- PowerShellで日本語ファイルを確認するときは、文字化けを避けるためUTF-8を明示する。`$OutputEncoding=[Text.UTF8Encoding]::new($false); Get-Content -Encoding UTF8 ...`、`$env:PYTHONIOENCODING='utf-8'; py -3 -c "... Path(...).read_text(encoding='utf-8') ..."`、`rg`、`git diff` を優先する。
+- PowerShellで日本語ファイルを確認するときは、文字化けを避けるためUTF-8を明示する。`$OutputEncoding=[Text.UTF8Encoding]::new($false); Get-Content -Encoding UTF8 ...`、`$env:PYTHONIOENCODING='utf-8'; python -c "... Path(...).read_text(encoding='utf-8') ..."`（Windowsは `py -3`）、`rg`、`git diff` を優先する。
 - PowerShell表示が文字化けしても、すぐにソース破損と判断しない。UTF-8で読み直してから判断する。
 - 常に Codex / Claude の利用クレジット消費を抑えて作業する。不要な長文出力、重複調査、過剰なファイル読み込み、不要な並列探索、同じ確認のやり直しを避ける。
 - まず `rg`、差分確認、必要最小限のファイル読み取り、軽い単体テストで判断する。大きい調査が必要な場合も、読む範囲を絞り、分かったことを短くまとめる。
@@ -57,7 +57,7 @@
 | `core/youtube_analytics.py` | YouTube Analytics API取得 |
 | `core/analytics_score.py` | Analytics評価・スコアリング・TSV保存 |
 | `core/output_paths.py` | 出力パスの集約・マイグレーション |
-| `core/ymmp_editor.py` | 旧YMM4タイムライン互換ヘルパー（**廃止済み**・参照のみ） |
+| `core/ymmp_editor.py` | YMM4テンプレート読み込み・タイムライン内部処理（YMM4最終出力は廃止済みだが内部ヘルパーとして現役） |
 
 ## 出力フォルダ構造
 
