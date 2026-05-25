@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-05-26
+
+### コード整理・デッドコード削除・定数集約
+
+- `core/opening_quality.py`: `local_opening_review()` のデフォルト引数 `render_engine="ymm4"` → `"native"` に修正。LLMプロンプト内で Long動画も `render_engine` を正しく渡すよう修正（従来は Long 時に "ymm4" が固定送信されていた）
+- `main.py` / `gui.py`: `native_render=False` 分岐（YMM4尺チェック・Shorts尺表示）をデッドコードとして削除
+- `config.py`: `TRANSITION_SEC` / `VOICE_TAIL_SAFETY_SEC` / `NATIVE_INTER_DIALOGUE_GAP_SEC` を追加。`main.py` / `native_renderer.py` のモジュール内定数定義を廃止してインポートに統一
+- `core/native_renderer.py`: `INTER_DIALOGUE_GAP_SEC` → `NATIVE_INTER_DIALOGUE_GAP_SEC` に改名（`main.py` の YMM4用同名定数との混在を解消）
+- 全Pythonファイル: 残存英語コメント・docstringを日本語化（`gui.py` 13件 / `main.py` 5件 / `analytics_score.py` ルール1〜7ラベル / `tests/test_refactor.py` ほか）
+
 ## 2026-05-25 (13)
 
 ### テスト用ファイル置き場 `dev/` を追加・ルール化
