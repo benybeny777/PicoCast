@@ -122,7 +122,7 @@ def duration_status(item: dict[str, Any]) -> str:
         if 61 <= duration < 90:
             return "ok_but_short"
         return "needs_review"
-    # Long
+    # Long動画
     if 300 <= duration <= 600:
         return "ideal"
     if 270 <= duration < 300 or 600 < duration <= 660:
@@ -204,7 +204,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         })
         return result
 
-    # Rule 1: Analyticsの平均視聴率などが未取得、または views == 0 はデータ待ち
+    # ルール1: Analyticsの平均視聴率などが未取得、または views == 0 はデータ待ち
     if not analytics_available or views == 0:
         result = dict(item)
         result.update({
@@ -254,7 +254,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     above_expansion_min = avg_percent >= min_pct_expansion
     long_expansion_ready = video_type == "Long" and ctr_value >= 8 and avg_percent >= 40
 
-    # Rule 2: 動画種別ごとのベーススコア
+    # ルール2: 動画種別ごとのベーススコア
     if video_type == "Shorts":
         if avg_percent >= 90 or avg_duration >= 45:
             score, action = "S", "横展開"
@@ -279,7 +279,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         else:
             score, action = "D", "要見直し"
     else:
-        # Long (180秒+)
+        # Long（180秒+）
         if ctr_value >= 8 and avg_percent >= 40:
             score, action = "S", "横展開"
         elif ctr_value >= 5 and avg_percent >= 30:
@@ -291,11 +291,11 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         else:
             score, action = "D", "要見直し"
 
-    # Rule 3: 最低視聴率ラインを下回る横展開を抑制
+    # ルール3: 最低視聴率ラインを下回る横展開を抑制
     if action == "横展開" and not above_expansion_min:
         action = "テーマ有望・構成改善"
 
-    # Rule 4: 登録者純増 >= 2 → 強い横展開候補（最低でも B）
+    # ルール4: 登録者純増 >= 2 → 強い横展開候補（最低でも B）
     if subscribers_net >= 2:
         if SCORE_ORDER.get(score, 0) < SCORE_ORDER["B"]:
             score = "B"
@@ -310,7 +310,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     elif subscribers_net >= 1 and action in ("弱い", "要見直し", "改善して再挑戦"):
         action = f"{action}・登録導線あり"
 
-    # Rule 5: like率 >= 1.5% → テーマ有望（視聴率ライン未達または C/D スコア）
+    # ルール5: like率 >= 1.5% → テーマ有望（視聴率ライン未達または C/D スコア）
     if like_rate >= 1.5 and action != "横展開":
         if not above_expansion_min:
             # 高エンゲージメントだが低視聴率 → テーマ有望・構成改善
@@ -318,11 +318,11 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         elif score in ("C", "D"):
             action = "テーマ有望・冒頭/構成改善"
 
-    # Rule 6: コメント反応あり（弱いスコアの補足）
+    # ルール6: コメント反応あり（弱いスコアの補足）
     if comments >= 1 and action in ("弱い", "要見直し"):
         action = f"{action}・反応あり"
 
-    # Rule 7: 本判定保留（views < 500 かつ公開24時間未満）
+    # ルール7: 本判定保留（views < 500 かつ公開24時間未満）
     if is_provisional and "横展開" in action:
         action = f"{action}(判定保留)"
 

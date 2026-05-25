@@ -832,7 +832,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     items = ScriptParser.parse(script_txt_path)
 
-    # Extract and save metadata (thumbnail / title / description / tags)
+    # メタデータ（サムネ/タイトル/説明文/タグ）を取得して保存
     meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
     items = [it for it in items if it["type"] not in ScriptParser.META_TYPES]
     items = normalize_background_order(items)
@@ -1513,8 +1513,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
                 try:
                     with wave.open(audio_path, 'rb') as wr:
-                        # AdditionalTime=0.3s from character_templates.json must be added to Length
-                        # so YMM4 plays the full WAV without internal early cutoff.
+                        # character_templates.json の AdditionalTime=0.3s を Length に加算する
+                        # 加算しないと YMM4 内部で WAV 末尾が早期カットされる
                         _ADDITIONAL_FRAMES = math.ceil(0.3 * editor.fps)
                         wav_frames = math.ceil(wr.getnframes() / wr.getframerate() * editor.fps)
                         duration_frames = wav_frames + _ADDITIONAL_FRAMES
@@ -1548,13 +1548,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         return finish_result(msg)
     current_frame += editor.fps
 
-    # Finalize
+    # 最後の背景アイテムを確定
     if current_bg and current_frame > bg_start_frame:
         bg_path = os.path.join(theme_bg_dir, current_bg)
         if os.path.exists(bg_path):
             editor.add_image_item(bg_path, bg_start_frame, current_frame - bg_start_frame, layer=0)
             
-    # Build per-character emotion-segmented TachieItems
+    # キャラクターごとに感情セグメントを結合してTachieItemを構築
     char_order = list(dict.fromkeys(info[0] for info in dialogue_tachie_info))
     char_dialogues = defaultdict(list)
     for char, emotion, start, end in dialogue_tachie_info:
@@ -1568,8 +1568,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         x_pos, y_pos, tachie_zoom = TACHIE_PARAMS[key][mode] if key else (0, 0, 30)
         layer = 3 + i
 
-        # Fill gaps between dialogues with ノーマル, then merge consecutive same-emotion blocks
-        # All segments clipped to start at frame 3 (TACHIE_START_FRAME) at the earliest
+        # 台詞間の空白をノーマルで埋め、連続する同感情ブロックをマージする
+        # 全セグメントは最低でもフレーム3（TACHIE_START_FRAME）から開始
         TACHIE_START_FRAME = 3
         segs = sorted(char_dialogues[char_name], key=lambda x: x[1])
         full_segs = []

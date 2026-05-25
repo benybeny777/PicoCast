@@ -77,12 +77,12 @@ def split_input_scripts(raw_scripts):
     if not raw_scripts:
         return []
 
-    # Preferred separator from our prompt.
+    # プロンプトが出力する区切り線（---）
     scripts = [s.strip() for s in re.split(r'\n-{3,}\n', raw_scripts) if s.strip()]
     if len(scripts) > 1:
         return scripts
 
-    # Also accept headings like: ━━ 動画1：ショート版 ━━
+    # ━━ 動画1：ショート版 ━━ 形式の見出しでも分割する
     heading_re = re.compile(r'^\s*━+\s*動画\s*\d+[^。\n]*━+\s*$', re.MULTILINE)
     if heading_re.search(raw_scripts):
         chunks = []
@@ -99,7 +99,7 @@ def split_input_scripts(raw_scripts):
         if len(chunks) > 1:
             return chunks
 
-    # Last-resort split: multiple scripts pasted back-to-back starting with 動画形式.
+    # 最終手段: 「動画形式:」で始まる複数台本が連続貼り付けされた場合に分割
     starts = [m.start() for m in re.finditer(r'(?m)^動画形式[:：]', raw_scripts)]
     if len(starts) > 1:
         starts.append(len(raw_scripts))
@@ -294,7 +294,7 @@ class ShortsAutoFactory:
         main_frame = ttk.Frame(root, padding="12")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # Header + script controls in one row
+        # ヘッダーと台本操作ボタンを1行に並べる
         top_frame = ttk.Frame(main_frame)
         top_frame.pack(fill=tk.X, pady=(0, 4))
         self.generate_btn = ttk.Button(top_frame, text="🎬 生成 🚀", style="Accent.TButton", command=self.start_generation)
@@ -319,11 +319,11 @@ class ShortsAutoFactory:
         clear_btn.pack(side=tk.RIGHT, padx=4)
         self._add_tooltip(clear_btn, "台本入力欄を空にします。")
 
-        # Script area
+        # 台本入力エリア
         self.ref_text = scrolledtext.ScrolledText(main_frame, height=6, font=("Consolas", 10), bg="#fdfdfd", borderwidth=1, relief="solid", highlightthickness=1, highlightbackground="#dfe6e9", highlightcolor="#0984e3")
         self.ref_text.pack(fill=tk.X, expand=False, pady=(0, 4))
 
-        # Options row (all in one line)
+        # オプション行（1行にまとめる）
         opt_frame = ttk.Frame(main_frame)
         opt_frame.pack(fill=tk.X, pady=2)
 
@@ -355,7 +355,7 @@ class ShortsAutoFactory:
         self.history_batch_btn.pack(side=tk.LEFT, padx=(10, 0))
         self._add_tooltip(self.history_batch_btn, "過去の生成履歴を複数選び、同じ設定でまとめて再生成します。")
 
-        # Sub buttons row
+        # サブボタン行
         btn_frame = ttk.Frame(main_frame)
         btn_frame.pack(fill=tk.X, pady=(0, 4))
         self.upload_btn = ttk.Button(btn_frame, text="📤 YouTubeアップ", command=self.start_youtube_upload)
@@ -390,7 +390,7 @@ class ShortsAutoFactory:
         self.native_render_history_btn = ttk.Button(test_btn_frame, text="native MP4化", command=self.start_native_render_from_history)
         self.native_render_history_btn.pack(side=tk.LEFT, padx=(4, 0), ipady=2)
         self._add_tooltip(self.native_render_history_btn, "既存履歴の音声・背景を使い、ffmpeg/native MP4出力だけを実行します。")
-        # Status + progress
+        # ステータスとプログレスバー
         self.status_var = tk.StringVar(value="Ready")
         self.status_label = ttk.Label(main_frame, textvariable=self.status_var, font=("Meiryo", 8, "italic"), width=110)
         self.status_label.pack(anchor=tk.W, fill=tk.X)
@@ -1599,7 +1599,7 @@ class ShortsAutoFactory:
                 self.log("⏹ 中止しました。残りの履歴/台本は処理しません。", "error")
                 break
             try:
-                # Derive topic via parser (handles both same-line and next-line values)
+                # parser でトピックを取得（同行・次行どちらの書式にも対応）
                 try:
                     _items_for_topic = ScriptParser.parse_string(script)
                     _title_items = [it for it in _items_for_topic if it["type"] == "video_title"]
@@ -1932,7 +1932,7 @@ class ShortsAutoFactory:
         rows = []
         seen_video_ids = set()
 
-        # Primary source: scan 000_uploaded folders
+        # 優先ソース: 000_uploadedフォルダをスキャン
         if os.path.isdir(uploaded_dir):
             folders = sorted(
                 (d for d in os.listdir(uploaded_dir) if os.path.isdir(os.path.join(uploaded_dir, d))),
@@ -1962,7 +1962,7 @@ class ShortsAutoFactory:
                     "pinned_at": record.get("fixed_comment_pinned_at"),
                 })
 
-        # Supplemental: per-video records from folder scan (for videos not in 000_uploaded)
+        # 補完ソース: フォルダスキャン由来のレコード（000_uploadedにない動画用）
         for record in sorted(load_upload_records(), key=lambda r: r.get("uploaded_at") or "", reverse=True):
             video_id = (record.get("video_id") or "").strip()
             if not video_id or video_id in seen_video_ids:
@@ -1970,7 +1970,7 @@ class ShortsAutoFactory:
             fixed_comment = (record.get("fixed_comment_text") or "").strip()
             if not fixed_comment:
                 continue
-            # Use _local_path from folder scan so thread IDs can be written back
+            # フォルダスキャン由来の _local_path を使うことでスレッドIDを書き戻せる
             record_path = record.get("_local_path") or ""
             rows.append({
                 "name": record.get("title") or video_id,
@@ -3346,7 +3346,7 @@ class ShortsAutoFactory:
         ttk.Button(btn_frame, text="公開予定を変更", command=change_publish_time).pack(side=tk.RIGHT, padx=(0, 8))
         ttk.Button(btn_frame, text="スロット詰め直し", command=rebalance).pack(side=tk.RIGHT, padx=(0, 8))
 
-        # YouTube status checks are intentionally manual; auto-sync already runs once on open.
+        # YouTube状態確認は意図的に手動のみ。開いた時点で自動同期済みのため。
 
     def _confirm_upload_schedule(self, rows):
         """rows: [(type_label, title, slot_str, score_label), ...] — True で確定、False でキャンセル。"""
