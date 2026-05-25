@@ -14,6 +14,13 @@
 
 ## 2026-05-26
 
+### GUI補助ロジックの分離
+
+- `core/gui_support.py`: GUIから、台本分割、アプリバージョン取得、VOICEVOX/ffmpeg疎通表示用チェック、ファイルハッシュ、Pillow画像読み込み補助を分離
+- `core/generation_checks.py`: GUIから、生成前チェック、native推定尺計算、尺ステータス表示タグ判定を分離
+- `gui.py`: 上記ヘルパーを使う薄い呼び出しに整理し、import時副作用なしの状態を維持
+- `tests/test_gui_support.py`: 台本分割、生成前チェック、尺推定、尺タグ判定の軽いテストを追加
+
 ### コード整理・デッドコード削除・定数集約
 
 - `core/opening_quality.py`: `local_opening_review()` のデフォルト引数 `render_engine="ymm4"` → `"native"` に修正。LLMプロンプト内で Long動画も `render_engine` を正しく渡すよう修正（従来は Long 時に "ymm4" が固定送信されていた）

@@ -4,14 +4,11 @@ import threading
 import re
 import os
 import sys
-import subprocess
 import traceback
 import time
 import shutil
 import queue
 import json
-import hashlib
-import io
 from main import (
     OutputDirectoryLockedError,
     run_pipeline,
@@ -26,164 +23,26 @@ from core.output_paths import UPLOADED_TITLES_FILE, analytics_paths, ensure_outp
 from core.opening_quality import check_openai_final_review_connection, duration_review, duration_status_label, llm_opening_review, local_opening_review, opening_score_tag, save_duration_review
 from core.parser import ScriptParser
 from core.script_prompts import build_script_generation_prompt, build_title_prompt
+from core.generation_checks import duration_tag, estimate_duration, pre_generate_check
+from core.gui_support import (
+    build_app_version,
+    ffmpeg_native_status,
+    file_digest,
+    load_image_copy,
+    split_input_scripts,
+    unified_check,
+)
 from config import (
-    FFMPEG_BIN,
-    NATIVE_FFMPEG_ENCODER,
-    NATIVE_FFMPEG_PRESET,
     SD_SIZE_IMAGE_SCALE,
     THUMBNAIL_CHARACTER_PNGS,
     VOICEVOX_PATH,
     VOICEVOX_URL,
 )
-import requests
-
-APP_VERSION_BASE = "2026.05.19"
-
-
-def build_app_version() -> str:
-    try:
-        count = subprocess.check_output(
-            ["git", "rev-list", "--count", "HEAD"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        short_hash = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        dirty = subprocess.run(
-            ["git", "diff", "--quiet"],
-            cwd=os.path.dirname(os.path.abspath(__file__)),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        ).returncode != 0
-        version = f"{APP_VERSION_BASE}.{count}-{short_hash}"
-        return version + ("-dirty" if dirty else "")
-    except Exception:
-        return APP_VERSION_BASE
 
 try:
     from PIL import Image, ImageTk
 except Exception:
     Image = ImageTk = None
-
-
-def split_input_scripts(raw_scripts):
-    """貼り付けられた台本をバッチ区切り文字で分割する。"""
-    raw_scripts = raw_scripts.strip()
-    if not raw_scripts:
-        return []
-
-    # プロンプトが出力する区切り線（---）
-    scripts = [s.strip() for s in re.split(r'\n-{3,}\n', raw_scripts) if s.strip()]
-    if len(scripts) > 1:
-        return scripts
-
-    # ━━ 動画1：ショート版 ━━ 形式の見出しでも分割する
-    heading_re = re.compile(r'^\s*━+\s*動画\s*\d+[^。\n]*━+\s*$', re.MULTILINE)
-    if heading_re.search(raw_scripts):
-        chunks = []
-        current = []
-        for line in raw_scripts.splitlines():
-            if heading_re.match(line):
-                if current and any(part.strip() for part in current):
-                    chunks.append("\n".join(current).strip())
-                current = []
-                continue
-            current.append(line)
-        if current and any(part.strip() for part in current):
-            chunks.append("\n".join(current).strip())
-        if len(chunks) > 1:
-            return chunks
-
-    # 最終手段: 「動画形式:」で始まる複数台本が連続貼り付けされた場合に分割
-    starts = [m.start() for m in re.finditer(r'(?m)^動画形式[:：]', raw_scripts)]
-    if len(starts) > 1:
-        starts.append(len(raw_scripts))
-        return [raw_scripts[starts[i]:starts[i + 1]].strip() for i in range(len(starts) - 1)]
-
-    return [raw_scripts]
-
-
-def unified_check(name, primary_url, path):
-    file_ok = os.path.exists(path)
-    found_url = None
-    urls_to_try = [primary_url]
-    if "8188" in primary_url or "8000" in primary_url:
-        for p in ["8188", "8000", "8189"]:
-            alt = primary_url.replace("8188", p).replace("8000", p)
-            if alt not in urls_to_try: urls_to_try.append(alt)
-    for url in urls_to_try:
-        try:
-            with requests.get(url, timeout=0.8):
-                found_url = url
-                break
-        except Exception:
-            continue
-    return {
-        "name": name,
-        "connected": found_url is not None,
-        "url": found_url if found_url else primary_url,
-        "file_ok": file_ok,
-        "path": path
-    }
-
-
-def ffmpeg_native_status():
-    configured = str(NATIVE_FFMPEG_ENCODER or "libx264").strip() or "libx264"
-    preset = str(NATIVE_FFMPEG_PRESET or "").strip()
-    result = {
-        "bin": FFMPEG_BIN,
-        "configured": configured,
-        "preset": preset,
-        "available": False,
-        "gpu": configured not in ("", "libx264"),
-        "hw_encoders": [],
-        "error": "",
-    }
-    try:
-        proc = subprocess.run(
-            [FFMPEG_BIN, "-hide_banner", "-encoders"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=5,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-        )
-        text = (proc.stdout or "") + "\n" + (proc.stderr or "")
-        for enc in ("h264_nvenc", "hevc_nvenc", "av1_nvenc", "h264_qsv", "hevc_qsv", "h264_amf", "hevc_amf"):
-            if enc in text:
-                result["hw_encoders"].append(enc)
-        result["available"] = configured == "libx264" or configured in text
-        if proc.returncode != 0 and not result["available"]:
-            result["error"] = (proc.stderr or proc.stdout or "").strip().splitlines()[-1:]
-            result["error"] = result["error"][0] if result["error"] else f"exit {proc.returncode}"
-    except Exception as e:
-        result["error"] = str(e)
-    return result
-
-
-def _file_digest(path):
-    try:
-        h = hashlib.sha256()
-        with open(path, "rb") as f:
-            for chunk in iter(lambda: f.read(1024 * 1024), b""):
-                h.update(chunk)
-        return h.hexdigest()
-    except Exception:
-        return ""
-
-
-def _load_image_copy(path):
-    with open(path, "rb") as f:
-        data = f.read()
-    with Image.open(io.BytesIO(data)) as src:
-        return src.copy()
 
 def print_startup_check():
     print("\n--- [System Startup Check] ---")
@@ -973,127 +832,15 @@ class ShortsAutoFactory:
 
     @staticmethod
     def _pre_generate_check(items, is_shorts):
-        """生成前危険チェック。(errors, warnings) のリストを返す。"""
-        errors = []
-        warnings = []
-        meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
-        dialogue_items = [it for it in items if it["type"] == "dialogue"]
-        bg_items = [it for it in items if it["type"] == "background"]
-        try:
-            from core.cta_policy import check_shorts_navigation_ng
-
-            script_text = "\n".join(it.get("text", "") for it in dialogue_items)
-            hits = check_shorts_navigation_ng(script_text, "Shorts" if is_shorts else "Long")
-            if hits:
-                warnings.append(
-                    "Shortsでは直接的な他動画誘導・次回予告が含まれています。"
-                    f"ループ締めに変更してください: {', '.join(hits)}"
-                )
-        except Exception:
-            pass
-
-        if not meta.get("video_title"):
-            errors.append("video_titleがありません")
-
-        thumb_text = meta.get("thumbnail_text", "")
-        if thumb_text and len(thumb_text) > 15:
-            warnings.append(f"サムネイル文字が長い（{len(thumb_text)}文字）: 「{thumb_text[:20]}」")
-
-        min_bg = 4 if is_shorts else 3
-        if len(bg_items) < min_bg:
-            warnings.append(f"背景数が少ない（{len(bg_items)}箇所、推奨{min_bg}以上）")
-
-        if dialogue_items:
-            first_text = dialogue_items[0].get("text", "")
-            if len(first_text) < 8:
-                warnings.append(f"冒頭セリフが短すぎます（{len(first_text)}文字）: 「{first_text}」")
-            if is_shorts:
-                from config import (
-                    NATIVE_SHORTS_AVG_CHARS_MIN,
-                    NATIVE_SHORTS_CHARS_MUST_FIX_MIN,
-                    NATIVE_SHORTS_LINES_IDEAL_MAX,
-                    NATIVE_SHORTS_LINES_IDEAL_MIN,
-                    NATIVE_SHORTS_LINES_MUST_FIX,
-                    NATIVE_SHORTS_LINES_TARGET_MAX,
-                    NATIVE_SHORTS_LINES_TARGET_MIN,
-                    NATIVE_SHORTS_SHORT_LINE_MAX,
-                    NATIVE_SHORTS_TARGET_CHARS_MIN,
-                )
-
-                dialogue_count = len(dialogue_items)
-                total_dialogue_chars = sum(len(it.get("text", "")) for it in dialogue_items)
-                avg_dialogue_chars = total_dialogue_chars / dialogue_count if dialogue_count else 0.0
-                if dialogue_count < NATIVE_SHORTS_LINES_IDEAL_MIN:
-                    errors.append(
-                        f"Shorts台本量不足（{dialogue_count}行 / 理想{NATIVE_SHORTS_LINES_IDEAL_MIN}行以上）"
-                    )
-                if dialogue_count >= NATIVE_SHORTS_LINES_MUST_FIX:
-                    errors.append(f"Shortsセリフ数過多（{dialogue_count}行 / 31行以上は禁止）")
-                if total_dialogue_chars < NATIVE_SHORTS_CHARS_MUST_FIX_MIN:
-                    missing = NATIVE_SHORTS_TARGET_CHARS_MIN - total_dialogue_chars
-                    errors.append(
-                        f"Shorts本文文字数不足（セリフ本文{total_dialogue_chars}文字 / 最低{NATIVE_SHORTS_CHARS_MUST_FIX_MIN}文字以上）"
-                        f"。目標{NATIVE_SHORTS_TARGET_CHARS_MIN}文字まであと{missing}文字"
-                    )
-                if avg_dialogue_chars < NATIVE_SHORTS_AVG_CHARS_MIN:
-                    errors.append(
-                        f"Shorts平均文字数不足（平均{avg_dialogue_chars:.1f}文字 / 必須{NATIVE_SHORTS_AVG_CHARS_MIN:.1f}文字以上）"
-                    )
-                short_line_count = sum(1 for it in dialogue_items if len(it.get("text", "")) <= 10)
-                very_short_line_count = sum(1 for it in dialogue_items if len(it.get("text", "")) <= 7)
-                if short_line_count > NATIVE_SHORTS_SHORT_LINE_MAX:
-                    errors.append(
-                        f"Shorts短文セリフ過多（10文字以下が{short_line_count}行 / 最大{NATIVE_SHORTS_SHORT_LINE_MAX}行）"
-                    )
-                if very_short_line_count:
-                    warnings.append(f"7文字以下の短文セリフがあります（{very_short_line_count}行）。原則11〜15文字に伸ばしてください")
-                if NATIVE_SHORTS_LINES_IDEAL_MIN <= dialogue_count <= NATIVE_SHORTS_LINES_IDEAL_MAX and not (
-                    NATIVE_SHORTS_LINES_TARGET_MIN <= dialogue_count <= NATIVE_SHORTS_LINES_TARGET_MAX
-                ):
-                    warnings.append(
-                        f"Shortsセリフ数は許容内ですが、安定目標は{NATIVE_SHORTS_LINES_TARGET_MIN}〜{NATIVE_SHORTS_LINES_TARGET_MAX}行です"
-                    )
-
-        return errors, warnings
+        return pre_generate_check(items, is_shorts)
 
     @staticmethod
     def _estimate_duration(items, is_shorts: bool):
-        """推定尺（秒）を返す。Shorts/Long とも native 速度で計算する。"""
-        dialogue_items = [it for it in items if it["type"] == "dialogue"]
-        if not dialogue_items:
-            return None, 0, 0
-        n = len(dialogue_items)
-        total_chars = sum(len(it.get("text", "")) for it in dialogue_items)
-        avg_chars = total_chars / n if n else 0
-
-        from config import (
-            NATIVE_SHORTS_INTRO_VOICE_SPEED, NATIVE_SHORTS_BODY_VOICE_SPEED,
-            NATIVE_SHORTS_ESTIMATE_BASE_CPS, VOICE_INTRO_FAST_LINES,
-            NATIVE_LONG_INTRO_VOICE_SPEED, NATIVE_LONG_BODY_VOICE_SPEED,
-        )
-
-        elapsed = 0.0
-        if is_shorts:
-            for i, item in enumerate(dialogue_items):
-                chars = len(item.get("text", ""))
-                speed = NATIVE_SHORTS_INTRO_VOICE_SPEED if i < VOICE_INTRO_FAST_LINES else NATIVE_SHORTS_BODY_VOICE_SPEED
-                elapsed += chars / (NATIVE_SHORTS_ESTIMATE_BASE_CPS * speed) + 0.1 * speed
-        else:
-            ADDITIONAL = 0.3 + 0.5 + 0.2
-            for item in dialogue_items:
-                chars = len(item.get("text", ""))
-                speed = NATIVE_LONG_INTRO_VOICE_SPEED if elapsed < 5.0 else NATIVE_LONG_BODY_VOICE_SPEED
-                elapsed += chars / (5.4 * speed) + 0.1 * speed + ADDITIONAL
-
-        return elapsed, n, avg_chars
+        return estimate_duration(items, is_shorts)
 
     @staticmethod
     def _duration_tag(status):
-        if status in ("ideal", "ok", "ok_but_short"):
-            return "success"
-        if status in ("ok_but_long", "warning"):
-            return "warning"
-        return "error"
+        return duration_tag(status)
 
     def start_bulk_llm_check(self):
         raw_scripts = self.ref_text.get("1.0", tk.END).strip()
@@ -3988,7 +3735,7 @@ class ShortsAutoFactory:
                     img_gen = None
                     thumb_gen = None
                     try:
-                        before_hash = _file_digest(spec["path"])
+                        before_hash = file_digest(spec["path"])
                         width, height = (1080, 1920) if spec.get("is_shorts") else (1920, 1080)
                         img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style, sd_size_mode=sd_size_mode)
                         target_dir = os.path.dirname(spec["path"])
@@ -4049,7 +3796,7 @@ class ShortsAutoFactory:
                                     pf.write(regen_prompt)
                             except Exception:
                                 pass
-                            after_hash = _file_digest(spec["path"])
+                            after_hash = file_digest(spec["path"])
                             try:
                                 updated_at = time.strftime("%H:%M:%S", time.localtime(os.path.getmtime(spec["path"])))
                                 size_kb = os.path.getsize(spec["path"]) // 1024
@@ -4093,7 +3840,7 @@ class ShortsAutoFactory:
         display_sizes = []
         for spec in specs:
             try:
-                img = _load_image_copy(spec["path"])
+                img = load_image_copy(spec["path"], Image)
                 try:
                     w, h = img.size
                 finally:
@@ -4161,7 +3908,7 @@ class ShortsAutoFactory:
             win.title("拡大表示")
             win.transient(dialog)
             try:
-                img = _load_image_copy(path)
+                img = load_image_copy(path, Image)
                 img.thumbnail((900, 900), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
                 img.close()
@@ -4225,7 +3972,7 @@ class ShortsAutoFactory:
             img_frame.pack()
 
             try:
-                img = _load_image_copy(spec["path"])
+                img = load_image_copy(spec["path"], Image)
                 img.thumbnail((cell_w, cell_h), Image.LANCZOS)
                 photo = ImageTk.PhotoImage(img)
                 img.close()
@@ -4244,7 +3991,7 @@ class ShortsAutoFactory:
             try:
                 file_info = (
                     f"{time.strftime('%H:%M:%S', time.localtime(os.path.getmtime(spec['path'])))} / "
-                    f"{os.path.getsize(spec['path']) // 1024}KB / {_file_digest(spec['path'])[:8]}"
+                    f"{os.path.getsize(spec['path']) // 1024}KB / {file_digest(spec['path'])[:8]}"
                 )
                 ttk.Label(cell, text=file_info, font=("Meiryo", 8), foreground="#636e72").pack()
             except Exception:
