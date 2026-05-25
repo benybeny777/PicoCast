@@ -71,10 +71,11 @@ NATIVE_BGM_VOLUME_DB = float(os.environ.get("NATIVE_BGM_VOLUME_DB", "-20"))  # n
 # ───────────────────────────────────────────────
 # キャラクター表示 — 腰から上モード（native/YMM4 共通）
 # ───────────────────────────────────────────────
-CHARACTER_UPPER_BODY_MODE         = os.environ.get("CHARACTER_UPPER_BODY_MODE", "1").strip().lower() in ("1", "true", "yes", "on")  # 有効で腰から上表示
-CHARACTER_UPPER_BODY_SCALE        = float(os.environ.get("CHARACTER_UPPER_BODY_SCALE",        "1.55"))  # キャラ拡大倍率
-CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET = int(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET", "250"))  # Shorts: 下方向シフト量 (px)
-CHARACTER_UPPER_BODY_LONG_Y_OFFSET   = int(os.environ.get("CHARACTER_UPPER_BODY_LONG_Y_OFFSET",   "400"))  # Long: 下方向シフト量 (px)
+CHARACTER_UPPER_BODY_MODE              = os.environ.get("CHARACTER_UPPER_BODY_MODE", "1").strip().lower() in ("1", "true", "yes", "on")  # 有効で腰から上表示
+CHARACTER_UPPER_BODY_SCALE             = float(os.environ.get("CHARACTER_UPPER_BODY_SCALE",             "1.55"))  # Long: キャラ拡大倍率
+CHARACTER_UPPER_BODY_SHORTS_SCALE      = float(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_SCALE",      "1.15"))  # Shorts: キャラ拡大倍率（縦画面は幅が狭いため Long より小さく）
+CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET   = int(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET",   "250"))    # Shorts: 下方向シフト量 (px)
+CHARACTER_UPPER_BODY_LONG_Y_OFFSET     = int(os.environ.get("CHARACTER_UPPER_BODY_LONG_Y_OFFSET",     "400"))    # Long: 下方向シフト量 (px)
 
 # キャラクター表示 — native Shorts 非腰上モード時の倍率（CHARACTER_UPPER_BODY_MODE=0 のときのみ使用）
 NATIVE_SHORTS_CHARACTER_SCALE = float(os.environ.get("NATIVE_SHORTS_CHARACTER_SCALE", "1.05"))
@@ -93,7 +94,7 @@ if CHARACTER_UPPER_BODY_MODE:
             m: (
                 x,
                 y + (CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET if m == "shorts" else CHARACTER_UPPER_BODY_LONG_Y_OFFSET),
-                round(z * CHARACTER_UPPER_BODY_SCALE, 2),
+                round(z * (CHARACTER_UPPER_BODY_SHORTS_SCALE if m == "shorts" else CHARACTER_UPPER_BODY_SCALE), 2),
             )
             for m, (x, y, z) in modes.items()
         }

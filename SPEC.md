@@ -407,7 +407,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_BGM_VOLUME_DB` | -20 | native出力のBGM音量(dB)。YMM4の `BGM_VOLUME` とは独立 |
 | `NATIVE_SHORTS_CHARACTER_SCALE` | 1.05 | native Shortsのキャラ表示倍率。`CHARACTER_UPPER_BODY_MODE=1` のとき無効 |
 | `CHARACTER_UPPER_BODY_MODE` | 1 | `1` でnative腰から上表示モードを有効化 |
-| `CHARACTER_UPPER_BODY_SCALE` | 1.55 | 腰から上モード時のキャラ拡大倍率 |
+| `CHARACTER_UPPER_BODY_SCALE` | 1.55 | 腰から上モード時のキャラ拡大倍率（Long用） |
+| `CHARACTER_UPPER_BODY_SHORTS_SCALE` | 1.15 | 腰から上モード時のキャラ拡大倍率（Shorts用。縦画面は幅が狭いため Long より小さく） |
 | `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
 | `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 400 | 腰から上モード: Long の下方向シフト量(px) |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
@@ -436,7 +437,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - 出力後に ffmpeg `ebur128=peak=true` で最終MP4の音量解析を行い、Integrated loudness / LRA / True peak の要約をログに出す。
 - MP4生成後、ffprobe で実尺を取得し `📏 native実尺評価: Xs [理想/やや短い/OKだけど長め/警告/要確認]` をログ表示する。評価基準はShortsと同じ（38〜50s=理想 / 35〜37s=やや短い / 51〜55s=OKだけど長め / 32〜34s or 56〜58s=警告）。
 - `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
-- **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになり、`CHARACTER_UPPER_BODY_SCALE=1.55` 倍に拡大して `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` / `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。
+- **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。YMM4 の `YMM4_TACHIE_PARAMS` も同じスケール定数から自動計算される。
 - 字幕フチ幅は `NATIVE_SUBTITLE_STROKE_WIDTH`(内フチ, デフォルト 9) / `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(外フチ, デフォルト 13) で調整可能。字幕帯のパディングは `NATIVE_SUBTITLE_PADDING_Y` で調整。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭1フレームにサムネイル画像を挿入する（Long は挿入しない）。

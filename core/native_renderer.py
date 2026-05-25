@@ -18,6 +18,7 @@ from config import (
     CHARACTER_UPPER_BODY_LONG_Y_OFFSET,
     CHARACTER_UPPER_BODY_MODE,
     CHARACTER_UPPER_BODY_SCALE,
+    CHARACTER_UPPER_BODY_SHORTS_SCALE,
     CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET,
     CHARACTER_EXPRESSION_PNGS,
     NATIVE_BGM_VOLUME_DB,
@@ -548,7 +549,7 @@ def _segment_filter(
     current = "base0"
     overlay_num = 1
     if CHARACTER_UPPER_BODY_MODE:
-        char_scale = CHARACTER_UPPER_BODY_SCALE
+        char_scale = CHARACTER_UPPER_BODY_SHORTS_SCALE if portrait else CHARACTER_UPPER_BODY_SCALE
     elif portrait:
         char_scale = NATIVE_SHORTS_CHARACTER_SCALE
     else:
@@ -877,7 +878,7 @@ def render_native_test(
         if is_shorts:
             progress_callback(f"📏 native実尺評価: {actual_duration:.1f}秒 {dur_label}")
         if NATIVE_RENDER_CHARACTERS and is_shorts:
-            char_scale = CHARACTER_UPPER_BODY_SCALE if CHARACTER_UPPER_BODY_MODE else NATIVE_SHORTS_CHARACTER_SCALE
+            char_scale = CHARACTER_UPPER_BODY_SHORTS_SCALE if CHARACTER_UPPER_BODY_MODE else NATIVE_SHORTS_CHARACTER_SCALE
             progress_callback(f"🧍 nativeキャラ倍率: {char_scale:g}")
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
             progress_callback(

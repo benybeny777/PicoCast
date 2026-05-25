@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-05-25 (9)
+
+### Shorts キャラ倍率を Long と分離（重なりバグ修正）
+
+- `config.py`: `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` を追加。Shorts の縦画面（幅1080px）では Long 用の 1.55 倍だとキャラ同士が中央で大きく重なるため、Shorts 専用の小さい倍率を分離
+- `core/native_renderer.py`: `CHARACTER_UPPER_BODY_MODE` 時の `char_scale` を portrait/landscape で切り替えるよう修正（portrait → `CHARACTER_UPPER_BODY_SHORTS_SCALE`、landscape → `CHARACTER_UPPER_BODY_SCALE`）
+- `config.py`: `YMM4_TACHIE_PARAMS` の zoom 計算も Shorts / Long で別スケールを使うよう修正
+
 ## 2026-05-25 (8)
 
 ### native立ち絵の表情指定を追加
