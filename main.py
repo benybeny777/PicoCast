@@ -42,7 +42,6 @@ from config import (
     MAX_BACKGROUNDS_LONG,
     MAX_BACKGROUNDS_LONG_BUDGET,
     MAX_BACKGROUNDS_SHORTS,
-    NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
     NATIVE_LONG_BODY_VOICE_SPEED,
     NATIVE_LONG_INTRO_VOICE_SPEED,
     NATIVE_SHORTS_AVG_CHARS_MIN,
@@ -66,6 +65,7 @@ from config import (
     LONG_THUMBNAIL_AB_TEST,
     THUMBNAIL_CHARACTER_PNGS,
     THUMBNAIL_HOLD_FRAMES_SHORTS,
+    TRANSITION_SEC,
     VIDEO_FPS,
     VOICE_INTRO_FAST_LINES,
     VOICE_INTRO_FAST_SECONDS,
@@ -74,6 +74,7 @@ from config import (
     VOICE_SPEED_SCALE_LONG,
     VOICE_SPEED_SCALE_SHORTS,
     VOICEVOX_PATH,
+    VOICE_TAIL_SAFETY_SEC,
 )
 from core.cta_policy import (
     build_cta_policy,
@@ -130,9 +131,8 @@ def _cleanup_old_theme_backups(backup_base: str, safe_topic: str, keep: str | No
     return removed
 
 
-TRANSITION_SEC = 0.3  # 背景クロスフェード時間（秒）
-VOICE_TAIL_SAFETY_SEC = 0.5
 INTER_DIALOGUE_GAP_SEC = 0.2
+TACHIE_START_FRAME = 3
 
 LONG_THUMBNAIL_VARIANTS = [
     {
@@ -1570,7 +1570,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
         # 台詞間の空白をノーマルで埋め、連続する同感情ブロックをマージする
         # 全セグメントは最低でもフレーム3（TACHIE_START_FRAME）から開始
-        TACHIE_START_FRAME = 3
         segs = sorted(char_dialogues[char_name], key=lambda x: x[1])
         full_segs = []
         prev_end = TACHIE_START_FRAME
@@ -1610,21 +1609,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if is_cancelled():
         return cancel_result()
     total_sec = current_frame / editor.fps
-    if not native_render:
-        duration_result = duration_review(total_sec, is_shorts)
-        duration_review_path = save_duration_review(theme_dir, duration_result)
-        _dur_label = f"{total_sec:.1f}秒"
-        if not is_shorts:
-            _m, _s = divmod(int(total_sec), 60)
-            _dur_label = f"{_m}分{_s}秒 ({total_sec:.1f}秒)"
-        duration_status_text = duration_status_label(duration_result.get("status"))
-        update_status(
-            f"━━━━━━━━ 尺チェック {_dur_label} / {duration_status_text} ━━━━━━━━\n"
-            f"  理想: {duration_result.get('ideal')} / 許容: {duration_result.get('acceptable')}\n"
-            f"  保存先: {duration_review_path}",
-            "duration",
-        )
-
 
     # render_info を _meta に保存
     try:
@@ -1635,7 +1619,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "enabled": native_render,
                 "voice_speed_intro": intro_voice_speed,
                 "voice_speed_body": body_voice_speed,
-                "min_silence_between_lines": 0.0 if native_render else NATIVE_DEFAULT_SILENCE_BETWEEN_LINES,
+                "min_silence_between_lines": 0.0,
                 "target_dialogue_lines": f"{NATIVE_SHORTS_LINES_IDEAL_MIN}-{NATIVE_SHORTS_LINES_IDEAL_MAX}" if is_shorts else "n/a",
                 "thumbnail_hold_frames": _thumb_frames,
                 "thumbnail_hold_seconds": round(_thumb_frames / VIDEO_FPS, 3),
@@ -1655,20 +1639,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     report.elapsed_sec = time.time() - pipeline_start
     msg = f"✅ 完成! 出力フォルダ: {theme_dir}"
     update_status(msg)
-
-    if is_shorts and not native_render:
-        if total_sec < 35:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ 短すぎ（35秒未満）", "warning")
-        elif total_sec < 38:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ やや短いがOK（35〜37秒）", "success")
-        elif total_sec <= 50:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ✅ 理想（38〜50秒）", "success")
-        elif total_sec <= 55:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠ OKだけど長め（51〜55秒）", "warning")
-        elif total_sec <= 58:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 ⚠⚠ カット推奨（〜58秒）", "warning")
-        else:
-            update_status(f"📏 動画尺: {total_sec:.1f}秒 🚨 要カット（58秒超え）", "error")
 
     update_status(report.summary())
     return finish_result(msg)

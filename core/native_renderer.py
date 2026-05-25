@@ -55,12 +55,12 @@ from config import (
     NATIVE_SUBTITLE_Y_OFFSET_SHORTS,
     VIDEO_FPS,
     THUMBNAIL_HOLD_FRAMES_SHORTS,
+    NATIVE_NATIVE_INTER_DIALOGUE_GAP_SEC,
 )
 from core.native_character_assets import CharacterVariantSet, load_character_variants
 from core.parser import ScriptParser
 
 
-INTER_DIALOGUE_GAP_SEC = 0.0
 CaptionChunk = tuple[str, str, str | None]
 
 
@@ -710,7 +710,7 @@ def _write_subtitles(
                 lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},SubtitleBox,,0,0,0,,{{\\pos({width // 2},{text_y})\\p1}}{box_path}{{\\p0}}")
             lines.append(f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},{style_name}Outer,,0,0,0,,{override}{escaped_text}")
             lines.append(f"Dialogue: 2,{_ass_time(start)},{_ass_time(end)},{style_name},,0,0,0,,{override}{escaped_text}")
-        t += max(0.0, dur) + INTER_DIALOGUE_GAP_SEC
+        t += max(0.0, dur) + NATIVE_INTER_DIALOGUE_GAP_SEC
     with open(path, "w", encoding="utf-8-sig", newline="\n") as f:
         f.write("\n".join(lines))
 
@@ -917,10 +917,10 @@ def render_native_test(
     })
 
     if progress_callback:
-        # silence計測（セグメント間のINTER_DIALOGUE_GAP_SEC合計）
-        silence_total = INTER_DIALOGUE_GAP_SEC * max(0, len(durations) - 1)
-        median_silence = INTER_DIALOGUE_GAP_SEC
-        max_silence = INTER_DIALOGUE_GAP_SEC  # 現状全セグメント同一値
+        # silence計測（セグメント間のNATIVE_INTER_DIALOGUE_GAP_SEC合計）
+        silence_total = NATIVE_INTER_DIALOGUE_GAP_SEC * max(0, len(durations) - 1)
+        median_silence = NATIVE_INTER_DIALOGUE_GAP_SEC
+        max_silence = NATIVE_INTER_DIALOGUE_GAP_SEC  # 現状全セグメント同一値
 
         cps = script_char_count / total_audio if total_audio > 0 else 0.0
         if cps < 6.0:
