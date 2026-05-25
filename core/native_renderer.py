@@ -735,7 +735,7 @@ def render_native_test(
     voice_speed_body: float | None = None,
     estimated_duration_sec: float | None = None,
 ) -> NativeRenderResult:
-    """Create a simple YMM-free MP4 from generated audio/background assets."""
+    """生成済み音声・背景アセットからネイティブMP4を生成する。"""
     output_dir = os.path.abspath(output_dir)
     script_path = os.path.join(output_dir, "script.txt")
     audio_dir = os.path.join(output_dir, "audio")

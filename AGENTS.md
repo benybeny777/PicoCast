@@ -57,7 +57,7 @@
 | `core/youtube_analytics.py` | YouTube Analytics API取得 |
 | `core/analytics_score.py` | Analytics評価・スコアリング・TSV保存 |
 | `core/output_paths.py` | 出力パスの集約・マイグレーション |
-| `core/ymmp_editor.py` | YMM4テンプレート読み込み・タイムライン内部処理（YMM4最終出力は廃止済みだが内部ヘルパーとして現役） |
+| `core/timeline_editor.py` | タイムライン・キャラクターレイヤー・表情プリセット管理（YMM4最終出力は廃止済みだが内部ヘルパーとして現役） |
 
 ## 出力フォルダ構造
 

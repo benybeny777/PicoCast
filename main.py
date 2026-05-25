@@ -12,7 +12,7 @@ import gc
 from collections import defaultdict
 from core.voicevox import VoicevoxAPI
 from core.parser import ScriptParser
-from core.ymmp_editor import YmmpEditor
+from core.timeline_editor import TimelineEditor
 from core.ai_generator import AIGenerator
 from core.ng_words import apply_ng_word_replacements
 from core.youtube_metadata import optimize_description, optimize_tags
@@ -527,7 +527,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     return _finish_thumbnail(thumb_path)
 
 
-def _read_ymmp_duration(path):
+def _read_template_duration(path):
     """Return the total frame count (max Frame+Length) of a ymmp file."""
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
@@ -1264,14 +1264,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             if vv.check_connection(): break
             time.sleep(2)
 
-    editor = YmmpEditor(width=width, height=height, fps=VIDEO_FPS, debug=debug_mode)
+    editor = TimelineEditor(width=width, height=height, fps=VIDEO_FPS, debug=debug_mode)
 
     TEMPLATES_DIR = os.path.join(ASSETS_DIR, "templates")
     op_template = os.path.join(TEMPLATES_DIR, "opening_shorts.ymmp" if is_shorts else "opening.ymmp")
     current_frame = 3  # frame 0-2 reserved for YMM4 init
     if os.path.exists(op_template):
         editor.merge_project(op_template, offset_frames=0)
-        current_frame = _read_ymmp_duration(op_template)
+        current_frame = _read_template_duration(op_template)
         update_status(f"📂 OPテンプレート読み込み完了 ({current_frame}フレーム)")
     intro_fast_until_frame = current_frame + round(VOICE_INTRO_FAST_SECONDS * editor.fps)
 

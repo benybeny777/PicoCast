@@ -35,7 +35,7 @@ ACTION_PRESETS = {
     "セクシー": [(0, 0, 0, 0), (0, -8, 2.0, -4), (0, -5, 1.5, 4), (0, 0, 0, 0)],
 }
 
-class YmmpEditor:
+class TimelineEditor:
     def __init__(self, width=1920, height=1080, fps=60, debug=False):
         self.debug = debug
         self.width = width
@@ -75,7 +75,7 @@ class YmmpEditor:
 
     @staticmethod
     def _anim_value(value):
-        """Wrap a scalar into a YMM4 animatable value object."""
+        """スカラー値をタイムラインアニメーション値オブジェクトにラップする。"""
         return {
             "Values": [{"Value": float(value)}],
             "Span": 0.0,
@@ -419,7 +419,7 @@ class YmmpEditor:
                 src = json.load(f)
         except Exception as e:
             if self.debug:
-                print(f"  [YMMP] merge_project failed to load {source_path}: {e}")
+                print(f"  [timeline] merge_project failed to load {source_path}: {e}")
             return
 
         # Merge characters (skip duplicates by name)
@@ -439,10 +439,10 @@ class YmmpEditor:
                 self.project["Timelines"][0]["Items"].append(item)
 
         if self.debug:
-            print(f"  [YMMP] Merged {source_path} (offset={offset_frames})")
+            print(f"  [timeline] Merged {source_path} (offset={offset_frames})")
 
     def save(self, file_path):
         with open(file_path, "w", encoding="utf-8-sig") as f:
             json.dump(self.project, f, ensure_ascii=False, indent=2)
         if self.debug:
-            print(f"  [YMMP] Saved project to {file_path}")
+            print(f"  [timeline] Saved project to {file_path}")
