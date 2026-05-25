@@ -502,7 +502,7 @@ def _character_base_path(character: CharacterVariantSet, speaking: str | None, e
 
 def _using_expression_png(character: CharacterVariantSet, speaking: str | None, expression: str | None) -> bool:
     """True when the speaking character is rendered with an expression PNG (not the regular base).
-    In that case lipsync/blink overlays must be skipped to avoid double-mouth/eye glitches."""
+    Blink overlay is suppressed to avoid double-eye glitches; lipsync mouth overlay remains active."""
     if character.name != speaking or not expression:
         return False
     path = character.expressions.get(str(expression).strip())
@@ -573,7 +573,7 @@ def _segment_filter(
         input_index += 1
 
         expr_png_active = _using_expression_png(character, speaking, expression)
-        if NATIVE_ENABLE_LIPSYNC and speaking == character.name and not expr_png_active:
+        if NATIVE_ENABLE_LIPSYNC and speaking == character.name:
             if character.mouth_half and os.path.exists(character.mouth_half):
                 chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_mouth_half]")
                 chains.append(
@@ -612,7 +612,7 @@ def _segment_character_inputs(duration: float, characters: list[CharacterVariant
     for character in characters:
         paths = [_character_base_path(character, speaking, expression)]
         expr_png_active = _using_expression_png(character, speaking, expression)
-        if NATIVE_ENABLE_LIPSYNC and speaking == character.name and not expr_png_active:
+        if NATIVE_ENABLE_LIPSYNC and speaking == character.name:
             paths.extend([character.mouth_half, character.mouth_open])
         if NATIVE_ENABLE_BLINK and _blink_enable_expr(duration, character.name, speaking) and not expr_png_active:
             paths.append(character.eye_closed)
