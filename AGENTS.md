@@ -4,6 +4,7 @@
 
 ## 最重要運用ルール
 
+- `AGENTS.md` はすべて日本語で記述する。英語セクション・英語コメントは追加しない。既存の英語記述を見つけたら日本語に置き換える。
 - ルール正本は `AGENTS.md` 1本。`CLAUDE.md` はリダイレクトのみなので編集しない。恒久ルールはすべてこのファイルに追記する。
 - 仕様、画面、プロンプト、設定、YouTube連携、Analytics判定、生成フローを変更した場合は、必ずドキュメントも同時に最新化する。
 - 基本は `SPEC.md` を最新仕様の正とし、大きめの変更は `CHANGELOG.md` にも履歴を残す。
@@ -121,47 +122,47 @@ output/{テーマ名}/
 - `dev/` は `.gitignore` で除外済みのため、コミットされない。
 - `assets/` 直下やサブフォルダにテスト画像を置かない。テスト用途のものは必ず `dev/` に移動してから使う。
 
-## 2026-05-18 Note
+## 2026-05-18 変更メモ
 
-- Shorts duration status is now more granular:
-  - `ideal`: 38-50s
-  - `ok_but_short`: 35-37s
-  - `ok_but_long`: 51-55s
-  - `warning`: 32-34s or 56-58s
-  - `needs_review`: outside those ranges
-- GUI pre-run estimate and final duration log both show "OKだけど長め" for 51-55s, so 54-55s no longer looks like plain OK.
-- LLM wait visibility:
-  - `main.py` now logs when Ollama opening review starts/finishes.
-  - `main.py` now logs when Ollama opening rewrite starts.
-  - `main.py` now logs when ChatGPT final review starts.
-- Bulk preflight check:
-  - `gui.py` adds `LLM/尺チェック` button.
-  - It checks all scripts currently pasted in the text area without generating assets.
-  - For each script it runs Ollama opening review and estimated duration review, then logs a summary.
-  - After completion, it copies an AI correction request report to the clipboard.
-- Score log visibility:
-  - `gui.py` score tags now use colored backgrounds: green for strong, yellow for warning, red for low.
-  - Score lines now use `■■■ ... ■■■` markers instead of only line separators.
-  - Opening score threshold is 80. Ollama rewrite candidates are re-scored locally and are only applied when the post-rewrite score is 80 or higher.
-  - Opening scores below 70, or scores with critical errors, are treated as `llm_review_required`.
-  - If the pipeline stops because the opening has critical errors or is below 70, the GUI reports it as `要修正` instead of `成功`.
-  - If the primary Ollama rewrite model fails to produce a 70+ candidate with no critical errors, the pipeline tries one fallback rewrite model (`gemma4:e4b` by default) once.
-- Script prompt:
-  - `core/script_generation_prompt.txt` now includes an "LLM冒頭チェック通過ルール" section.
-  - It requires Shorts first dialogue to include the food name, clear surprise, and a complete conclusion, with thumbnail/telop/opening meaning aligned.
-- Image review:
-  - Thumbnail cards in the image review dialog now have a prompt edit button.
-  - Saving an edited thumbnail prompt marks that thumbnail for regeneration and writes the prompt file for later reuse.
-- ChatGPT review flow:
-  - ChatGPT review now runs before image/voice/native MP4 generation.
-  - It uses estimated duration, opening review, title/thumbnail, and script content. Must-fix items, score below 70, review failure, or review skip stops before asset generation.
-  - Actual VOICEVOX duration is still measured after voice generation and logged for human judgment.
-- LLM check relaxation:
-  - Opening 80+ is a clean pass, 70-79 can pass as warning if there are no critical errors, and below 70 stops.
-  - Critical opening errors are first-line food missing, incomplete first line, no first-line surprise, 4 same-speaker lines in a row, or 21+ Shorts dialogue lines.
-  - Pre-generation ChatGPT review stops on `must_fix` or score below 70. `publish_ok=false` without `must_fix` is logged as a warning instead of stopping.
-  - Estimated Shorts duration under 35s or over 55s still stops before asset generation.
-- Analytics:
-  - `core/youtube_analytics.py` fetches video-level YouTube Analytics for 7/28/90 day windows.
-  - `core/analytics_score.py` scores videos with rule-based S/A/B/C/D ratings and action labels.
-  - GUI has a separate `📊 アナリティクス` window with colored score rows, TSV copy, AI-analysis copy, and `output/analytics_score_YYYYMMDD.{json,tsv}` export.
+- Shorts 尺ステータスをより細かく分類:
+  - `ideal`: 38〜50秒
+  - `ok_but_short`: 35〜37秒
+  - `ok_but_long`: 51〜55秒
+  - `warning`: 32〜34秒 または 56〜58秒
+  - `needs_review`: それ以外
+- GUI の事前推定尺と最終尺ログの両方で 51〜55秒を「OKだけど長め」と表示（54〜55秒が普通のOKに見えないようにした）
+- LLM処理中の表示改善:
+  - `main.py` に Ollama 冒頭レビュー開始・終了ログを追加
+  - `main.py` に Ollama 冒頭書き直し開始ログを追加
+  - `main.py` に ChatGPT 最終レビュー開始ログを追加
+- 一括事前チェック（LLM/尺チェックボタン）:
+  - `gui.py` に `LLM/尺チェック` ボタンを追加
+  - 台本欄に貼り付けた全台本をアセット生成なしでチェック
+  - 各台本について Ollama 冒頭レビューと推定尺レビューを実行してサマリーをログ表示
+  - 完了後、AI修正依頼レポートをクリップボードにコピー
+- スコアログの視認性改善:
+  - `gui.py` のスコアタグに色付き背景を追加（強い→緑、警告→黄、低→赤）
+  - スコア行に `■■■ ... ■■■` マーカーを追加
+  - 冒頭スコア閾値は80。Ollama書き直し候補はローカル再採点し、書き直し後スコアが80以上の場合のみ採用
+  - 冒頭スコア70未満またはクリティカルエラーがある場合は `llm_review_required` として扱う
+  - 冒頭のクリティカルエラーまたは70未満でパイプラインが停止した場合、GUIは `成功` ではなく `要修正` と表示
+  - 主Ollamaモデルがクリティカルエラーなしの70以上候補を出せなかった場合、フォールバックモデル（デフォルト `gemma4:e4b`）を1回だけ試みる
+- 台本プロンプト:
+  - `core/script_generation_prompt.txt` に「LLM冒頭チェック通過ルール」セクションを追加
+  - Shorts1行目に食べ物名・明確な驚き・完結した結論を入れ、サムネ・テロップ・冒頭の意味を一致させることを要求
+- 画像レビュー:
+  - 画像レビューダイアログのサムネカードにプロンプト編集ボタンを追加
+  - 編集したサムネプロンプトを保存すると、そのサムネが再生成対象にマークされ、プロンプトファイルが保存される
+- ChatGPT最終レビューフロー:
+  - ChatGPT最終レビューを画像・音声・native MP4生成の前に実行するよう変更
+  - 推定尺・冒頭レビュー・タイトル/サムネ・台本内容を使用。must_fix、スコア70未満、レビュー失敗、レビュースキップはアセット生成前に停止
+  - VOICEVOX実尺計測は音声生成後に引き続き行い、人間判断用にログ記録
+- LLMチェック緩和:
+  - 冒頭80以上は通過、70〜79はクリティカルエラーなしなら警告として通過、70未満は停止
+  - クリティカルエラー: 1行目の食べ物名欠如、1行目の不完全、1行目に驚きなし、同話者4行連続、Shorts21行以上
+  - 事前ChatGPTレビューは `must_fix` またはスコア70未満で停止。`must_fix` なしの `publish_ok=false` は警告としてログに残す
+  - 推定Shorts尺35秒未満または55秒超はアセット生成前に停止
+- アナリティクス:
+  - `core/youtube_analytics.py` で動画別YouTube Analyticsを7/28/90日ウィンドウで取得
+  - `core/analytics_score.py` でルールベースのS/A/B/C/D評価とactionラベルを付与
+  - GUIに独立した `📊 アナリティクス` ウィンドウを追加（色付きスコア行、TSVコピー、AI分析コピー、`output/analytics_score_YYYYMMDD.{json,tsv}` 保存）
