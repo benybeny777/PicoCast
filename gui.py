@@ -1,9 +1,10 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, filedialog
+from tkinter import ttk, scrolledtext, messagebox
 import threading
 import re
 import os
 import sys
+import subprocess
 import traceback
 import time
 import shutil
@@ -4035,7 +4036,15 @@ class ShortsAutoFactory:
     def open_output_dir(self):
         out_dir = os.path.abspath("output")
         os.makedirs(out_dir, exist_ok=True)
-        os.startfile(out_dir)
+        try:
+            if sys.platform == "win32":
+                os.startfile(out_dir)
+            elif sys.platform == "darwin":
+                subprocess.run(["open", out_dir], check=False)
+            else:
+                subprocess.run(["xdg-open", out_dir], check=False)
+        except Exception as e:
+            messagebox.showerror("フォルダを開けません", f"{out_dir}\n\n{e}")
 
 if __name__ == "__main__":
     print_startup_check()

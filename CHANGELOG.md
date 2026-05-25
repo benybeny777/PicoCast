@@ -18,7 +18,7 @@
 
 - `core/gui_support.py`: GUIから、台本分割、アプリバージョン取得、VOICEVOX/ffmpeg疎通表示用チェック、ファイルハッシュ、Pillow画像読み込み補助を分離
 - `core/generation_checks.py`: GUIから、生成前チェック、native推定尺計算、尺ステータス表示タグ判定を分離
-- `gui.py`: 上記ヘルパーを使う薄い呼び出しに整理し、import時副作用なしの状態を維持
+- `gui.py`: 上記ヘルパーを使う薄い呼び出しに整理し、import時副作用なしの状態を維持。出力フォルダを開く処理を Windows/Mac/Linux 対応に変更
 - `tests/test_gui_support.py`: 台本分割、生成前チェック、尺推定、尺タグ判定の軽いテストを追加
 
 ### コード整理・デッドコード削除・定数集約
