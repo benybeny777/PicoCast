@@ -253,7 +253,7 @@ class ScriptParser:
 
     @staticmethod
     def validate(items):
-        """Validates the parsed items and returns (is_valid, messages)."""
+        """パース済みアイテムを検証し (is_valid, messages) を返す。"""
         errors = []
         warnings = []
 

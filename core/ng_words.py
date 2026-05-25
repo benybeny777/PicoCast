@@ -1,4 +1,4 @@
-"""YouTube向けNGワードの言い換えルール."""
+"""YouTube向けNGワード言い換えルール定義。"""
 
 NG_WORD_REPLACEMENTS = [
     # 薬物・禁止物
@@ -47,7 +47,7 @@ NG_WORD_REPLACEMENTS = [
 
 
 def apply_ng_word_replacements(text):
-    """Known direct NG words are replaced locally before/after AI correction."""
+    """既知のNGワードをAI修正前後にローカルで置換する。"""
     if not text:
         return text
 

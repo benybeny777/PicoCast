@@ -110,7 +110,7 @@ def _opening_limit(is_shorts: bool) -> int:
 
 
 def opening_score_tag(score: int, critical_errors: list | None = None) -> str:
-    """Return log tag for a given opening score and critical error list."""
+    """冒頭スコアとクリティカルエラーリストからログタグを返す。"""
     has_errors = bool(critical_errors)
     if score >= OPENING_SCORE_ABORT_THRESHOLD and not has_errors:
         return "score_ok"

@@ -87,7 +87,7 @@ class OutputDirectoryLockedError(Exception):
 
 
 def _find_locking_process(path):
-    """Return 'Name (PID)' of the process locking the file, or None."""
+    """ファイルをロックしているプロセスの 'Name (PID)' を返す。ロックなしは None。"""
     try:
         import psutil
         target = os.path.abspath(path).lower()
@@ -241,7 +241,7 @@ def _write_long_title_manifest(theme_dir, topic, title_variants, default_variant
 
 
 def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
-    """Store uploaded YouTube video id in the long-thumbnail A/B manifest."""
+    """アップロード済みYouTube動画IDをLongサムネA/Bマニフェストに記録する。"""
     if not output_dir or not video_id:
         return None
     manifest_path = os.path.join(output_dir, "_meta", "thumbnail_ab_test.json")
@@ -371,8 +371,7 @@ class GenerationReport:
 
 
 def _estimate_script_duration(items, is_shorts: bool):
-    """Estimate narration duration before VOICEVOX generation.
-
+    """VOICEVOX生成前に台本の尺を推定する。
     Shorts: native速度（1.40x/1.25x、chars_per_sec=3.0）で計算。
     Long: native速度（1.40x/1.20x）で計算。
     """
@@ -402,7 +401,7 @@ def _estimate_script_duration(items, is_shorts: bool):
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
                        script_content=None, debug_mode=False, long_thumbnail_ab_test=None):
-    """Generate thumbnail image via Nano Banana using script content."""
+    """台本内容をもとにNano Bananaでサムネイル画像を生成する。"""
     def _log(msg):
         if update_status: update_status(msg)
         else: print(msg, flush=True)
@@ -528,7 +527,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
 
 
 def _read_template_duration(path):
-    """Return the total frame count (max Frame+Length) of a ymmp file."""
+    """ymmpファイルの総フレーム数（max Frame+Length）を返す。"""
     try:
         with open(path, "r", encoding="utf-8-sig") as f:
             p = json.load(f)
@@ -558,7 +557,7 @@ def _add_fixed_bgm(editor, total_frames, update_status=print):
 
 
 def merge_telops_into_backgrounds(items):
-    """Fold テロップ items into the preceding 背景 prompt so Nano Banana renders the text."""
+    """テロップアイテムを直前の背景プロンプトに折り込み、Nano Bananaにテキストを描画させる。"""
     result = []
     last_bg_idx = None
     for item in items:
@@ -588,7 +587,7 @@ def merge_telops_into_backgrounds(items):
 
 
 def normalize_background_order(items):
-    """Accept scripts that put a background line immediately after its dialogue."""
+    """セリフ直後に背景行が来る台本形式を正規化する。"""
     normalized = []
     i = 0
     while i < len(items):

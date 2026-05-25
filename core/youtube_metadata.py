@@ -251,7 +251,7 @@ def optimize_upload_metadata(
     is_shorts: bool | None = None,
     script_text: str = "",
 ) -> tuple[str, str, str]:
-    """Return title unchanged while improving description and YouTube tags."""
+    """タイトルはそのままに説明文とYouTubeタグを改善して返す。"""
     clean_title = str(title or "").strip()
     optimized_description = optimize_description(description, is_shorts=is_shorts, keep_hashtags=True)
     optimized_tags = optimize_tags(

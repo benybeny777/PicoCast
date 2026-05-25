@@ -6,7 +6,7 @@ from config import GOOGLE_API_KEY, GEMINI_MODEL
 from core.ng_words import apply_ng_word_replacements
 from core.script_prompts import build_gemini_system_prompt
 
-# NOTE: generate_script() はデッドコード。GUIからは常に pregenerated_script が渡されるため呼ばれない。
+# generate_script() はGUIからは呼ばれない（常に pregenerated_script が渡される）がCLIパスで使用。
 # __init__ / client は gui.py の接続確認チェックでのみ使用。
 class AIGenerator:
     def __init__(self, debug=False):
@@ -130,7 +130,7 @@ class AIGenerator:
         return ""
 
     def generate_title_variants(self, script_text: str, base_title: str, thumbnail_text: str = "") -> list[dict]:
-        """Generate three long-video title candidates aligned to thumbnail variants A/B/C."""
+        """サムネA/B/Cに対応したLong動画タイトル候補を3件生成する。"""
         if not self.client:
             return []
         prompt = f"""以下のYouTubeロング動画について、サムネイルA/B/Cに対応するタイトル案を3つ作ってください。

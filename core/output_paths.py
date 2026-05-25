@@ -40,7 +40,7 @@ def ensure_output_dirs() -> None:
 
 
 def migrate_root_file(filename: str, destination_dir: str, *, overwrite: bool = False) -> str:
-    """Move an old output-root file into its organized directory if needed."""
+    """旧出力ルートのファイルを整理済みディレクトリへ移動する（必要な場合のみ）。"""
     ensure_output_dirs()
     old_path = os.path.join(OUTPUT_DIR, filename)
     new_path = os.path.join(destination_dir, filename)

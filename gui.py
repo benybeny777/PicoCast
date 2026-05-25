@@ -72,7 +72,7 @@ except Exception:
 
 
 def split_input_scripts(raw_scripts):
-    """Split pasted scripts by supported batch separators."""
+    """貼り付けられた台本をバッチ区切り文字で分割する。"""
     raw_scripts = raw_scripts.strip()
     if not raw_scripts:
         return []
@@ -2660,7 +2660,7 @@ class ShortsAutoFactory:
                 return None
 
         def build_rows(statuses: dict | None = None):
-            """Build rows from YouTube video statuses (source of truth)."""
+            """YouTubeのステータスを正として表示行を構築する。"""
             from core.youtube_uploader import get_channel_upload_video_statuses
             current_now = datetime.now(JST)
             cutoff_dt = current_now - timedelta(days=90)

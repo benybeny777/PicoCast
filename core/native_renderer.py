@@ -186,7 +186,7 @@ def _native_loudnorm_filter() -> str:
 
 
 def _duration_status(sec: float) -> tuple[str, str]:
-    """Returns (status_key, display_label) for Shorts duration evaluation."""
+    """Shorts尺評価の (status_key, 表示ラベル) を返す。"""
     if 38 <= sec <= 50:
         return "ideal", "✅ 理想"
     if 35 <= sec < 38:
@@ -502,8 +502,8 @@ def _character_base_path(character: CharacterVariantSet, speaking: str | None, e
 
 
 def _using_expression_png(character: CharacterVariantSet, speaking: str | None, expression: str | None) -> bool:
-    """True when the speaking character is rendered with an expression PNG (not the regular base).
-    Both lipsync mouth and blink overlays are suppressed to avoid double-mouth/eye glitches."""
+    """話者キャラが表情PNG（通常ベースではなく expression 指定）で描画される場合 True。
+    表情PNG使用中は口パク・まばたきオーバーレイを両方無効化（二重口・二重目防止）。"""
     if character.name != speaking or not expression:
         return False
     path = character.expressions.get(str(expression).strip())

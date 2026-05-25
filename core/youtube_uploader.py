@@ -167,7 +167,7 @@ def infer_video_type(title: str | None = None, duration: str | None = None) -> s
 
 
 def _youtube_publish_at(publish_at) -> tuple[str, str]:
-    """Return (UTC RFC3339 for YouTube, JST display text)."""
+    """(YouTube向けUTC RFC3339, JST表示文字列) を返す。"""
     from datetime import datetime, timedelta, timezone
 
     JST = timezone(timedelta(hours=9))
@@ -186,7 +186,7 @@ def _youtube_publish_at(publish_at) -> tuple[str, str]:
 
 
 def get_channel_upload_video_statuses() -> dict[str, dict]:
-    """Return status/snippet data for videos in the authenticated channel uploads playlist."""
+    """認証済みチャンネルのアップロード再生リストの動画ステータス・スニペットを返す。"""
     youtube = None
     try:
         youtube = get_youtube_client()

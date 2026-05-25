@@ -10,9 +10,8 @@ ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 
 
 def load_upload_records() -> list[dict[str, Any]]:
-    """Scan per-video _meta/upload_record.json files in the output tree.
-    Central upload_records.json is abolished; YouTube is the schedule source of truth.
-    Each returned record has a '_local_path' key with the source file path.
+    """出力ツリー内の各動画 _meta/upload_record.json を走査して返す。
+    中央集約ファイルは廃止済み。各レコードに '_local_path' キーを付与する。
     """
     output_dir = os.path.join(ROOT_DIR, "output")
     seen: dict[str, dict] = {}
@@ -32,12 +31,12 @@ def load_upload_records() -> list[dict[str, Any]]:
 
 
 def save_upload_records(records: list[dict[str, Any]]) -> str:
-    """No-op: central upload_records.json is abolished."""
+    """No-op: 中央集約ファイルは廃止済み。"""
     return UPLOAD_RECORDS_FILE
 
 
 def upsert_upload_record(record: dict[str, Any]) -> str:
-    """No-op: records are managed per-video in _meta/upload_record.json."""
+    """No-op: レコードは各動画の _meta/upload_record.json で管理。"""
     return UPLOAD_RECORDS_FILE
 
 
@@ -102,5 +101,5 @@ def find_upload_record(title: str | None = None, video_type: str | None = None, 
 
 
 def migrate_from_uploaded_dir() -> int:
-    """No-op: migration to central file is abolished."""
+    """No-op: 中央ファイルへの移行は廃止済み。"""
     return 0

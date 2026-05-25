@@ -83,17 +83,17 @@ def _assign_slots_from_used(
 
 
 def assign_slots(count: int, video_type: str) -> list[datetime]:
-    """Return empty slots for video_type ('shorts'|'long')."""
+    """video_type ('shorts'|'long') の空きスロットを返す。"""
     schedule = schedule_from_records().get(video_type, {})
     return _assign_slots_from_used(count, video_type, set(schedule.keys()))
 
 
 def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
-    """Return empty slots using YouTube scheduled videos as the source of truth.
+    """YouTube予約動画を正として空きスロットを返す。
 
-    Queries the channel's upload list and treats any private/unlisted video
-    with a future publishAt of matching video_type as an occupied slot.
-    Falls back to local records if the YouTube API call fails.
+    チャンネルのアップロードリストを取得し、該当 video_type の
+    private/unlisted かつ将来の publishAt を使用済みスロットとして扱う。
+    YouTube API 失敗時はローカルレコードにフォールバック。
     """
     from core.youtube_uploader import get_channel_upload_video_statuses
 
@@ -123,13 +123,13 @@ def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
 
 
 def mark_slot_used(slot_dt: datetime, title: str, video_type: str):
-    """Compatibility no-op."""
+    """後方互換用 No-op。"""
     return None
 
 
 def schedule_from_youtube() -> dict[str, dict]:
-    """Build schedule from YouTube API (source of truth).
-    Returns {"shorts": {iso: title, ...}, "long": {...}}.
+    """YouTube APIを正としてスケジュールを構築する。
+    {"shorts": {iso: title, ...}, "long": {...}} を返す。
     """
     from core.youtube_uploader import get_channel_upload_video_statuses
 
@@ -163,7 +163,7 @@ def schedule_from_youtube() -> dict[str, dict]:
 
 
 def _scheduled_entries_from_youtube(video_type: str) -> list[dict]:
-    """Get scheduled entries from YouTube for rebalancing."""
+    """リバランス用にYouTubeから予約済みエントリを取得する。"""
     from core.youtube_uploader import get_channel_upload_video_statuses
 
     now = datetime.now(JST)
@@ -200,7 +200,7 @@ def _scheduled_entries_from_youtube(video_type: str) -> list[dict]:
 
 
 def schedule_from_records(records: list[dict] | None = None) -> dict[str, dict]:
-    """Build the derived schedule cache from upload_records data."""
+    """アップロードレコードからスケジュールキャッシュを構築する。"""
     if records is None:
         from core.upload_records import load_upload_records
 
@@ -234,7 +234,7 @@ def build_rebalanced_schedule(
     now: datetime | None = None,
     used_slots: set[str] | None = None,
 ) -> tuple[dict, list[tuple[str, str, str]]]:
-    """Build a rebalanced schedule without saving it."""
+    """保存せずにリバランス後のスケジュールを構築する。"""
     now = _as_jst(now or datetime.now(JST))
     cutoff = now + timedelta(minutes=5)
 
@@ -315,7 +315,7 @@ def build_rebalanced_entries(
     used_slots: set[str] | None = None,
     include_record_index: bool = False,
 ) -> list[tuple]:
-    """Build rebalance changes from record entries, preserving duplicate slots."""
+    """レコードエントリからリバランス変更リストを構築する（重複スロット保持）。"""
     now = _as_jst(now or datetime.now(JST))
     cutoff = now + timedelta(minutes=5)
 
@@ -353,14 +353,14 @@ def build_rebalanced_entries(
 
 
 def rebalance_slots(video_type: str) -> list[tuple[str, str, str]]:
-    """Compute changes needed to repack future slots using YouTube as source.
-    Does not write anything; caller applies each change to YouTube."""
+    """YouTubeを正として将来スロットを詰め直す変更リストを計算する。
+    書き込みは行わず、呼び出し元がYouTubeへ適用する。"""
     entries = _scheduled_entries_from_youtube(video_type)
     return build_rebalanced_entries(entries, video_type)
 
 
 def rebalance_slots_detailed(video_type: str) -> list[tuple[str, str, str, str, int | None]]:
-    """Like rebalance_slots(), with video_id. Uses YouTube as source."""
+    """rebalance_slots() の video_id 付き版。YouTubeを正として動作。"""
     entries = _scheduled_entries_from_youtube(video_type)
     return build_rebalanced_entries(
         entries,
@@ -375,7 +375,7 @@ def count_rebalance_candidates(video_type: str) -> int:
 
 
 def list_schedule() -> dict:
-    """Return {"shorts": {...}, "long": {...}} from YouTube."""
+    """YouTubeから {"shorts": {...}, "long": {...}} を返す。"""
     return schedule_from_youtube()
 
 
@@ -400,7 +400,7 @@ def _remove_schedule_entry(schedule: dict, iso: str | None, title: str):
 
 
 def sync_schedule_from_youtube(progress_callback=None) -> dict:
-    """Use YouTube status as source of truth and update local records/schedules."""
+    """YouTubeのステータスを正としてローカルレコード・スケジュールを更新する。"""
     from core.upload_records import load_upload_records, save_upload_records
     from core.youtube_uploader import get_channel_upload_video_statuses, get_video_statuses
 
@@ -508,5 +508,5 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
 
 
 def format_slot(slot_dt: datetime) -> str:
-    """Return display text like 'YYYY/MM/DD HH:MM (JST)'."""
+    """'YYYY/MM/DD HH:MM (JST)' 形式の表示文字列を返す。"""
     return _as_jst(slot_dt).strftime("%Y/%m/%d %H:%M") + " (JST)"

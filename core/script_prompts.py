@@ -229,7 +229,7 @@ def build_script_generation_prompt(existing_titles=None) -> str:
 
 
 def build_vidiq_prompt() -> str:
-    """Backward-compatible alias for older imports."""
+    """旧インポート向け後方互換エイリアス。"""
     return build_script_generation_prompt()
 
 

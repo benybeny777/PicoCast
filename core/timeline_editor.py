@@ -90,7 +90,7 @@ class TimelineEditor:
         }
 
     def add_character(self, name, char_id=None):
-        # Check if exists
+        # 同名キャラが既に登録済みならスキップ
         for char in self.project["Characters"]:
             if char["Name"] == name:
                 return
@@ -99,14 +99,14 @@ class TimelineEditor:
             char_id = str(uuid.uuid4())
 
         if name in self.templates:
-            char_data = dict(self.templates[name])  # shallow copy
-            # deep-copy only the field we mutate below
+            char_data = dict(self.templates[name])  # シャローコピー
+            # 変更する FontSize フィールドだけディープコピー
             if "FontSize" in char_data:
                 char_data["FontSize"] = copy.deepcopy(char_data["FontSize"])
             char_data["Id"] = char_id
             if "$type" not in char_data:
                 char_data["$type"] = "YukkuriMovieMaker.Project.CharacterParameter, YukkuriMovieMaker"
-            # Scale font size for portrait (Shorts) layout
+            # Shorts縦画面用にフォントサイズを設定
             font_size = 71.5
             if "FontSize" in char_data and "Values" in char_data["FontSize"]:
                 for v in char_data["FontSize"]["Values"]:
@@ -117,7 +117,7 @@ class TimelineEditor:
                     v["Value"] = float(self.width)
             self.project["Characters"].append(char_data)
         else:
-            # Fallback to minimal definition with simple numbers
+            # テンプレートなし: 最小限の定義で追加
             self.project["Characters"].append({
                 "$type": "YukkuriMovieMaker.Project.CharacterParameter, YukkuriMovieMaker",
                 "Id": char_id,
@@ -150,7 +150,7 @@ class TimelineEditor:
 
     def add_voice_item(self, character_name, text, hatsuon=None, file_path=None, start_frame=0, duration=100, layer=6, volume=200.0):
         resolved_name = self._resolve_name(character_name)
-        self._get_character_id(resolved_name)  # ensure registered
+        self._get_character_id(resolved_name)  # キャラ未登録なら登録
 
         item = {
             "$type": "YukkuriMovieMaker.Project.Items.VoiceItem, YukkuriMovieMaker",
@@ -308,9 +308,9 @@ class TimelineEditor:
 
     def add_tachie_item(self, character_name, start_frame, duration, layer=4, x=0, y=0, zoom=30, emotion="ノーマル"):
         resolved_name = self._resolve_name(character_name)
-        self._get_character_id(resolved_name)  # ensure registered
+        self._get_character_id(resolved_name)  # キャラ未登録なら登録
 
-        # Look up plugin parameters from template
+        # テンプレートからプラグインパラメータを取得
         tmpl = self.templates.get(resolved_name, {})
         tachie_item_param = self._apply_expression_layers(
             tmpl.get("TachieDefaultItemParameter"), resolved_name, emotion
@@ -402,11 +402,11 @@ class TimelineEditor:
             "FontSize": float(font_size),
             "Font": "源ノ角ゴシック JP Bold",
             "FontColor": "#FFFFFFFF",
-            "Style": 1, # Border
+            "Style": 1, # 縁取り
             "StyleColor": "#FF000000",
             "X": 0.0,
             "Y": float(y),
-            "BasePoint": 4, # Center
+            "BasePoint": 4, # 中央
             "Opacity": 100.0
         }
         self.project["Timelines"][0]["Items"].append(item)
@@ -422,14 +422,14 @@ class TimelineEditor:
                 print(f"  [timeline] merge_project failed to load {source_path}: {e}")
             return
 
-        # Merge characters (skip duplicates by name)
+        # キャラをマージ（名前重複はスキップ）
         existing_names = {c["Name"] for c in self.project["Characters"]}
         for char in src.get("Characters", []):
             if char.get("Name") not in existing_names:
                 self.project["Characters"].append(char)
                 existing_names.add(char.get("Name"))
 
-        # Merge items with frame offset
+        # アイテムをフレームオフセット付きでマージ
         for item in src.get("Timelines", [{}])[0].get("Items", []):
             if offset_frames and "Frame" in item:
                 merged = dict(item)
