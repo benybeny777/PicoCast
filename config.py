@@ -116,13 +116,6 @@ NATIVE_SHORTS_LINES_WARNING    = 29   # 29〜30行: warning
 NATIVE_SHORTS_LINES_MUST_FIX   = 31  # 31行以上: must_fix
 
 # ───────────────────────────────────────────────
-# レンダリングエンジン選択
-# ───────────────────────────────────────────────
-DEFAULT_SHORTS_RENDER_ENGINE = "native"  # deprecated: YMM4出力廃止後は常にnative
-GENERATE_YMM4_PROJECT        = False     # deprecated: .ymmp は生成しない
-RENDER_WITH_YMM4             = False     # deprecated: YMM4本番レンダリングは行わない
-
-# ───────────────────────────────────────────────
 # API キー・外部 LLM
 # ───────────────────────────────────────────────
 GOOGLE_API_KEY  = os.environ.get("GOOGLE_API_KEY", "")   # Google AI Studio キー（Gemini / 画像生成）

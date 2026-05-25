@@ -108,12 +108,10 @@ class ScriptParser:
                 if not line:
                     continue
 
-                # Clean up common AI decorations
+                # AI出力に含まれる装飾記号を除去
                 line = line.replace("**", "").replace("__", "")
 
-                # Metadata header style:
-                # 【動画タイトル】
-                # タイトル
+                # 【メタ項目名】値 形式の行を解析
                 m = bracket_meta_re.match(line)
                 if m:
                     label = m.group(1).strip().lower()
@@ -125,7 +123,7 @@ class ScriptParser:
                         last_meta = item
                         continue
 
-                # Continuation of metadata (description=multi-line, others=next-line-only)
+                # メタ値の続き（description=複数行、それ以外=次の1行のみ）
                 if last_meta:
                     is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
@@ -140,21 +138,21 @@ class ScriptParser:
                             last_meta["text"] = val.strip("()（）") if last_meta["type"] == "background" else val
                             last_meta = None
                             continue
-                    last_meta = None  # fall through to keyword processing
+                    last_meta = None  # キーワード処理へ
 
-                # Check ignore patterns
+                # 無視パターンに一致する行をスキップ
                 if any(p.match(line) for p in ignore_patterns):
                     last_dialogue = None
                     last_meta = None
                     continue
 
-                # Chapter markers (Long only metadata — ignore)
+                # チャプターマーカー（Longのみ・メタ扱い・無視）
                 if ScriptParser._chapter_re.match(line):
                     last_dialogue = None
                     last_meta = None
                     continue
 
-                # Background
+                # 背景
                 m = bg_re.match(line)
                 if m:
                     bg_text = m.group(1).strip().strip("()（）")
@@ -164,7 +162,7 @@ class ScriptParser:
                     last_meta = item if not bg_text else None
                     continue
 
-                # Metadata: thumbnail / video_title / description / tags
+                # メタデータ: thumbnail / video_title / description / tags
                 matched_meta = False
                 for meta_re, meta_type in [
                     (format_re, "video_format"),
@@ -193,7 +191,7 @@ class ScriptParser:
                 if matched_meta:
                     continue
 
-                # Telop
+                # テロップ
                 m = telop_re.match(line)
                 if m:
                     lines.append({"type": "telop", "text": m.group(1).strip()})
@@ -201,7 +199,7 @@ class ScriptParser:
                     last_meta = None
                     continue
 
-                # Dialogue
+                # セリフ行
                 m = dialogue_re.match(line)
                 if m:
                     char_name = m.group(1).strip()
@@ -209,8 +207,8 @@ class ScriptParser:
                     expression = m.group(3).strip() if m.group(3) else None
                     text = m.group(4).strip()
 
-                    # Normalize character name
-                    found_char_name = "ずんだもん" # default
+                    # キャラ名を正規化
+                    found_char_name = "ずんだもん"  # デフォルト
                     for key in CHARACTERS:
                         if key in char_name:
                             found_char_name = CHARACTERS[key]["name"]
@@ -233,7 +231,7 @@ class ScriptParser:
                     last_meta = None
                     continue
 
-                # Continuation of previous dialogue
+                # 直前のセリフの続き行
                 if last_dialogue and not any(p.match(line) for p in ignore_patterns):
                     if line.startswith(('*', '-', '・')):
                         last_dialogue = None
