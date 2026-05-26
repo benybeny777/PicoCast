@@ -1118,10 +1118,14 @@ def render_native_test(
         del filter_complex, inputs, encode_candidates, last_error
 
     _write_concat_list(segment_list, segment_paths)
+    if progress_callback:
+        progress_callback(f"🔗 セグメントを結合中... ({len(segment_paths)}件)")
     _run_ffmpeg([FFMPEG_BIN, "-y", "-f", "concat", "-safe", "0", "-i", segment_list, "-c", "copy", video_path])
 
     loudnorm_filter = _native_loudnorm_filter()
     if BGM_PATH and os.path.exists(BGM_PATH):
+        if progress_callback:
+            progress_callback("🔊 BGMミックス・最終エンコード中...")
         audio_filter = (
             f"[0:a]volume=1.0[a0];[1:a]volume={NATIVE_BGM_VOLUME_DB:.1f}dB[a1];"
             "[a0][a1]amix=inputs=2:duration=first:dropout_transition=0"
@@ -1137,6 +1141,8 @@ def render_native_test(
         ])
     else:
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
+            if progress_callback:
+                progress_callback("🔊 音量正規化・最終エンコード中...")
             _run_ffmpeg([
                 FFMPEG_BIN, "-y", "-i", video_path,
                 "-map", "0:v", "-map", "0:a",
@@ -1145,6 +1151,8 @@ def render_native_test(
                 output_path,
             ])
         else:
+            if progress_callback:
+                progress_callback("📦 最終出力中...")
             _run_ffmpeg([FFMPEG_BIN, "-y", "-i", video_path, "-c", "copy", output_path])
 
     actual_duration = media_duration_sec(output_path) or total_audio

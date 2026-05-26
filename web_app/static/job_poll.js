@@ -47,7 +47,8 @@ async function updateJobLogs(activeJobIds, logBox, options = {}) {
     try {
       const res = await fetch(`/api/jobs/${jobId}`);
       const job = await res.json();
-      htmlContent += buildLogLine(`[${job.type}] ${job.status}: ${job.progress_text}`, job.status);
+      // ジョブ種別とステータスをヘッダーとして表示（progress_text は最後のログ行と重複するので含めない）
+      htmlContent += `<div class="log-job-header">[${escapeHtml(job.type)}] ${escapeHtml(job.status)}</div>`;
 
       for (const entry of (job.logs || [])) {
         htmlContent += buildLogLine(entry.message, entry.tag);

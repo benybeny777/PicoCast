@@ -279,6 +279,7 @@ select {
 }
 
 .log-line { margin-bottom: 2px; padding: 1px 0; }
+.log-job-header { color: var(--text-dim); font-size: 10px; margin: 6px 0 2px; border-top: 1px solid var(--border); padding-top: 4px; }
 .log-info { color: var(--info); }
 .log-success { color: var(--ok); }
 .log-warning { color: var(--warn); }
