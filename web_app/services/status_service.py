@@ -22,6 +22,19 @@ def check_voicevox() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
+def check_ollama() -> dict[str, Any]:
+    try:
+        base = config.OLLAMA_BASE_URL.rstrip("/")
+        r = httpx.get(f"{base}/api/tags", timeout=3.0)
+        if r.status_code == 200:
+            models = r.json().get("models", [])
+            return {"ok": True, "model_count": len(models)}
+        else:
+            return {"ok": False, "error": f"Status code: {r.status_code}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def check_ffmpeg() -> dict[str, Any]:
     bin_path = shutil.which(config.FFMPEG_BIN) or config.FFMPEG_BIN
     try:
@@ -30,7 +43,41 @@ def check_ffmpeg() -> dict[str, Any]:
             capture_output=True, text=True, timeout=config.WEB_FFMPEG_CHECK_TIMEOUT_SEC
         )
         first_line = result.stdout.splitlines()[0] if result.stdout else ""
-        return {"ok": result.returncode == 0, "version": first_line}
+        ver_short = first_line.split(" Copyright")[0].strip() if " Copyright" in first_line else first_line
+        if ver_short.startswith("ffmpeg version "):
+            ver_short = ver_short[len("ffmpeg version "):]
+        ver_short = ver_short.split("-")[0].strip()
+
+        # 現在の設定エンコーダー
+        configured_encoder = str(getattr(config, "NATIVE_FFMPEG_ENCODER", "") or "libx264").strip()
+
+        # GPUエンコーダーのサポート状況チェック
+        gpu_supported = False
+        try:
+            encoders_result = subprocess.run(
+                [bin_path, "-encoders"],
+                capture_output=True, text=True, timeout=config.WEB_FFMPEG_CHECK_TIMEOUT_SEC
+            )
+            if encoders_result.returncode == 0:
+                encoders_stdout = encoders_result.stdout
+                if configured_encoder in encoders_stdout:
+                    gpu_supported = True
+        except Exception:
+            pass
+
+        # 動作環境の判定
+        if configured_encoder == "libx264":
+            running_mode = "CPU (libx264)"
+        elif gpu_supported:
+            running_mode = f"GPU ({configured_encoder})"
+        else:
+            running_mode = f"CPU (libx264) ※設定値 {configured_encoder} は未サポートのためフォールバック"
+
+        return {
+            "ok": result.returncode == 0,
+            "version": ver_short,
+            "gpu": running_mode
+        }
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -41,6 +88,7 @@ def get_settings_status() -> dict[str, Any]:
     return {
         "voicevox": check_voicevox(),
         "ffmpeg": check_ffmpeg(),
+        "ollama": check_ollama(),
         "google_api_key": bool(config.GOOGLE_API_KEY),
         "openai_api_key": bool(config.OPENAI_API_KEY),
         "client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),

@@ -19,10 +19,21 @@
         </td>
       </tr>
       <tr>
+        <td>Ollama</td>
+        <td>
+          {% if status.ollama.ok %}
+          <span class="badge badge-ok">接続OK ({{ status.ollama.model_count }}モデル)</span>
+          {% else %}
+          <span class="badge badge-ng">未接続: {{ status.ollama.get('error','') }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
         <td>ffmpeg</td>
         <td>
           {% if status.ffmpeg.ok %}
-          <span class="badge badge-ok">利用可</span>
+          <span class="badge badge-ok">利用可{% if status.ffmpeg.version %} v{{ status.ffmpeg.version }}{% endif %}</span>
+          <br><small style="color:var(--text-muted)">動作: {{ status.ffmpeg.gpu }}</small>
           {% else %}
           <span class="badge badge-ng">未インストール</span>
           {% endif %}
