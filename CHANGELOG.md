@@ -52,6 +52,7 @@
 - `web_app/templates/settings.html`: 設定変更の保存・リセットボタンを設定フォーム上にも配置し、下までスクロールせず操作できるようにした
 - `web_app/templates/history.html`: 履歴一覧に表示中の全選択・全解除ボタンを追加
 - `web_app/templates/upload.html`: アップロード済み動画のYouTubeリンクを通常サイズのボタンへ変更
+- `web_app/routes/pages.py` / `web_app/templates/base.html`: 静的CSS/JSに更新番号を付け、ブラウザキャッシュで古いレイアウトが残らないようにした
 - `web_app/templates/settings.html`: APIキー変更をアコーディオン最下部に移動
 - `web_app/templates/base.html`: 「画像」タブを削除（履歴詳細から遷移）
 - `web_app/services/prompt_service.py`: プロンプト生成ロジックをWeb UI用に実装

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}ダッシュボード{% endblock %} — {{ web_app_name }}</title>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/app.css?v={{ static_asset_version }}">
 </head>
 <body>
 <nav class="navbar">
@@ -36,7 +36,7 @@ window.WEB_SUCCESS_RELOAD_DELAY_MS = {{ web_success_reload_delay_ms }};
 window.WEB_TOAST_VISIBLE_MS = {{ web_toast_visible_ms }};
 window.WEB_TOAST_HIDE_DELAY_MS = {{ web_toast_hide_delay_ms }};
 </script>
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v={{ static_asset_version }}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

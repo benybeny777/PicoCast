@@ -33,6 +33,7 @@ from web_app.services import (
 from web_app.job_manager import get_job_manager
 
 _TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
 templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 router = APIRouter(tags=["pages"])
@@ -46,7 +47,19 @@ def _render(request: Request, name: str, ctx: dict):
     ctx["web_success_reload_delay_ms"] = WEB_SUCCESS_RELOAD_DELAY_MS
     ctx["web_toast_visible_ms"] = WEB_TOAST_VISIBLE_MS
     ctx["web_toast_hide_delay_ms"] = WEB_TOAST_HIDE_DELAY_MS
+    ctx["static_asset_version"] = _static_asset_version()
     return templates.TemplateResponse(request, name, ctx)
+
+
+def _static_asset_version() -> int:
+    try:
+        paths = [
+            os.path.join(_STATIC_DIR, "app.css"),
+            os.path.join(_STATIC_DIR, "app.js"),
+        ]
+        return int(max(os.path.getmtime(path) for path in paths if os.path.exists(path)))
+    except Exception:
+        return 0
 
 
 @router.get("/", response_class=HTMLResponse)
