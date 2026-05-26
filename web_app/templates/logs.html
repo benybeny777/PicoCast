@@ -65,41 +65,98 @@
 </div>
 {% endif %}
 
-<!-- 自動更新: 実行中ジョブがある場合 -->
+<!-- 自動更新: 実行中ジョブがある場合はAJAXで差分更新 -->
 <script>
-const _OPEN_KEY   = 'logsOpenDetails';
-const _SCROLL_KEY = 'logsScrollY';
+const _TERMINAL = new Set(['success', 'failed', 'cancelled']);
 
-// リロード後: 開いていた詳細パネルとスクロール位置を復元
-const _savedOpen = JSON.parse(sessionStorage.getItem(_OPEN_KEY) || '[]');
-if (_savedOpen.length) {
-  sessionStorage.removeItem(_OPEN_KEY);
-  document.querySelectorAll('.job-card').forEach(card => {
-    if (_savedOpen.includes(card.dataset.jobId)) {
-      const d = card.querySelector('details');
-      if (d) d.open = true;
-    }
-  });
+function _buildLogHtml(logs) {
+  return (logs || []).map(e => {
+    const t = (e.time || '').slice(11, 19);
+    return `<div class="log-line log-${escapeHtml(e.tag)}">${escapeHtml(t)} [${escapeHtml(e.tag)}] ${escapeHtml(e.message)}</div>`;
+  }).join('');
 }
-const _savedScroll = sessionStorage.getItem(_SCROLL_KEY);
-if (_savedScroll !== null) {
-  sessionStorage.removeItem(_SCROLL_KEY);
-  window.scrollTo(0, parseInt(_savedScroll, 10));
+
+function _updateCard(card, job) {
+  card.className = card.className.replace(/\bstatus-\S+/, `status-${job.status}`);
+  card.dataset.status = job.status;
+
+  const badge = card.querySelector('.badge');
+  if (badge) {
+    badge.textContent = job.status;
+    badge.className = 'badge ' + (
+      job.status === 'success'  ? 'badge-ok' :
+      job.status === 'failed'   ? 'badge-ng' :
+      job.status === 'running'  ? 'badge-running' : 'badge-warn'
+    );
+  }
+
+  const prog = card.querySelector('.job-progress');
+  if (prog) prog.textContent = job.progress_text || '';
+
+  let errEl = card.querySelector('.error-text');
+  if (job.error) {
+    if (!errEl) { errEl = document.createElement('div'); errEl.className = 'error-text'; prog && prog.after(errEl); }
+    errEl.textContent = 'エラー: ' + job.error;
+  } else if (errEl) {
+    errEl.remove();
+  }
+
+  const header = card.querySelector('.job-header');
+  let cancelBtn = header && header.querySelector('.btn-danger');
+  if (job.status === 'running') {
+    if (!cancelBtn && header) {
+      cancelBtn = document.createElement('button');
+      cancelBtn.className = 'btn btn-xs btn-danger';
+      cancelBtn.type = 'button';
+      cancelBtn.title = 'この実行中ジョブへ中止要求を送ります';
+      cancelBtn.textContent = '中止する';
+      cancelBtn.onclick = () => cancelJob(job.job_id);
+      header.appendChild(cancelBtn);
+    }
+  } else if (cancelBtn) {
+    cancelBtn.remove();
+  }
+
+  const logs = job.logs || [];
+  let details = card.querySelector('details');
+  if (logs.length > 0) {
+    if (!details) { details = document.createElement('details'); card.appendChild(details); }
+    let summary = details.querySelector('summary');
+    if (!summary) { summary = document.createElement('summary'); details.prepend(summary); }
+    summary.textContent = `ログ詳細 (${logs.length} 件)`;
+
+    let logBox = details.querySelector('.log-box');
+    if (!logBox) { logBox = document.createElement('div'); logBox.className = 'log-box'; details.appendChild(logBox); }
+
+    const atBottom = details.open && (logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 5);
+    logBox.innerHTML = _buildLogHtml(logs);
+    if (atBottom) logBox.scrollTop = logBox.scrollHeight;
+  } else if (details) {
+    details.remove();
+  }
+}
+
+let _pollTimer = null;
+function _startPolling() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(async () => {
+    try {
+      const res = await fetch('/api/jobs');
+      const jobs = await res.json();
+      jobs.forEach(job => {
+        const card = document.querySelector(`.job-card[data-job-id="${job.job_id}"]`);
+        if (card) _updateCard(card, job);
+      });
+      if (jobs.every(j => _TERMINAL.has(j.status))) {
+        clearInterval(_pollTimer);
+        _pollTimer = null;
+      }
+    } catch(e) {}
+  }, 3000);
 }
 
 const hasRunning = {{ 'true' if jobs and (jobs | selectattr('status', 'equalto', 'running') | list) else 'false' }};
-if (hasRunning) {
-  setTimeout(() => {
-    const openIds = [];
-    document.querySelectorAll('.job-card').forEach(card => {
-      const d = card.querySelector('details');
-      if (d && d.open) openIds.push(card.dataset.jobId);
-    });
-    if (openIds.length) sessionStorage.setItem(_OPEN_KEY, JSON.stringify(openIds));
-    sessionStorage.setItem(_SCROLL_KEY, String(window.scrollY));
-    location.reload();
-  }, 5000);
-}
+if (hasRunning) _startPolling();
 
 function filterJobs() {
   const status = document.getElementById('status-filter').value;
