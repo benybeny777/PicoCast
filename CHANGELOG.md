@@ -14,6 +14,13 @@
 
 ## 2026-05-26
 
+### 実尺チェックをよみがな正規化・音声生成後に移動
+
+- `main.py`: VOICEVOX 音声生成ループ完了直後に全 WAV ファイルの合計秒数を計算し `duration_review()` で評価するよう変更
+- Shorts で `needs_review`（< 35s または > 58s）の場合は MP4 化を中止して台本修正を促す
+- 結果を `_meta/duration_review.json` に `"estimated": false` 付きで保存する
+- `SPEC.md`: 実尺チェックのタイミングと停止条件を更新
+
 ### 履歴詳細の再生成ボタン修正
 
 - `web_app/templates/history_detail.html`: 履歴名をURL/JavaScriptへ安全に埋め込むよう修正し、空白・記号入りの履歴名でも「全工程を再生成」「動画を再生成」が壊れないようにした

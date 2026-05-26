@@ -650,23 +650,21 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 | Shorts セリフ数（warning） | 29〜30行 |
 | Shorts セリフ数（must_fix） | 31行以上 |
 | Shorts 推定尺チェック | 参考値のみ表示（停止しない） |
+| Shorts **実尺チェック（音声合計）** | `needs_review` 時は MP4 化を中止 |
 | Shorts 音声速度 | イントロ 1.40x / 本編 1.25x |
 | Long 音声速度 | イントロ 1.40x / 本編 1.20x |
 
 native では尺ではなく**語り速度（chars/sec）と台本量**で調整するため、推定尺による停止は行わない。
 
-### 実尺チェック（native MP4 生成後）
+### 実尺チェック（VOICEVOX 音声生成直後）
 
-`render_native_test()` 完了後、Web UI が ffprobe で計測した MP4 の実尺に対して `duration_review()` を実行し、native基準で判定を表示する。
+VOICEVOX 音声生成ループ完了後、よみがな正規化済みの全 WAV ファイルの長さを合算して `duration_review()` で評価する。WAV 合計 ≈ MP4 実尺 − 約 1s（サムネ保持 + 背景遷移分）のため、同じ閾値で判定して問題ない。
 
-```
-━━━━━━━━ 実尺チェック 44.3秒 / 理想（38〜50秒） ━━━━━━━━   ← 緑
-━━━━━━━━ 実尺チェック 53.1秒 / OKだけど長め ━━━━━━━━      ← 黄
-━━━━━━━━ 実尺チェック 60.2秒 / 要確認 ━━━━━━━━            ← 赤
-```
-
-- 結果は `_meta/duration_review.json` に `"source": "native_mp4"` 付きで上書き保存する
-- 判定基準は native 実尺基準（ideal: 38〜50s / ok_but_short: 35〜37s / ok_but_long: 51〜55s / warning: 32〜34s or 56〜58s / needs_review: それ以外）
+- 結果は `_meta/duration_review.json` に `"estimated": false` 付きで保存する
+- Shorts で `needs_review`（< 35s または > 58s）のときは MP4 化を中止し、台本修正を促す
+- `warning` / `ok_but_short` / `ok_but_long` はログ警告のみで続行する
+- Long は `warning`（< 4分 または > 11分）のみログ警告、中止しない
+- 判定基準は native 実尺基準（ideal: 38〜50s / ok_but_short: 35〜37s / ok_but_long: 51〜55s / warning: 56〜58s / needs_review: それ以外）
 
 ### 詳細ログ（`render_native_test` 完了時）
 

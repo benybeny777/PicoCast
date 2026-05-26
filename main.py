@@ -1452,6 +1452,40 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if is_cancelled():
         return cancel_result()
 
+    # 実尺チェック: 全WAVの実際の長さを合算して duration_review で評価
+    _actual_sec = 0.0
+    try:
+        for _wf in sorted(os.listdir(theme_audio_dir)):
+            if not _wf.lower().endswith(".wav"):
+                continue
+            _wp = os.path.join(theme_audio_dir, _wf)
+            with wave.open(_wp, "rb") as _wr:
+                _actual_sec += _wr.getnframes() / _wr.getframerate()
+    except Exception as _e:
+        update_status(f"⚠ 実尺計算スキップ: {_e}", "warning")
+        _actual_sec = 0.0
+
+    if _actual_sec > 0:
+        actual_duration_result = duration_review(_actual_sec, is_shorts)
+        actual_duration_result["estimated"] = False
+        dr_path = save_duration_review(theme_dir, actual_duration_result)
+        _dur_status = actual_duration_result["status"]
+        _dur_label = duration_status_label(_dur_status)
+        _ideal = actual_duration_result.get("ideal", "")
+        update_status(
+            f"⏱ 実尺チェック: {_actual_sec:.1f}秒 — {_dur_label}（目安: {_ideal}）　保存: {dr_path}",
+            "warning" if _dur_status in ("warning", "needs_review") else None,
+        )
+        if _dur_status == "needs_review":
+            msg = (
+                f"❌ 実尺が規格外のためMP4化を中止しました\n"
+                f"実尺: {_actual_sec:.1f}秒 / 目安: {_ideal}\n"
+                f"台本の分量を調整して再実行してください。"
+            )
+            update_status(msg, "error")
+            report.elapsed_sec = time.time() - pipeline_start
+            return finish_result(msg)
+
     # render_info を _meta に保存
     try:
         _thumb_frames = THUMBNAIL_HOLD_FRAMES_SHORTS if is_shorts else 0
