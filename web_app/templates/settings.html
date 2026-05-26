@@ -101,14 +101,17 @@ let _configItems = [];
 async function loadConfig() {
   const form = document.getElementById('config-form');
   try {
-    const [configRes, ollamaRes] = await Promise.all([
+    const [configRes, ollamaRes, bgmRes] = await Promise.all([
       fetch('/api/settings/config'),
       fetch('/api/settings/ollama-models'),
+      fetch('/api/settings/bgm-files'),
     ]);
     _configItems = await configRes.json();
     const ollamaData = await ollamaRes.json();
     const ollamaModels = ollamaData.models || [];
     const ollamaAvailable = ollamaData.available;
+    const bgmData = await bgmRes.json();
+    const bgmFiles = bgmData.files || [];
 
     form.innerHTML = '';
     const table = document.createElement('table');
@@ -130,7 +133,6 @@ async function loadConfig() {
 
       } else if (item.type === 'ollama_model') {
         if (ollamaAvailable && ollamaModels.length > 0) {
-          // モデル一覧をセレクト表示（現在値が一覧にない場合も先頭に追加）
           const allModels = ollamaModels.includes(item.current)
             ? ollamaModels
             : [item.current, ...ollamaModels];
@@ -142,11 +144,28 @@ async function loadConfig() {
               ${opts}
             </select>`;
         } else {
-          // Ollama 未起動 or モデルなし → テキスト入力にフォールバック
           const note = ollamaAvailable ? '（モデルなし）' : '（Ollama 未起動）';
           tdInput.innerHTML = `
             <input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:180px">
             <small style="color:var(--text-muted)"> ${note}</small>`;
+        }
+
+      } else if (item.type === 'bgm_file') {
+        if (bgmFiles.length > 0) {
+          const allFiles = bgmFiles.includes(item.current)
+            ? bgmFiles
+            : [item.current, ...bgmFiles];
+          const opts = allFiles.map(f =>
+            `<option value="${esc(f)}" ${f === item.current ? 'selected' : ''}>${esc(f)}</option>`
+          ).join('');
+          tdInput.innerHTML = `
+            <select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">
+              ${opts}
+            </select>`;
+        } else {
+          tdInput.innerHTML = `
+            <input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:220px">
+            <small style="color:var(--text-muted)"> （assets/bgm/ にファイルなし）</small>`;
         }
 
       } else {

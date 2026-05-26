@@ -16,6 +16,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "NATIVE_SHORTS_INTRO_VOICE_SPEED", "type": "float", "label": "Shorts 冒頭音声速度",       "default": str(cfg.NATIVE_SHORTS_INTRO_VOICE_SPEED), "min": 0.5, "max": 3.0},
     {"key": "NATIVE_LONG_BODY_VOICE_SPEED",    "type": "float", "label": "Long 本編音声速度",          "default": str(cfg.NATIVE_LONG_BODY_VOICE_SPEED), "min": 0.5, "max": 3.0},
     {"key": "NATIVE_LONG_INTRO_VOICE_SPEED",   "type": "float", "label": "Long 冒頭音声速度",          "default": str(cfg.NATIVE_LONG_INTRO_VOICE_SPEED), "min": 0.5, "max": 3.0},
+    {"key": "BGM_FILE",                         "type": "bgm_file", "label": "BGMファイル",             "default": str(cfg.BGM_FILE)},
     {"key": "NATIVE_BGM_VOLUME_DB",            "type": "float", "label": "native BGM音量(dB)",         "default": str(cfg.NATIVE_BGM_VOLUME_DB), "min": -60, "max": 0},
     {"key": "NATIVE_ENABLE_MOTION_EFFECTS",    "type": "bool",  "label": "Shorts軽量エフェクト全体",   "default": "1" if cfg.NATIVE_ENABLE_MOTION_EFFECTS else "0"},
     {"key": "NATIVE_ENABLE_BG_KEN_BURNS",      "type": "bool",  "label": "背景ズーム/パン",            "default": "1" if cfg.NATIVE_ENABLE_BG_KEN_BURNS else "0"},
@@ -119,9 +120,12 @@ def _validate(updates: dict[str, str]) -> list[str]:
             elif spec["type"] == "bool":
                 if raw_val not in ("0", "1"):
                     errors.append(f"{key}: '0' か '1' で指定してください")
-            elif spec["type"] in ("str", "ollama_model"):
+            elif spec["type"] in ("str", "ollama_model", "bgm_file"):
                 if not raw_val.strip() and not spec.get("allow_empty"):
                     errors.append(f"{key}: 空文字は不正です")
+                if spec["type"] == "bgm_file" and raw_val.strip():
+                    if os.path.sep in raw_val or "/" in raw_val or "\\" in raw_val:
+                        errors.append(f"{key}: ファイル名のみ指定してください（パス区切り文字不可）")
         except (ValueError, TypeError):
             errors.append(f"{key}: '{raw_val}' は {spec['type']} として無効です")
     return errors

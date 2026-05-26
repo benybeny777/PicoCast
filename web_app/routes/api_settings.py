@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, HTTPException
 from web_app.services.status_service import get_settings_status
 from web_app.services.config_service import get_editable_config, save_config
@@ -35,6 +36,20 @@ def api_save_secrets(updates: dict[str, str]):
     if errors:
         raise HTTPException(status_code=422, detail=errors)
     return {"saved": list(updates.keys())}
+
+
+@router.get("/bgm-files")
+def api_bgm_files():
+    """assets/bgm/ 内の音声ファイル一覧を返す。"""
+    bgm_dir = os.path.join(cfg.ASSETS_DIR, "bgm")
+    try:
+        files = sorted(
+            f for f in os.listdir(bgm_dir)
+            if os.path.splitext(f)[1].lower() in (".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a")
+        )
+        return {"files": files, "available": True}
+    except Exception:
+        return {"files": [], "available": False}
 
 
 @router.get("/ollama-models")
