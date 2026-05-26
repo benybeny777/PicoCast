@@ -1199,9 +1199,24 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     for _item in dialogue_items:
         _all_chunks.extend(_split_at_punctuation(_item.get("text", "")))
     reading_normalizer = ReadingNormalizer()
+    _reading_map_path = os.path.join(_meta_dir(theme_dir), "reading_map.json")
+    if os.path.exists(_reading_map_path):
+        try:
+            with open(_reading_map_path, encoding="utf-8") as _rmf:
+                _saved_map = json.load(_rmf)
+            reading_normalizer._cache.update(_saved_map)
+            update_status(f"🔤 よみがな: 保存済みマップ読み込み ({len(_saved_map)}件)")
+        except Exception as _e:
+            update_status(f"⚠ よみがなマップ読み込みスキップ: {_e}", "warning")
     if reading_normalizer._available and _all_chunks:
         update_status(f"🔤 よみがな正規化中: {len(_all_chunks)}チャンク...")
     reading_map = reading_normalizer.normalize_batch(_all_chunks)
+    try:
+        os.makedirs(_meta_dir(theme_dir), exist_ok=True)
+        with open(_reading_map_path, "w", encoding="utf-8") as _rmf:
+            json.dump(reading_map, _rmf, ensure_ascii=False, indent=2)
+    except Exception as _e:
+        update_status(f"⚠ よみがなマップ保存失敗: {_e}", "warning")
 
     vv = VoicevoxAPI()
     if not vv.check_connection() and os.path.exists(VOICEVOX_PATH):

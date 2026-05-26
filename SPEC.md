@@ -214,6 +214,7 @@ for item in dialogue_items:
 | `opening_review.json` | ローカル・Ollamaレビュー結果、final_score、final_status |
 | `opening_rewrite_suggestion.txt` | Ollamaリライト内容（リライトが発生した場合） |
 | `duration_review.json` | 尺レビュー結果（seconds / status / ideal） |
+| `reading_map.json` | よみがな正規化マップ（チャンク原文 → 読み）。再生成時に再利用して一貫性を確保 |
 | `final_review.json` | ChatGPT生成前レビュー結果 |
 
 ### LLMレビューの有効化
@@ -759,6 +760,7 @@ output/{テーマ名}/
 │   ├── opening_review.json                 # 冒頭レビュー結果
 │   ├── opening_rewrite_suggestion.txt      # Ollamaリライト内容（発生時のみ）
 │   ├── duration_review.json                # 尺レビュー結果
+│   ├── reading_map.json                    # よみがな正規化マップ（チャンク→読み）
 │   ├── final_review.json                   # ChatGPT生成前レビュー結果
 │   ├── upload_record.json                  # アップロード記録（スコア含む）
 │   ├── thumbnail_ab_test.json              # Long: A/Bテスト管理
