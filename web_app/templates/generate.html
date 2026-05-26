@@ -245,7 +245,20 @@ async function updateJobLogs() {
   let htmlContent = '';
 
   function buildLogLine(msg, tag) {
-    return `<div class="log-line log-${tag || 'info'}">${escapeHtml(msg)}</div>`;
+    let resolvedTag = tag || 'info';
+    if (msg.includes('スコア') && msg.includes('点')) {
+      const scoreMatch = msg.match(/(\d+)点/);
+      if (scoreMatch) {
+        const scoreVal = parseInt(scoreMatch[1]);
+        if (scoreVal >= 80) resolvedTag = 'score_ok';
+        else if (scoreVal >= 70) resolvedTag = 'score_warn';
+        else resolvedTag = 'score';
+      }
+    }
+    let displayMsg = escapeHtml(msg);
+    displayMsg = displayMsg.replace(/(\d+点)/g, '<strong style="font-size: 1.15em; text-decoration: underline; color: #fff;">$1</strong>');
+    displayMsg = displayMsg.replace(/(スコア)/g, '<strong style="color: #fff;">$1</strong>');
+    return `<div class="log-line log-${resolvedTag}">${displayMsg}</div>`;
   }
 
   for (const jobId of activeJobIds) {
