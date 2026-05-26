@@ -53,23 +53,10 @@ pip install --upgrade requests google-genai python-dotenv Pillow google-api-pyth
 ```env
 GOOGLE_API_KEY=...
 OPENAI_API_KEY=...
-OPENAI_FINAL_REVIEW_MODEL=gpt-5.2
-GEMINI_MODEL=gemini-3.1-pro-preview
-NANOBANANA_PRO_MODEL=gemini-3-pro-image-preview
-NANOBANANA_FLASH_MODEL=gemini-3.1-flash-image-preview
-NATIVE_AUDIO_LOUDNORM_ENABLED=1
-NATIVE_AUDIO_LOUDNORM_I=-15
-NATIVE_AUDIO_LOUDNORM_TP=-1.5
-NATIVE_AUDIO_LOUDNORM_LRA=6
-NATIVE_BGM_VOLUME_DB=-20
-NATIVE_SHORTS_CHARACTER_SCALE=1.05
-LONG_UPLOAD_PLAYLIST_NAME=ロング動画
 ```
 
 - `GOOGLE_API_KEY`: Google AI Studio の API keys で作成します。台本生成・画像生成で使います。
 - `OPENAI_API_KEY`: OpenAI Platform の API keys で作成します。ChatGPT生成前レビューで使います。
-- `OPENAI_FINAL_REVIEW_MODEL` / `GEMINI_MODEL` / `NANOBANANA_*_MODEL`: 任意。外部API側のモデル更新に追随するため、`.env` で差し替えできます。
-- `LONG_UPLOAD_PLAYLIST_NAME`: 任意。Longアップロード成功後、名前が完全一致する自チャンネルの再生リストへ自動追加します。未設定時は `ロング動画` を使います。空にすると無効です。
 - `client_secrets.json`: Google Cloud Console で YouTube Data API v3 / YouTube Analytics API を有効化し、OAuthクライアントID（デスクトップアプリ）を作成してJSONをダウンロードします。ファイル名を `client_secrets.json` にしてリポジトリ直下へ置きます。
 - 初回の `YouTubeアップ` / `📊 アナリティクス` 実行時にブラウザ認証が開き、`token.json` / `token_analytics.json` が自動作成されます。
 - Google OAuth設定後、YouTube Studioで本人確認が頻発することがあります。その場合は、チャンネルのGoogleアカウントのセキュリティ項目でOAuth連携が警告扱いになっていないか確認し、警告を確認・承認すると本人確認が出なくなることがあります。
@@ -81,6 +68,24 @@ LONG_UPLOAD_PLAYLIST_NAME=ロング動画
 - Google Cloud 認証情報: https://console.cloud.google.com/apis/credentials
 
 `client_secrets.json`、`token.json`、`token_analytics.json`、`.env` はGit管理外です。
+
+### 主な設定値
+
+APIキーやOAuthファイルなどの認証情報以外は、原則として [config.py](config.py) の既定値を使います。必要な場合だけ `.env` または環境変数で上書きできます。
+
+| 設定名 | 既定値 | 用途 |
+| --- | --- | --- |
+| `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.2` | ChatGPT生成前レビューのモデル |
+| `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
+| `NANOBANANA_PRO_MODEL` | `gemini-3-pro-image-preview` | 背景・サムネ生成の高品質モデル |
+| `NANOBANANA_FLASH_MODEL` | `gemini-3.1-flash-image-preview` | 背景・サムネ生成の高速モデル |
+| `NATIVE_AUDIO_LOUDNORM_ENABLED` | `1` | native MP4の最終音声にloudnormを適用 |
+| `NATIVE_AUDIO_LOUDNORM_I` | `-15` | loudnormのIntegrated loudness目標 |
+| `NATIVE_AUDIO_LOUDNORM_TP` | `-1.5` | loudnormのTrue Peak上限 |
+| `NATIVE_AUDIO_LOUDNORM_LRA` | `6` | loudnormのLoudness Range目標 |
+| `NATIVE_BGM_VOLUME_DB` | `-20` | native出力のBGM音量 |
+| `NATIVE_SHORTS_CHARACTER_SCALE` | `1.05` | native Shortsのキャラ倍率 |
+| `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード成功後に追加する再生リスト名。空にすると無効 |
 
 ## 起動
 
