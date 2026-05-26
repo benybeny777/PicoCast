@@ -35,6 +35,7 @@ yukkurijidou/
 ├── web_app/                # ローカル Web UI (FastAPI)
 │   ├── app.py              # FastAPI エントリポイント (通常起動は start.bat 推奨)
 │   ├── job_manager.py      # バックグラウンドジョブ管理
+│   ├── worker_runner.py    # subprocess ワーカー起動・進捗転送・キャンセル共通ヘルパー
 │   ├── schemas.py          # Pydantic リクエスト/レスポンススキーマ
 │   ├── security.py         # パストラバーサル対策・output/配下制限
 │   ├── services/           # ビジネスロジック層
@@ -69,6 +70,8 @@ yukkurijidou/
 │   ├── templates/          # Jinja2 HTMLテンプレート (12画面)
 │   └── static/             # CSS/JS (app.css, app.js)
 ├── main.py                 # 動画生成パイプライン
+├── worker_pipeline.py      # パイプライン subprocess ワーカー（1本生成完了でプロセス終了）
+├── worker_render.py        # レンダリング subprocess ワーカー（1本完了でプロセス終了）
 ├── config.py               # 設定・定数
 ├── core/
 │   ├── ai_generator.py     # Gemini台本生成

@@ -14,6 +14,14 @@
 
 ## 2026-05-27
 
+### 動画生成・レンダリングをワーカープロセスへ分離（メモリ解放）
+
+- `worker_pipeline.py`: 新規。`run_pipeline` を別 Python プロセスで実行するスタンドアロンスクリプト。完了後プロセスが終了しOS レベルでメモリを解放する
+- `worker_render.py`: 新規。`render_native_test` を別 Python プロセスで実行するスタンドアロンスクリプト
+- `web_app/worker_runner.py`: 新規。上記 worker スクリプトを subprocess で起動し、stdout JSONL 進捗を `Job.logs` へ転送する共通ヘルパー。stdin への `"cancel\n"` でグレースフルキャンセル、15秒タイムアウト後に terminate
+- `web_app/services/generation_service.py`: `from main import run_pipeline` をインプロセス呼び出しから `run_in_worker("worker_pipeline.py", ...)` に変更
+- `web_app/services/render_service.py`: `render_native_test` 直接呼び出しから `run_in_worker("worker_render.py", ...)` に変更
+
 ### 視聴者維持率分析（Analytics画面）
 
 - `core/youtube_analytics.py`: `fetch_audience_retention()` を追加。YouTube Analytics API の `elapsedVideoTimeRatio` ディメンションを使い、指定動画の秒単位維持率データを取得する

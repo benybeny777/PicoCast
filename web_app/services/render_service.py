@@ -1,14 +1,13 @@
 """
 動画（MP4）のみ再レンダリングサービス。
-既存の audio/ と backgrounds/ を使って native_renderer で MP4 を再生成する。
-台本・音声・画像は変更しない。
+native_renderer をサブプロセス（worker_render.py）で実行してメモリを解放する。
 """
 import os
 from typing import Any
 
-from core.output_paths import OUTPUT_DIR
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import safe_output_path
+from web_app.worker_runner import run_in_worker
 
 
 def submit_render_job(history_name: str) -> str:
@@ -27,26 +26,26 @@ def submit_render_job(history_name: str) -> str:
 
 
 def _run_render(job: Job, history_name: str) -> dict[str, Any]:
-    from core.native_renderer import render_native_test
-
     theme_dir = safe_output_path(history_name)
-
     _log(job, "audio/ と backgrounds/ から MP4 を再生成します", "info")
     _log(job, f"対象フォルダ: {theme_dir}", "info")
 
-    if job.cancel_event.is_set():
+    worker_result = run_in_worker(
+        "worker_render.py",
+        {
+            "history_name": history_name,
+            "theme_dir": theme_dir,
+        },
+        job,
+    )
+
+    status = worker_result.get("status")
+    if status == "cancelled":
         return {"cancelled": True}
+    if status == "failed":
+        raise RuntimeError(worker_result.get("error", "レンダリングエラー"))
 
-    try:
-        result = render_native_test(
-            output_dir=theme_dir,
-            progress_callback=lambda msg: _log(job, msg, "info"),
-        )
-    except Exception as e:
-        _log(job, f"レンダリングエラー: {e}", "error")
-        raise
-
-    output_path = result.output_path if hasattr(result, "output_path") else str(result)
+    output_path = worker_result.get("output_path", "")
     _log(job, f"MP4 生成完了: {os.path.basename(output_path)}", "success")
     return {"output_path": output_path, "history_name": history_name}
 

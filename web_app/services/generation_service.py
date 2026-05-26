@@ -1,7 +1,7 @@
 """
 動画生成ジョブサービス。
-既存の run_pipeline をジョブ化して実行する。
-Web UI は run_pipeline を唯一の生成入口として使う。
+run_pipeline をサブプロセス（worker_pipeline.py）で実行してメモリを解放する。
+1本生成完了ごとにワーカープロセスが終了するため、GUIプロセスにメモリが蓄積しない。
 """
 import os
 from typing import Any
@@ -11,6 +11,7 @@ from core.gui_support import split_input_scripts
 from core.output_paths import OUTPUT_DIR
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import safe_output_path
+from web_app.worker_runner import run_in_worker
 
 
 def submit_generate_job(
@@ -101,18 +102,10 @@ def _run_generate(
     sd_size_mode: bool,
     with_render: bool = False,
 ) -> dict[str, Any]:
-    """バックグラウンドスレッドで呼ばれる生成ロジック。"""
-    from main import run_pipeline
+    """バックグラウンドスレッドから呼ばれる。worker_pipeline.py をサブプロセスで起動する。"""
     from core.parser import ScriptParser
 
-    def progress(msg: str, tag: str = "info"):
-        _log(job, msg, tag)
-        if job.cancel_event.is_set():
-            raise _CancelledError()
-
     _log(job, "台本を解析中...", "info")
-
-    # topicをparserで取得
     try:
         items = ScriptParser.parse_string(script)
         meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
@@ -122,28 +115,33 @@ def _run_generate(
 
     _log(job, f"動画生成開始: {topic}", "info")
 
-    try:
-        msg, report = run_pipeline(
-            topic=topic,
-            pregenerated_script=script,
-            image_style=image_style,
-            reuse_backgrounds=reuse_backgrounds,
-            cancel_event=job.cancel_event,
-            progress_callback=progress,
-            long_thumbnail_ab_test=long_thumbnail_ab_test,
-            long_budget_mode=long_budget_mode,
-            sd_size_mode=sd_size_mode,
-        )
-    except _CancelledError:
-        return {"cancelled": True}
+    worker_result = run_in_worker(
+        "worker_pipeline.py",
+        {
+            "topic": topic,
+            "pregenerated_script": script,
+            "image_style": image_style,
+            "reuse_backgrounds": reuse_backgrounds,
+            "long_thumbnail_ab_test": long_thumbnail_ab_test,
+            "long_budget_mode": long_budget_mode,
+            "sd_size_mode": sd_size_mode,
+        },
+        job,
+    )
 
-    # 結果ファイルの存在確認
+    status = worker_result.get("status")
+    if status == "cancelled":
+        return {"cancelled": True}
+    if status == "failed":
+        raise RuntimeError(worker_result.get("error", "ワーカーエラー"))
+
+    msg = worker_result.get("message", "")
     theme_dir = os.path.join(OUTPUT_DIR, _safe_dirname(topic))
     result = {
         "topic": topic,
         "message": msg,
         "theme_dir": theme_dir,
-        "elapsed_sec": getattr(report, "elapsed_sec", None),
+        "elapsed_sec": worker_result.get("elapsed_sec"),
     }
 
     _log(job, msg, "success" if "完了" in msg or "success" in msg.lower() else "info")
@@ -167,7 +165,3 @@ def split_scripts(raw: str) -> list[str]:
 def _safe_dirname(title: str) -> str:
     import re
     return re.sub(r'[\\/:*?"<>|]', '_', title)[:80]
-
-
-class _CancelledError(Exception):
-    pass

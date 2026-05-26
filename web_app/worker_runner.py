@@ -1,0 +1,105 @@
+"""
+バックグラウンドジョブ用 subprocess 実行ヘルパー。
+worker_pipeline.py / worker_render.py を subprocess で起動し、
+stdout JSONL を Job.logs へ転送する。
+キャンセルは stdin へ "cancel\n" を送り、タイムアウト後に terminate する。
+"""
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import threading
+from typing import Any
+
+from web_app.job_manager import Job, _log
+
+# worker スクリプトが置いてあるプロジェクトルート（web_app/ の一つ上）
+_WORKER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# subprocess に渡す環境変数（PYTHONIOENCODING を強制して文字化けを防ぐ）
+_WORKER_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+
+
+def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[str, Any]:
+    """
+    worker_name（例: "worker_pipeline.py"）をサブプロセスで実行する。
+    進捗 JSONL を job.logs へ転送し、result dict を返す。
+    ワーカー失敗時は RuntimeError を raise する。
+    """
+    worker_script = os.path.join(_WORKER_DIR, worker_name)
+    if not os.path.isfile(worker_script):
+        raise FileNotFoundError(f"ワーカースクリプトが見つかりません: {worker_script}")
+
+    with tempfile.TemporaryDirectory(prefix="yjworker_") as tmpdir:
+        input_path = os.path.join(tmpdir, "input.json")
+        result_path = os.path.join(tmpdir, "result.json")
+
+        with open(input_path, "w", encoding="utf-8") as f:
+            json.dump(params, f, ensure_ascii=False)
+
+        proc = subprocess.Popen(
+            [sys.executable, worker_script, "--input", input_path, "--result", result_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            cwd=_WORKER_DIR,
+            env=_WORKER_ENV,
+        )
+
+        def _cancel_monitor() -> None:
+            """cancel_event を監視して stdin に cancel を送り、タイムアウト後に terminate する。"""
+            job.cancel_event.wait()
+            try:
+                proc.stdin.write("cancel\n")
+                proc.stdin.flush()
+                proc.stdin.close()
+            except OSError:
+                pass
+            try:
+                proc.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+
+        cancel_thread = threading.Thread(target=_cancel_monitor, daemon=True)
+        cancel_thread.start()
+
+        # stderr をバックグラウンドで読み捨て（パイプバッファ詰まり防止）
+        stderr_lines: list[str] = []
+
+        def _drain_stderr() -> None:
+            for line in proc.stderr:
+                stderr_lines.append(line.rstrip())
+
+        stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
+        stderr_thread.start()
+
+        # stdout JSONL を読んで job.logs へ転送
+        for raw in proc.stdout:
+            raw = raw.strip()
+            if not raw:
+                continue
+            try:
+                entry = json.loads(raw)
+                _log(job, entry.get("message", raw), entry.get("tag", "info"))
+            except json.JSONDecodeError:
+                _log(job, raw, "info")
+
+        proc.wait()
+        stderr_thread.join(timeout=2)
+
+        if os.path.exists(result_path):
+            with open(result_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        # result ファイルがない＝ worker がクラッシュした
+        err_tail = "\n".join(stderr_lines[-20:]) if stderr_lines else "(stderr なし)"
+        raise RuntimeError(f"ワーカーが結果ファイルを生成しませんでした\n{err_tail}")
