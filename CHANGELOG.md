@@ -21,6 +21,14 @@
 - `web_app/routes/api_analytics.py`: `GET /api/analytics/retention?video_id=...&duration=...` エンドポイントを追加
 - `web_app/templates/analytics.html`: Analytics一覧表で行を選択すると「維持率分析」ボタンが有効化され、モーダルで分析結果（テーブル・離脱ポイント・自動コメント）を表示。TSVコピー機能付き
 
+### 固定コメント自動投稿（スロット時刻到達時）
+
+- `web_app/services/auto_fixed_comment_service.py`: 新規。アプリ起動時にデーモンスレッドを起動し、YouTubeの公開スロット時刻（7/12/19/21時 JST）の5分後にのみ未投稿候補をチェックして自動投稿する。ローカルファイルで候補をスキャンしてから YouTube API を呼ぶ二段階チェックで無駄なAPI呼び出しを防ぐ
+- `web_app/app.py`: FastAPI `lifespan` コンテキストマネージャーで起動時にウォッチャースレッドを開始
+- `config.py`: `AUTO_FIXED_COMMENT_ENABLED` 設定を追加（デフォルト OFF）
+- `web_app/services/config_service.py`: 設定画面の EDITABLE_CONFIG に「固定コメント 自動投稿」トグルを追加
+- `web_app/templates/fixed_comment.html`: 自動投稿済みエントリに「自動」バッジ（badge-info）を表示。未確定の自動投稿中は「自動投稿中…」バッジを表示
+
 ### 固定コメント自動生成をめたん調テンプレートに変更
 
 - `core/comment_templates.py`: 新規。四国めたん調（お嬢様口調・軽い毒舌）の固定コメントテンプレートを実装。タイトルからトピックを抽出し、`normal` / `topic_request` の2モードでランダム生成する `build_fixed_comment()` を提供

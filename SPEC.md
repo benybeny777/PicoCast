@@ -50,7 +50,8 @@ yukkurijidou/
 │   │   ├── analytics_service.py    # Analytics取得・表示
 │   │   ├── schedule_service.py     # スケジュール管理
 │   │   ├── upload_service.py       # YouTubeアップロード
-│   │   └── fixed_comment_service.py # 固定コメント投稿
+│   │   ├── fixed_comment_service.py # 固定コメント投稿
+│   │   └── auto_fixed_comment_service.py # スロット時刻到達時の固定コメント自動投稿デーモン
 │   ├── routes/             # APIルート層
 │   │   ├── pages.py        # Jinja2ページルート
 │   │   ├── api_status.py   # GET /api/health, /api/status, /api/dashboard
