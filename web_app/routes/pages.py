@@ -94,7 +94,15 @@ def page_history_detail(request: Request, history_name: str):
     detail = history_service.get_history_detail(history_name)
     if detail is None:
         raise HTTPException(status_code=404, detail="履歴が見つかりません")
-    return _render(request, "history_detail.html", {"detail": detail})
+    return _render(request, "history_detail.html", {
+        "detail": detail,
+        "image_style_choices": WEB_IMAGE_STYLE_CHOICES,
+        "default_image_style": WEB_DEFAULT_IMAGE_STYLE,
+        "default_reuse_backgrounds": WEB_DEFAULT_REUSE_BACKGROUNDS,
+        "default_long_thumbnail_ab_test": WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
+        "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
+        "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
+    })
 
 
 @router.get("/images", response_class=HTMLResponse)

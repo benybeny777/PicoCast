@@ -17,8 +17,6 @@
     <a href="/api/images/{{ detail.name }}/file/{{ detail.mp4_name }}" class="btn btn-secondary mt-sm" target="_blank">MP4を確認</a>
     {% endif %}
     <a href="/images?history={{ detail.name }}" class="btn btn-secondary mt-sm">画像確認・再生成</a>
-    <button class="btn btn-primary mt-sm" onclick="renderVideo()">動画を再生成</button>
-    <div id="render-status" style="display:none" class="log-box mt-sm"></div>
   </div>
 
   <!-- アップロード状態 -->
@@ -38,6 +36,48 @@
     <p>アップロード記録なし</p>
     {% endif %}
   </div>
+</div>
+
+<!-- 再生成設定と実行 -->
+<div class="card mt">
+  <h2>動画・全工程の再生成</h2>
+  <p class="hint">台本(script.txt)を元に、チェック・音声・画像・動画の全工程を再生成するか、既存の音声/画像から動画のみを再生成します。</p>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="image-style">画像スタイル</label>
+      <select id="image-style">
+        {% for style in image_style_choices %}
+        <option value="{{ style }}" {% if style == default_image_style %}selected{% endif %}>{{ style }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group check-group">
+      <label><input type="checkbox" id="reuse-backgrounds" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
+    </div>
+    <div class="form-group check-group">
+      <label><input type="checkbox" id="long-thumbnail-ab" {% if default_long_thumbnail_ab_test %}checked{% endif %}> LongサムネAB</label>
+    </div>
+    <div class="form-group check-group">
+      <label><input type="checkbox" id="long-budget-mode" {% if default_long_budget_mode %}checked{% endif %}> Long節約</label>
+    </div>
+    <div class="form-group check-group">
+      <label><input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> SD生成</label>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button id="regenerate-btn" class="btn btn-primary" onclick="regenerateAll()">全工程を再生成</button>
+    <button id="render-btn" class="btn btn-primary" onclick="renderVideo()">動画を再生成（レンダーのみ）</button>
+    <button id="cancel-btn" class="btn btn-danger" style="display:none" onclick="cancelGenerate()">中止</button>
+  </div>
+</div>
+
+<!-- 生成ログ -->
+<div id="generate-status" class="card mt" style="display:none">
+  <h2>処理ログ</h2>
+  <div id="job-ids-info" class="hint"></div>
+  <div id="log-container" class="log-box"></div>
 </div>
 
 <!-- スコア情報 -->
@@ -122,12 +162,96 @@ document.querySelectorAll('.score-badge').forEach(el => {
   else el.classList.add('badge-ng');
 });
 
+let activeJobIds = [];
+let pollTimer = null;
+
+function appendLog(msg, tag) {
+  const logBox = document.getElementById('log-container');
+  const div = document.createElement('div');
+  div.className = `log-line log-${tag || 'info'}`;
+  div.textContent = msg;
+  logBox.appendChild(div);
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+function disableButtons() {
+  document.getElementById('regenerate-btn').disabled = true;
+  document.getElementById('render-btn').disabled = true;
+  document.getElementById('cancel-btn').style.display = 'inline-block';
+}
+
+function finishGenerate() {
+  document.getElementById('regenerate-btn').disabled = false;
+  document.getElementById('render-btn').disabled = false;
+  document.getElementById('cancel-btn').style.display = 'none';
+}
+
+async function cancelGenerate() {
+  for (const jobId of activeJobIds) {
+    try {
+      await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'});
+    } catch {}
+  }
+  appendLog('キャンセル要求を送信しました', 'warning');
+  finishGenerate();
+}
+
+function pollJobs() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(async () => {
+    if (!activeJobIds.length) { clearInterval(pollTimer); return; }
+    const result = await updateJobLogs();
+    if (result.allDone) {
+      clearInterval(pollTimer);
+      if (result.hasFailed) {
+        appendLog('一部の処理が失敗またはキャンセルされました。', 'error');
+        finishGenerate();
+      } else {
+        appendLog('処理が完了しました。リロードします...', 'success');
+        setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
+      }
+    }
+  }, window.WEB_JOB_POLL_INTERVAL_MS);
+}
+
+async function updateJobLogs() {
+  let allDone = true;
+  let hasFailed = false;
+  const logBox = document.getElementById('log-container');
+  logBox.innerHTML = '';
+
+  for (const jobId of activeJobIds) {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`);
+      const job = await res.json();
+      appendLog(`[${job.type}] ${job.status}: ${job.progress_text}`, job.status);
+
+      for (const entry of (job.logs || [])) {
+        appendLog(entry.message, entry.tag);
+      }
+      if (!['success','failed','cancelled'].includes(job.status)) {
+        allDone = false;
+      }
+      if (['failed', 'cancelled'].includes(job.status)) {
+        hasFailed = true;
+      }
+
+      if (job.status === 'success' && job.result) {
+        appendLog(`完了: ${job.result.message || ''}`, 'success');
+      }
+    } catch(e) {
+      allDone = false;
+    }
+  }
+  return { allDone, hasFailed };
+}
+
 async function renderVideo() {
   if (!confirm('既存の audio/ と backgrounds/ から MP4 を再生成します。\n現在の MP4 は上書きされます。よろしいですか？')) return;
 
-  const statusBox = document.getElementById('render-status');
-  statusBox.style.display = 'block';
-  statusBox.textContent = 'ジョブ送信中...';
+  prepareLogView();
+  disableButtons();
+  appendLog('レンダーリクエストを送信中...', 'info');
 
   try {
     const res = await fetch('/api/history/{{ detail.name }}/render', {
@@ -136,24 +260,70 @@ async function renderVideo() {
       body: JSON.stringify({confirmed: true}),
     });
     const data = await res.json();
-    if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
-    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
+    if (!res.ok) {
+      appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error');
+      finishGenerate();
+      return;
+    }
 
-    const interval = setInterval(async () => {
-      try {
-        const r = await fetch(`/api/jobs/${data.job_id}`);
-        const job = await r.json();
-        const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length - 1].message : '';
-        statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
-        if (['success', 'failed', 'cancelled'].includes(job.status)) {
-          clearInterval(interval);
-          if (job.status === 'success') setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
-        }
-      } catch {}
-    }, window.WEB_JOB_POLL_INTERVAL_MS);
+    activeJobIds = [data.job_id];
+    document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')}`;
+    appendLog('レンダージョブを登録しました', 'info');
+    pollJobs();
   } catch(e) {
-    statusBox.textContent = '通信エラー: ' + e;
+    appendLog('通信エラー: ' + e, 'error');
+    finishGenerate();
   }
+}
+
+async function regenerateAll() {
+  if (!confirm('台本(script.txt)を元に、チェック・音声生成・画像生成・動画組立の全工程を再生成します。\n現在の生成物はすべて上書きされます。よろしいですか？')) return;
+
+  const imageStyle = document.getElementById('image-style').value;
+  const reuseBg = document.getElementById('reuse-backgrounds').checked;
+  const longThumbnailAb = document.getElementById('long-thumbnail-ab').checked;
+  const longBudgetMode = document.getElementById('long-budget-mode').checked;
+  const sdSizeMode = document.getElementById('sd-size-mode').checked;
+
+  prepareLogView();
+  disableButtons();
+  appendLog('再生成リクエストを送信中...', 'info');
+
+  try {
+    const res = await fetch('/api/history/regenerate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        history_names: ['{{ detail.name }}'],
+        image_style: imageStyle,
+        reuse_backgrounds: reuseBg,
+        long_thumbnail_ab_test: longThumbnailAb,
+        long_budget_mode: longBudgetMode,
+        sd_size_mode: sdSizeMode,
+        confirmed: true
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error');
+      finishGenerate();
+      return;
+    }
+
+    activeJobIds = data.job_ids || [];
+    document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')} (${data.count}本)`;
+    appendLog(`再生成ジョブを登録しました (${data.count}本)`, 'info');
+    pollJobs();
+  } catch(e) {
+    appendLog('通信エラー: ' + e, 'error');
+    finishGenerate();
+  }
+}
+
+function prepareLogView() {
+  document.getElementById('generate-status').style.display = 'block';
+  document.getElementById('log-container').innerHTML = '';
+  document.getElementById('job-ids-info').textContent = '';
 }
 </script>
 {% endblock %}
