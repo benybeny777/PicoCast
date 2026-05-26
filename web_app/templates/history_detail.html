@@ -208,7 +208,9 @@ function pollJobs() {
         appendLog('一部の処理が失敗またはキャンセルされました。', 'error');
         finishGenerate();
       } else {
-        appendLog('処理が完了しました。リロードします...', 'success');
+        appendLog('処理が完了しました。ページ情報を更新します...', 'success');
+        const logBox = document.getElementById('log-container');
+        sessionStorage.setItem('restored_logs_' + historyName, logBox.innerHTML);
         setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
       }
     }
@@ -361,5 +363,18 @@ function prepareLogView() {
   document.getElementById('log-container').innerHTML = '';
   document.getElementById('job-ids-info').textContent = '';
 }
+
+// リロード後にログを復元
+(function restoreLogs() {
+  const key = 'restored_logs_' + historyName;
+  const saved = sessionStorage.getItem(key);
+  if (!saved) return;
+  sessionStorage.removeItem(key);
+  const statusEl = document.getElementById('generate-status');
+  const logBox = document.getElementById('log-container');
+  statusEl.style.display = 'block';
+  logBox.innerHTML = saved;
+  logBox.scrollTop = logBox.scrollHeight;
+})();
 </script>
 {% endblock %}
