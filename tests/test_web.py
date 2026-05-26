@@ -257,3 +257,20 @@ def test_generate_empty_script_rejected(client):
 def test_upload_requires_confirmation(client):
     res = client.post("/api/upload", json={"history_name": "test", "confirmed": False})
     assert res.status_code == 400
+
+
+# ── /fixed-comment ページおよびAPIの最低限テスト ──────────────────────────────
+def test_fixed_comment_page(client):
+    res = client.get("/fixed-comment")
+    assert res.status_code == 200
+    assert "固定コメント" in res.text
+
+def test_api_fixed_comment_candidates(client):
+    res = client.get("/api/fixed-comment/candidates")
+    assert res.status_code == 200
+    assert isinstance(res.json(), list)
+
+def test_api_fixed_comment_requires_confirmation(client):
+    res = client.post("/api/fixed-comment", json={"history_name": "test", "confirmed": False})
+    assert res.status_code == 400
+
