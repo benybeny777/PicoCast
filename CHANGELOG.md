@@ -14,6 +14,12 @@
 
 ## 2026-05-26
 
+### native Shorts軽量エフェクトを追加
+
+- `config.py`: `NATIVE_ENABLE_MOTION_EFFECTS`、背景Ken Burns、キャラバウンス、ポップテロップ、シェイク、シェイク/アイコン上限、背景ズーム最大倍率の設定を追加
+- `core/native_renderer.py`: Shortsの各セグメントに、背景のゆっくりズーム/パン、話者キャラの軽いバウンス、`テロップ:` 行のポップ表示、短いツッコミ/疑問場面の軽いシェイクと疑問/驚きアイコンを追加。ffmpegフィルタ失敗時は該当セグメントをエフェクトなしで再レンダーして継続する
+- `README.md` / `SPEC.md`: nativeレンダラーの軽量エフェクト仕様と設定値を追記
+
 ### Shorts冒頭・サムネ・中盤の勝ち型を追加
 
 - `core/prompt_parts/local/script_generation_prompt.txt` / `samples/prompt_parts/food/script_generation_prompt.txt`: 台本生成プロンプトに、Shortsの1行目フック公式、サムネ文字と1行目の連動公式、15〜25秒地点の第2驚き構造を追加

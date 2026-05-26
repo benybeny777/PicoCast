@@ -15,6 +15,7 @@ from config import (
     NATIVE_AUDIO_LOUDNORM_TP,
     NATIVE_BACKGROUND_TRANSITION,
     NATIVE_BACKGROUND_TRANSITION_SEC,
+    NATIVE_BG_ZOOM_MAX,
     CHARACTER_UPPER_BODY_LONG_Y_OFFSET,
     CHARACTER_UPPER_BODY_MODE,
     CHARACTER_UPPER_BODY_SCALE,
@@ -28,12 +29,19 @@ from config import (
     NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS,
     NATIVE_CHARACTER_SIDE_MARGIN_LONG,
     NATIVE_CHARACTER_SIDE_MARGIN_SHORTS,
+    NATIVE_ENABLE_BG_KEN_BURNS,
     NATIVE_ENABLE_BLINK,
+    NATIVE_ENABLE_CHARACTER_BOUNCE,
     NATIVE_ENABLE_LIPSYNC,
+    NATIVE_ENABLE_MOTION_EFFECTS,
+    NATIVE_ENABLE_POP_TELOP,
+    NATIVE_ENABLE_SHAKE,
     NATIVE_FFMPEG_CQ,
     NATIVE_FFMPEG_CRF,
     NATIVE_FFMPEG_ENCODER,
     NATIVE_FFMPEG_PRESET,
+    NATIVE_MAX_ICON_COUNT_SHORTS,
+    NATIVE_MAX_SHAKE_COUNT_SHORTS,
     NATIVE_RENDER_CHARACTERS,
     NATIVE_SHORTS_CHARACTER_SCALE,
     NATIVE_SUBTITLE_FONT,
@@ -62,6 +70,13 @@ from core.parser import ScriptParser
 
 
 CaptionChunk = tuple[str, str, str | None]
+
+
+@dataclass
+class SegmentEffect:
+    telop: str | None = None
+    shake: bool = False
+    icon: str | None = None
 
 
 @dataclass
@@ -311,6 +326,33 @@ def _dialogue_captions(script_path: str) -> list[CaptionChunk]:
     return captions
 
 
+def _dialogue_caption_events(script_path: str) -> list[tuple[CaptionChunk, str | None]]:
+    try:
+        with open(script_path, "r", encoding="utf-8") as f:
+            items = ScriptParser.parse_string(f.read())
+    except Exception:
+        return []
+    events: list[tuple[CaptionChunk, str | None]] = []
+    pending_telops: list[str] = []
+    for item in items:
+        item_type = item.get("type")
+        if item_type == "telop":
+            text = str(item.get("text", "")).strip()
+            if text:
+                pending_telops.append(text)
+            continue
+        if item_type != "dialogue":
+            continue
+        style = _caption_style(item.get("character", ""))
+        expression = item.get("expression")
+        telop = " / ".join(pending_telops[:2]) if pending_telops else None
+        pending_telops.clear()
+        parts = _split_at_punctuation(item.get("text", ""))
+        for part_idx, text in enumerate(parts):
+            events.append(((text, style, expression), telop if part_idx == 0 else None))
+    return events
+
+
 def _captions_for_audio_files(script_path: str, audio_files: list[str]) -> list[CaptionChunk]:
     script_captions = _dialogue_captions(script_path)
     result: list[CaptionChunk] = []
@@ -329,6 +371,67 @@ def _captions_for_audio_files(script_path: str, audio_files: list[str]) -> list[
             matched = (audio_text, "Default", None)
         result.append(matched)
     return result
+
+
+def _effects_for_audio_files(script_path: str, audio_files: list[str], is_shorts: bool) -> list[SegmentEffect]:
+    events = _dialogue_caption_events(script_path)
+    result: list[SegmentEffect] = []
+    search_from = 0
+    shake_count = 0
+    icon_count = 0
+    for audio_path in audio_files:
+        audio_text = _audio_caption(audio_path)
+        audio_key = _audio_stem_key(audio_text)
+        matched: tuple[CaptionChunk, str | None] | None = None
+        for idx in range(search_from, len(events)):
+            caption, telop = events[idx]
+            if _audio_stem_key(caption[0]) == audio_key:
+                matched = (caption, telop)
+                search_from = idx + 1
+                break
+        caption, telop = matched if matched is not None else ((audio_text, "Default", None), None)
+        text, style, _expression = caption
+        if not is_shorts:
+            telop = None
+        should_shake = bool(is_shorts and _is_reaction_for_motion(text, style))
+        icon = _reaction_icon(text, style) if is_shorts else None
+        if should_shake and shake_count < max(0, NATIVE_MAX_SHAKE_COUNT_SHORTS):
+            shake_count += 1
+        else:
+            should_shake = False
+        if icon and icon_count < max(0, NATIVE_MAX_ICON_COUNT_SHORTS):
+            icon_count += 1
+        else:
+            icon = None
+        result.append(SegmentEffect(telop=telop, shake=should_shake, icon=icon))
+    return result
+
+
+def _is_reaction_for_motion(text: str, style: str) -> bool:
+    compact = re.sub(r"\s+", "", str(text or ""))
+    if not compact:
+        return False
+    has_trigger = bool(re.search(r"[!！?？]|ヤバ|やば|えっ|ええ|マジ|まじ|嘘|うそ", compact))
+    if not has_trigger:
+        return False
+    if len(compact) > 22:
+        return False
+    return style == "Metan" or "？" in compact or "?" in compact
+
+
+def _reaction_icon(text: str, style: str) -> str | None:
+    compact = re.sub(r"\s+", "", str(text or ""))
+    has_question = "？" in compact or "?" in compact
+    has_exclaim = "！" in compact or "!" in compact or re.search(r"ヤバ|やば|えっ|マジ|まじ", compact)
+    if style == "Zundamon" and has_question:
+        return "？"
+    if style == "Metan" and has_question and has_exclaim:
+        return "!?"
+    if style == "Metan" and has_exclaim:
+        return "!"
+    if style == "Metan" and has_question:
+        return "？"
+    return None
 
 
 def _audio_caption(path: str) -> str:
@@ -524,6 +627,33 @@ def _background_transition_sec(duration: float) -> float:
     return min(float(NATIVE_BACKGROUND_TRANSITION_SEC), max(0.05, float(duration) * 0.45))
 
 
+def _background_fill_filter(input_label: str, output_label: str, width: int, height: int) -> str:
+    return f"{input_label}scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1{output_label}"
+
+
+def _background_motion_filter(input_label: str, output_label: str, width: int, height: int, duration: float, segment_index: int) -> str:
+    zoom_max = max(1.0, min(1.08, float(NATIVE_BG_ZOOM_MAX or 1.0)))
+    duration = max(0.1, float(duration or 0.1))
+    progress = f"min(t/{duration:.3f}\\,1)"
+    base_scale = f"max({width}/iw\\,{height}/ih)"
+    zoom = f"(1+{zoom_max - 1.0:.5f}*{progress})"
+    scale_w = f"trunc(iw*{base_scale}*{zoom}/2)*2"
+    scale_h = f"trunc(ih*{base_scale}*{zoom}/2)*2"
+    variants = [
+        (f"(iw-ow)*{progress}", f"(ih-oh)/2"),
+        (f"(iw-ow)*(1-{progress})", f"(ih-oh)/2"),
+        (f"(iw-ow)/2", f"(ih-oh)*{progress}"),
+        (f"(iw-ow)/2", f"(ih-oh)*(1-{progress})"),
+        (f"(iw-ow)*{progress}", f"(ih-oh)*(1-{progress})"),
+        (f"(iw-ow)*(1-{progress})", f"(ih-oh)*{progress}"),
+    ]
+    x_expr, y_expr = variants[segment_index % len(variants)]
+    return (
+        f"{input_label}scale=w='{scale_w}':h='{scale_h}':eval=frame,"
+        f"crop={width}:{height}:x='{x_expr}':y='{y_expr}',setsar=1{output_label}"
+    )
+
+
 def _blink_enable_expr(duration: float, character_name: str, speaking: str | None) -> str | None:
     duration = max(0.1, float(duration or 0.1))
     if speaking != character_name:
@@ -532,6 +662,30 @@ def _blink_enable_expr(duration: float, character_name: str, speaking: str | Non
     blink_start = max(0.04, min(duration * 0.45, duration - blink_len - 0.03))
     blink_end = min(duration, blink_start + blink_len)
     return f"between(t,{blink_start:.3f},{blink_end:.3f})"
+
+
+def _character_scale_filter(input_index: int, output_label: str, scaled_char_h: int, bounce: bool) -> str:
+    if not bounce:
+        return f"[{input_index}:v]scale=-1:{scaled_char_h}{output_label}"
+    bounce_sec = 0.22
+    scale_expr = (
+        f"if(lte(t\\,{bounce_sec:.3f})\\,"
+        f"{scaled_char_h}*(1+0.04*sin(PI*t/{bounce_sec:.3f}))\\,{scaled_char_h})"
+    )
+    return f"[{input_index}:v]scale=w=-1:h='{scale_expr}':eval=frame{output_label}"
+
+
+def _maybe_shake_filter(input_label: str, output_label: str, width: int, height: int, enabled: bool) -> str:
+    if not enabled:
+        return f"{input_label}copy{output_label}"
+    pad = 24
+    amp_x = 7
+    amp_y = 5
+    return (
+        f"{input_label}scale={width + pad}:{height + pad},"
+        f"crop={width}:{height}:x='{pad // 2}+{amp_x}*sin(2*PI*t*24)':"
+        f"y='{pad // 2}+{amp_y}*sin(2*PI*t*27)'{output_label}"
+    )
 
 
 def _segment_filter(
@@ -543,15 +697,23 @@ def _segment_filter(
     expression: str | None,
     duration: float,
     has_background_transition: bool = False,
+    segment_index: int = 0,
+    effect: SegmentEffect | None = None,
+    enable_motion_effects: bool = True,
 ) -> str:
     portrait = height > width
     char_h = NATIVE_CHARACTER_HEIGHT_SHORTS if portrait else NATIVE_CHARACTER_HEIGHT_LONG
-    chains = [f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg_current]"]
+    effects_on = bool(enable_motion_effects and NATIVE_ENABLE_MOTION_EFFECTS and portrait)
+    bg_motion = bool(effects_on and NATIVE_ENABLE_BG_KEN_BURNS)
+    bounce_on = bool(effects_on and NATIVE_ENABLE_CHARACTER_BOUNCE)
+    shake_on = bool(effects_on and NATIVE_ENABLE_SHAKE and effect and effect.shake)
+    bg_filter = _background_motion_filter("[0:v]", "[bg_current]", width, height, duration, segment_index) if bg_motion else _background_fill_filter("[0:v]", "[bg_current]", width, height)
+    chains = [bg_filter]
     input_index = 2
     if has_background_transition:
         transition_sec = _background_transition_sec(duration)
         expr = f"if(lte(T\\,{transition_sec:.3f})\\,A*(1-T/{transition_sec:.3f})+B*(T/{transition_sec:.3f})\\,B)"
-        chains.append(f"[{input_index}:v]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},setsar=1[bg_prev]")
+        chains.append(_background_fill_filter(f"[{input_index}:v]", "[bg_prev]", width, height))
         chains.append(f"[bg_prev][bg_current]blend=all_expr='{expr}'[base0]")
         input_index += 1
     else:
@@ -567,8 +729,10 @@ def _segment_filter(
     scaled_char_h = int(round(char_h * char_scale))
     for char_idx, character in enumerate(characters):
         position = _character_position(character.name, portrait=portrait)
-        chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_base]")
-        chains.append(f"[{current}][{character.name}_base]overlay={position}[base{overlay_num}]")
+        char_bounce = bool(bounce_on and speaking == character.name)
+        overlay_suffix = ":eval=frame" if char_bounce else ""
+        chains.append(_character_scale_filter(input_index, f"[{character.name}_base]", scaled_char_h, char_bounce))
+        chains.append(f"[{current}][{character.name}_base]overlay={position}{overlay_suffix}[base{overlay_num}]")
         current = f"base{overlay_num}"
         overlay_num += 1
         input_index += 1
@@ -576,19 +740,19 @@ def _segment_filter(
         expr_png_active = _using_expression_png(character, speaking, expression)
         if NATIVE_ENABLE_LIPSYNC and speaking == character.name and not expr_png_active:
             if character.mouth_half and os.path.exists(character.mouth_half):
-                chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_mouth_half]")
+                chains.append(_character_scale_filter(input_index, f"[{character.name}_mouth_half]", scaled_char_h, char_bounce))
                 chains.append(
                     f"[{current}][{character.name}_mouth_half]overlay={position}:"
-                    f"enable='between(mod(t,0.24),0.12,0.20)'[base{overlay_num}]"
+                    f"enable='between(mod(t,0.24),0.12,0.20)'{overlay_suffix}[base{overlay_num}]"
                 )
                 current = f"base{overlay_num}"
                 overlay_num += 1
                 input_index += 1
             if character.mouth_open and os.path.exists(character.mouth_open):
-                chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_mouth_open]")
+                chains.append(_character_scale_filter(input_index, f"[{character.name}_mouth_open]", scaled_char_h, char_bounce))
                 chains.append(
                     f"[{current}][{character.name}_mouth_open]overlay={position}:"
-                    f"enable='between(mod(t,0.24),0.00,0.12)'[base{overlay_num}]"
+                    f"enable='between(mod(t,0.24),0.00,0.12)'{overlay_suffix}[base{overlay_num}]"
                 )
                 current = f"base{overlay_num}"
                 overlay_num += 1
@@ -596,14 +760,17 @@ def _segment_filter(
 
         blink_expr = _blink_enable_expr(duration, character.name, speaking)
         if NATIVE_ENABLE_BLINK and blink_expr and not expr_png_active and character.eye_closed and os.path.exists(character.eye_closed):
-            chains.append(f"[{input_index}:v]scale=-1:{scaled_char_h}[{character.name}_eye_closed]")
+            chains.append(_character_scale_filter(input_index, f"[{character.name}_eye_closed]", scaled_char_h, char_bounce))
             chains.append(
                 f"[{current}][{character.name}_eye_closed]overlay={position}:"
-                f"enable='{blink_expr}'[base{overlay_num}]"
+                f"enable='{blink_expr}'{overlay_suffix}[base{overlay_num}]"
             )
             current = f"base{overlay_num}"
             overlay_num += 1
             input_index += 1
+    if shake_on:
+        chains.append(_maybe_shake_filter(f"[{current}]", "[motion_shake]", width, height, True))
+        current = "motion_shake"
     chains.append(f"[{current}]subtitles='{_filter_escape_path(ass_path)}'[vout]")
     return ";".join(chains)
 
@@ -630,6 +797,8 @@ def _write_subtitles(
     width: int,
     height: int,
     offset_sec: float = 0.0,
+    telop: str | None = None,
+    icon: str | None = None,
 ) -> None:
     font_size = int(round((NATIVE_SUBTITLE_FONT_SIZE_SHORTS if height >= 1600 else NATIVE_SUBTITLE_FONT_SIZE_LONG) * float(NATIVE_SUBTITLE_FONT_SCALE or 1.0)))
     margin_v = NATIVE_SUBTITLE_MARGIN_V_SHORTS if height >= 1600 else NATIVE_SUBTITLE_MARGIN_V_LONG
@@ -660,6 +829,9 @@ def _write_subtitles(
         "Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, "
         "Shadow, Alignment, MarginL, MarginR, MarginV, Encoding",
         f"Style: SubtitleBox,Arial,1,{box_color},&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,100,0,0,1,0,0,7,0,0,0,1",
+        f"Style: PopTelopOuter,{font_name},{max(font_size + 8, 72)},&H00FFFFFF,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,{NATIVE_SUBTITLE_OUTER_STROKE_WIDTH + 2},2,5,60,60,0,1",
+        f"Style: PopTelop,{font_name},{max(font_size + 8, 72)},&H00FFF7D6,&H00FFFFFF,&H002B2B2B,&H80000000,1,0,0,0,100,100,0,0,1,{NATIVE_SUBTITLE_STROKE_WIDTH},0,5,60,60,0,1",
+        f"Style: ReactionIcon,{font_name},{max(font_size + 22, 96)},&H00FFF7D6,&H00FFFFFF,&H00000000,&H80000000,1,0,0,0,100,100,0,0,1,{NATIVE_SUBTITLE_OUTER_STROKE_WIDTH},2,5,40,40,0,1",
     ]
     for name, inner_outline in inner_outline_colors.items():
         lines.append(
@@ -711,6 +883,32 @@ def _write_subtitles(
             lines.append(f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},{style_name}Outer,,0,0,0,,{override}{escaped_text}")
             lines.append(f"Dialogue: 2,{_ass_time(start)},{_ass_time(end)},{style_name},,0,0,0,,{override}{escaped_text}")
         t += max(0.0, dur) + NATIVE_INTER_DIALOGUE_GAP_SEC
+    segment_duration = sum(max(0.0, dur) for dur in audio_durations)
+    if telop and NATIVE_ENABLE_MOTION_EFFECTS and NATIVE_ENABLE_POP_TELOP:
+        start = 0.05
+        end = min(max(0.85, segment_duration), 1.5)
+        if end > start + 0.1:
+            telop_y = int(height * (0.29 if height > width else 0.22))
+            escaped_telop = _ass_escape(telop)
+            pop = (
+                f"{{\\an5\\pos({width // 2},{telop_y})\\fscx72\\fscy72\\alpha&H20&"
+                "\\t(0,180,\\fscx112\\fscy112\\alpha&H00&)\\t(180,330,\\fscx100\\fscy100)"
+                "\\fad(40,120)}}"
+            )
+            lines.append(f"Dialogue: 5,{_ass_time(start)},{_ass_time(end)},PopTelopOuter,,0,0,0,,{pop}{escaped_telop}")
+            lines.append(f"Dialogue: 6,{_ass_time(start)},{_ass_time(end)},PopTelop,,0,0,0,,{pop}{escaped_telop}")
+    if icon and NATIVE_ENABLE_MOTION_EFFECTS:
+        start = 0.02
+        end = min(max(0.55, segment_duration), 0.95)
+        if end > start + 0.1:
+            icon_x = int(width * 0.70)
+            icon_y = int(height * (0.23 if height > width else 0.20))
+            pop = (
+                f"{{\\an5\\pos({icon_x},{icon_y})\\fscx60\\fscy60\\alpha&H20&"
+                "\\t(0,150,\\fscx115\\fscy115\\alpha&H00&)\\t(150,260,\\fscx100\\fscy100)"
+                "\\fad(20,120)}}"
+            )
+            lines.append(f"Dialogue: 7,{_ass_time(start)},{_ass_time(end)},ReactionIcon,,0,0,0,,{pop}{_ass_escape(icon)}")
     with open(path, "w", encoding="utf-8-sig", newline="\n") as f:
         f.write("\n".join(lines))
 
@@ -780,9 +978,10 @@ def render_native_test(
             "音声生成失敗の可能性があるため、欠けた音声を修正してから再実行してください。"
         )
     captions = _captions_for_audio_files(script_path, audio_files)
+    is_shorts = height > width
+    effects = _effects_for_audio_files(script_path, audio_files, is_shorts)
 
     segment_paths: list[str] = []
-    is_shorts = height > width
     if is_shorts:
         thumb_path = _thumbnail_path(output_dir)
         if thumb_path:
@@ -797,11 +996,21 @@ def render_native_test(
                 )
     prev_bg_path: str | None = None
     warned_expression_fallbacks: set[tuple[str | None, str | None, str]] = set()
-    for idx, (audio_path, duration, caption) in enumerate(zip(audio_files, durations, captions), start=1):
+    motion_fallback_count = 0
+    for idx, (audio_path, duration, caption, effect) in enumerate(zip(audio_files, durations, captions, effects), start=1):
         bg_path = _background_for_audio(audio_path, bg_files)
         ass_path = os.path.join(work_dir, f"subtitle_{idx:04d}.ass")
         segment_path = os.path.join(work_dir, f"segment_{idx:04d}.mp4")
-        _write_subtitles(ass_path, [caption], [duration], width, height, offset_sec=NATIVE_SUBTITLE_OFFSET_SEC)
+        _write_subtitles(
+            ass_path,
+            [caption],
+            [duration],
+            width,
+            height,
+            offset_sec=NATIVE_SUBTITLE_OFFSET_SEC,
+            telop=effect.telop,
+            icon=effect.icon,
+        )
         _caption_text, caption_style, expression = caption
         speaking = _speaker_name(caption_style)
         fallback_reason = _expression_fallback_reason(characters, speaking, expression)
@@ -814,33 +1023,87 @@ def render_native_test(
                 else:
                     progress_callback(f"⚠ native表情素材がありません: {speaking or 'unknown'}[{expression}] → 既定表情を使用")
         has_bg_transition = _background_transition_enabled(prev_bg_path, bg_path, duration)
-        filter_complex = _segment_filter(width, height, ass_path, characters, speaking, expression, duration, has_bg_transition)
+        filter_complex = _segment_filter(
+            width,
+            height,
+            ass_path,
+            characters,
+            speaking,
+            expression,
+            duration,
+            has_bg_transition,
+            segment_index=idx - 1,
+            effect=effect,
+            enable_motion_effects=True,
+        )
         inputs = [FFMPEG_BIN, "-y", "-loop", "1", "-t", f"{max(0.1, duration):.3f}", "-i", bg_path, "-i", audio_path]
         if has_bg_transition and prev_bg_path:
             inputs.extend(["-loop", "1", "-t", f"{max(0.1, duration):.3f}", "-i", prev_bg_path])
         inputs.extend(_segment_character_inputs(duration, characters, speaking, expression))
         last_error = None
         encode_candidates = _segment_encode_args()
-        for enc_idx, encode_args in enumerate(encode_candidates):
-            try:
-                _run_ffmpeg([
-                    *inputs,
-                    "-filter_complex", filter_complex,
-                    "-map", "[vout]", "-map", "1:a",
-                    "-r", str(VIDEO_FPS), "-pix_fmt", "yuv420p",
-                    *encode_args,
-                    "-c:a", "aac", "-ar", "48000", "-ac", "2",
-                    "-shortest", segment_path,
-                ])
-                if enc_idx > 0 and progress_callback:
-                    progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました")
-                last_error = None
-                break
-            except Exception as e:
-                last_error = e
-                if enc_idx == 0 and len(encode_candidates) > 1:
-                    continue
+        try:
+            for enc_idx, encode_args in enumerate(encode_candidates):
+                try:
+                    _run_ffmpeg([
+                        *inputs,
+                        "-filter_complex", filter_complex,
+                        "-map", "[vout]", "-map", "1:a",
+                        "-r", str(VIDEO_FPS), "-pix_fmt", "yuv420p",
+                        *encode_args,
+                        "-c:a", "aac", "-ar", "48000", "-ac", "2",
+                        "-shortest", segment_path,
+                    ])
+                    if enc_idx > 0 and progress_callback:
+                        progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました")
+                    last_error = None
+                    break
+                except Exception as e:
+                    last_error = e
+                    if enc_idx == 0 and len(encode_candidates) > 1:
+                        continue
+                    raise
+        except Exception as effect_error:
+            if not (NATIVE_ENABLE_MOTION_EFFECTS and is_shorts):
                 raise
+            motion_fallback_count += 1
+            if progress_callback:
+                progress_callback(f"⚠ segment {idx}: 軽量エフェクトに失敗したため静的レンダーで続行します")
+            _write_subtitles(ass_path, [caption], [duration], width, height, offset_sec=NATIVE_SUBTITLE_OFFSET_SEC)
+            filter_complex = _segment_filter(
+                width,
+                height,
+                ass_path,
+                characters,
+                speaking,
+                expression,
+                duration,
+                has_bg_transition,
+                segment_index=idx - 1,
+                effect=SegmentEffect(),
+                enable_motion_effects=False,
+            )
+            last_error = None
+            for enc_idx, encode_args in enumerate(encode_candidates):
+                try:
+                    _run_ffmpeg([
+                        *inputs,
+                        "-filter_complex", filter_complex,
+                        "-map", "[vout]", "-map", "1:a",
+                        "-r", str(VIDEO_FPS), "-pix_fmt", "yuv420p",
+                        *encode_args,
+                        "-c:a", "aac", "-ar", "48000", "-ac", "2",
+                        "-shortest", segment_path,
+                    ])
+                    if enc_idx > 0 and progress_callback:
+                        progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました")
+                    last_error = None
+                    break
+                except Exception as e:
+                    last_error = e
+                    if enc_idx == 0 and len(encode_candidates) > 1:
+                        continue
+                    raise RuntimeError(f"エフェクトなし再レンダーにも失敗しました: {e}") from effect_error
         if last_error:
             raise last_error
         segment_paths.append(segment_path)
@@ -896,6 +1159,9 @@ def render_native_test(
         if NATIVE_RENDER_CHARACTERS and is_shorts:
             char_scale = CHARACTER_UPPER_BODY_SHORTS_SCALE if CHARACTER_UPPER_BODY_MODE else NATIVE_SHORTS_CHARACTER_SCALE
             progress_callback(f"🧍 nativeキャラ倍率: {char_scale:g}")
+        if is_shorts:
+            motion_status = "enabled" if NATIVE_ENABLE_MOTION_EFFECTS else "disabled"
+            progress_callback(f"✨ native軽量エフェクト: {motion_status} / fallback_segments={motion_fallback_count}")
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
             progress_callback(
                 "🔊 native audio loudnorm: "
@@ -914,6 +1180,8 @@ def render_native_test(
         "loudnorm_i": NATIVE_AUDIO_LOUDNORM_I,
         "loudnorm_tp": NATIVE_AUDIO_LOUDNORM_TP,
         "loudnorm_lra": NATIVE_AUDIO_LOUDNORM_LRA,
+        "motion_effects_enabled": bool(NATIVE_ENABLE_MOTION_EFFECTS and is_shorts),
+        "motion_effects_fallback_segments": motion_fallback_count,
     })
 
     if progress_callback:

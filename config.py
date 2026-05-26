@@ -208,6 +208,18 @@ NATIVE_BACKGROUND_TRANSITION     = os.environ.get("NATIVE_BACKGROUND_TRANSITION"
 NATIVE_BACKGROUND_TRANSITION_SEC = float(os.environ.get("NATIVE_BACKGROUND_TRANSITION_SEC", "0.18"))           # フェード時間 (秒)
 
 # ───────────────────────────────────────────────
+# native Shorts 軽量モーション演出
+# ───────────────────────────────────────────────
+NATIVE_ENABLE_MOTION_EFFECTS = os.environ.get("NATIVE_ENABLE_MOTION_EFFECTS", "1").strip().lower() in ("1", "true", "yes", "on")  # native Shorts の軽量演出全体
+NATIVE_ENABLE_BG_KEN_BURNS = os.environ.get("NATIVE_ENABLE_BG_KEN_BURNS", "1").strip().lower() in ("1", "true", "yes", "on")  # 背景のゆっくりズーム/パン
+NATIVE_ENABLE_CHARACTER_BOUNCE = os.environ.get("NATIVE_ENABLE_CHARACTER_BOUNCE", "1").strip().lower() in ("1", "true", "yes", "on")  # 話者開始時の軽いバウンス
+NATIVE_ENABLE_POP_TELOP = os.environ.get("NATIVE_ENABLE_POP_TELOP", "1").strip().lower() in ("1", "true", "yes", "on")  # テロップ行のポップ表示
+NATIVE_ENABLE_SHAKE = os.environ.get("NATIVE_ENABLE_SHAKE", "1").strip().lower() in ("1", "true", "yes", "on")  # ツッコミ/驚き時の軽い画面揺れ
+NATIVE_MAX_SHAKE_COUNT_SHORTS = int(os.environ.get("NATIVE_MAX_SHAKE_COUNT_SHORTS", "4"))  # Shorts 1本あたりのシェイク最大回数
+NATIVE_MAX_ICON_COUNT_SHORTS = int(os.environ.get("NATIVE_MAX_ICON_COUNT_SHORTS", "4"))  # Shorts 1本あたりの疑問/驚きアイコン最大回数
+NATIVE_BG_ZOOM_MAX = float(os.environ.get("NATIVE_BG_ZOOM_MAX", "1.06"))  # 背景Ken Burnsの最大拡大倍率
+
+# ───────────────────────────────────────────────
 # native 字幕スタイル
 # ───────────────────────────────────────────────
 NATIVE_SUBTITLE_OFFSET_SEC        = float(os.environ.get("NATIVE_SUBTITLE_OFFSET_SEC",        "0"))     # 字幕の開始タイミング補正 (秒)

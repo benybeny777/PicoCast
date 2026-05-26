@@ -25,6 +25,7 @@
 - 主要ボタンにカーソルを合わせると機能概要を表示
 - `Long節約` チェックボックスで Long の背景生成を最大 16 枚に制限（台本で `背景: 前と同じ` と書くと前の背景を継続使用）
 - `SD生成` チェックボックスで画像を縮小サイズで生成して拡大セット（API コスト削減。デフォルト OFF）
+- native Shorts は背景のゆっくりズーム/パン、話者の軽いバウンス、`テロップ:` 行のポップ表示、短いツッコミ/疑問場面のシェイク・アイコンを自動で追加
 
 ## セットアップ
 
@@ -85,6 +86,14 @@ APIキーやOAuthファイルなどの認証情報以外は、原則として [c
 | `NATIVE_AUDIO_LOUDNORM_LRA` | `6` | loudnormのLoudness Range目標 |
 | `NATIVE_BGM_VOLUME_DB` | `-20` | native出力のBGM音量 |
 | `NATIVE_SHORTS_CHARACTER_SCALE` | `1.05` | native Shortsのキャラ倍率 |
+| `NATIVE_ENABLE_MOTION_EFFECTS` | `1` | native Shorts軽量エフェクト全体の有効/無効 |
+| `NATIVE_ENABLE_BG_KEN_BURNS` | `1` | 背景のゆっくりズーム/パン |
+| `NATIVE_ENABLE_CHARACTER_BOUNCE` | `1` | 話者キャラの軽いバウンス |
+| `NATIVE_ENABLE_POP_TELOP` | `1` | `テロップ:` 行のポップ表示 |
+| `NATIVE_ENABLE_SHAKE` | `1` | ツッコミ/驚き場面の軽いシェイク |
+| `NATIVE_MAX_SHAKE_COUNT_SHORTS` | `4` | Shorts 1本あたりのシェイク上限 |
+| `NATIVE_MAX_ICON_COUNT_SHORTS` | `4` | Shorts 1本あたりの疑問/驚きアイコン上限 |
+| `NATIVE_BG_ZOOM_MAX` | `1.06` | 背景Ken Burnsの最大拡大倍率 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード成功後に追加する再生リスト名。空にすると無効 |
 
 ## 起動

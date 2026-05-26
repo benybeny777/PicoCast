@@ -397,6 +397,14 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_BGM_VOLUME_DB` | -20 | native出力のBGM音量(dB) |
 | `NATIVE_SHORTS_CHARACTER_SCALE` | 1.05 | native Shortsのキャラ表示倍率。`CHARACTER_UPPER_BODY_MODE=1` のとき無効 |
 | `CHARACTER_UPPER_BODY_MODE` | 1 | `1` でnative腰から上表示モードを有効化 |
+| `NATIVE_ENABLE_MOTION_EFFECTS` | `true` | native Shorts軽量エフェクト全体を有効化 |
+| `NATIVE_ENABLE_BG_KEN_BURNS` | `true` | 背景画像を各セグメント内でゆっくりズーム/パン |
+| `NATIVE_ENABLE_CHARACTER_BOUNCE` | `true` | セリフ開始時に話者キャラだけ軽く拡大縮小 |
+| `NATIVE_ENABLE_POP_TELOP` | `true` | 台本の `テロップ:` 行を短時間ポップ表示 |
+| `NATIVE_ENABLE_SHAKE` | `true` | ツッコミ/驚き系の短い反応で軽いシェイク |
+| `NATIVE_MAX_SHAKE_COUNT_SHORTS` | 4 | Shorts 1本あたりのシェイク最大回数 |
+| `NATIVE_MAX_ICON_COUNT_SHORTS` | 4 | Shorts 1本あたりの疑問/驚きアイコン最大回数 |
+| `NATIVE_BG_ZOOM_MAX` | 1.06 | 背景Ken Burnsの最大拡大倍率 |
 | `CHARACTER_UPPER_BODY_SCALE` | 1.55 | 腰から上モード時のキャラ拡大倍率（Long用） |
 | `CHARACTER_UPPER_BODY_SHORTS_SCALE` | 1.15 | 腰から上モード時のキャラ拡大倍率（Shorts用。縦画面は幅が狭いため Long より小さく） |
 | `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
@@ -428,6 +436,8 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
 - **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。
 - 字幕フチ幅は `NATIVE_SUBTITLE_STROKE_WIDTH`(内フチ, デフォルト 9) / `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(外フチ, デフォルト 13) で調整可能。字幕帯のパディングは `NATIVE_SUBTITLE_PADDING_Y` で調整。
+- **Shorts軽量エフェクト**: `NATIVE_ENABLE_MOTION_EFFECTS=1` のとき、背景に最大 `NATIVE_BG_ZOOM_MAX` までのKen Burns風ズーム/パン、話者キャラの0.2秒前後の軽いバウンス、`テロップ:` 行の0.8〜1.5秒ポップ表示、短いツッコミ/疑問場面の軽いシェイクと疑問/驚きアイコンを追加する。シェイクとアイコンは各 `NATIVE_MAX_SHAKE_COUNT_SHORTS` / `NATIVE_MAX_ICON_COUNT_SHORTS` 回までに制限する。
+- エフェクトはセグメント単位で付与し、BGM・音声タイミングは変更しない。ffmpegフィルタが失敗したセグメントはエフェクトなしで再レンダーして生成を継続する。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭に `THUMBNAIL_HOLD_FRAMES_SHORTS`（デフォルト3フレーム≒0.1秒）だけサムネイル画像を挿入する（Long は挿入しない）。保持フレーム数は `.env` の `THUMBNAIL_HOLD_FRAMES_SHORTS` で変更可。1秒以上の静止サムネは設定値に関係なく生じない（上限5フレーム≒0.17秒）。
 - `_meta/render_info.json` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra。
@@ -830,16 +840,16 @@ YouTube Studio 側で予約動画を手動公開した場合:
 3. `公開予定を変更` を押す
 4. 日付と時間をプルダウンから選択
 
-This operation updates YouTube `publishAt`. The target video must have a YouTube `video_id`. Allowed times: Shorts 7:00 / 12:00 / 19:00, Long weekday 21:00 and weekend 12:00 / 21:00. If the destination slot already has another video of the same type, the two publish times are swapped on YouTube.
+この操作は YouTube の `publishAt` を更新する。対象動画には YouTube の `video_id` が必要。指定可能時刻は Shorts が 7:00 / 12:00 / 19:00、Long が平日 21:00、土日 12:00 / 21:00。移動先スロットに同じ動画タイプの別動画がある場合は、YouTube 側で2本の公開予定時刻を入れ替える。
 
 予約スロットを前詰めしたい場合:
 
 1. `📅 スケジュール` を開く
 2. `スロット詰め直し` を押す
 
-Future scheduled slots can be packed forward from the earliest available slot. `rebalance_slots()` uses YouTube `publishAt` / `video_id` data, then updates YouTube publish times. Shorts and Long may share the same `publishAt`, but duplicate `publishAt` values within the same video type are treated as rebalance targets. YouTube updates require `video_id`.
+未来の予約枠は、最も早い空きスロットから前詰めできる。`rebalance_slots()` は YouTube の `publishAt` / `video_id` を正として読み、YouTube 側の公開予定時刻を更新する。Shorts と Long は同じ `publishAt` を共有してよいが、同じ動画タイプ内で `publishAt` が重複している場合は詰め直し対象にする。YouTube 更新には `video_id` が必要。
 
-Native Shorts rendering places zundamon/metan smaller and slightly higher than the old bottom-aligned layout to reduce overlap with captions. Shorts dialogue captions are center-aligned, use a 1.4x font scale by default, and prioritize readability: white text, speaker-colored inner outline (dark green for zundamon / dark purple-pink for metan), black outer outline, and an optional semi-transparent black band behind captions (`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`). Captions are nudged slightly downward with `NATIVE_SUBTITLE_Y_OFFSET_SHORTS`. These can be adjusted with `NATIVE_CHARACTER_HEIGHT_SHORTS`, `NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`, `NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`, `NATIVE_SUBTITLE_FONT_SCALE`, `NATIVE_SUBTITLE_ALIGNMENT_SHORTS`, and `NATIVE_SUBTITLE_Y_OFFSET_SHORTS`.
+native Shorts の立ち絵は、字幕との重なりを抑えるため旧来の下寄せ配置より小さめ・やや上寄せにする。Shorts通常字幕は中央寄せ、既定1.4倍のフォント倍率、白文字、話者色の内フチ（ずんだもん=濃緑 / めたん=濃い紫ピンク）、黒外フチ、任意の半透明黒帯（`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`）で可読性を優先する。字幕は `NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で少し下げる。調整は `NATIVE_CHARACTER_HEIGHT_SHORTS`、`NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`、`NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`、`NATIVE_SUBTITLE_FONT_SCALE`、`NATIVE_SUBTITLE_ALIGNMENT_SHORTS`、`NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で行う。
 
 ---
 
@@ -1005,6 +1015,14 @@ YouTube OAuth:
 | `THUMBNAIL_HOLD_FRAMES_SHORTS` | `config.py` / `.env` | Shorts先頭サムネ保持フレーム数。1〜5（30fps換算: 1=0.033s / 3=0.100s / 5=0.167s）。デフォルト3。不正値は3、範囲外は1〜5にクランプ。Long非対応 |
 | `BGM_PATH` | `config.py` | 固定BGMファイル |
 | `NATIVE_BGM_VOLUME_DB` | `.env` / `config.py` | native出力のBGM音量(dB) |
+| `NATIVE_ENABLE_MOTION_EFFECTS` | `.env` / `config.py` | native Shorts軽量エフェクト全体の有効/無効 |
+| `NATIVE_ENABLE_BG_KEN_BURNS` | `.env` / `config.py` | 背景画像のゆっくりズーム/パン |
+| `NATIVE_ENABLE_CHARACTER_BOUNCE` | `.env` / `config.py` | セリフ開始時の話者キャラバウンス |
+| `NATIVE_ENABLE_POP_TELOP` | `.env` / `config.py` | `テロップ:` 行のポップ表示 |
+| `NATIVE_ENABLE_SHAKE` | `.env` / `config.py` | 短いツッコミ/驚き場面のシェイク |
+| `NATIVE_MAX_SHAKE_COUNT_SHORTS` | `.env` / `config.py` | Shorts 1本あたりのシェイク最大回数 |
+| `NATIVE_MAX_ICON_COUNT_SHORTS` | `.env` / `config.py` | Shorts 1本あたりの疑問/驚きアイコン最大回数 |
+| `NATIVE_BG_ZOOM_MAX` | `.env` / `config.py` | 背景Ken Burnsの最大拡大倍率 |
 | `MAX_BACKGROUNDS_SHORTS` | `config.py` | Shortsの最大背景生成枚数 |
 | `MAX_BACKGROUNDS_LONG` | `config.py` | Longの最大背景生成枚数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `.env` | Longアップロード後に自動追加する再生リスト名。未設定時は `ロング動画`。完全一致で検索 |
