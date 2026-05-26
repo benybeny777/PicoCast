@@ -8,9 +8,7 @@
     <button class="btn btn-primary" onclick="refreshAnalytics()">Analytics取得・更新</button>
     <button class="btn btn-secondary" onclick="copyTSV()">TSVコピー</button>
   </div>
-  {% if analytics_files %}
-  <p class="hint">ファイル: {% for f in analytics_files %}<code>{{ f }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
-  {% endif %}
+
   <div id="refresh-status" class="log-box mt" style="display:none"></div>
 </div>
 
