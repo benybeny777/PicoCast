@@ -491,7 +491,7 @@ VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防�
 - 動画1本あたり全セリフチャンクを **1回の API 呼び出し** でまとめて変換（コスト効率優先）
 - 変換後テキスト → VOICEVOX へ渡す（読み上げ用）
 - 元テキスト → ファイル名・字幕に使う（字幕マッチング維持）
-- Ollama 未起動 / 変換エラーは元テキストへフォールバック（生成を止めない）
+- `VOICE_READING_NORMALIZE_ENABLED = True` の状態で Ollama に接続できない場合は `RuntimeError` を投げて生成を中止する（サイレントスキップ禁止）
 - `VOICE_READING_NORMALIZE_ENABLED = False` で無効化可能
 
 ```

@@ -42,6 +42,26 @@
 - `core/comment_templates.py`: 新規。四国めたん調（お嬢様口調・軽い毒舌）の固定コメントテンプレートを実装。タイトルからトピックを抽出し、`normal` / `topic_request` の2モードでランダム生成する `build_fixed_comment()` を提供
 - `main.py`: 固定コメント生成を Gemini API 呼び出しから `build_fixed_comment()` のテンプレート生成へ変更。APIコスト削減および安定しためたん口調を実現
 
+### 出力フォルダを開くボタンを追加
+
+- 履歴詳細・履歴一覧に「フォルダを開く」ボタンを追加（Windows: `os.startfile`、Mac: `open`、Linux: `xdg-open`）
+- `POST /api/history/{history_name}/open-folder` エンドポイントを追加
+
+### 出力フォルダが開いている状態での再生成エラーを解消
+
+- `main.py`: `os.replace(theme_dir, backup_dir)` が PermissionError で失敗した場合（Explorer でフォルダを開いている等）に `OutputDirectoryLockedError` を投げる代わり、警告ログを出して上書き生成を続行するよう変更
+- バックアップ失敗時は `_existing_theme_backup = None` のまま処理を継続するため、背景再利用とサムネイルフォールバックはそのケースで無効化される
+
+### 読み補正 ON 時の Ollama 未起動をエラー中止に変更
+
+- `core/reading_normalizer.py`: `VOICE_READING_NORMALIZE_ENABLED = True` の状態で Ollama に接続できない場合、サイレントスキップせず `RuntimeError` を投げて生成を中止するよう変更
+- API 呼び出し失敗時の `except Exception: pass` も削除し、エラーをそのまま上位に伝播させるよう変更
+
+### Ctrl+C 即時終了を修正
+
+- `web_app/job_manager.py`: `ThreadPoolExecutor` に `atexit.register(lambda: executor.shutdown(wait=False))` を追加し、Ctrl+C 時にワーカースレッドの終了を待たずに即退場するよう変更
+- `web_app/worker_runner.py`: `atexit.register(_kill_all_workers)` で起動中のワーカープロセスツリーをシャットダウン時に強制終了するよう変更
+
 ## 2026-05-26
 
 ### 実尺チェックをよみがな正規化・音声生成後に移動
