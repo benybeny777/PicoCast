@@ -22,6 +22,29 @@ _WORKER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # subprocess に渡す環境変数（PYTHONIOENCODING を強制して文字化けを防ぐ）
 _WORKER_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
 
+# Windows ではプロセスグループを新規作成して子プロセスツリーをまとめて kill できるようにする
+_POPEN_EXTRA: dict[str, Any] = (
+    {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    if sys.platform == "win32"
+    else {}
+)
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    """プロセスとその子プロセスをすべて強制終了する。"""
+    if sys.platform == "win32":
+        subprocess.run(
+            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+            check=False,
+            capture_output=True,
+        )
+    else:
+        proc.kill()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
 
 def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[str, Any]:
     """
@@ -49,11 +72,15 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
             encoding="utf-8",
             cwd=_WORKER_DIR,
             env=_WORKER_ENV,
+            **_POPEN_EXTRA,
         )
 
         def _cancel_monitor() -> None:
-            """cancel_event を監視して stdin に cancel を送り、タイムアウト後に terminate する。"""
-            job.cancel_event.wait()
+            """cancel_event を監視して stdin に cancel を送り、タイムアウト後にツリーごと kill する。
+            プロセスが正常終了した場合は何もせずに抜ける（①スレッドリーク対策）。"""
+            while not job.cancel_event.wait(timeout=0.5):
+                if proc.poll() is not None:
+                    return
             try:
                 proc.stdin.write("cancel\n")
                 proc.stdin.flush()
@@ -63,11 +90,7 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
             try:
                 proc.wait(timeout=15)
             except subprocess.TimeoutExpired:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
+                _kill_tree(proc)  # ③ ffmpeg 孤立防止: ツリーごと強制終了
 
         cancel_thread = threading.Thread(target=_cancel_monitor, daemon=True)
         cancel_thread.start()
@@ -93,7 +116,11 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
             except json.JSONDecodeError:
                 _log(job, raw, "info")
 
-        proc.wait()
+        # ② stdout 閉鎖後のハングに備えてタイムアウトを設ける
+        try:
+            proc.wait(timeout=60)
+        except subprocess.TimeoutExpired:
+            _kill_tree(proc)
         stderr_thread.join(timeout=2)
 
         if os.path.exists(result_path):
