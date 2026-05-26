@@ -4,46 +4,41 @@
 <h1>ダッシュボード</h1>
 
 <div class="card-grid">
-  <!-- サービス状態 -->
+  <!-- 連携アプリ状態 -->
   <div class="card">
-    <h2>サービス状態</h2>
+    <h2>連携アプリ</h2>
     <table class="status-table">
       <tr>
-        <td>VOICEVOX</td>
+        <td>Google AI</td>
+        <td>{% if summary.google_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>OpenAI</td>
+        <td>{% if summary.openai_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>YouTubeアップロード</td>
         <td>
-          {% if summary.voicevox.ok %}
-            <span class="badge badge-ok">接続OK{% if summary.voicevox.version %} v{{ summary.voicevox.version }}{% endif %}</span>
+          {% if summary.client_secrets_json and summary.token_json %}
+            <span class="badge badge-ok">連携済み</span>
+          {% elif summary.client_secrets_json %}
+            <span class="badge badge-warn">認証待ち</span>
           {% else %}
-            <span class="badge badge-ng">未接続</span>
+            <span class="badge badge-ng">未設定</span>
           {% endif %}
         </td>
       </tr>
       <tr>
-        <td>ffmpeg</td>
+        <td>YouTube Analytics</td>
         <td>
-          {% if summary.ffmpeg.ok %}
-            <span class="badge badge-ok">利用可{% if summary.ffmpeg.version %} v{{ summary.ffmpeg.version }}{% endif %}</span>
-            <br><small style="color:var(--text-muted)">動作: {{ summary.ffmpeg.gpu }}</small>
+          {% if summary.client_secrets_json and summary.token_analytics_json %}
+            <span class="badge badge-ok">連携済み</span>
+          {% elif summary.client_secrets_json %}
+            <span class="badge badge-warn">認証待ち</span>
           {% else %}
-            <span class="badge badge-ng">見つからない</span>
+            <span class="badge badge-ng">未設定</span>
           {% endif %}
         </td>
-      </tr>
-      <tr>
-        <td>Google APIキー</td>
-        <td>{% if summary.google_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
-      </tr>
-      <tr>
-        <td>OpenAI APIキー</td>
-        <td>{% if summary.openai_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
-      </tr>
-      <tr>
-        <td>client_secrets.json</td>
-        <td>{% if summary.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
-      </tr>
-      <tr>
-        <td>token.json</td>
-        <td>{% if summary.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
       </tr>
     </table>
   </div>

@@ -41,6 +41,31 @@ def _find_thumbnail(theme_dir: str) -> str | None:
     return None
 
 
+def _script_meta(theme_dir: str) -> dict[str, str]:
+    script_text = _read_text(os.path.join(theme_dir, "script.txt"))
+    if not script_text.strip():
+        return {}
+    from core.parser import ScriptParser
+    items = ScriptParser.parse_string(script_text)
+    return {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
+
+
+def _video_format(name: str, render_info: dict, script_meta: dict[str, str]) -> str:
+    value = str(render_info.get("video_format") or script_meta.get("video_format") or "").strip()
+    if value:
+        low = value.lower()
+        if low in ("shorts", "short", "ショート"):
+            return "Shorts"
+        if low in ("long", "ロング"):
+            return "Long"
+        return value
+    if name.startswith("[Shorts]"):
+        return "Shorts"
+    if name.startswith("[Long]"):
+        return "Long"
+    return ""
+
+
 def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
     results = []
     try:
@@ -66,18 +91,20 @@ def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
         opening_review = _safe_json(os.path.join(meta_d, "opening_review.json"))
         final_review = _safe_json(os.path.join(meta_d, "final_review.json"))
         upload_record = _safe_json(os.path.join(meta_d, "upload_record.json"))
+        script_meta = _script_meta(theme_dir)
 
         mp4_name = _find_mp4(theme_dir)
         thumb_rel = _find_thumbnail(theme_dir)
+        video_format = _video_format(name, render_info, script_meta)
 
         results.append({
             "name": name,
             "is_management": is_mgmt,
-            "title": render_info.get("video_title") or name,
-            "video_format": render_info.get("video_format", ""),
-            "generation_kind": render_info.get("generation_kind", ""),
-            "source_video_title": render_info.get("source_video_title", ""),
-            "generation_purpose": render_info.get("generation_purpose", ""),
+            "title": render_info.get("video_title") or script_meta.get("video_title") or name,
+            "video_format": video_format,
+            "generation_kind": render_info.get("generation_kind") or script_meta.get("generation_kind", ""),
+            "source_video_title": render_info.get("source_video_title") or script_meta.get("source_video_title", ""),
+            "generation_purpose": render_info.get("generation_purpose") or script_meta.get("generation_purpose", ""),
             "render_engine": render_info.get("render_engine", ""),
             "has_mp4": mp4_name is not None,
             "mp4_name": mp4_name,

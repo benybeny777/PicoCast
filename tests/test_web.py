@@ -39,6 +39,11 @@ def test_dashboard_page(client):
     res = client.get("/")
     assert res.status_code == 200
     assert "ダッシュボード" in res.text or "Web UI" in res.text
+    assert "Google APIキー" not in res.text
+    assert "client_secrets.json" not in res.text
+    assert "Google AI" in res.text
+    assert "YouTubeアップロード" in res.text
+    assert "YouTube Analytics" in res.text
 
 
 # 4. /generate ページが 200 を返す
@@ -48,6 +53,8 @@ def test_generate_page(client):
     assert "LongサムネAB" in res.text
     assert "Long節約" in res.text
     assert "SD生成" in res.text
+    assert "背景生成エンジン" in res.text
+    assert "Local / ComfyUI" in res.text
 
 
 # 5. /history ページが 200 を返す

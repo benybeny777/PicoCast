@@ -150,6 +150,15 @@ async function loadConfig() {
             <option value="0" ${item.current === '0' ? 'selected' : ''}>無効</option>
           </select>`;
 
+      } else if (item.type === 'select') {
+        const opts = (item.choices || []).map(([value, label]) =>
+          `<option value="${esc(value)}" ${value === item.current ? 'selected' : ''}>${esc(label)}</option>`
+        ).join('');
+        tdInput.innerHTML = `
+          <select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">
+            ${opts}
+          </select>`;
+
       } else if (item.type === 'ollama_model') {
         if (ollamaAvailable && ollamaModels.length > 0) {
           const allModels = ollamaModels.includes(item.current)

@@ -14,6 +14,24 @@
 
 ## 2026-05-27
 
+### Local / ComfyUI 背景生成を追加
+
+- 背景画像のみ `Nano Banana` / `Local / ComfyUI` をWeb UIから選択可能にした。サムネイル生成は当面 Nano Banana / Gemini を維持
+- `assets/comfyui/presets.json` と workflow 雛形を追加し、用途別プリセット「背景（漫画風・標準）」「背景（資料風・写実）」「背景（難プロンプト用）」を定義
+- `core/comfyui_client.py` と `core/local_prompt_adapter.py` を追加。ComfyUI API接続確認、workflow注入、完了待機、画像検証、ローカル向け背景プロンプト整形を実装
+- ComfyUI未起動、workflow不正、checkpoint未設定/未配置、タイムアウト、出力画像不正では自動フォールバックせず、原因を表示して処理を中止する方針を明記
+- `_meta/image_generation.json` に背景生成エンジン、プリセット、checkpoint、workflow、seed、prompt、negative_prompt、status、error_message、`fallback_used=false` を保存
+
+### サービス診断表示を追加
+
+- `112ef08`: Web UIのダッシュボード/設定画面に Ollama 接続状態、ffmpegバージョン、GPUエンコーダー表示を追加
+- ダッシュボードは秘密ファイル名やAPIキー有無の羅列をやめ、Google AI / OpenAI / YouTubeアップロード / YouTube Analytics の連携状況表示に整理。実行環境の詳細確認は設定画面へ寄せた
+
+### よみがな正規化のOllamaモデル確認を明確化
+
+- `VOICE_READING_NORMALIZE_MODEL` の既定値を配置済み運用に合わせて `qwen2.5:7b-instruct` に変更
+- よみがな正規化開始前にOllamaのモデル一覧を確認し、指定モデルが未配置の場合は `/api/chat` の404ではなく「モデル未配置」と分かるエラーで中止する
+
 ### 動画生成・レンダリングをワーカープロセスへ分離（メモリ解放）
 
 - `worker_pipeline.py`: 新規。`run_pipeline` を別 Python プロセスで実行するスタンドアロンスクリプト。完了後プロセスが終了しOS レベルでメモリを解放する

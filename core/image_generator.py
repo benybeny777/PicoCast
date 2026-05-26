@@ -1,21 +1,41 @@
+import json
 import os
 import time
 from google import genai
-from config import GOOGLE_API_KEY, NANOBANANA_PRO_MODEL, NANOBANANA_FLASH_MODEL, SD_SIZE_IMAGE_SCALE
+from config import (
+    GOOGLE_API_KEY,
+    IMAGE_BACKGROUND_ENGINE,
+    LOCAL_COMFYUI_PRESET,
+    NANOBANANA_FLASH_MODEL,
+    NANOBANANA_PRO_MODEL,
+    SD_SIZE_IMAGE_SCALE,
+)
+from core.local_prompt_adapter import adapt_background_prompt_for_comfyui
 
 class ImageGenerator:
-    def __init__(self, width=1920, height=1080, debug=False, image_style="通常", sd_size_mode=False):
+    def __init__(
+        self,
+        width=1920,
+        height=1080,
+        debug=False,
+        image_style="通常",
+        sd_size_mode=False,
+        background_engine=None,
+        comfyui_preset=None,
+    ):
         self.width = width
         self.height = height
         self.debug = debug
         self.image_style = image_style
         self.sd_size_mode = sd_size_mode
+        self.background_engine = (background_engine or IMAGE_BACKGROUND_ENGINE).strip().lower()
+        self.comfyui_preset = (comfyui_preset or LOCAL_COMFYUI_PRESET).strip()
         scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
         self.request_width = max(64, int(round(self.width * scale))) if sd_size_mode else self.width
         self.request_height = max(64, int(round(self.height * scale))) if sd_size_mode else self.height
 
         self.client = None
-        if GOOGLE_API_KEY:
+        if self.background_engine == "nanobanana" and GOOGLE_API_KEY:
             try:
                 self.client = genai.Client(api_key=GOOGLE_API_KEY)
             except Exception as e:
@@ -109,7 +129,79 @@ class ImageGenerator:
                     resized.close()
         return fname
 
+    def _meta_path_for_dir(self, save_dir):
+        theme_dir = os.path.dirname(os.path.abspath(save_dir))
+        meta_dir = os.path.join(theme_dir, "_meta")
+        os.makedirs(meta_dir, exist_ok=True)
+        return os.path.join(meta_dir, "image_generation.json")
+
+    def _write_image_generation_meta(self, save_dir, entry):
+        path = self._meta_path_for_dir(save_dir)
+        current = {"entries": []}
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if isinstance(loaded, dict):
+                current = loaded
+                current.setdefault("entries", [])
+        current["entries"].append(entry)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(current, f, ensure_ascii=False, indent=2)
+
+    def _generate_background_comfyui(self, description, save_dir, fname):
+        from core.comfyui_client import ComfyUIClient
+
+        if not fname:
+            existing_nums = []
+            for f in os.listdir(save_dir):
+                if f.lower().endswith(".png") and f.lower().startswith("bg_"):
+                    try:
+                        existing_nums.append(int(f[3:6]))
+                    except ValueError:
+                        pass
+            next_num = max(existing_nums, default=0) + 1
+            fname = f"bg_{next_num:03d}_001.png"
+        output_path = os.path.join(save_dir, fname)
+        prompt = adapt_background_prompt_for_comfyui(description)
+        entry = {
+            "engine": "local_comfyui",
+            "preset_name": self.comfyui_preset,
+            "prompt": prompt,
+            "status": "failed",
+            "error_message": "",
+            "fallback_used": False,
+        }
+        try:
+            client = ComfyUIClient()
+            result = client.generate_image(
+                prompt=prompt,
+                output_path=output_path,
+                preset_name=self.comfyui_preset,
+            )
+            entry.update(result)
+            entry["status"] = "success"
+            entry["error_message"] = ""
+            self._write_image_generation_meta(save_dir, entry)
+            if self.debug:
+                print(f"  [AI] ComfyUI 完了: {fname}")
+                self._save_prompt_log(save_dir, fname, prompt)
+            return fname
+        except Exception as e:
+            entry["error_message"] = str(e)
+            self._write_image_generation_meta(save_dir, entry)
+            print("❌ ComfyUI背景生成に失敗しました。自動フォールバックは行いません。")
+            print("❌ フォールバック禁止方針により処理を中止しました。")
+            raise
+
     def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None):
+        if self.background_engine == "local_comfyui":
+            save_dir = target_dir or "output/backgrounds"
+            os.makedirs(save_dir, exist_ok=True)
+            # 自動フォールバック禁止。失敗時は中止する。
+            return self._generate_background_comfyui(description, save_dir, fname)
+        if self.background_engine != "nanobanana":
+            raise RuntimeError(f"未対応の背景生成エンジンです: {self.background_engine}")
+
         if not self.client:
             print("  [Error] Google API キーが未設定です")
             return None

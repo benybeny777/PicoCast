@@ -34,6 +34,13 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "GEMINI_MODEL",                    "type": "str",   "label": "Gemini 台本生成モデル",       "default": str(cfg.GEMINI_MODEL)},
     {"key": "NANOBANANA_PRO_MODEL",            "type": "str",   "label": "画像生成モデル(高品質)",      "default": str(cfg.NANOBANANA_PRO_MODEL)},
     {"key": "NANOBANANA_FLASH_MODEL",          "type": "str",   "label": "画像生成モデル(高速)",        "default": str(cfg.NANOBANANA_FLASH_MODEL)},
+    {"key": "IMAGE_BACKGROUND_ENGINE",         "type": "select", "label": "背景生成エンジン",            "default": str(cfg.IMAGE_BACKGROUND_ENGINE), "choices": [("nanobanana", "Nano Banana"), ("local_comfyui", "Local / ComfyUI")]},
+    {"key": "LOCAL_COMFYUI_URL",                "type": "str",    "label": "ComfyUI URL",                "default": str(cfg.LOCAL_COMFYUI_URL)},
+    {"key": "LOCAL_COMFYUI_TIMEOUT_SEC",        "type": "float",  "label": "ComfyUIタイムアウト(秒)",     "default": str(cfg.LOCAL_COMFYUI_TIMEOUT_SEC), "min": 10, "max": 3600},
+    {"key": "LOCAL_COMFYUI_PRESET",             "type": "select", "label": "ComfyUI既定プリセット",       "default": str(cfg.LOCAL_COMFYUI_PRESET), "choices": [("anime_standard", "背景（漫画風・標準）"), ("realistic_reference", "背景（資料風・写実）"), ("hard_prompt_flux", "背景（難プロンプト用）")]},
+    {"key": "LOCAL_COMFYUI_OUTPUT_WIDTH",       "type": "int",    "label": "ComfyUI標準幅",              "default": str(cfg.LOCAL_COMFYUI_OUTPUT_WIDTH), "min": 64, "max": 4096},
+    {"key": "LOCAL_COMFYUI_OUTPUT_HEIGHT",      "type": "int",    "label": "ComfyUI標準高さ",            "default": str(cfg.LOCAL_COMFYUI_OUTPUT_HEIGHT), "min": 64, "max": 4096},
+    {"key": "LOCAL_COMFYUI_PRESET_FILE",        "type": "str",    "label": "ComfyUIプリセットファイル",    "default": str(cfg.LOCAL_COMFYUI_PRESET_FILE)},
     {"key": "OPENING_REVIEW_USE_LLM",          "type": "bool",         "label": "Ollama レビュー有効",           "default": "1" if cfg.OPENING_REVIEW_USE_LLM else "0"},
     {"key": "OLLAMA_REVIEW_MODEL",             "type": "ollama_model", "label": "Ollama レビューモデル",         "default": str(cfg.OLLAMA_REVIEW_MODEL)},
     {"key": "OLLAMA_REWRITE_MODEL",            "type": "ollama_model", "label": "Ollama リライトモデル",         "default": str(cfg.OLLAMA_REWRITE_MODEL)},
@@ -129,6 +136,10 @@ def _validate(updates: dict[str, str]) -> list[str]:
                 if spec["type"] == "bgm_file" and raw_val.strip():
                     if os.path.sep in raw_val or "/" in raw_val or "\\" in raw_val:
                         errors.append(f"{key}: ファイル名のみ指定してください（パス区切り文字不可）")
+            elif spec["type"] == "select":
+                choices = {str(value) for value, _label in spec.get("choices", [])}
+                if raw_val not in choices:
+                    errors.append(f"{key}: 選択肢にない値です")
         except (ValueError, TypeError):
             errors.append(f"{key}: '{raw_val}' は {spec['type']} として無効です")
     return errors

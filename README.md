@@ -1,7 +1,7 @@
 # Native Video Factory 🎥
 
 「ずんだもんとめたんの食べ物雑学堂」向けに、食べ物雑学の解説動画を台本から自動生成するローカルWebツールです。  
-台本を入力するだけで、**VOICEVOXによる音声合成**、**Gemini (Nano Banana Suite) による背景画像生成**、**ffmpegによる高品質なネイティブMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができます。
+台本を入力するだけで、**VOICEVOXによる音声合成**、**Nano Banana または Local / ComfyUI による背景画像生成**、**ffmpegによる高品質なネイティブMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができます。サムネイル生成は当面 Gemini (Nano Banana Suite) を使います。
 
 ---
 
@@ -15,9 +15,11 @@ graph TD
     B -->|修正必要/Must Fix| A
     B -->|品質クリア| C[よみがな正規化<br/>Ollama]
     C --> D[音声生成 WAV<br/>VOICEVOX]
-    C --> E[画像・サムネ生成 PNG<br/>Gemini / Nano Banana]
+    C --> E[背景生成 PNG<br/>Nano Banana / Local ComfyUI]
+    C --> T[サムネ生成 PNG<br/>Gemini / Nano Banana]
     D --> F[ネイティブレンダリング<br/>ffmpeg]
     E --> F
+    T --> F
     F --> G[実尺評価 & 実績保存<br/>native MP4 / _meta]
     G --> H[YouTube予約アップロード<br/>OAuth / スロット管理]
     H --> I[固定コメント投稿]
@@ -55,7 +57,8 @@ graph TD
 1. **Python 3.10 以上** (本プロジェクトでは `.venv` 仮想環境を使用します)
 2. **VOICEVOX** ([公式ホームページ](https://voicevox.nero.ne.jp/)からダウンロード)
 3. **ffmpeg** (パスを通しておくか、環境変数 `FFMPEG_BIN` にバイナリパスを指定してください)
-4. **Ollama** (よみがな正規化および冒頭品質レビューに利用。デフォルトモデル: `qwen2.5:7b` / `qwen3:8b`)
+4. **Ollama** (よみがな正規化および冒頭品質レビューに利用。デフォルトモデル: `qwen2.5:7b-instruct` / `qwen3:8b`)
+5. **ComfyUI** (任意。背景生成エンジンに `Local / ComfyUI` を選ぶ場合のみ必要。デフォルトURL: `http://127.0.0.1:8188`)
 
 ---
 
@@ -110,6 +113,27 @@ OPENAI_API_KEY=your_openai_api_key
     New-Item -ItemType Directory -Force -Path core\prompt_parts\local
     Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
     ```
+
+---
+
+### Step 4. Local / ComfyUI 背景生成を使う場合
+
+背景画像だけをローカルの ComfyUI で生成できます。Web UI の生成画面または設定画面で、背景生成エンジンを `Local / ComfyUI` に切り替えます。`Auto` モードや自動切替はありません。
+
+1. ComfyUI を起動し、API が `http://127.0.0.1:8188` で応答する状態にします。
+2. 使用する checkpoint を ComfyUI の通常のモデル配置場所（例: `ComfyUI/models/checkpoints/`）に置きます。
+3. 必要に応じて `.env` または設定画面で次を調整します。
+
+```env
+IMAGE_BACKGROUND_ENGINE=local_comfyui
+LOCAL_COMFYUI_URL=http://127.0.0.1:8188
+LOCAL_COMFYUI_PRESET=anime_standard
+LOCAL_COMFYUI_TIMEOUT_SEC=300
+```
+
+プリセット定義は `assets/comfyui/presets.json`、workflow は `assets/comfyui/workflows/` にあります。初期プリセットは「背景（漫画風・標準）」「背景（資料風・写実）」「背景（難プロンプト用）」の3つです。モデル名はユーザーに直接選ばせず、用途別プリセットとして扱います。
+
+ComfyUI未起動、workflow不正、checkpoint未配置、タイムアウト、出力画像不正の場合は、Nano Banana / Gemini や別プリセットへ自動切替せず、原因を表示して生成を中止します。
 
 ---
 

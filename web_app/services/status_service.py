@@ -35,6 +35,21 @@ def check_ollama() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
+def check_comfyui() -> dict[str, Any]:
+    try:
+        base = config.LOCAL_COMFYUI_URL.rstrip("/")
+        r = httpx.get(f"{base}/system_stats", timeout=3.0)
+        if r.status_code == 200:
+            return {
+                "ok": True,
+                "url": config.LOCAL_COMFYUI_URL,
+                "preset": config.LOCAL_COMFYUI_PRESET,
+            }
+        return {"ok": False, "url": config.LOCAL_COMFYUI_URL, "error": f"Status code: {r.status_code}"}
+    except Exception as e:
+        return {"ok": False, "url": config.LOCAL_COMFYUI_URL, "error": str(e)}
+
+
 def check_ffmpeg() -> dict[str, Any]:
     bin_path = shutil.which(config.FFMPEG_BIN) or config.FFMPEG_BIN
     try:
@@ -89,6 +104,7 @@ def get_settings_status() -> dict[str, Any]:
         "voicevox": check_voicevox(),
         "ffmpeg": check_ffmpeg(),
         "ollama": check_ollama(),
+        "comfyui": check_comfyui(),
         "google_api_key": bool(config.GOOGLE_API_KEY),
         "openai_api_key": bool(config.OPENAI_API_KEY),
         "client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),

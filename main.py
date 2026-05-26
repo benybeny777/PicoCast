@@ -421,6 +421,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     thumb_img_gen = ImageGenerator(
         width=img_gen.width, height=img_gen.height,
         debug=img_gen.debug, image_style="nanobanana2", sd_size_mode=img_gen.sd_size_mode,
+        background_engine="nanobanana",
     )
 
     def _finish_thumbnail(value):
@@ -588,7 +589,7 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     theme_bg_dir = os.path.join(output_dir, "backgrounds")
     os.makedirs(theme_bg_dir, exist_ok=True)
 
-    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode)
+    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode, background_engine="nanobanana")
     try:
         thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
                                         update_status, script_content=script_content, debug_mode=debug,
@@ -604,7 +605,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
-                 long_budget_mode=None, sd_size_mode=False):
+                 long_budget_mode=None, sd_size_mode=False,
+                 background_engine=None, comfyui_preset=None):
     report = GenerationReport()
     pipeline_start = time.time()
     img_gen = None
@@ -1226,7 +1228,23 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             if vv.check_connection(): break
             time.sleep(2)
 
-    img_gen = ImageGenerator(width=width, height=height, debug=debug_mode, image_style=image_style, sd_size_mode=sd_size_mode)
+    img_gen = ImageGenerator(
+        width=width,
+        height=height,
+        debug=debug_mode,
+        image_style=image_style,
+        sd_size_mode=sd_size_mode,
+        background_engine=background_engine,
+        comfyui_preset=comfyui_preset,
+    )
+    if img_gen.background_engine == "local_comfyui":
+        use_batch_api = False
+        _preset_label = {
+            "anime_standard": "背景（漫画風・標準）",
+            "realistic_reference": "背景（資料風・写実）",
+            "hard_prompt_flux": "背景（難プロンプト用）",
+        }.get(img_gen.comfyui_preset, img_gen.comfyui_preset)
+        update_status(f"🖼 背景生成: Local / ComfyUI [{_preset_label}]")
 
     thumbnail_title = meta.get("video_title", topic)
     if _has_saved_bgs:
@@ -1367,7 +1385,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 if is_cancelled():
                     return cancel_result()
             except Exception as e:
-                update_status(f"  ❌ 背景生成失敗: {e}")
+                update_status(f"  ❌ 背景生成失敗: {e}", "error")
+                if img_gen.background_engine == "local_comfyui":
+                    update_status("❌ ComfyUI背景生成に失敗しました。自動フォールバックは行いません。", "error")
+                    update_status("❌ フォールバック禁止方針により処理を中止しました。", "error")
+                    raise
                 generated_file = None
             if generated_file:
                 report.backgrounds_generated += 1

@@ -1,7 +1,7 @@
 # ずんかみ自動生成システム 仕様書
 
 チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
-最終更新: 2026-05-26
+最終更新: 2026-05-27
 
 ---
 
@@ -11,7 +11,8 @@
 
 - **台本生成** → Gemini AI
 - **音声生成** → VOICEVOX (ずんだもん / 四国めたん)（よみがな正規化を Ollama で前処理）
-- **背景画像生成** → Nano Banana (Gemini画像生成)
+- **背景画像生成** → Nano Banana (Gemini画像生成) または Local / ComfyUI
+- **サムネイル生成** → Nano Banana (Gemini画像生成)
 - **動画組立** → ffmpeg/native MP4
 - **品質レビュー** → ローカルルール + Ollama LLM + ChatGPT
 - **アップロード** → YouTube Data API v3
@@ -77,7 +78,9 @@ yukkurijidou/
 │   ├── ai_generator.py     # Gemini台本生成
 │   ├── voicevox.py         # VOICEVOX音声生成
 │   ├── reading_normalizer.py # よみがな正規化（Ollama）
-│   ├── image_generator.py  # Nano Banana背景画像生成
+│   ├── image_generator.py  # 背景画像生成（Nano Banana / Local ComfyUI）とサムネ生成呼び出し
+│   ├── comfyui_client.py   # ComfyUI APIクライアント
+│   ├── local_prompt_adapter.py # ローカル背景生成向けプロンプト整形
 │   ├── parser.py           # 台本パーサー (ScriptParser)
 │   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
 │   ├── opening_quality.py  # 冒頭品質レビュー
@@ -148,7 +151,7 @@ yukkurijidou/
 9. よみがな正規化（Ollamaで全チャンクを一括変換）
    └── 変換後テキストをVOICEVOXに渡す。字幕・ファイル名は元テキストのまま
 10. VOICEVOX音声生成（セリフ1行ずつ）
-11. 背景画像生成（Nano Banana）
+11. 背景画像生成（Nano Banana または Local / ComfyUI）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
 12. サムネイル生成（Nano Banana）
 13. 旧タイムライン互換ヘルパーで素材タイミングを組立
@@ -177,6 +180,29 @@ for item in dialogue_items:
 
 - 既存の `bg_XXXX.png` がある場合は再利用
 - **台本変更により必要な背景枚数が変わった場合**: 既存の背景（サムネ除く）を全削除して再生成
+
+### 背景生成エンジン
+
+背景生成エンジンは `IMAGE_BACKGROUND_ENGINE` で選択する。
+
+| 値 | 内容 |
+|---|---|
+| `nanobanana` | 既存の Nano Banana / Gemini で背景を生成する |
+| `local_comfyui` | ローカル ComfyUI API で背景を生成する |
+
+`Auto` や自動切替設定は持たない。サムネイル生成は背景エンジンに関係なく当面 Nano Banana / Gemini を使う。
+
+ComfyUIプリセットは `assets/comfyui/presets.json` に定義する。初期プリセット:
+
+| preset | 表示名 | model_type | checkpoint | sampler | steps | cfg | サイズ |
+|---|---|---|---|---|---:|---:|---|
+| `anime_standard` | 背景（漫画風・標準） | `sdxl` | Animagine XL 3.1 | dpmpp_2m_karras | 24 | 6.5 | 832x1472 |
+| `realistic_reference` | 背景（資料風・写実） | `sdxl` | Juggernaut XL | dpmpp_2m_karras | 26 | 5.5 | 832x1472 |
+| `hard_prompt_flux` | 背景（難プロンプト用） | `flux` | FLUX.1-dev | euler | 24 | 1.0 | 832x1472 |
+
+ComfyUI背景生成では、日本語背景文をローカル向けに短縮し、人物・テキスト・ロゴ・看板文字・赤丸・矢印・注釈を禁止する。背景だけを生成し、文字や装飾は描かせない。
+
+ComfyUI未起動、workflow不正、checkpoint未設定/未配置、タイムアウト、出力画像不正はすべて失敗として扱い、Nano Banana / Gemini、別プリセット、別モデルへ自動フォールバックしない。失敗時は `_meta/image_generation.json` に `status=failed`、`error_message`、`fallback_used=false` を保存して処理を中止する。
 
 ---
 
@@ -496,7 +522,7 @@ VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防�
 
 ```
 VOICE_READING_NORMALIZE_ENABLED    = True
-VOICE_READING_NORMALIZE_MODEL      = "qwen2.5:7b"
+VOICE_READING_NORMALIZE_MODEL      = "qwen2.5:7b-instruct"
 VOICE_READING_NORMALIZE_OLLAMA_URL = "http://localhost:11434"
 ```
 
@@ -600,7 +626,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
 | `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 400 | 腰から上モード: Long の下方向シフト量(px) |
 | `VOICE_READING_NORMALIZE_ENABLED` | `True` | よみがな正規化の有効/無効 |
-| `VOICE_READING_NORMALIZE_MODEL` | `qwen2.5:7b` | よみがな正規化に使うOllamaモデル |
+| `VOICE_READING_NORMALIZE_MODEL` | `qwen2.5:7b-instruct` | よみがな正規化に使うOllamaモデル |
 | `VOICE_READING_NORMALIZE_OLLAMA_URL` | `http://localhost:11434` | よみがな正規化用Ollama URL |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
@@ -1143,7 +1169,7 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 | Google Gemini API | 台本生成・台本チェック | `GOOGLE_API_KEY` |
 | Nano Banana (Gemini) | 背景・サムネ画像生成 | `GOOGLE_API_KEY` |
 | Ollama (qwen3:8b) | 冒頭品質レビュー・リライト | ローカル起動 |
-| Ollama (qwen2.5:7b) | よみがな正規化（VOICEVOX誤読対策） | ローカル起動 |
+| Ollama (qwen2.5:7b-instruct) | よみがな正規化（VOICEVOX誤読対策） | ローカル起動 |
 | OpenAI API | ChatGPT生成前レビュー | `OPENAI_API_KEY` |
 | YouTube Data API v3 | 動画アップロード | OAuth2 (`client_secrets.json`) |
 
@@ -1216,6 +1242,13 @@ YouTube OAuth:
 | `GEMINI_MODEL` | `.env` / `config.py` | 台本生成で使うGeminiモデル |
 | `NANOBANANA_PRO_MODEL` | `.env` / `config.py` | 高品質画像生成モデル |
 | `NANOBANANA_FLASH_MODEL` | `.env` / `config.py` | 速い画像生成モデル |
+| `IMAGE_BACKGROUND_ENGINE` | `.env` / `config.py` | 背景生成エンジン。`nanobanana` または `local_comfyui` |
+| `LOCAL_COMFYUI_URL` | `.env` / `config.py` | ComfyUI API URL |
+| `LOCAL_COMFYUI_TIMEOUT_SEC` | `.env` / `config.py` | ComfyUI背景生成タイムアウト秒 |
+| `LOCAL_COMFYUI_PRESET` | `.env` / `config.py` | ComfyUI背景生成プリセット名 |
+| `LOCAL_COMFYUI_OUTPUT_WIDTH` | `.env` / `config.py` | ComfyUI背景生成の標準幅 |
+| `LOCAL_COMFYUI_OUTPUT_HEIGHT` | `.env` / `config.py` | ComfyUI背景生成の標準高さ |
+| `LOCAL_COMFYUI_PRESET_FILE` | `.env` / `config.py` | ComfyUIプリセット定義ファイル |
 | `CHARACTERS` | `config.py` | VOICEVOX話者ID・スタイルID |
 | `CHARACTER_PNGS` | `config.py` | native合成用キャラ立ち絵 |
 | `CHARACTER_EXPRESSION_PNGS` | `config.py` | native表情指定用PNG。素材未配置時は既定立ち絵へフォールバック |

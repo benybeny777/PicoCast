@@ -47,6 +47,21 @@
         {% endfor %}
       </select>
     </div>
+    <div class="form-group">
+      <label for="background-engine">背景生成エンジン</label>
+      <select id="background-engine" onchange="syncComfyPresetVisibility()">
+        <option value="nanobanana" {% if default_background_engine == "nanobanana" %}selected{% endif %}>Nano Banana</option>
+        <option value="local_comfyui" {% if default_background_engine == "local_comfyui" %}selected{% endif %}>Local / ComfyUI</option>
+      </select>
+    </div>
+    <div class="form-group" id="comfyui-preset-group">
+      <label for="comfyui-preset">ComfyUIプリセット</label>
+      <select id="comfyui-preset">
+        {% for value, label in comfyui_preset_choices %}
+        <option value="{{ value }}" {% if value == default_comfyui_preset %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
     <div class="form-group check-group">
       <label><input type="checkbox" id="reuse-backgrounds" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
     </div>
@@ -171,6 +186,8 @@ async function startGenerate() {
   if (!script) { alert('台本を入力してください'); return; }
 
   const imageStyle = document.getElementById('image-style').value;
+  const backgroundEngine = document.getElementById('background-engine').value;
+  const comfyuiPreset = document.getElementById('comfyui-preset').value;
   const reuseBg = document.getElementById('reuse-backgrounds').checked;
   const longThumbnailAb = document.getElementById('long-thumbnail-ab').checked;
   const longBudgetMode = document.getElementById('long-budget-mode').checked;
@@ -190,6 +207,8 @@ async function startGenerate() {
       body: JSON.stringify({
         script,
         image_style: imageStyle,
+        background_engine: backgroundEngine,
+        comfyui_preset: comfyuiPreset,
         reuse_backgrounds: reuseBg,
         long_thumbnail_ab_test: longThumbnailAb,
         long_budget_mode: longBudgetMode,
@@ -251,5 +270,11 @@ function appendLog(msg, tag) {
   logBox.appendChild(div);
   logBox.scrollTop = logBox.scrollHeight;
 }
+
+function syncComfyPresetVisibility() {
+  const engine = document.getElementById('background-engine').value;
+  document.getElementById('comfyui-preset-group').style.display = engine === 'local_comfyui' ? '' : 'none';
+}
+syncComfyPresetVisibility();
 </script>
 {% endblock %}

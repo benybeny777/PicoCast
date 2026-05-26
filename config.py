@@ -110,7 +110,7 @@ AUTO_FULL_REWRITE_ENABLED    = os.environ.get("AUTO_FULL_REWRITE_ENABLED",   "0"
 # よみがな正規化（VOICEVOX 誤読対策 / Ollama使用）
 # ───────────────────────────────────────────────
 VOICE_READING_NORMALIZE_ENABLED    = os.environ.get("VOICE_READING_NORMALIZE_ENABLED",    "1").strip().lower() in ("1", "true", "yes", "on")
-VOICE_READING_NORMALIZE_MODEL      = os.environ.get("VOICE_READING_NORMALIZE_MODEL",      "qwen2.5:7b")
+VOICE_READING_NORMALIZE_MODEL      = os.environ.get("VOICE_READING_NORMALIZE_MODEL",      "qwen2.5:7b-instruct")
 VOICE_READING_NORMALIZE_OLLAMA_URL = os.environ.get("VOICE_READING_NORMALIZE_OLLAMA_URL", "http://localhost:11434")
 
 # ───────────────────────────────────────────────
@@ -120,6 +120,17 @@ GEMINI_MODEL          = os.environ.get("GEMINI_MODEL",          "gemini-3.1-pro-
 NANOBANANA_PRO_MODEL  = os.environ.get("NANOBANANA_PRO_MODEL",  "gemini-3-pro-image-preview")   # 背景・サムネ生成（高品質）
 NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-flash-image-preview")  # 背景・サムネ生成（高速）
 SD_SIZE_IMAGE_SCALE   = float(os.environ.get("SD_SIZE_IMAGE_SCALE", "0.5"))                     # SD 生成モード: 縮小倍率（生成後に拡大）
+
+# ───────────────────────────────────────────────
+# 背景画像生成エンジン（サムネイルは当面 Nano Banana 固定）
+# ───────────────────────────────────────────────
+IMAGE_BACKGROUND_ENGINE = os.environ.get("IMAGE_BACKGROUND_ENGINE", "nanobanana").strip().lower()  # 背景生成エンジン（nanobanana / local_comfyui）
+LOCAL_COMFYUI_URL = os.environ.get("LOCAL_COMFYUI_URL", "http://127.0.0.1:8188")  # ComfyUI API URL
+LOCAL_COMFYUI_TIMEOUT_SEC = float(os.environ.get("LOCAL_COMFYUI_TIMEOUT_SEC", "300"))  # ComfyUI 背景生成タイムアウト秒
+LOCAL_COMFYUI_PRESET = os.environ.get("LOCAL_COMFYUI_PRESET", "anime_standard").strip()  # ComfyUI 背景生成プリセット名
+LOCAL_COMFYUI_OUTPUT_WIDTH = int(os.environ.get("LOCAL_COMFYUI_OUTPUT_WIDTH", "832"))  # ComfyUI 背景生成の標準幅
+LOCAL_COMFYUI_OUTPUT_HEIGHT = int(os.environ.get("LOCAL_COMFYUI_OUTPUT_HEIGHT", "1472"))  # ComfyUI 背景生成の標準高さ
+LOCAL_COMFYUI_PRESET_FILE = os.environ.get("LOCAL_COMFYUI_PRESET_FILE", os.path.join(os.path.dirname(__file__), "assets", "comfyui", "presets.json"))  # ComfyUI プリセット定義ファイル
 
 # ───────────────────────────────────────────────
 # キャラクター定義（VOICEVOX スピーカー ID）
@@ -316,6 +327,11 @@ WEB_TOAST_VISIBLE_MS = int(os.environ.get("WEB_TOAST_VISIBLE_MS", "2000"))  # We
 WEB_TOAST_HIDE_DELAY_MS = int(os.environ.get("WEB_TOAST_HIDE_DELAY_MS", "420"))  # Web UI トースト非表示待ち時間(ms)
 WEB_VOICEVOX_CHECK_TIMEOUT_SEC = float(os.environ.get("WEB_VOICEVOX_CHECK_TIMEOUT_SEC", "2.0"))  # Web UI のVOICEVOX疎通確認タイムアウト(秒)
 WEB_FFMPEG_CHECK_TIMEOUT_SEC = float(os.environ.get("WEB_FFMPEG_CHECK_TIMEOUT_SEC", "5.0"))  # Web UI のffmpeg疎通確認タイムアウト(秒)
+DEBUG_LOG_ENABLED = os.environ.get("DEBUG_LOG_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")  # デバッグログ出力の有効/無効
+DEBUG_LOG_DIR = os.environ.get("DEBUG_LOG_DIR", os.path.join(OUTPUT_DATA_DIR, "debug_logs"))  # デバッグログ保存ディレクトリ
+DEBUG_LOG_RETENTION_DAYS = int(os.environ.get("DEBUG_LOG_RETENTION_DAYS", "3"))  # デバッグログ保持日数
+DEBUG_LOG_LEVEL = os.environ.get("DEBUG_LOG_LEVEL", "DEBUG").strip().upper()  # デバッグログ出力レベル
+DEBUG_LOG_VIEW_LINES = int(os.environ.get("DEBUG_LOG_VIEW_LINES", "400"))  # Web UIログ画面に表示する最大行数
 
 # ───────────────────────────────────────────────
 # API接続・タイムアウト設定

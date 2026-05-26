@@ -26,11 +26,19 @@ class ReadingNormalizer:
             res = requests.get(f"{_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}/api/tags", timeout=_cfg.READING_NORMALIZE_CHECK_TIMEOUT_SEC)
             if res.status_code != 200:
                 raise RuntimeError(f"HTTP {res.status_code}")
+            models = res.json().get("models", [])
+            model_names = {m.get("name") for m in models if isinstance(m, dict)}
+            if _cfg.VOICE_READING_NORMALIZE_MODEL not in model_names:
+                raise RuntimeError(
+                    f"モデル未配置: {_cfg.VOICE_READING_NORMALIZE_MODEL} "
+                    f"(利用可能: {', '.join(sorted(n for n in model_names if n)) or 'なし'})"
+                )
             self._available = True
         except Exception as e:
             raise RuntimeError(
                 f"よみがな正規化が有効ですがOllamaに接続できません ({_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}): {e}\n"
-                "Ollamaを起動するか、VOICE_READING_NORMALIZE_ENABLED=0 に設定してください。"
+                "Ollamaを起動するか、VOICE_READING_NORMALIZE_MODELを配置済みモデル名に変更するか、"
+                "VOICE_READING_NORMALIZE_ENABLED=0 に設定してください。"
             ) from e
 
     def normalize_batch(self, texts: list[str]) -> dict[str, str]:
@@ -54,6 +62,12 @@ class ReadingNormalizer:
             },
             timeout=_cfg.READING_NORMALIZE_CHAT_TIMEOUT_SEC,
         )
+        if res.status_code == 404:
+            try:
+                detail = res.json().get("error", res.text)
+            except ValueError:
+                detail = res.text
+            raise RuntimeError(f"Ollamaよみがな正規化モデルが見つかりません: {_cfg.VOICE_READING_NORMALIZE_MODEL} ({detail})")
         res.raise_for_status()
         content = res.json()["message"]["content"].strip()
         m = re.search(r"\{.*\}", content, re.DOTALL)
@@ -76,4 +90,3 @@ class ReadingNormalizer:
         if text in self._cache:
             return self._cache[text]
         return self.normalize_batch([text]).get(text, text)
-

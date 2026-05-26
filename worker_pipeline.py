@@ -59,6 +59,8 @@ def main() -> None:
             topic=params["topic"],
             pregenerated_script=params.get("pregenerated_script"),
             image_style=params.get("image_style", "通常"),
+            background_engine=params.get("background_engine"),
+            comfyui_preset=params.get("comfyui_preset"),
             reuse_backgrounds=params.get("reuse_backgrounds", False),
             cancel_event=_cancel_event,
             progress_callback=progress,

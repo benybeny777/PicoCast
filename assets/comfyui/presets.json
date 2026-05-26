@@ -1,0 +1,41 @@
+{
+  "anime_standard": {
+    "label": "背景（漫画風・標準）",
+    "model_type": "sdxl",
+    "checkpoint": "Animagine XL 3.1",
+    "loras": [],
+    "sampler": "dpmpp_2m_karras",
+    "steps": 24,
+    "cfg": 6.5,
+    "width": 832,
+    "height": 1472,
+    "negative_prompt": "people, person, character, face, body, hands, text, logo, watermark, sign text, captions, arrows, red circle, annotation, speech bubble",
+    "workflow_path": "assets/comfyui/workflows/sdxl_background.json"
+  },
+  "realistic_reference": {
+    "label": "背景（資料風・写実）",
+    "model_type": "sdxl",
+    "checkpoint": "Juggernaut XL",
+    "loras": [],
+    "sampler": "dpmpp_2m_karras",
+    "steps": 26,
+    "cfg": 5.5,
+    "width": 832,
+    "height": 1472,
+    "negative_prompt": "people, person, character, face, body, hands, text, logo, watermark, sign text, captions, arrows, red circle, annotation, speech bubble, anime",
+    "workflow_path": "assets/comfyui/workflows/sdxl_background.json"
+  },
+  "hard_prompt_flux": {
+    "label": "背景（難プロンプト用）",
+    "model_type": "flux",
+    "checkpoint": "FLUX.1-dev",
+    "loras": [],
+    "sampler": "euler",
+    "steps": 24,
+    "cfg": 1.0,
+    "width": 832,
+    "height": 1472,
+    "negative_prompt": "people, person, character, face, body, hands, text, logo, watermark, sign text, captions, arrows, red circle, annotation, speech bubble",
+    "workflow_path": "assets/comfyui/workflows/flux_background.json"
+  }
+}

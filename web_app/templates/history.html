@@ -22,14 +22,9 @@
         <th></th>
         <th>テーマ名</th>
         <th>形式</th>
-        <th>生成区分</th>
-        <th>元動画</th>
-        <th>目的</th>
-        <th>エンジン</th>
         <th>MP4</th>
         <th>サムネ</th>
-        <th>冒頭スコア</th>
-        <th>最終スコア</th>
+        <th>スコア</th>
         <th>アップ状態</th>
         <th></th>
       </tr>
@@ -46,20 +41,13 @@
           <span class="badge {% if 'Short' in h.video_format %}badge-shorts{% else %}badge-long{% endif %}">{{ h.video_format }}</span>
           {% else %}—{% endif %}
         </td>
-        <td>{{ h.generation_kind or "—" }}</td>
-        <td>{{ (h.source_video_title or "")[:20] or "—" }}</td>
-        <td>{{ (h.generation_purpose or "")[:15] or "—" }}</td>
-        <td>{{ h.render_engine or "—" }}</td>
         <td>{% if h.has_mp4 %}<span class="badge badge-ok">あり</span>{% else %}—{% endif %}</td>
         <td>{% if h.has_thumbnail %}<span class="badge badge-ok">あり</span>{% else %}—{% endif %}</td>
         <td>
-          {% if h.opening_score %}
-          <span class="score-badge" data-score="{{ h.opening_score }}">{{ h.opening_score }}</span>
-          {% else %}—{% endif %}
-        </td>
-        <td>
           {% if h.final_score %}
           <span class="score-badge" data-score="{{ h.final_score }}">{{ h.final_score }}</span>
+          {% elif h.opening_score %}
+          <span class="score-badge" data-score="{{ h.opening_score }}">{{ h.opening_score }}</span>
           {% else %}—{% endif %}
         </td>
         <td>{{ h.upload_status or "—" }}</td>

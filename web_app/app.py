@@ -23,7 +23,10 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 import config
+from core.debug_logging import setup_debug_logging
 from core.gui_support import build_app_version
+
+setup_debug_logging()
 
 # ── アプリ生成 ────────────────────────────────────────────────────────────
 from contextlib import asynccontextmanager
@@ -89,7 +92,9 @@ def health():
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     # スタックトレースは内部ログのみ。レスポンスには詳細を最小限にする
+    import logging
     import traceback
+    logging.getLogger(__name__).exception("未処理例外: %s %s", request.method, request.url.path)
     traceback.print_exc()
     return JSONResponse(
         status_code=500,
