@@ -24,12 +24,17 @@ class ReadingNormalizer:
             return
         try:
             res = requests.get(f"{_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}/api/tags", timeout=_cfg.READING_NORMALIZE_CHECK_TIMEOUT_SEC)
-            self._available = res.status_code == 200
-        except Exception:
-            pass
+            if res.status_code != 200:
+                raise RuntimeError(f"HTTP {res.status_code}")
+            self._available = True
+        except Exception as e:
+            raise RuntimeError(
+                f"よみがな正規化が有効ですがOllamaに接続できません ({_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}): {e}\n"
+                "Ollamaを起動するか、VOICE_READING_NORMALIZE_ENABLED=0 に設定してください。"
+            ) from e
 
     def normalize_batch(self, texts: list[str]) -> dict[str, str]:
-        """複数テキストを一括でよみがな正規化する。失敗時は元テキストにフォールバック。"""
+        """複数テキストを一括でよみがな正規化する。"""
         if not self._available:
             return {t: t for t in texts}
 
@@ -40,26 +45,23 @@ class ReadingNormalizer:
         numbered = "\n".join(f"{i + 1}: {t}" for i, t in enumerate(uncached))
         prompt = _PROMPT_HEADER + numbered
 
-        try:
-            res = requests.post(
-                f"{_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}/api/chat",
-                json={
-                    "model": _cfg.VOICE_READING_NORMALIZE_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "stream": False,
-                },
-                timeout=_cfg.READING_NORMALIZE_CHAT_TIMEOUT_SEC,
-            )
-            res.raise_for_status()
-            content = res.json()["message"]["content"].strip()
-            m = re.search(r"\{.*\}", content, re.DOTALL)
-            if m:
-                result = json.loads(m.group())
-                for i, original in enumerate(uncached):
-                    normalized = result.get(str(i + 1), original)
-                    self._cache[original] = normalized if isinstance(normalized, str) else original
-        except Exception:
-            pass
+        res = requests.post(
+            f"{_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}/api/chat",
+            json={
+                "model": _cfg.VOICE_READING_NORMALIZE_MODEL,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+            },
+            timeout=_cfg.READING_NORMALIZE_CHAT_TIMEOUT_SEC,
+        )
+        res.raise_for_status()
+        content = res.json()["message"]["content"].strip()
+        m = re.search(r"\{.*\}", content, re.DOTALL)
+        if m:
+            result = json.loads(m.group())
+            for i, original in enumerate(uncached):
+                normalized = result.get(str(i + 1), original)
+                self._cache[original] = normalized if isinstance(normalized, str) else original
 
         for t in uncached:
             if t not in self._cache:
