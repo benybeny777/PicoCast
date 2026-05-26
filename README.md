@@ -1,231 +1,207 @@
-# Native Video Factory
+# Native Video Factory 🎥
 
-「ずんだもんとめたんの食べ物雑学堂」向けに、食べ物雑学の解説動画を台本から VOICEVOX音声・背景画像・ffmpeg/native MP4まで自動生成するローカルWebツールです。
+「ずんだもんとめたんの食べ物雑学堂」向けに、食べ物雑学の解説動画を台本から自動生成するローカルWebツールです。  
+台本を入力するだけで、**VOICEVOXによる音声合成**、**Gemini (Nano Banana Suite) による背景画像生成**、**ffmpegによる高品質なネイティブMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができます。
 
-## 主な機能
+---
 
-- ローカルWeb UIで台本貼り付けから native MP4 を自動生成
-- Shorts / ロングを `動画形式:` から自動判定
-- `━━ 動画1 ━━` や `動画形式:` が複数ある台本を分割して一括生成
-- YouTube NG ワードをマイルド表現へ自動置換
-- VOICEVOX 音声は Shorts(native): 冒頭1.40倍速・本編1.25倍速、ロング(native): 冒頭1.40倍速・本編1.20倍速で生成
-- 背景指定がセリフの後に来る台本も自動で補正
-- BGMer「のほほん」を固定 BGM として自動追加
-- 生成履歴から複数選択して再生成 / native MP4化 / YouTube アップロード
-- YouTubeアップロード選択画面は、アップロード可能な `.mp4` がある履歴だけを表示
-- 画像確認画面でサムネイル・背景を確認し、選択した画像だけ再生成
-- Web UIから食べ物雑学特化の台本生成プロンプトをコピー
-- Web UIから既存タイトル・Analytics実績データを反映した `Shortsタイトル案` / `Longタイトル案` プロンプトをコピー
-- 作業中止ボタンで生成処理を即時キャンセル
-- YouTube 予約投稿: Shorts は毎日 7:00 / 12:00 / 19:00、Long は毎日 21:00（土日は追加で 12:00）(JST) に自動割り当て
-- vidIQキーワード分析に基づき、YouTubeタグ欄へ `食べ物 雑学` / `雑学 ショート` / `ゆっくり解説 食べ物` などを自動補完。題材別タグを追加し、実際に使ったタグを `_meta/youtube_metadata.json` に保存
-- スケジュール画面で予約中＋直近90日の公開済み動画を一覧表示。公開日時は YouTube API 同期値を使用。公開予定変更・スロット詰め直し対応。Shorts/Long・予定/公開済みで絞り込み可
-- Analytics画面で YouTube Analytics API から動画・チャンネル指標を取得。チャンネル全動画を対象に S/A/B/C/D スコアリング（Shorts / ShortLong / Long 別）、公開予約・非公開は分類表示、高評価率・横展開用サマリー、2026-05-16以前の音切れリスク動画の品質改善候補を確認
-- 固定コメント画面でアップロード済み動画に固定コメント用コメントを投稿し、確認用の動画リンクを表示
-- `LongサムネAB` チェックボックスで Long の A/B/C サムネ候補を生成
-- `Long節約` チェックボックスで Long の背景生成を最大 16 枚に制限（台本で `背景: 前と同じ` と書くと前の背景を継続使用）
-- `SD生成` チェックボックスで画像を縮小サイズで生成して拡大セット（API コスト削減。デフォルト OFF）
-- `背景再利用` チェックボックスで既存背景を活かした再生成に対応
-- native Shorts は背景のゆっくりズーム/パン、話者の軽いバウンス、`テロップ:` 行のポップ表示、短いツッコミ/疑問場面のシェイク・アイコンを自動で追加
+## 🔄 システム処理フロー
 
-## セットアップ
+本システムは、以下のパイプラインに沿って動画を完全自動で生成・投稿します。
 
-Windows / Mac の両方を想定しています。ffmpeg/native生成を主経路とし、YMM4プロジェクト出力は廃止済みです。
-
-1. VOICEVOX をインストール
-2. APIキーとOAuth設定を用意
-3. プロンプト設定を確認する
-   - 初期状態は食べ物用設定でそのまま動きます
-   - 別ジャンルで使う場合は、必ず `core/prompt_parts/local/` に個人用プロンプト設定を置きます
-   - 食べ物用設定を明示的に復元する場合:
-     ```powershell
-     New-Item -ItemType Directory -Force -Path core\prompt_parts\local
-     Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
-     ```
-4. Python 依存を入れる
-
-```bash
-pip install --upgrade requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib openai fastapi "uvicorn[standard]" jinja2 python-multipart
+```mermaid
+graph TD
+    A[台本入力・一括処理] --> B[品質レビュー・チェック<br/>ローカル & Ollama & ChatGPT]
+    B -->|修正必要/Must Fix| A
+    B -->|品質クリア| C[よみがな正規化<br/>Ollama]
+    C --> D[音声生成 WAV<br/>VOICEVOX]
+    C --> E[画像・サムネ生成 PNG<br/>Gemini / Nano Banana]
+    D --> F[ネイティブレンダリング<br/>ffmpeg]
+    E --> F
+    F --> G[実尺評価 & 実績保存<br/>native MP4 / _meta]
+    G --> H[YouTube予約アップロード<br/>OAuth / スロット管理]
+    H --> I[固定コメント投稿]
+    I --> J[Analytics スコアリング<br/>S/A/B/C/D 評価]
+    J -->|実績データをタイトル案プロンプトへフィードバック| A
 ```
 
-### APIキー・OAuth
+---
 
-`.env` をリポジトリ直下に作り、必要なキーを入れます。
+## 🚀 クイックスタート
+
+Windows環境であれば、用意されているバッチファイルを使用して最も簡単に起動できます。
+
+1. **VOICEVOX を起動**しておきます（デフォルトポート: `50021`）。
+2. リポジトリ直下の [start.bat](file:///c:/00_PG/00_yukkurijidou/start.bat) をダブルクリック、またはターミナルから起動します。
+   ```powershell
+   .\start.bat
+   ```
+3. 自動的にブラウザが立ち上がり、`http://127.0.0.1:58080` にアクセスできます。
+
+---
+
+## 🛠 前提条件 (Prerequisites)
+
+本ツールを使用するには、以下の外部ソフトウェアがローカル環境に導入されている必要があります。
+
+1. **Python 3.10 以上** (本プロジェクトでは [`.venv`](file:///c:/00_PG/00_yukkurijidou/.venv) 仮想環境を使用します)
+2. **VOICEVOX** ([公式ホームページ](https://voicevox.nero.ne.jp/)からダウンロード)
+3. **ffmpeg** (パスを通しておくか、環境変数 `FFMPEG_BIN` にバイナリパスを指定してください)
+4. **Ollama** (よみがな正規化および冒頭品質レビューに利用。デフォルトモデル: `qwen2.5:7b` / `qwen3:8b`)
+
+---
+
+## 📦 セットアップ手順
+
+### Step 1. 仮想環境のアクティベートと依存パッケージの導入
+Windowsでコマンドから実行する場合、システムの Python ではなく、プロジェクト専用の仮想環境 [`.venv`](file:///c:/00_PG/00_yukkurijidou/.venv) の Python を使用します。
+
+*   **PowerShell の場合:**
+    ```powershell
+    # 仮想環境のアクティベート
+    .venv\Scripts\Activate.ps1
+    # 依存関係のインストール・更新
+    pip install --upgrade requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib openai fastapi "uvicorn[standard]" jinja2 python-multipart
+    ```
+*   **コマンドプロンプト (cmd) の場合:**
+    ```cmd
+    :: 仮想環境のアクティベート
+    .venv\Scripts\activate.bat
+    :: 依存関係のインストール・更新
+    pip install --upgrade requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib openai fastapi "uvicorn[standard]" jinja2 python-multipart
+    ```
+
+### Step 2. APIキーとOAuth設定ファイルの配置
+リポジトリ直下に環境設定ファイル [`.env`](file:///c:/00_PG/00_yukkurijidou/.env) を作成し、各種APIキーを設定します。
 
 ```env
-GOOGLE_API_KEY=...
-OPENAI_API_KEY=...
+GOOGLE_API_KEY=your_gemini_api_key
+OPENAI_API_KEY=your_openai_api_key
 ```
 
-- `GOOGLE_API_KEY`: Google AI Studio の API keys で作成します。台本生成・画像生成で使います。
-- `OPENAI_API_KEY`: OpenAI Platform の API keys で作成します。ChatGPT生成前レビューで使います。
-- `client_secrets.json`: Google Cloud Console で YouTube Data API v3 / YouTube Analytics API を有効化し、OAuthクライアントID（デスクトップアプリ）を作成してJSONをダウンロードします。ファイル名を `client_secrets.json` にしてリポジトリ直下へ置きます。
-- 初回の `YouTubeアップ` / `📊 アナリティクス` 実行時にブラウザ認証が開き、`token.json` / `token_analytics.json` が自動作成されます。
-- Google OAuth設定後、YouTube Studioで本人確認が頻発することがあります。その場合は、チャンネルのGoogleアカウントのセキュリティ項目でOAuth連携が警告扱いになっていないか確認し、警告を確認・承認すると本人確認が出なくなることがあります。
+*   **`GOOGLE_API_KEY`:** Google AI Studio (Gemini API) から取得します。台本や背景画像の生成に使われます。
+*   **`OPENAI_API_KEY`:** OpenAI Platform から取得します。ChatGPT による台本の生成前最終レビュー（`gpt-5.2`）で使われます。
+*   **`client_secrets.json`:** YouTube API を利用するための OAuth 2.0 クライアント認証情報（デスクトップアプリ用）です。Google Cloud Console からダウンロードし、**リポジトリ直下**に配置してください。
 
-取得先:
-- Google AI Studio API key: https://aistudio.google.com/apikey
-- OpenAI API key: https://platform.openai.com/api-keys
-- Google Cloud APIライブラリ: https://console.cloud.google.com/apis/library
-- Google Cloud 認証情報: https://console.cloud.google.com/apis/credentials
+> [!IMPORTANT]
+> - `client_secrets.json`, `.env`, `token.json`, `token_analytics.json` は個人情報やAPIキーを含むため、**絶対に Git にコミットしないでください**（`.gitignore` で除外されています）。
+> - アナリティクスやスケジュール同期などを初めて利用する際、ブラウザが開いて Google 認証を求められます。認証に成功すると、プロジェクトルートに `token.json` と `token_analytics.json` が自動生成されます。
 
-`client_secrets.json`、`token.json`、`token_analytics.json`、`.env` はGit管理外です。
+### Step 3. プロンプト設定の確認
+初期状態では、本プロジェクトの「食べ物雑学」用の設定が適用されます。  
+もし別のジャンルで運用する場合は、[core/prompt_parts/local/](file:///c:/00_PG/00_yukkurijidou/core/prompt_parts/local) ディレクトリを作成し、そこに個人用プロンプト部品を配置してください（このディレクトリ内のファイルが最優先で読み込まれます）。
 
-### 主な設定値
+*   **食べ物用のデフォルト設定を復元・初期化したい場合 (PowerShell):**
+    ```powershell
+    New-Item -ItemType Directory -Force -Path core\prompt_parts\local
+    Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
+    ```
 
-APIキーやOAuthファイルなどの認証情報以外は、原則として [config.py](config.py) の既定値を使います。必要な場合だけ `.env` または環境変数で上書きできます。
+---
 
-| 設定名 | 既定値 | 用途 |
-| --- | --- | --- |
-| `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.2` | ChatGPT生成前レビューのモデル |
-| `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
-| `NANOBANANA_PRO_MODEL` | `gemini-3-pro-image-preview` | 背景・サムネ生成の高品質モデル |
-| `NANOBANANA_FLASH_MODEL` | `gemini-3.1-flash-image-preview` | 背景・サムネ生成の高速モデル |
-| `NATIVE_AUDIO_LOUDNORM_ENABLED` | `1` | native MP4の最終音声にloudnormを適用 |
-| `NATIVE_AUDIO_LOUDNORM_I` | `-15` | loudnormのIntegrated loudness目標 |
-| `NATIVE_AUDIO_LOUDNORM_TP` | `-1.5` | loudnormのTrue Peak上限 |
-| `NATIVE_AUDIO_LOUDNORM_LRA` | `6` | loudnormのLoudness Range目標 |
-| `NATIVE_BGM_VOLUME_DB` | `-20` | native出力のBGM音量 |
-| `NATIVE_SHORTS_CHARACTER_SCALE` | `1.05` | native Shortsのキャラ倍率 |
-| `NATIVE_ENABLE_MOTION_EFFECTS` | `1` | native Shorts軽量エフェクト全体の有効/無効 |
-| `NATIVE_ENABLE_BG_KEN_BURNS` | `1` | 背景のゆっくりズーム/パン |
-| `NATIVE_ENABLE_CHARACTER_BOUNCE` | `1` | 話者キャラの軽いバウンス |
-| `NATIVE_ENABLE_POP_TELOP` | `1` | `テロップ:` 行のポップ表示 |
-| `NATIVE_ENABLE_SHAKE` | `1` | ツッコミ/驚き場面の軽いシェイク |
-| `NATIVE_MAX_SHAKE_COUNT_SHORTS` | `4` | Shorts 1本あたりのシェイク上限 |
-| `NATIVE_MAX_ICON_COUNT_SHORTS` | `4` | Shorts 1本あたりの疑問/驚きアイコン上限 |
-| `NATIVE_BG_ZOOM_MAX` | `1.06` | 背景Ken Burnsの最大拡大倍率 |
-| `WEB_APP_NAME` | `Native Video Factory` | Web UIの表示アプリ名 |
-| `WEB_UI_HOST` | `127.0.0.1` | Web UIのバインドホスト。外部公開はしない |
-| `WEB_UI_PORT` | `58080` | Web UIのポート番号 |
-| `WEB_DEFAULT_IMAGE_STYLE` | `通常` | Web UI生成画面の既定画像スタイル |
-| `WEB_IMAGE_STYLE_CHOICES` | `通常,アニメ,水彩` | Web UI生成画面の画像スタイル選択肢 |
-| `WEB_DEFAULT_REUSE_BACKGROUNDS` | `0` | Web UI生成画面の背景再利用既定値 |
-| `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `0` | Web UI生成画面のLongサムネAB既定値 |
-| `WEB_DEFAULT_LONG_BUDGET_MODE` | `0` | Web UI生成画面のLong節約既定値 |
-| `WEB_DEFAULT_SD_SIZE_MODE` | `0` | Web UI生成画面のSD生成既定値 |
-| `WEB_JOB_POLL_INTERVAL_MS` | `2000` | Web UIのジョブ状態更新間隔(ms) |
-| `WEB_SUCCESS_RELOAD_DELAY_MS` | `1500` | Web UIのジョブ成功後再読み込み待ち時間(ms) |
-| `WEB_TOAST_VISIBLE_MS` | `2000` | Web UIのトースト表示時間(ms) |
-| `WEB_TOAST_HIDE_DELAY_MS` | `420` | Web UIのトースト非表示待ち時間(ms) |
-| `WEB_VOICEVOX_CHECK_TIMEOUT_SEC` | `2.0` | Web UIのVOICEVOX疎通確認タイムアウト(秒) |
-| `WEB_FFMPEG_CHECK_TIMEOUT_SEC` | `5.0` | Web UIのffmpeg疎通確認タイムアウト(秒) |
-| `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード成功後に追加する再生リスト名。空にすると無効 |
+## 💻 起動方法と起動オプション
 
-## 起動
+### コマンドラインからの起動
 
-```bash
-python web_app/app.py
-```
+仮想環境の Python を使用して起動します。
 
-起動後、ブラウザで `http://127.0.0.1:58080` を開きます。
+*   **通常起動 (PowerShell):**
+    ```powershell
+    .\.venv\Scripts\python.exe -m web_app.app
+    ```
+*   **自動でブラウザを開く場合:**
+    ```powershell
+    .\.venv\Scripts\python.exe -m web_app.app --open-browser
+    ```
+*   **開発用（ファイル変更時の自動リロードを有効にする）:**
+    ```powershell
+    .\.venv\Scripts\python.exe -m web_app.app --reload --open-browser
+    ```
+
+> [!TIP]
+> **Windowsで「Python was not found...」というエラーが出る場合:**
+> システム環境変数 (PATH) に Python が通っていない可能性があります。必ず上記の通り `.\.venv\Scripts\python.exe` のように**仮想環境のパスを明示的に指定して実行**するか、[start.bat](file:///c:/00_PG/00_yukkurijidou/start.bat) を実行してください。
+
+### 主要な起動引数
 
 | オプション | 説明 |
-|---|---|
-| `--port N` | ポートを指定（省略時は `WEB_UI_PORT` の値） |
-| `--auto-port` | 指定ポートが使用中の場合、自動で空きポートを探して起動 |
-| `--open-browser` | 起動後にブラウザを自動で開く |
+| :--- | :--- |
+| `--port N` | ポートを指定して起動（デフォルト: `58080`） |
+| `--auto-port` | 指定ポートが競合している場合、自動的に次の空きポートを探して起動 |
+| `--open-browser` | サーバー起動後、自動的に既定のウェブブラウザを開く |
+| `--reload` | **[開発用]** 関連ソースコードの変更を検知した際に、自動でUvicornサーバーを再起動する |
 
-```bash
-python web_app/app.py --open-browser          # 通常起動
-python web_app/app.py --port 58081            # ポート競合時に別ポートを指定
-python web_app/app.py --auto-port             # 空きポートを自動選択
-```
+---
 
-Windowsでは `start.bat` からも起動できます。
+## 📝 基本のワークフロー
 
-**セキュリティ注意:**
-- Web UI は **127.0.0.1 のみ**にバインドします。外部には公開しません。
-- `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の中身は Web 画面に**絶対に表示されません**。
+1.  **実績の同期:** `📊 アナリティクス` 画面で YouTube Analytics の最新実績データを取得します。
+2.  **タイトル案プロンプト作成:** Web UI のタイトル生成プロンプトコピー（Shorts/Long）を使い、実績データを組み込んだプロンプトで AI にタイトル案を出させます。
+3.  **台本作成:** 採用したタイトルから、Web UI にある「台本作成プロンプト」をコピーして AI に台本を作成させます。
+4.  **台本のチェック・生成:** Web UI の台本欄に貼り付け、必要に応じて「LLM/尺チェック」を行ったあと、生成を開始します。
+5.  **画像・動画の確認:** 「画像確認」画面でサムネイルと背景画像をチェックし、気に入らない画像があればプロンプトを編集して再生成します。
+6.  **最終確認とアップロード:** 生成されたネイティブ MP4 動画を確認し、「アップロード」画面から YouTube 予約スロットへ投稿します。
+7.  **固定コメントの投稿:** 必要に応じて「固定コメント」画面から公開動画に誘導コメントを投稿します。
 
-### Web UI でできること
+---
 
-| 画面 | 機能 |
-|---|---|
-| ダッシュボード | サービス接続状態、統計、直近履歴、クイックアクション |
-| 台本貼り付け / 生成 | 台本入力 → 生成ジョブ開始 → ログ表示 |
-| LLM/尺チェック | 台本の冒頭品質・推定尺・AI評価を確認 |
-| 生成履歴 | output/ 配下の履歴一覧・詳細表示・履歴から複数再生成・native MP4化 |
-| 画像確認 / 再生成 | サムネイル・背景画像の確認、プロンプト編集、選択画像の再生成 |
-| Analytics | YouTube Analytics データの表示・取得 |
-| スケジュール | 予約中動画一覧・YouTube同期 |
-| アップロード | MP4がある履歴をYouTubeにアップロード |
-| 固定コメント | アップロード済み動画への固定コメント投稿 |
-| 設定 / サービス確認 | VOICEVOX診断、非秘密設定の変更、最下部でAPIキー状態確認・変更 |
-| ログ | バックグラウンドジョブのログ確認 |
+## 📜 台本フォーマット
 
-### Web UI の追加パッケージ
-
-上記のセットアップ用 `pip install` に含まれています。既存環境へ追加する場合だけ、`fastapi` / `uvicorn[standard]` / `jinja2` / `python-multipart` を入れてください。
-
-### 販売・配布時の注意
-
-- Web UI はローカル専用です。SaaS 化・外部公開する場合は認証機構を別途追加してください。
-- `.env` や OAuth トークンはGit管理外です。配布パッケージには含めないでください。
-
-## 基本の使い方
-
-1. 必要に応じて `📊 アナリティクス` で実績データを取得
-2. Web UIの `Shortsタイトル案` でShorts寄りのタイトル案作成プロンプトをコピーし、候補を作成
-   - Long候補だけを出したい場合は `Longタイトル案` を使う
-3. Web UIの `AI台本作成` で台本作成プロンプトをコピーし、採用タイトルから台本を作成
-4. Web UI の台本欄に貼り付け
-5. 生成を開始する
-6. 必要なら `画像確認` で画像を見直す
-7. native MP4を確認する
-8. アップロード画面で履歴から動画を選んでアップロード（MP4なしの履歴は表示されません）
-9. 必要なら固定コメント画面で公開済み動画へコメントを投稿し、Studio側でピン留め
-
-`Shortsタイトル案` / `Longタイトル案` は直近の `output/000_analytics/analytics_score_*.tsv` がある場合、その実績データをプロンプトへ自動で差し込みます。実績データがない場合は新規開拓枠として扱う指示になります。
-
-## 台本フォーマット
+台本テキストの先頭に動画のメタ情報を定義し、空行を挟んでセリフや演出を記述します。
 
 ```text
 動画形式: Shorts
-動画タイトル: タイトル
-サムネ文字: ヤバい
-説明文: YouTube説明文（VOICEVOXクレジット不要・自動付与）
+動画タイトル: チョコは500年間ずっと飲み物だった
+サムネ文字: 飲み物
+説明文: チョコレートの驚きの歴史を解説！
 タグ: ずんだもん,ゆっくり解説,VOICEVOX,食べ物 雑学,雑学 ショート
 生成区分: 横展開
-元動画: 昔のコーラに入ってた危険な粉の正体
-目的: 薬だった飲み物系
 
-背景: 場面説明、漫画風、画面上部に"テロップ"を描画
-ずんだもん(ノーマル): セリフ
-四国めたん(ツンツン)[ジト目]: セリフ
+背景: 漫画風イラスト調。ヨーロッパの古い街並み。
+ずんだもん(ノーマル): チョコは昔、薬の飲み物だったのだ！
+四国めたん(ツンツン): えーっ！薬ですの！？
+テロップ: 薬だった！
 ```
 
-`()` はVOICEVOXの声スタイル、`[]` はnative立ち絵の画面表情です。`[]` は必要な場面だけ使います。
+*   **`()`**: VOICEVOX のスタイル指定（例: `あまあま`, `ツンツン`）。
+*   **`[]`**: ネイティブ立ち絵の表情指定（例: `[驚き]`, `[ジト目]`）。
+*   **複数動画の一括処理:** `━━ 動画1 ━━` や `━━ 動画2 ━━` などの区切り行を挟むことで、複数の台本を一度に分割処理できます。
 
-複数動画をまとめて貼る場合は区切り記号に対応しています。
+---
 
-```text
-━━ 動画1：ショート版 ━━
-動画形式: Shorts
-...
+## ⚙️ 主な設定値 (config.py)
 
-━━ 動画2：ロング版 ━━
-動画形式: ロング
-...
-```
+APIキーやOAuthファイルなどの認証情報以外は、原則として [config.py](file:///c:/00_PG/00_yukkurijidou/config.py) の既定値を使います。必要な場合だけ `.env` または環境変数で上書きできます。
 
-## 注意
+| 設定項目 | 既定値 | 説明 |
+| :--- | :--- | :--- |
+| `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本の生成プロンプトや修正用のAIモデル名 |
+| `NANOBANANA_PRO_MODEL` | `gemini-3-pro-image-preview` | 背景・サムネ生成の高品質画像生成モデル |
+| `NANOBANANA_FLASH_MODEL` | `gemini-3.1-flash-image-preview` | 画像生成の高速画像生成モデル |
+| `NATIVE_AUDIO_LOUDNORM_ENABLED` | `True` | 最終的なMP4音声にラウドネス正規化 (loudnorm) を適用するか |
+| `NATIVE_BGM_VOLUME_DB` | `-20` | レンダリング時の BGM 音量 (dB) |
+| `CHARACTER_UPPER_BODY_MODE` | `True` | 立ち絵を腰から上で拡大して表示するモード（True=有効） |
+| `MAX_BACKGROUNDS_SHORTS` | `9` | Shorts 1本あたりに生成する背景画像の最大枚数 |
+| `MAX_BACKGROUNDS_LONG` | `90` | ロング動画における通常時の背景画像最大枚数 |
+| `MAX_BACKGROUNDS_LONG_BUDGET` | `16` | ロング動画の「画像節約モード」有効時の背景画像最大枚数 |
+| `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Long動画アップロード成功後に、自動的に追加する再生リスト名 |
 
-- YMM4プロジェクト出力は廃止済みです。生成・アップロード候補は native MP4 のみを対象にします。
-- 旧Tkinter GUI と `main.py` の直接CLI生成入口は廃止済みです。操作入口はローカルWeb UIのみです。
-- `output/`, `.env`, `client_secrets.json`, `token.json`, `token_analytics.json` は Git 管理外です。
-- アップロード記録は各動画フォルダの `_meta/upload_record.json` に残します。予約・公開状態の正はYouTube側なので、スケジュール画面や詰め直しはYouTube APIの状態を参照します。`output/000_uploaded/` はアップロード済み生成物の保管場所です。
-- `OUTPUT_DIR` / `OUTPUT_DATA_DIR` / `OUTPUT_ANALYTICS_DIR` / `OUTPUT_LEGACY_DIR` / `UPLOAD_RECORDS_FILE` / `UPLOADED_TITLES_FILE` は `.env` または環境変数で変更できます。
-- `output/000_backups/` は再生成時の退避先です。同一テーマは最新1世代だけ残し、アップロード成功後はそのテーマのバックアップを自動削除します。
-- `core/prompt_parts/local/` は個人用プロンプト差し替え欄です。Git管理外なので、別ジャンル担当者のネタ設定と混ざりません。
-- 初回セットアップではプロンプト設定を必ず確認します。食べ物用ならGit管理側の設定でそのまま動き、別ジャンルで使う人は必ず `local/` に差し替えファイルを置きます。
-- 食べ物用の復元サンプルは `samples/prompt_parts/food/`、サンプル台本は `samples/scripts/` にあります。
-- `local/` を消した場合は、`samples/prompt_parts/food/` の中身を `core/prompt_parts/local/` へコピーすると食べ物用設定を戻せます。
-- YouTube アップロードには Google OAuth 用の `client_secrets.json` が必要です。
-- 詳細仕様・操作手順は [SPEC.md](SPEC.md) を参照してください。
-- 大きめの変更履歴は [CHANGELOG.md](CHANGELOG.md) に残します。
-## CTA/Long運用メモ
+---
 
-- Shorts本編はループ視聴優先です。アプリは一括生成時に `ネタ募集CTA: 許可 / 禁止` を台本へ差し込み、5本以上のShorts同時生成でもネタ募集CTAは最大1本だけにします。
-- Shorts台本に `次回は` / `次の動画` / `他の動画も見て` / `チャンネル登録お願いします` などの直接誘導がある場合、生成前チェックで警告します。Longでは関連動画誘導を許可します。
-- Longアップロード時は説明欄末尾にYouTubeチャプター形式の `【目次】` を自動追加できます。方針は `_meta/cta_policy.json` と `_meta/youtube_metadata.json` に保存されます。
+## ⚠️ 注意・制約事項
+
+*   **YMM4（ゆっくりムービーメーカー4）連携の廃止:** 本システムは ffmpeg を用いたネイティブ動画レンダリング（`native`）が標準であり、`.ymmp` 出力は廃止されています。
+*   **旧Tkinter GUI / CLI の廃止:** 動画生成などのすべてのコントロールはローカル Web UI に一本化されています。
+*   **バックアップと上書き:** 再生成時、同一のテーマフォルダが存在する場合は `output/000_backups/` に最新1世代分が自動退避されます。YouTubeへのアップロードが成功した時点で、バックアップフォルダは自動的にクリーンアップされます。
+*   **予約スロットの基準:** スケジュール画面やスロット割り当ての空き枠の判定には、ローカルデータではなく **YouTube API から返ってくる実際の予約状況** を正（マスタ）として同期処理を行います。
+
+---
+
+## 📢 CTA/Long動画の運用ポリシー
+
+*   **Shorts本編のループ視聴優先:** 
+    動画の離脱を防ぐため、Shorts本編での「チャンネル登録お願いします」や「次の動画も見てね」といった直接的な誘導セリフは生成前チェックで警告が出ます。また、5本以上のShortsを一括生成する場合、視聴者維持率の観点から「ネタ募集CTA」は自動的に最大1本だけに制限されます。
+*   **Long動画の目次（チャプター）自動追加:**
+    Long動画アップロードの際は、台本の内容からAIがYouTube概要欄用の `【目次】(0:00形式)` チャプターマーカーを自動で生成し、説明文の末尾に追加します。
+*   **Longサムネイル A/B テスト:**
+    Web UI の「LongサムネAB」チェックボックスをONにすると、自動的に3パターンのサムネイル画像 (Variant A, B, C) が出力されます。YouTube Studio でのテスト用にご活用ください。
