@@ -10,7 +10,7 @@
 食べ物雑学ゆっくり解説動画（Shorts / Long）を自動生成してYouTubeにアップロードするシステム。
 
 - **台本生成** → Gemini AI
-- **音声生成** → VOICEVOX (ずんだもん / 四国めたん)
+- **音声生成** → VOICEVOX (ずんだもん / 四国めたん)（よみがな正規化を Ollama で前処理）
 - **背景画像生成** → Nano Banana (Gemini画像生成)
 - **動画組立** → ffmpeg/native MP4
 - **品質レビュー** → ローカルルール + Ollama LLM + ChatGPT
@@ -32,12 +32,43 @@
 
 ```
 yukkurijidou/
-├── gui.py                  # Tkinter GUI (メインウィンドウ)
+├── gui.py                  # Tkinter GUI (メインウィンドウ) ← 既存、維持
 ├── main.py                 # 動画生成パイプライン
 ├── config.py               # 設定・定数
+├── web_app/                # ローカル Web UI (FastAPI) ← 新規追加
+│   ├── app.py              # FastAPI エントリポイント (python web_app/app.py)
+│   ├── job_manager.py      # バックグラウンドジョブ管理
+│   ├── schemas.py          # Pydantic リクエスト/レスポンススキーマ
+│   ├── security.py         # パストラバーサル対策・output/配下制限
+│   ├── services/           # ビジネスロジック層
+│   │   ├── status_service.py       # 設定診断・ダッシュボード状態
+│   │   ├── history_service.py      # 生成履歴一覧・詳細
+│   │   ├── generation_service.py   # 動画生成ジョブ
+│   │   ├── script_check_service.py # LLM/尺チェックジョブ
+│   │   ├── image_service.py        # 画像確認・再生成
+│   │   ├── analytics_service.py    # Analytics取得・表示
+│   │   ├── schedule_service.py     # スケジュール管理
+│   │   ├── upload_service.py       # YouTubeアップロード
+│   │   └── fixed_comment_service.py # 固定コメント投稿
+│   ├── routes/             # APIルート層
+│   │   ├── pages.py        # Jinja2ページルート
+│   │   ├── api_status.py   # GET /api/health, /api/status, /api/dashboard
+│   │   ├── api_jobs.py     # GET/POST /api/jobs
+│   │   ├── api_history.py  # GET /api/history
+│   │   ├── api_generate.py # POST /api/generate
+│   │   ├── api_check.py    # POST /api/check
+│   │   ├── api_images.py   # GET/POST /api/images
+│   │   ├── api_analytics.py # GET/POST /api/analytics
+│   │   ├── api_schedule.py  # GET/POST /api/schedule
+│   │   ├── api_upload.py    # GET/POST /api/upload
+│   │   ├── api_fixed_comment.py # GET/POST /api/fixed-comment
+│   │   └── api_settings.py # GET /api/settings/status
+│   ├── templates/          # Jinja2 HTMLテンプレート (12画面)
+│   └── static/             # CSS/JS (app.css, app.js)
 ├── core/
 │   ├── ai_generator.py     # Gemini台本生成
 │   ├── voicevox.py         # VOICEVOX音声生成
+│   ├── reading_normalizer.py # よみがな正規化（Ollama）
 │   ├── image_generator.py  # Nano Banana背景画像生成
 │   ├── parser.py           # 台本パーサー (ScriptParser)
 │   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
@@ -104,14 +135,16 @@ yukkurijidou/
 7. 生成前の尺推定 + 尺レビュー
 8. ChatGPT生成前レビュー（評価のみ、修正なし）
    └── `must_fix` あり、または重大エラー基準未満なら処理中止
-9. VOICEVOX音声生成（セリフ1行ずつ）
-10. 背景画像生成（Nano Banana）
+9. よみがな正規化（Ollamaで全チャンクを一括変換）
+   └── 変換後テキストをVOICEVOXに渡す。字幕・ファイル名は元テキストのまま
+10. VOICEVOX音声生成（セリフ1行ずつ）
+11. 背景画像生成（Nano Banana）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
-11. サムネイル生成（Nano Banana）
-12. 旧タイムライン互換ヘルパーで素材タイミングを組立
-13. BGM追加
-14. native MP4出力
-15. 実尺レビュー + 完了レポート
+12. サムネイル生成（Nano Banana）
+13. 旧タイムライン互換ヘルパーで素材タイミングを組立
+14. BGM追加
+15. native MP4出力
+16. 実尺レビュー + 完了レポート
 ```
 
 ### 尺推定 (gui.py: `_estimate_duration`)
@@ -253,6 +286,116 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 ---
 
+## ローカル Web UI (`web_app/`)
+
+### 起動
+
+```bash
+python web_app/app.py [--open-browser] [--port 8000]
+```
+
+アクセス: `http://127.0.0.1:8000`
+
+### FastAPI 構成
+
+- フレームワーク: FastAPI + Uvicorn + Jinja2
+- バインド: `127.0.0.1` のみ（外部公開しない）
+- 層分離: API層 (`routes/`) / サービス層 (`services/`) / テンプレート層 (`templates/`)
+- ジョブ管理: `job_manager.py` でバックグラウンド実行・ステータス追跡
+
+### ジョブ管理 (`job_manager.py`)
+
+長時間処理（生成・チェック・アップロード・Analytics等）はすべてジョブ化する。
+
+| フィールド | 説明 |
+|---|---|
+| job_id | UUID |
+| type | generate / check / upload / analytics_refresh / schedule_sync / fixed_comment / image_regenerate |
+| status | queued / running / success / failed / cancelled |
+| progress_text | 直近の進行メッセージ |
+| started_at / finished_at | ISO8601 タイムスタンプ |
+| logs | [{time, tag, message}] のリスト |
+| result / error | 成功時の結果 / 失敗時のエラーメッセージ |
+
+初期実装はメモリ内管理。将来DB/JSON保存へ移行しやすい構造。
+
+### 主要画面
+
+| URL | 画面 |
+|---|---|
+| `/` | ダッシュボード |
+| `/generate` | 台本貼り付け / 動画生成 |
+| `/check` | LLM/尺チェック |
+| `/history` | 生成履歴一覧 |
+| `/history/{name}` | 生成履歴詳細 |
+| `/images` | 画像確認 / 再生成 |
+| `/analytics` | Analytics |
+| `/schedule` | スケジュール管理 |
+| `/upload` | YouTubeアップロード |
+| `/fixed-comment` | 固定コメント |
+| `/settings` | 設定 / サービス確認 |
+| `/logs` | ジョブログ |
+
+### API概要
+
+```
+GET  /health
+GET  /api/health
+GET  /api/status
+GET  /api/dashboard
+GET  /api/jobs
+GET  /api/jobs/{job_id}
+POST /api/jobs/{job_id}/cancel
+
+GET  /api/history
+GET  /api/history/{history_name}
+
+POST /api/generate
+POST /api/generate/batch
+POST /api/check
+
+GET  /api/images/{history_name}
+GET  /api/images/{history_name}/file/{file_path}
+POST /api/images/{history_name}/regenerate
+
+GET  /api/analytics
+GET  /api/analytics/tsv
+POST /api/analytics/refresh
+
+GET  /api/schedule
+POST /api/schedule/sync
+POST /api/schedule/rebalance  # dry-run
+POST /api/schedule/update     # [disabled: YouTube API書き込み未実装]
+POST /api/schedule/delete     # [disabled: YouTube API書き込み未実装]
+
+GET  /api/upload/candidates
+POST /api/upload
+
+GET  /api/fixed-comment/candidates
+POST /api/fixed-comment
+
+GET  /api/settings/status
+```
+
+### セキュリティ方針
+
+- `127.0.0.1` のみバインド
+- output/ 配下のみファイルアクセス可（`security.py` で検証）
+- `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の内容は返さない
+- APIキー設定は有無（bool）のみ返す
+- パストラバーサル拒否
+- 破壊的操作（アップロード・固定コメント投稿）は `confirmed=true` が必須
+- 例外時に秘密値をログへ出さない
+
+### 既存Tkinter GUIとの共存方針
+
+- `gui.py` は削除しない・変更しない
+- Web UI から `gui.py` の内部関数を直接呼ばない
+- `run_pipeline` / `ScriptParser` / `core/*` を共通基盤として両UIが使う
+- 生成ロジックは `main.py: run_pipeline` を再利用（`cancel_event` / `progress_callback` を渡す）
+
+---
+
 ## GUI (`gui.py`)
 
 ### 主要タブ・機能
@@ -309,6 +452,24 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 - 列: 番号 / タイトル / スケジュール / スコア（冒頭 / 尺 / 最終）
 - 幅: 860px
+
+---
+
+## よみがな正規化 (`core/reading_normalizer.py`)
+
+VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防ぐため、音声合成前に Ollama でセリフをひらがな/カタカナ寄りに変換する。
+
+- 動画1本あたり全セリフチャンクを **1回の API 呼び出し** でまとめて変換（コスト効率優先）
+- 変換後テキスト → VOICEVOX へ渡す（読み上げ用）
+- 元テキスト → ファイル名・字幕に使う（字幕マッチング維持）
+- Ollama 未起動 / 変換エラーは元テキストへフォールバック（生成を止めない）
+- `VOICE_READING_NORMALIZE_ENABLED = False` で無効化可能
+
+```
+VOICE_READING_NORMALIZE_ENABLED    = True
+VOICE_READING_NORMALIZE_MODEL      = "qwen2.5:7b"
+VOICE_READING_NORMALIZE_OLLAMA_URL = "http://localhost:11434"
+```
 
 ---
 
@@ -409,6 +570,9 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `CHARACTER_UPPER_BODY_SHORTS_SCALE` | 1.15 | 腰から上モード時のキャラ拡大倍率（Shorts用。縦画面は幅が狭いため Long より小さく） |
 | `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
 | `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 400 | 腰から上モード: Long の下方向シフト量(px) |
+| `VOICE_READING_NORMALIZE_ENABLED` | `True` | よみがな正規化の有効/無効 |
+| `VOICE_READING_NORMALIZE_MODEL` | `qwen2.5:7b` | よみがな正規化に使うOllamaモデル |
+| `VOICE_READING_NORMALIZE_OLLAMA_URL` | `http://localhost:11434` | よみがな正規化用Ollama URL |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
@@ -936,6 +1100,7 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 | Google Gemini API | 台本生成・台本チェック | `GOOGLE_API_KEY` |
 | Nano Banana (Gemini) | 背景・サムネ画像生成 | `GOOGLE_API_KEY` |
 | Ollama (qwen3:8b) | 冒頭品質レビュー・リライト | ローカル起動 |
+| Ollama (qwen2.5:7b) | よみがな正規化（VOICEVOX誤読対策） | ローカル起動 |
 | OpenAI API | ChatGPT生成前レビュー | `OPENAI_API_KEY` |
 | YouTube Data API v3 | 動画アップロード | OAuth2 (`client_secrets.json`) |
 

@@ -107,6 +107,13 @@ LONG_FULL_SCRIPT_REVIEW      = os.environ.get("LONG_FULL_SCRIPT_REVIEW",     "0"
 AUTO_FULL_REWRITE_ENABLED    = os.environ.get("AUTO_FULL_REWRITE_ENABLED",   "0").strip().lower() in ("1", "true", "yes", "on")  # must_fix 時に自動全文リライトするか
 
 # ───────────────────────────────────────────────
+# よみがな正規化（VOICEVOX 誤読対策 / Ollama使用）
+# ───────────────────────────────────────────────
+VOICE_READING_NORMALIZE_ENABLED    = os.environ.get("VOICE_READING_NORMALIZE_ENABLED",    "1").strip().lower() in ("1", "true", "yes", "on")
+VOICE_READING_NORMALIZE_MODEL      = os.environ.get("VOICE_READING_NORMALIZE_MODEL",      "qwen2.5:7b")
+VOICE_READING_NORMALIZE_OLLAMA_URL = os.environ.get("VOICE_READING_NORMALIZE_OLLAMA_URL", "http://localhost:11434")
+
+# ───────────────────────────────────────────────
 # Google AI モデル（Nano Banana Suite）
 # ───────────────────────────────────────────────
 GEMINI_MODEL          = os.environ.get("GEMINI_MODEL",          "gemini-3.1-pro-preview")       # 台本生成モデル
@@ -284,7 +291,13 @@ LONG_UPLOAD_PLAYLIST_NAME  = os.environ.get("LONG_UPLOAD_PLAYLIST_NAME",  "ロ�
 # Long: 5〜7 秒ごと。10 秒以上同一背景は避ける
 # Long節約モード: 新規生成を最大 16 枚に制限（台本で「背景: 前と同じ」を使うとカウント外）
 # ───────────────────────────────────────────────
-MAX_BACKGROUNDS_SHORTS      = 9    # Shorts: 最大背景枚数
-MAX_BACKGROUNDS_LONG        = 90   # Long: 最大背景枚数（通常モード）
-MAX_BACKGROUNDS_LONG_BUDGET = 16   # Long: 最大背景枚数（節約モード）
+MAX_BACKGROUNDS_SHORTS      = int(os.environ.get("MAX_BACKGROUNDS_SHORTS",      "9"))   # Shorts: 最大背景枚数
+MAX_BACKGROUNDS_LONG        = int(os.environ.get("MAX_BACKGROUNDS_LONG",        "90"))  # Long: 最大背景枚数（通常モード）
+MAX_BACKGROUNDS_LONG_BUDGET = int(os.environ.get("MAX_BACKGROUNDS_LONG_BUDGET", "16"))  # Long: 最大背景枚数（節約モード）
 MAX_BACKGROUNDS             = MAX_BACKGROUNDS_SHORTS  # 後方互換エイリアス
+
+# ───────────────────────────────────────────────
+# ローカル Web UI
+# ───────────────────────────────────────────────
+WEB_UI_HOST = os.environ.get("WEB_UI_HOST", "127.0.0.1")  # バインドホスト（外部公開禁止）
+WEB_UI_PORT = int(os.environ.get("WEB_UI_PORT", "58080"))  # ポート番号（他アプリと競合しにくい高番号）

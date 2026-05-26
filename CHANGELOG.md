@@ -14,6 +14,57 @@
 
 ## 2026-05-26
 
+### よみがな正規化（VOICEVOX誤読対策）
+
+- `core/reading_normalizer.py`: Ollama を使い、VOICEVOX に渡す前に全セリフチャンクを一括でよみがな変換。固有名詞・難読漢字等の誤読を防ぐ。Ollama未起動時は元テキストへフォールバックして生成継続
+- `main.py`: 音声生成ループ前にバッチ変換を実行。VoicevoxAPI には変換後テキストを渡し、字幕マッチング用ファイル名は元テキストを維持
+- `config.py`: `VOICE_READING_NORMALIZE_ENABLED` / `VOICE_READING_NORMALIZE_MODEL` / `VOICE_READING_NORMALIZE_OLLAMA_URL` を追加
+- `web_app/services/config_service.py`: 上記3設定を設定画面の編集可能項目に追加（Ollamaモデル選択UI対応）
+
+### Web UI 全般改善
+
+- `web_app/templates/generate.html`: プロンプト生成機能追加（AI台本作成・Shortsタイトル案・Longタイトル案）、クリップボード自動コピー、目立つトースト通知
+- `web_app/templates/upload.html`: 個別→チェックボックス複数選択で一括アップロードに変更
+- `web_app/templates/images.html`: 背景画像のプロンプト表示・編集・保存機能追加（未保存でも再生成時に反映）
+- `web_app/templates/settings.html`: APIキー変更をアコーディオン最下部に移動
+- `web_app/templates/base.html`: 「画像」タブを削除（履歴詳細から遷移）
+- `web_app/services/prompt_service.py`: プロンプト生成ロジックをWeb UI用に実装
+- `web_app/services/image_service.py`: 背景プロンプト読み込み・保存・再生成時の上書き対応
+- `web_app/routes/api_prompt.py`: `/api/prompt/script`、`/api/prompt/title` エンドポイント追加
+- `web_app/routes/api_images.py`: `POST /api/images/{name}/save-prompts` エンドポイント追加
+- `web_app/routes/api_upload.py`: `POST /api/upload/batch` エンドポイント追加
+- `web_app/services/secrets_service.py`: APIキー書き込み専用サービス（値はレスポンス/ログに含めない）
+- `web_app/static/app.css`: lightbox、image-card object-fit、背景プロンプト行レイアウト追加
+
+---
+
+## 2026-05-26 (Web UI追加)
+
+### ローカルWeb UI全面追加
+
+- `web_app/app.py`: FastAPI + Uvicorn によるローカルWeb UIを追加。`python web_app/app.py` または `python -m web_app.app` で起動。127.0.0.1のみバインド、外部公開なし
+- `web_app/job_manager.py`: バックグラウンドジョブ管理。生成・チェック・アップロード・Analytics等をメモリ内でジョブ化。status/logs/cancel対応。将来DB移行しやすい構造
+- `web_app/security.py`: output/配下のみアクセス可、パストラバーサル拒否、秘密ファイル読み取り禁止
+- `web_app/schemas.py`: Pydantic リクエスト/レスポンススキーマ
+- `web_app/services/`: 9サービス (status, history, generation, script_check, image, analytics, schedule, upload, fixed_comment)
+- `web_app/routes/`: 12ルート (pages + 11 API)
+- `web_app/templates/`: 12画面 (dashboard, generate, check, history, history_detail, images, analytics, schedule, upload, fixed_comment, settings, logs)
+- `web_app/static/app.css, app.js`: ダークテーマUI、スコアバッジ色付け、ジョブポーリングユーティリティ
+- `tests/test_web.py`: 23テスト追加。/health、ジョブ状態遷移、パストラバーサル、管理フォルダ除外、設定診断秘密値非返却、外部API不要起動テスト等
+- 既存の `gui.py` / `main.py` / `core/*` への変更なし。Tkinter GUIと完全共存
+
+### 設定診断画面追加
+
+- Web UIの `/settings` 画面: VOICEVOX接続、APIキー設定有無（値は非表示）、ffmpeg利用可否、各種設定値を診断表示
+
+### ジョブ管理画面追加
+
+- `/logs` 画面: バックグラウンドジョブのステータス・ログ一覧。実行中ジョブは5秒ごとに自動更新。失敗ログ・ログ詳細をアコーディオン表示
+
+---
+
+## 2026-05-26
+
 ### native Shorts軽量エフェクトを追加
 
 - `config.py`: `NATIVE_ENABLE_MOTION_EFFECTS`、背景Ken Burns、キャラバウンス、ポップテロップ、シェイク、シェイク/アイコン上限、背景ズーム最大倍率の設定を追加

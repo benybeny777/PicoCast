@@ -9,6 +9,7 @@ import json
 import shutil
 import gc
 from core.voicevox import VoicevoxAPI
+from core.reading_normalizer import ReadingNormalizer
 from core.parser import ScriptParser
 from core.ai_generator import AIGenerator
 from core.ng_words import apply_ng_word_replacements
@@ -705,6 +706,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     safe_topic = re.sub(r'[\\/:*?"<>|]', '_', folder_base)
     if is_shorts and not safe_topic.startswith("[Shorts]"):
         safe_topic = f"[Shorts]{safe_topic}"
+    elif not is_shorts and not safe_topic.startswith("[Long]"):
+        safe_topic = f"[Long]{safe_topic}"
 
     theme_dir = os.path.join("output", safe_topic)
 
@@ -1191,6 +1194,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     for warn in _messages:
         update_status(f"  ⚠ {warn}")
 
+    # よみがな正規化: 全セリフチャンクをLLMで一括変換（VOICEVOX誤読対策）
+    _all_chunks = []
+    for _item in dialogue_items:
+        _all_chunks.extend(_split_at_punctuation(_item.get("text", "")))
+    reading_normalizer = ReadingNormalizer()
+    if reading_normalizer._available and _all_chunks:
+        update_status(f"🔤 よみがな正規化中: {len(_all_chunks)}チャンク...")
+    reading_map = reading_normalizer.normalize_batch(_all_chunks)
+
     vv = VoicevoxAPI()
     if not vv.check_connection() and os.path.exists(VOICEVOX_PATH):
         subprocess.Popen([VOICEVOX_PATH], creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0,
@@ -1375,10 +1387,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 audio_path = os.path.join(theme_audio_dir, audio_filename)
                 speed_scale = intro_voice_speed if voice_num <= VOICE_INTRO_FAST_LINES else body_voice_speed
 
+                speech_text = reading_map.get(chunk_text, chunk_text)
                 preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
                 update_status(f"🎤 音声 [{voice_num}/{total_voices}] {char_key}({emotion}) x{speed_scale:g}「{preview}」")
                 try:
-                    vv.generate_audio(chunk_text, speaker_id, audio_path, speed_scale=speed_scale)
+                    vv.generate_audio(speech_text, speaker_id, audio_path, speed_scale=speed_scale)
                     report.voices_generated += 1
                 except Exception as e:
                     report.voices_failed += 1
