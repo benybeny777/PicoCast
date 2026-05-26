@@ -265,9 +265,10 @@ VOICE_TAIL_SAFETY_SEC     = 0.5   # 音声WAV末尾の安全余裕（秒）
 NATIVE_INTER_DIALOGUE_GAP_SEC = 0.0  # nativeレンダラーのセリフ間追加ギャップ（秒）
 
 # ───────────────────────────────────────────────
-# BGM（固定: BGMer「のほほん」）
+# BGM
 # ───────────────────────────────────────────────
-BGM_PATH   = os.path.join(ASSETS_DIR, "bgm", "nohohon_long_BPM97.mp3")
+BGM_FILE = os.environ.get("BGM_FILE", "nohohon_long_BPM97.mp3")
+BGM_PATH = os.path.join(ASSETS_DIR, "bgm", BGM_FILE) if BGM_FILE else ""
 
 # ───────────────────────────────────────────────
 # 出力ディレクトリ・ファイルパス
@@ -314,3 +315,22 @@ WEB_TOAST_VISIBLE_MS = int(os.environ.get("WEB_TOAST_VISIBLE_MS", "2000"))  # We
 WEB_TOAST_HIDE_DELAY_MS = int(os.environ.get("WEB_TOAST_HIDE_DELAY_MS", "420"))  # Web UI トースト非表示待ち時間(ms)
 WEB_VOICEVOX_CHECK_TIMEOUT_SEC = float(os.environ.get("WEB_VOICEVOX_CHECK_TIMEOUT_SEC", "2.0"))  # Web UI のVOICEVOX疎通確認タイムアウト(秒)
 WEB_FFMPEG_CHECK_TIMEOUT_SEC = float(os.environ.get("WEB_FFMPEG_CHECK_TIMEOUT_SEC", "5.0"))  # Web UI のffmpeg疎通確認タイムアウト(秒)
+
+# ───────────────────────────────────────────────
+# API接続・タイムアウト設定
+# ───────────────────────────────────────────────
+VOICEVOX_CONNECTION_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_CONNECTION_TIMEOUT_SEC", "5.0"))  # VOICEVOX接続確認タイムアウト（秒）
+VOICEVOX_QUERY_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_QUERY_TIMEOUT_SEC", "10.0"))            # VOICEVOXクエリ生成タイムアウト（秒）
+VOICEVOX_SYNTHESIS_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_SYNTHESIS_TIMEOUT_SEC", "30.0"))    # VOICEVOX音声合成タイムアウト（秒）
+READING_NORMALIZE_CHECK_TIMEOUT_SEC = float(os.environ.get("READING_NORMALIZE_CHECK_TIMEOUT_SEC", "3.0"))  # よみがな正規化接続確認タイムアウト（秒）
+READING_NORMALIZE_CHAT_TIMEOUT_SEC = float(os.environ.get("READING_NORMALIZE_CHAT_TIMEOUT_SEC", "120.0"))  # よみがな正規化生成タイムアウト（秒）
+
+# ───────────────────────────────────────────────
+# native レンダラー演出パラメータ
+# ───────────────────────────────────────────────
+NATIVE_SHAKE_AMP_X = int(os.environ.get("NATIVE_SHAKE_AMP_X", "7"))                                  # 画面シェイクの水平方向振幅(px)
+NATIVE_SHAKE_AMP_Y = int(os.environ.get("NATIVE_SHAKE_AMP_Y", "5"))                                  # 画面シェイクの垂直方向振幅(px)
+NATIVE_CHARACTER_BOUNCE_SEC = float(os.environ.get("NATIVE_CHARACTER_BOUNCE_SEC", "0.22"))          # キャラクターバウンス演出時間(秒)
+NATIVE_TELOP_POP_START_SEC = float(os.environ.get("NATIVE_TELOP_POP_START_SEC", "0.05"))            # ポップテロップの表示開始ディレイ(秒)
+NATIVE_TELOP_POP_MAX_SEC = float(os.environ.get("NATIVE_TELOP_POP_MAX_SEC", "1.5"))                  # ポップテロップの最大表示持続時間(秒)
+

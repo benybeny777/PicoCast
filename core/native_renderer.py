@@ -64,6 +64,11 @@ from config import (
     VIDEO_FPS,
     THUMBNAIL_HOLD_FRAMES_SHORTS,
     NATIVE_INTER_DIALOGUE_GAP_SEC,
+    NATIVE_SHAKE_AMP_X,
+    NATIVE_SHAKE_AMP_Y,
+    NATIVE_CHARACTER_BOUNCE_SEC,
+    NATIVE_TELOP_POP_START_SEC,
+    NATIVE_TELOP_POP_MAX_SEC,
 )
 from core.native_character_assets import CharacterVariantSet, load_character_variants
 from core.parser import ScriptParser
@@ -667,7 +672,7 @@ def _blink_enable_expr(duration: float, character_name: str, speaking: str | Non
 def _character_scale_filter(input_index: int, output_label: str, scaled_char_h: int, bounce: bool) -> str:
     if not bounce:
         return f"[{input_index}:v]scale=-1:{scaled_char_h}{output_label}"
-    bounce_sec = 0.22
+    bounce_sec = NATIVE_CHARACTER_BOUNCE_SEC
     scale_expr = (
         f"if(lte(t\\,{bounce_sec:.3f})\\,"
         f"{scaled_char_h}*(1+0.04*sin(PI*t/{bounce_sec:.3f}))\\,{scaled_char_h})"
@@ -678,9 +683,9 @@ def _character_scale_filter(input_index: int, output_label: str, scaled_char_h: 
 def _maybe_shake_filter(input_label: str, output_label: str, width: int, height: int, enabled: bool) -> str:
     if not enabled:
         return f"{input_label}copy{output_label}"
-    pad = 24
-    amp_x = 7
-    amp_y = 5
+    amp_x = NATIVE_SHAKE_AMP_X
+    amp_y = NATIVE_SHAKE_AMP_Y
+    pad = max(amp_x, amp_y) * 4
     return (
         f"{input_label}scale={width + pad}:{height + pad},"
         f"crop={width}:{height}:x='{pad // 2}+{amp_x}*sin(2*PI*t*24)':"
@@ -885,8 +890,8 @@ def _write_subtitles(
         t += max(0.0, dur) + NATIVE_INTER_DIALOGUE_GAP_SEC
     segment_duration = sum(max(0.0, dur) for dur in audio_durations)
     if telop and NATIVE_ENABLE_MOTION_EFFECTS and NATIVE_ENABLE_POP_TELOP:
-        start = 0.05
-        end = min(max(0.85, segment_duration), 1.5)
+        start = NATIVE_TELOP_POP_START_SEC
+        end = min(max(0.85, segment_duration), NATIVE_TELOP_POP_MAX_SEC)
         if end > start + 0.1:
             telop_y = int(height * (0.29 if height > width else 0.22))
             escaped_telop = _ass_escape(telop)

@@ -32,7 +32,6 @@
 - Web UI は `127.0.0.1` のみバインドする。外部公開・認証なし運用は禁止。
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の中身をレスポンスやログへ絶対に含めない。APIキー設定はbool（有無）のみ返す。
 - Web UI を唯一の操作入口とする。`main.py` は生成パイプラインとして使い、旧Tkinter GUI/CLI導線を復活させない。
-- 大規模リファクタはしない。`core/` の既存インターフェースを壊さない形で `services/` からラップする。
 - 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
 - output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
 - 破壊的操作（アップロード・固定コメント・スケジュール変更）は `confirmed=true` 必須 + 画面確認ダイアログ必須。

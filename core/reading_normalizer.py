@@ -9,6 +9,8 @@ from config import (
     VOICE_READING_NORMALIZE_ENABLED,
     VOICE_READING_NORMALIZE_MODEL,
     VOICE_READING_NORMALIZE_OLLAMA_URL,
+    READING_NORMALIZE_CHECK_TIMEOUT_SEC,
+    READING_NORMALIZE_CHAT_TIMEOUT_SEC,
 )
 
 _PROMPT_HEADER = (
@@ -27,7 +29,7 @@ class ReadingNormalizer:
         if not VOICE_READING_NORMALIZE_ENABLED:
             return
         try:
-            res = requests.get(f"{VOICE_READING_NORMALIZE_OLLAMA_URL}/api/tags", timeout=3)
+            res = requests.get(f"{VOICE_READING_NORMALIZE_OLLAMA_URL}/api/tags", timeout=READING_NORMALIZE_CHECK_TIMEOUT_SEC)
             self._available = res.status_code == 200
         except Exception:
             pass
@@ -52,7 +54,7 @@ class ReadingNormalizer:
                     "messages": [{"role": "user", "content": prompt}],
                     "stream": False,
                 },
-                timeout=120,
+                timeout=READING_NORMALIZE_CHAT_TIMEOUT_SEC,
             )
             res.raise_for_status()
             content = res.json()["message"]["content"].strip()
@@ -75,3 +77,4 @@ class ReadingNormalizer:
         if text in self._cache:
             return self._cache[text]
         return self.normalize_batch([text]).get(text, text)
+
