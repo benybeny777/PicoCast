@@ -67,9 +67,10 @@
 
 <!-- 自動更新: 実行中ジョブがある場合 -->
 <script>
-const _OPEN_KEY = 'logsOpenDetails';
+const _OPEN_KEY   = 'logsOpenDetails';
+const _SCROLL_KEY = 'logsScrollY';
 
-// リロード後: 開いていた詳細パネルを復元
+// リロード後: 開いていた詳細パネルとスクロール位置を復元
 const _savedOpen = JSON.parse(sessionStorage.getItem(_OPEN_KEY) || '[]');
 if (_savedOpen.length) {
   sessionStorage.removeItem(_OPEN_KEY);
@@ -79,6 +80,11 @@ if (_savedOpen.length) {
       if (d) d.open = true;
     }
   });
+}
+const _savedScroll = sessionStorage.getItem(_SCROLL_KEY);
+if (_savedScroll !== null) {
+  sessionStorage.removeItem(_SCROLL_KEY);
+  window.scrollTo(0, parseInt(_savedScroll, 10));
 }
 
 const hasRunning = {{ 'true' if jobs and (jobs | selectattr('status', 'equalto', 'running') | list) else 'false' }};
@@ -90,6 +96,7 @@ if (hasRunning) {
       if (d && d.open) openIds.push(card.dataset.jobId);
     });
     if (openIds.length) sessionStorage.setItem(_OPEN_KEY, JSON.stringify(openIds));
+    sessionStorage.setItem(_SCROLL_KEY, String(window.scrollY));
     location.reload();
   }, 5000);
 }
