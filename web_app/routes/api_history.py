@@ -1,8 +1,13 @@
+import os
+import subprocess
+import sys
+
 from fastapi import APIRouter, Body, HTTPException, Query
 from web_app.schemas import HistoryRegenerateRequest
 from web_app.services.history_service import list_histories, get_history_detail
 from web_app.services.generation_service import submit_history_regenerate_jobs
 from web_app.services.render_service import submit_render_job
+from web_app.security import safe_output_path
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 
@@ -27,6 +32,21 @@ def api_render(history_name: str, confirmed: bool = Body(False, embed=True)):
         raise HTTPException(status_code=400, detail="confirmed=trueが必要です")
     job_id = submit_render_job(history_name)
     return {"job_id": job_id, "status": "queued"}
+
+
+@router.post("/{history_name}/open-folder")
+def api_open_folder(history_name: str):
+    """出力フォルダをOSのファイルマネージャーで開く（127.0.0.1専用ローカル操作）。"""
+    path = safe_output_path(history_name)
+    if not os.path.isdir(path):
+        raise HTTPException(status_code=404, detail="フォルダが見つかりません")
+    if sys.platform == "win32":
+        os.startfile(path)
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
+    return {"opened": path}
 
 
 @router.post("/regenerate")

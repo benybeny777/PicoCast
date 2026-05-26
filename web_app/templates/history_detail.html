@@ -17,6 +17,7 @@
     <a href="/api/images/{{ detail.name | urlencode }}/file/{{ detail.mp4_name | urlencode }}" class="btn btn-secondary mt-sm" target="_blank">MP4を確認</a>
     {% endif %}
     <a href="/images?history={{ detail.name | urlencode }}" class="btn btn-secondary mt-sm">画像確認・再生成</a>
+    <button class="btn btn-secondary mt-sm" onclick="openFolder()">フォルダを開く</button>
   </div>
 
   <!-- アップロード状態 -->
@@ -156,6 +157,10 @@
 {% endblock %}
 {% block scripts %}
 <script>
+async function openFolder() {
+  await fetch(`/api/history/${encodeURIComponent(historyName)}/open-folder`, {method: 'POST'});
+}
+
 document.querySelectorAll('.score-badge').forEach(el => {
   const s = parseInt(el.dataset.score);
   if (s >= 80) el.classList.add('badge-ok');
