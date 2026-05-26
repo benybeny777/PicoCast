@@ -7,7 +7,9 @@
   <div class="filter-row">
     <input type="text" id="filter-input" placeholder="テーマ名で絞り込み..." oninput="filterHistory()" class="filter-input">
     <label><input type="checkbox" id="show-mgmt" onchange="filterHistory()"> 管理フォルダも表示</label>
-    <button class="btn btn-primary" onclick="regenerateSelected()">選択履歴を再生成</button>
+    <button class="btn btn-primary"   onclick="regenerateSelected('full')">全工程再作成</button>
+    <button class="btn btn-secondary" onclick="regenerateSelected('no_render')">動画再作成（レンダー以外）</button>
+    <button class="btn btn-secondary" onclick="regenerateSelected('render_only')">動画再作成（レンダーのみ）</button>
     <button class="btn btn-secondary" onclick="selectVisibleHistories(true)">表示中を全選択</button>
     <button class="btn btn-secondary" onclick="selectVisibleHistories(false)">全解除</button>
   </div>
@@ -103,18 +105,38 @@ function selectVisibleHistories(checked) {
   });
 }
 
-async function regenerateSelected() {
+async function regenerateSelected(mode) {
   const names = Array.from(document.querySelectorAll('.history-check:checked')).map(el => el.value);
   if (!names.length) { alert('再生成する履歴を選択してください'); return; }
-  if (!confirm(`${names.length}件のscript.txtから再生成ジョブを作成します。よろしいですか？`)) return;
-  const res = await fetch('/api/history/regenerate', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({history_names: names, confirmed: true}),
-  });
-  const data = await res.json();
-  if (!res.ok) { alert('エラー: ' + (data.detail || JSON.stringify(data))); return; }
-  alert(`生成ジョブを登録しました: ${data.count}件`);
+
+  const labels = {
+    full: '全工程再作成（パイプライン＋MP4化）',
+    no_render: '動画再作成（レンダー以外）',
+    render_only: '動画再作成（レンダーのみ）',
+  };
+  if (!confirm(`${names.length}件を「${labels[mode]}」で実行します。よろしいですか？`)) return;
+
+  if (mode === 'render_only') {
+    let count = 0;
+    for (const name of names) {
+      const r = await fetch(`/api/history/${encodeURIComponent(name)}/render`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({confirmed: true}),
+      });
+      if (r.ok) count++;
+    }
+    alert(`レンダージョブを登録しました: ${count}件`);
+  } else {
+    const res = await fetch('/api/history/regenerate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({history_names: names, confirmed: true, with_render: mode === 'full'}),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert('エラー: ' + (data.detail || JSON.stringify(data))); return; }
+    alert(`生成ジョブを登録しました: ${data.count}件`);
+  }
   location.href = '/logs';
 }
 </script>

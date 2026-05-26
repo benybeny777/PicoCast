@@ -42,6 +42,7 @@ def api_regenerate_histories(req: HistoryRegenerateRequest):
         req.long_thumbnail_ab_test,
         req.long_budget_mode,
         req.sd_size_mode,
+        req.with_render,
     )
     if not job_ids:
         raise HTTPException(status_code=404, detail="再生成可能なscript.txtが見つかりません")

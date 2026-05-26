@@ -41,12 +41,13 @@ def _submit_generate_job_prepared(
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
     sd_size_mode: bool = False,
+    with_render: bool = False,
 ) -> str:
     """CTA方針反映済み台本を生成ジョブへ登録する。"""
     mgr = get_job_manager()
     job = mgr.create_job("generate")
     _log(job, "生成ジョブを登録しました", "info")
-    mgr.submit(job, _run_generate, script, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode)
+    mgr.submit(job, _run_generate, script, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render)
     return job.job_id
 
 
@@ -57,11 +58,12 @@ def submit_batch_generate_jobs(
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
     sd_size_mode: bool = False,
+    with_render: bool = False,
 ) -> list[str]:
     """複数台本の生成ジョブを登録してjob_id一覧を返す。"""
     job_ids = []
     for script in apply_topic_request_cta_policy_to_scripts(scripts):
-        job_ids.append(_submit_generate_job_prepared(script, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode))
+        job_ids.append(_submit_generate_job_prepared(script, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render))
     return job_ids
 
 
@@ -72,6 +74,7 @@ def submit_history_regenerate_jobs(
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
     sd_size_mode: bool = False,
+    with_render: bool = False,
 ) -> list[str]:
     scripts: list[str] = []
     for name in history_names:
@@ -85,7 +88,7 @@ def submit_history_regenerate_jobs(
             text = f.read().strip()
         if text:
             scripts.append(text)
-    return submit_batch_generate_jobs(scripts, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode)
+    return submit_batch_generate_jobs(scripts, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render)
 
 
 def _run_generate(
@@ -96,6 +99,7 @@ def _run_generate(
     long_thumbnail_ab_test: bool,
     long_budget_mode: bool,
     sd_size_mode: bool,
+    with_render: bool = False,
 ) -> dict[str, Any]:
     """バックグラウンドスレッドで呼ばれる生成ロジック。"""
     from main import run_pipeline
@@ -143,6 +147,16 @@ def _run_generate(
     }
 
     _log(job, msg, "success" if "完了" in msg or "success" in msg.lower() else "info")
+
+    if with_render and ("完了" in msg or "success" in msg.lower()):
+        from web_app.services.render_service import submit_render_job
+        history_name = _safe_dirname(topic)
+        try:
+            render_job_id = submit_render_job(history_name)
+            _log(job, f"🎬 レンダージョブを登録しました (job_id={render_job_id[:8]}…)", "info")
+        except Exception as _re:
+            _log(job, f"⚠ レンダージョブの登録に失敗: {_re}", "warning")
+
     return result
 
 
