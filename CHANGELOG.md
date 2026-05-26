@@ -14,6 +14,12 @@
 
 ## 2026-05-26
 
+### 履歴詳細の再生成ボタン修正
+
+- `web_app/templates/history_detail.html`: 履歴名をURL/JavaScriptへ安全に埋め込むよう修正し、空白・記号入りの履歴名でも「全工程を再生成」「動画を再生成」が壊れないようにした
+- `tests/test_web.py`: 記号入り履歴名の詳細画面で再生成用JavaScriptが壊れないことを確認するテストを追加
+- `web_app/templates/logs.html`: 実行中ジョブのキャンセル操作が状態表示に見えないよう、ボタン文言を「中止する」に変更
+
 ### ネタ募集CTAの通算制御とAnalytics表示
 
 - `core/cta_policy.py` / `web_app/services/generation_service.py`: Shortsの新規/横展開を既存出力から通算し、`TOPIC_REQUEST_CTA_EVERY_N`（既定5）本に1本だけ `ネタ募集CTA: 許可` を自動付与するよう変更

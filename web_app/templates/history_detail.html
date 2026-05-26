@@ -14,9 +14,9 @@
       <tr><td>背景画像数</td><td>{{ detail.backgrounds | length }} 枚</td></tr>
     </table>
     {% if detail.has_mp4 %}
-    <a href="/api/images/{{ detail.name }}/file/{{ detail.mp4_name }}" class="btn btn-secondary mt-sm" target="_blank">MP4を確認</a>
+    <a href="/api/images/{{ detail.name | urlencode }}/file/{{ detail.mp4_name | urlencode }}" class="btn btn-secondary mt-sm" target="_blank">MP4を確認</a>
     {% endif %}
-    <a href="/images?history={{ detail.name }}" class="btn btn-secondary mt-sm">画像確認・再生成</a>
+    <a href="/images?history={{ detail.name | urlencode }}" class="btn btn-secondary mt-sm">画像確認・再生成</a>
   </div>
 
   <!-- アップロード状態 -->
@@ -118,7 +118,7 @@
 {% if detail.has_thumbnail %}
 <div class="card mt">
   <h2>サムネイル</h2>
-  <img src="/api/images/{{ detail.name }}/file/{{ detail.thumbnail_rel }}" class="thumbnail-preview" alt="thumbnail">
+  <img src="/api/images/{{ detail.name | urlencode }}/file/{{ detail.thumbnail_rel | urlencode }}" class="thumbnail-preview" alt="thumbnail">
 </div>
 {% endif %}
 
@@ -128,7 +128,7 @@
   <div class="image-grid">
     {% for t in detail.long_thumbnails %}
     <div class="image-card">
-      <img src="/api/images/{{ detail.name }}/file/{{ t }}" alt="{{ t }}" loading="lazy">
+      <img src="/api/images/{{ detail.name | urlencode }}/file/{{ t | urlencode }}" alt="{{ t }}" loading="lazy">
       <p>{{ t }}</p>
     </div>
     {% endfor %}
@@ -164,6 +164,7 @@ document.querySelectorAll('.score-badge').forEach(el => {
 
 let activeJobIds = [];
 let pollTimer = null;
+const historyName = {{ detail.name | tojson }};
 
 function appendLog(msg, tag) {
   const logBox = document.getElementById('log-container');
@@ -289,7 +290,7 @@ async function renderVideo() {
   appendLog('レンダーリクエストを送信中...', 'info');
 
   try {
-    const res = await fetch('/api/history/{{ detail.name }}/render', {
+    const res = await fetch(`/api/history/${encodeURIComponent(historyName)}/render`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({confirmed: true}),
@@ -329,7 +330,7 @@ async function regenerateAll() {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
-        history_names: ['{{ detail.name }}'],
+        history_names: [historyName],
         image_style: imageStyle,
         reuse_backgrounds: reuseBg,
         long_thumbnail_ab_test: longThumbnailAb,

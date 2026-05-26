@@ -88,6 +88,20 @@ def test_logs_page(client):
     assert res.status_code == 200
 
 
+def test_logs_running_job_cancel_button_is_action_label(client):
+    from web_app.job_manager import get_job_manager, JobStatus
+
+    job = get_job_manager().create_job("generate")
+    job.status = JobStatus.RUNNING
+
+    res = client.get("/logs")
+
+    assert res.status_code == 200
+    assert "running" in res.text
+    assert "中止する" in res.text
+    assert ">中止</button>" not in res.text
+
+
 # ── job_manager の状態遷移 ───────────────────────────────────────────────────
 def test_job_manager_state_transitions():
     from web_app.job_manager import get_job_manager, JobStatus
@@ -176,6 +190,30 @@ def test_history_includes_management_when_requested(tmp_path, monkeypatch):
     names = [r["name"] for r in result]
     assert "000_analytics" in names
     assert "[Shorts]テスト動画" in names
+
+
+def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, monkeypatch):
+    from urllib.parse import quote
+    import web_app.services.history_service as hs
+
+    fake_output = tmp_path / "output"
+    history_name = "[Shorts]Bob's 100%"
+    theme_dir = fake_output / history_name
+    theme_dir.mkdir(parents=True)
+    (theme_dir / "script.txt").write_text(
+        "動画形式: Shorts\n生成区分: 新規\n動画タイトル: Bob's 100%\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(hs, "OUTPUT_DIR", str(fake_output))
+
+    res = client.get(f"/history/{quote(history_name, safe='')}")
+
+    assert res.status_code == 200
+    assert "const historyName =" in res.text
+    assert "encodeURIComponent(historyName)" in res.text
+    assert "history_names: [historyName]" in res.text
+    assert "history_names: ['" not in res.text
 
 
 # ── 設定診断APIが秘密値を返さない ─────────────────────────────────────────

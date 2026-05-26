@@ -39,7 +39,7 @@
     <span class="job-id-small">{{ job.job_id[:8] }}…</span>
     <span class="job-time">{{ (job.started_at or "")[:19] }}</span>
     {% if job.status == 'running' %}
-    <button class="btn btn-xs btn-danger" onclick="cancelJob('{{ job.job_id }}')">中止</button>
+    <button class="btn btn-xs btn-danger" type="button" title="この実行中ジョブへ中止要求を送ります" onclick="cancelJob('{{ job.job_id }}')">中止する</button>
     {% endif %}
   </div>
   <div class="job-progress">{{ job.progress_text }}</div>
