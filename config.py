@@ -299,5 +299,18 @@ MAX_BACKGROUNDS             = MAX_BACKGROUNDS_SHORTS  # 後方互換エイリア
 # ───────────────────────────────────────────────
 # ローカル Web UI
 # ───────────────────────────────────────────────
+WEB_APP_NAME = os.environ.get("WEB_APP_NAME", "Native Video Factory")  # Web UI の表示アプリ名
 WEB_UI_HOST = os.environ.get("WEB_UI_HOST", "127.0.0.1")  # バインドホスト（外部公開禁止）
 WEB_UI_PORT = int(os.environ.get("WEB_UI_PORT", "58080"))  # ポート番号（他アプリと競合しにくい高番号）
+WEB_DEFAULT_IMAGE_STYLE = os.environ.get("WEB_DEFAULT_IMAGE_STYLE", "通常")  # Web UI の既定画像スタイル
+WEB_IMAGE_STYLE_CHOICES = tuple(s.strip() for s in os.environ.get("WEB_IMAGE_STYLE_CHOICES", "通常,アニメ,水彩").split(",") if s.strip())  # Web UI 画像スタイル選択肢
+WEB_DEFAULT_REUSE_BACKGROUNDS = os.environ.get("WEB_DEFAULT_REUSE_BACKGROUNDS", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時の背景再利用既定値
+WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST = os.environ.get("WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のLongサムネAB既定値
+WEB_DEFAULT_LONG_BUDGET_MODE = os.environ.get("WEB_DEFAULT_LONG_BUDGET_MODE", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のLong節約既定値
+WEB_DEFAULT_SD_SIZE_MODE = os.environ.get("WEB_DEFAULT_SD_SIZE_MODE", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のSD生成既定値
+WEB_JOB_POLL_INTERVAL_MS = int(os.environ.get("WEB_JOB_POLL_INTERVAL_MS", "2000"))  # Web UI のジョブポーリング間隔(ms)
+WEB_SUCCESS_RELOAD_DELAY_MS = int(os.environ.get("WEB_SUCCESS_RELOAD_DELAY_MS", "1500"))  # Web UI ジョブ成功後の再読み込み待ち時間(ms)
+WEB_TOAST_VISIBLE_MS = int(os.environ.get("WEB_TOAST_VISIBLE_MS", "2000"))  # Web UI トースト表示時間(ms)
+WEB_TOAST_HIDE_DELAY_MS = int(os.environ.get("WEB_TOAST_HIDE_DELAY_MS", "420"))  # Web UI トースト非表示待ち時間(ms)
+WEB_VOICEVOX_CHECK_TIMEOUT_SEC = float(os.environ.get("WEB_VOICEVOX_CHECK_TIMEOUT_SEC", "2.0"))  # Web UI のVOICEVOX疎通確認タイムアウト(秒)
+WEB_FFMPEG_CHECK_TIMEOUT_SEC = float(os.environ.get("WEB_FFMPEG_CHECK_TIMEOUT_SEC", "5.0"))  # Web UI のffmpeg疎通確認タイムアウト(秒)

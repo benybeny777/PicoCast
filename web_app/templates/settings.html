@@ -31,19 +31,6 @@
     </table>
   </div>
 
-  <!-- APIキー -->
-  <div class="card">
-    <h2>APIキー設定</h2>
-    <table class="status-table">
-      <tr><td>GOOGLE_API_KEY</td><td>{% if status.google_api_key %}<span class="badge badge-ok">設定済み（値は非表示）</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td></tr>
-      <tr><td>OPENAI_API_KEY</td><td>{% if status.openai_api_key %}<span class="badge badge-ok">設定済み（値は非表示）</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td></tr>
-      <tr><td>client_secrets.json</td><td>{% if status.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
-      <tr><td>token.json</td><td>{% if status.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
-      <tr><td>token_analytics.json</td><td>{% if status.token_analytics_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
-    </table>
-    <p class="hint">APIキーは .env を直接編集してください。</p>
-  </div>
-
   <!-- パス設定 -->
   <div class="card">
     <h2>パス設定</h2>
@@ -68,7 +55,19 @@
   <div id="save-status" style="display:none" class="log-box mt"></div>
 </div>
 
-<!-- APIキー変更（最下部・目立たせない） -->
+<!-- APIキー状態・変更（最下部） -->
+<div class="card mt">
+  <h2>APIキー設定</h2>
+  <table class="status-table">
+    <tr><td>GOOGLE_API_KEY</td><td>{% if status.google_api_key %}<span class="badge badge-ok">設定済み（値は非表示）</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td></tr>
+    <tr><td>OPENAI_API_KEY</td><td>{% if status.openai_api_key %}<span class="badge badge-ok">設定済み（値は非表示）</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td></tr>
+    <tr><td>client_secrets.json</td><td>{% if status.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
+    <tr><td>token.json</td><td>{% if status.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
+    <tr><td>token_analytics.json</td><td>{% if status.token_analytics_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
+  </table>
+  <p class="hint">APIキー本体は表示しません。変更欄はこの下にあります。</p>
+</div>
+
 <details class="card mt" style="font-size:13px">
   <summary style="cursor:pointer; color:var(--text-muted); user-select:none">APIキー変更 ▸</summary>
   <div style="margin-top:12px">

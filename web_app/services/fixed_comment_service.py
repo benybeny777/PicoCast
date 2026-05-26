@@ -118,7 +118,7 @@ def _run_fixed_comment(job: Job, history_name: str) -> dict[str, Any]:
 
     _log(job, f"固定コメント投稿完了: comment_thread_id={comment_thread_id}", "success")
 
-    # upload_record.json に記録（gui.py と同じキー名）
+    # upload_record.json に固定コメント投稿済みIDを記録
     upload_record["fixed_comment_thread_id"] = comment_thread_id
     upload_record_path = os.path.join(theme_dir, "_meta", "upload_record.json")
     try:

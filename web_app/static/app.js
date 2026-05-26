@@ -19,7 +19,8 @@ document.addEventListener('DOMContentLoaded', () => {
  * @param {function} onDone - (job) => void
  * @param {number} intervalMs
  */
-function pollJob(jobId, onUpdate, onDone, intervalMs = 2000) {
+function pollJob(jobId, onUpdate, onDone, intervalMs = null) {
+  const pollIntervalMs = intervalMs || window.WEB_JOB_POLL_INTERVAL_MS;
   const timer = setInterval(async () => {
     try {
       const res = await fetch(`/api/jobs/${jobId}`);
@@ -33,7 +34,7 @@ function pollJob(jobId, onUpdate, onDone, intervalMs = 2000) {
     } catch (e) {
       // ネットワークエラーはサイレントに無視
     }
-  }, intervalMs);
+  }, pollIntervalMs);
   return timer;
 }
 

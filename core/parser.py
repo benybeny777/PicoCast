@@ -68,7 +68,7 @@ class ScriptParser:
         re.compile(r'^\s*$'),
     ]
 
-    # main.py / gui.py で共通利用するメタタイプセット
+    # Web UI / main.py で共通利用するメタタイプセット
     META_TYPES = frozenset({
         "thumbnail", "video_title", "description", "tags",
         "video_format", "thumbnail_text", "fixed_comment",

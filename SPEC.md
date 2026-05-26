@@ -32,11 +32,8 @@
 
 ```
 yukkurijidou/
-├── gui.py                  # Tkinter GUI (メインウィンドウ) ← 既存、維持
-├── main.py                 # 動画生成パイプライン
-├── config.py               # 設定・定数
-├── web_app/                # ローカル Web UI (FastAPI) ← 新規追加
-│   ├── app.py              # FastAPI エントリポイント (python web_app/app.py)
+├── web_app/                # ローカル Web UI (FastAPI)
+│   ├── app.py              # FastAPI エントリポイント (python -m web_app.app)
 │   ├── job_manager.py      # バックグラウンドジョブ管理
 │   ├── schemas.py          # Pydantic リクエスト/レスポンススキーマ
 │   ├── security.py         # パストラバーサル対策・output/配下制限
@@ -70,6 +67,8 @@ yukkurijidou/
 │   │   └── api_settings.py # GET/POST /api/settings
 │   ├── templates/          # Jinja2 HTMLテンプレート (12画面)
 │   └── static/             # CSS/JS (app.css, app.js)
+├── main.py                 # 動画生成パイプライン
+├── config.py               # 設定・定数
 ├── core/
 │   ├── ai_generator.py     # Gemini台本生成
 │   ├── voicevox.py         # VOICEVOX音声生成
@@ -152,7 +151,7 @@ yukkurijidou/
 16. 実尺レビュー + 完了レポート
 ```
 
-### 尺推定 (gui.py: `_estimate_duration`)
+### 尺推定（native基準）
 
 ```python
 CHARS_PER_SEC_AT_1X = 5.4
@@ -296,8 +295,17 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 ### 起動
 
 ```bash
-python web_app/app.py [--open-browser] [--port 58080]
+python web_app/app.py [--open-browser] [--port 58080] [--auto-port]
 ```
+
+| オプション | 説明 |
+|---|---|
+| `--port N` | 指定ポートで起動（省略時は `WEB_UI_PORT` を使用） |
+| `--auto-port` | 指定ポートが使用中の場合、自動で空きポートを探して起動 |
+| `--open-browser` | 起動後にブラウザを自動で開く |
+| `--reload` | ファイル変更時に自動リロード（開発用） |
+
+ポート競合時は `--auto-port` を使うか、`--port` で別ポートを明示指定する。
 
 アクセス: `http://127.0.0.1:58080`
 
@@ -315,7 +323,7 @@ python web_app/app.py [--open-browser] [--port 58080]
 | フィールド | 説明 |
 |---|---|
 | job_id | UUID |
-| type | generate / check / upload / analytics_refresh / schedule_sync / fixed_comment / image_regenerate |
+| type | generate / check / render / upload / analytics_refresh / schedule_sync / schedule_rebalance / schedule_update / fixed_comment / image_regenerate |
 | status | queued / running / success / failed / cancelled |
 | progress_text | 直近の進行メッセージ |
 | started_at / finished_at | ISO8601 タイムスタンプ |
@@ -354,6 +362,7 @@ POST /api/jobs/{job_id}/cancel
 
 GET  /api/history
 GET  /api/history/{history_name}
+POST /api/history/regenerate
 
 POST /api/generate
 POST /api/generate/batch
@@ -401,33 +410,29 @@ GET  /api/settings/ollama-models
 - 破壊的操作（アップロード・固定コメント投稿）は `confirmed=true` が必須
 - 例外時に秘密値をログへ出さない
 
-### 既存Tkinter GUIとの共存方針
+### Web一本化方針
 
-- `gui.py` は削除しない・変更しない
-- Web UI から `gui.py` の内部関数を直接呼ばない
-- `run_pipeline` / `ScriptParser` / `core/*` を共通基盤として両UIが使う
-- 生成ロジックは `main.py: run_pipeline` を再利用（`cancel_event` / `progress_callback` を渡す）
+- 旧Tkinter GUI と `main.py` のCLI生成入口は廃止済み。操作入口はローカル Web UI のみ。
+- `main.py` は `run_pipeline()` を提供する生成パイプラインとして残し、Web UI のジョブから呼び出す。
+- `run_pipeline` / `ScriptParser` / `core/*` はWeb UIの共通基盤として維持する。
 
----
+### 主要機能
 
-## GUI (`gui.py`)
-
-### 主要タブ・機能
-
-| 機能 | 説明 |
+| 機能 | Web UI 画面 |
 |---|---|
-| 生成 | 貼り付けた台本から音声・背景・サムネ・native MP4を生成 |
-| 作業中止 | 実行中の生成処理に中止リクエストを送る |
-| LLM/尺チェック | 複数台本を先に冒頭品質・推定尺・最終品質レビューする |
-| AI台本作成 | 既存タイトル重複を避ける台本生成プロンプトをコピー（生成区分・元動画・目的フィールド含む） |
-| Shortsタイトル案 / Longタイトル案 | 既存タイトル・Analytics実績データを反映したタイトル案プロンプトをコピー |
-| 履歴から複数生成 | 過去生成済みテーマを複数選択して再生成 |
-| 画像確認 | サムネイル・背景画像を確認し、選択した画像だけ再生成 |
-| YouTubeアップ | 複数動画の一括スケジュールアップロード |
-| 固定コメント | アップロード済み動画へ固定コメント用コメントを投稿し、動画URLを表示 |
-| スケジュール | 予約中＋直近90日の公開済み動画一覧。公開日時は YouTube API 同期値（`published_at`）を表示。Shorts/Long・予定/公開済みで絞り込み可 |
-| アナリティクス | YouTube Analytics取得、横展開候補や改善対象を評価 |
-| サービス確認 | VOICEVOX / Nano Banana 起動状態チェック |
+| 生成 / 中止 | `/generate` |
+| LLM/尺チェック | `/check` |
+| AI台本作成プロンプト | `/generate` |
+| Shortsタイトル案 / Longタイトル案 | `/generate` |
+| 履歴から複数生成 | `/history` |
+| 画像確認 / プロンプト編集 / 再生成 | `/images` |
+| YouTubeアップロード / 一括アップロード | `/upload` |
+| 固定コメント投稿 | `/fixed-comment` |
+| スケジュール確認 / 同期 / 公開予定変更 | `/schedule` |
+| アナリティクス取得・表示 | `/analytics` |
+| 設定 / サービス確認 | `/settings` |
+
+`/settings` のAPIキー状態表示とAPIキー変更欄は常に画面最下部に置く。通常の設定変更欄には秘密値を含めない。
 
 ### ログカラー
 
@@ -596,6 +601,20 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `MAX_BACKGROUNDS_SHORTS` | 9 | Shorts最大背景枚数 |
 | `MAX_BACKGROUNDS_LONG` | 90 | Long最大背景枚数（通常モード） |
 | `MAX_BACKGROUNDS_LONG_BUDGET` | 16 | Long節約モードの最大背景生成枚数 |
+| `WEB_APP_NAME` | `Native Video Factory` | Web UI表示アプリ名 |
+| `WEB_UI_PORT` | 58080 | Web UIポート番号 |
+| `WEB_DEFAULT_IMAGE_STYLE` | `通常` | Web UI生成画面の既定画像スタイル |
+| `WEB_IMAGE_STYLE_CHOICES` | `通常,アニメ,水彩` | Web UI生成画面の画像スタイル選択肢 |
+| `WEB_DEFAULT_REUSE_BACKGROUNDS` | `false` | Web UI生成画面の背景再利用既定値 |
+| `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `false` | Web UI生成画面のLongサムネAB既定値 |
+| `WEB_DEFAULT_LONG_BUDGET_MODE` | `false` | Web UI生成画面のLong節約既定値 |
+| `WEB_DEFAULT_SD_SIZE_MODE` | `false` | Web UI生成画面のSD生成既定値 |
+| `WEB_JOB_POLL_INTERVAL_MS` | 2000 | Web UIジョブ状態更新間隔(ms) |
+| `WEB_SUCCESS_RELOAD_DELAY_MS` | 1500 | Web UIジョブ成功後再読み込み待ち時間(ms) |
+| `WEB_TOAST_VISIBLE_MS` | 2000 | Web UIトースト表示時間(ms) |
+| `WEB_TOAST_HIDE_DELAY_MS` | 420 | Web UIトースト非表示待ち時間(ms) |
+| `WEB_VOICEVOX_CHECK_TIMEOUT_SEC` | 2.0 | Web UIのVOICEVOX疎通確認タイムアウト(秒) |
+| `WEB_FFMPEG_CHECK_TIMEOUT_SEC` | 5.0 | Web UIのffmpeg疎通確認タイムアウト(秒) |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 
 ---
@@ -605,7 +624,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 Shorts / Long の本番レンダラー。通常の「生成」ボタンで native MP4 を出力する。
 
 - **デフォルト動作**: `run_pipeline()` は常にnative用素材を生成する。YMM4プロジェクト出力とYMM4本番レンダリングは廃止済み。
-- `.ymmp` プロジェクトは生成しない。素材生成後、GUI側が `render_native_test()` を呼び出してnative MP4を作る。
+- `.ymmp` プロジェクトは生成しない。素材生成後、Web UIジョブが `render_native_test()` を呼び出してnative MP4を作る。
 - `render_native_test(output_dir, voice_speed_intro, voice_speed_body, estimated_duration_sec)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
 - 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。
 - native出力のBGM音量は `NATIVE_BGM_VOLUME_DB=-20` (dB) で管理する。
@@ -635,7 +654,7 @@ native では尺ではなく**語り速度（chars/sec）と台本量**で調整
 
 ### 実尺チェック（native MP4 生成後）
 
-`render_native_test()` 完了後、`gui.py` が ffprobe で計測した MP4 の実尺に対して `duration_review()` を実行し、native基準で判定を表示する。
+`render_native_test()` 完了後、Web UI が ffprobe で計測した MP4 の実尺に対して `duration_review()` を実行し、native基準で判定を表示する。
 
 ```
 ━━━━━━━━ 実尺チェック 44.3秒 / 理想（38〜50秒） ━━━━━━━━   ← 緑
@@ -673,7 +692,7 @@ Shortsの通常字幕は、背景に左右されない可読性を最優先す�
 
 ### サムネイルA/Bテスト
 
-GUI オプション行の **「LongサムネAB」チェックボックス**（デフォルト OFF）または `config.py` の `LONG_THUMBNAIL_AB_TEST` で制御。GUI の設定が優先される。
+Web UI の **「LongサムネAB」チェックボックス**（デフォルト OFF）または `config.py` の `LONG_THUMBNAIL_AB_TEST` / `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` で制御する。
 
 - **OFF（デフォルト）**: Variant A のみ生成。`thumbnail_ab_test.json` は書かない。
 - **ON**: 3バリアントを生成し `_meta/thumbnail_ab_test.json` で管理。
@@ -689,13 +708,13 @@ YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案�
 
 ### 画像 SD 生成モード
 
-GUI オプション行の **「SD生成」チェックボックス**（デフォルト OFF）で制御。Shorts / Long 両方に適用される。
+Web UI の **「SD生成」チェックボックス**（デフォルト OFF）または `WEB_DEFAULT_SD_SIZE_MODE` で制御する。Shorts / Long 両方に適用される。
 
 ON にすると `SD_SIZE_IMAGE_SCALE`（デフォルト 0.5、`.env` で変更可）倍の小サイズで画像を生成し、元の解像度に拡大してセットする。API トークン消費とコストを削減できる反面、解像度が粗くなる。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
 
 ### Long画像節約モード
 
-GUI オプション行の **「Long節約」チェックボックス**（デフォルト OFF）で制御。Shorts には影響しない。
+Web UI の **「Long節約」チェックボックス**（デフォルト OFF）または `WEB_DEFAULT_LONG_BUDGET_MODE` で制御する。Shorts には影響しない。
 
 | モード | 最大新規生成数 | 用途 |
 |--------|-----------|------|
@@ -799,17 +818,17 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 ### 生成
 
-1. `python gui.py` で起動
+1. `python -m web_app.app` で起動
 2. 必要に応じて `📊 アナリティクス` で実績データを取得
 3. `Shortsタイトル案` でタイトル案作成プロンプトをコピーし、候補を作成
 4. `AI台本作成` で食べ物雑学特化の台本作成プロンプトをコピー
-5. 作成した台本を台本欄に貼り付け
+5. 作成した台本を Web UI の台本欄に貼り付け
 6. 必要に応じて画風を選ぶ
-7. `🎬 生成` を押す
+7. `生成開始` を押す
 
-生成中に止めたい場合は `作業中止` を押します。押した時点でGUIは中止扱いになり、後続処理へ進みません。外部API呼び出し（画像生成・VOICEVOX通信など）は裏で待つことがありますが、戻ってきた結果は成功扱いにしません。
+生成中に止めたい場合は `中止` を押します。押した時点でジョブは中止扱いになり、後続処理へ進みません。外部API呼び出し（画像生成・VOICEVOX通信など）は裏で待つことがありますが、戻ってきた結果は成功扱いにしません。
 
-主要ボタンにカーソルを合わせると、機能概要のツールチップが表示されます。
+主要な処理は `/logs` でジョブ状態とログを確認できます。
 
 ### Shortsタイトル案 / Longタイトル案
 
@@ -1202,9 +1221,24 @@ YouTube OAuth:
 | `NATIVE_MAX_SHAKE_COUNT_SHORTS` | `.env` / `config.py` | Shorts 1本あたりのシェイク最大回数 |
 | `NATIVE_MAX_ICON_COUNT_SHORTS` | `.env` / `config.py` | Shorts 1本あたりの疑問/驚きアイコン最大回数 |
 | `NATIVE_BG_ZOOM_MAX` | `.env` / `config.py` | 背景Ken Burnsの最大拡大倍率 |
+| `WEB_APP_NAME` | `.env` / `config.py` | Web UIの表示アプリ名 |
+| `WEB_UI_HOST` | `.env` / `config.py` | Web UIのバインドホスト。既定は `127.0.0.1` |
+| `WEB_UI_PORT` | `.env` / `config.py` | Web UIのポート番号 |
+| `WEB_DEFAULT_IMAGE_STYLE` | `.env` / `config.py` | Web UI生成画面の既定画像スタイル |
+| `WEB_IMAGE_STYLE_CHOICES` | `.env` / `config.py` | Web UI生成画面の画像スタイル選択肢（カンマ区切り） |
+| `WEB_DEFAULT_REUSE_BACKGROUNDS` | `.env` / `config.py` | Web UI生成画面の背景再利用既定値 |
+| `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `.env` / `config.py` | Web UI生成画面のLongサムネAB既定値 |
+| `WEB_DEFAULT_LONG_BUDGET_MODE` | `.env` / `config.py` | Web UI生成画面のLong節約既定値 |
+| `WEB_DEFAULT_SD_SIZE_MODE` | `.env` / `config.py` | Web UI生成画面のSD生成既定値 |
+| `WEB_JOB_POLL_INTERVAL_MS` | `.env` / `config.py` | Web UIのジョブ状態更新間隔(ms) |
+| `WEB_SUCCESS_RELOAD_DELAY_MS` | `.env` / `config.py` | Web UIのジョブ成功後再読み込み待ち時間(ms) |
+| `WEB_TOAST_VISIBLE_MS` | `.env` / `config.py` | Web UIのトースト表示時間(ms) |
+| `WEB_TOAST_HIDE_DELAY_MS` | `.env` / `config.py` | Web UIのトースト非表示待ち時間(ms) |
+| `WEB_VOICEVOX_CHECK_TIMEOUT_SEC` | `.env` / `config.py` | Web UIのVOICEVOX疎通確認タイムアウト(秒) |
+| `WEB_FFMPEG_CHECK_TIMEOUT_SEC` | `.env` / `config.py` | Web UIのffmpeg疎通確認タイムアウト(秒) |
 | `MAX_BACKGROUNDS_SHORTS` | `config.py` | Shortsの最大背景生成枚数 |
 | `MAX_BACKGROUNDS_LONG` | `config.py` | Longの最大背景生成枚数 |
-| `LONG_UPLOAD_PLAYLIST_NAME` | `.env` | Longアップロード後に自動追加する再生リスト名。未設定時は `ロング動画`。完全一致で検索 |
+| `LONG_UPLOAD_PLAYLIST_NAME` | `.env` / `config.py` | Longアップロード後に自動追加する再生リスト名。未設定時は `ロング動画`。完全一致で検索 |
 
 `.env` の例:
 

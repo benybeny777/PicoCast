@@ -5,7 +5,7 @@
   python web_app/app.py
   python -m web_app.app
 
-アクセス: http://127.0.0.1:8000
+アクセス: http://127.0.0.1:58080
 
 127.0.0.1のみにバインドし、外部からアクセスできない。
 """
@@ -22,13 +22,14 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
+import config
 from core.gui_support import build_app_version
 
 # ── アプリ生成 ────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="動画ファクトリー — Web UI",
+    title=f"{config.WEB_APP_NAME} — Web UI",
     version=build_app_version(),
-    description="ずんだもんとめたんの食べ物雑学堂 ローカルWeb UI",
+    description=f"{config.WEB_APP_NAME} ローカルWeb UI",
 )
 
 # 静的ファイル
@@ -87,24 +88,65 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
+# ── ポートユーティリティ ──────────────────────────────────────────────────
+def _is_port_free(host: str, port: int) -> bool:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((host, port))
+            return True
+        except OSError:
+            return False
+
+
+def _find_free_port(host: str, start: int, limit: int = 20) -> int | None:
+    for port in range(start, start + limit):
+        if _is_port_free(host, port):
+            return port
+    return None
+
+
 # ── 起動 ──────────────────────────────────────────────────────────────────
 def main():
     import argparse
     from config import WEB_UI_HOST, WEB_UI_PORT
-    parser = argparse.ArgumentParser(description="Video Factory Web UI")
+    parser = argparse.ArgumentParser(description=f"{config.WEB_APP_NAME} Web UI")
     parser.add_argument("--host", default=WEB_UI_HOST, help=f"bind host (default: {WEB_UI_HOST})")
-    parser.add_argument("--port", type=int, default=WEB_UI_PORT, help=f"port (default: {WEB_UI_PORT})")
-    parser.add_argument("--open-browser", action="store_true", help="open browser on startup")
-    parser.add_argument("--reload", action="store_true", help="auto-reload on file change (dev)")
+    parser.add_argument("--port", type=int, default=None,
+                        help=f"使用するポート番号。省略時は config の WEB_UI_PORT ({WEB_UI_PORT}) を使用")
+    parser.add_argument("--auto-port", action="store_true",
+                        help="指定ポートが使用中の場合、自動で空きポートを探して起動する")
+    parser.add_argument("--open-browser", action="store_true", help="起動後にブラウザを開く")
+    parser.add_argument("--reload", action="store_true", help="ファイル変更時に自動リロード（開発用）")
     args = parser.parse_args()
 
-    if args.host not in ("127.0.0.1", "localhost"):
-        print(
-            f"警告: ホスト '{args.host}' を指定しています。"
-            " 外部からのアクセスに注意してください。"
-        )
+    host = args.host
+    port = args.port if args.port is not None else WEB_UI_PORT
 
-    url = f"http://{args.host}:{args.port}"
+    if host not in ("127.0.0.1", "localhost"):
+        print(f"警告: ホスト '{host}' を指定しています。外部からのアクセスに注意してください。")
+
+    # ポート競合チェック
+    if not _is_port_free(host, port):
+        if args.auto_port:
+            free = _find_free_port(host, port + 1)
+            if free is None:
+                print(f"エラー: ポート {port}〜{port + 19} がすべて使用中です。--port で別のポートを指定してください。")
+                sys.exit(1)
+            print(f"ポート {port} は使用中のため、{free} で起動します。")
+            port = free
+        else:
+            free = _find_free_port(host, port + 1)
+            suggestion = f"  別のポートで起動: python web_app/app.py --port {free}" if free else ""
+            print(
+                f"エラー: ポート {port} は既に使用中です。\n"
+                f"  自動で空きポートを探す: python web_app/app.py --auto-port\n"
+                f"{suggestion}"
+            )
+            sys.exit(1)
+
+    url = f"http://{host}:{port}"
     print(f"Web UI を起動しています: {url}")
     print("終了するには Ctrl+C を押してください。")
 
@@ -119,8 +161,8 @@ def main():
 
     uvicorn.run(
         "web_app.app:app",
-        host=args.host,
-        port=args.port,
+        host=host,
+        port=port,
         reload=args.reload,
         log_level="info",
     )

@@ -140,7 +140,7 @@ function pollJob(jobId, statusBox, reloadOnSuccess) {
         }
       }
     } catch {}
-  }, 2000);
+  }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
 function openUpdateDialog(videoId, currentPublishAt, title) {

@@ -637,7 +637,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             script_content = pregenerated_script
             update_status("台本を読み込み中...")
         else:
-            # NOTE: GUIからは常に pregenerated_script が渡されるためここには到達しない（CLIのみ）
+            # Web UIからは通常 pregenerated_script が渡されるため、直接呼び出し時だけAI生成を行う
             update_status(f"AI台本を生成中: {topic}...")
             script_content = ai.generate_script(topic, reference_script=reference_script, existing_titles=existing_titles)
             if script_content.startswith("Error"):
@@ -715,7 +715,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     height = 1920 if is_shorts else 1080
 
     # Step 4: 既存フォルダは削除せず、先にバックアップへ退避する。
-    # 開きっぱなしで退避できない場合は、GUI側で警告して同じ生成を再試行する。
+    # 開きっぱなしで退避できない場合は、Web UI側で警告して同じ生成を再試行する。
     _existing_theme_backup = None
     _saved_bg_dir = None
     _saved_thumb_path = None
@@ -1480,15 +1480,3 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     update_status(report.summary())
     return finish_result(msg)
 
-def main():
-    if sys.platform == 'win32':
-        import io
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
-    if len(sys.argv) < 2: return
-    topic = sys.argv[1]
-    debug_mode = "debug=y" in sys.argv
-    run_pipeline(topic, debug_mode=debug_mode)
-
-if __name__ == "__main__":
-    main()

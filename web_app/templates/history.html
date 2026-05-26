@@ -7,6 +7,7 @@
   <div class="filter-row">
     <input type="text" id="filter-input" placeholder="テーマ名で絞り込み..." oninput="filterHistory()" class="filter-input">
     <label><input type="checkbox" id="show-mgmt" onchange="filterHistory()"> 管理フォルダも表示</label>
+    <button class="btn btn-primary" onclick="regenerateSelected()">選択履歴を再生成</button>
   </div>
 </div>
 
@@ -14,6 +15,7 @@
   <table class="data-table" id="history-table">
     <thead>
       <tr>
+        <th></th>
         <th>テーマ名</th>
         <th>形式</th>
         <th>生成区分</th>
@@ -31,6 +33,7 @@
     <tbody>
       {% for h in histories %}
       <tr class="history-row {% if h.is_management %}mgmt-row{% endif %}" data-name="{{ h.name }}" data-mgmt="{{ h.is_management | lower }}">
+        <td>{% if not h.is_management %}<input type="checkbox" class="history-check" value="{{ h.name }}">{% endif %}</td>
         <td>
           <a href="/history/{{ h.name }}">{{ h.title[:35] }}{% if h.title|length > 35 %}…{% endif %}</a>
         </td>
@@ -89,5 +92,20 @@ function filterHistory() {
   });
 }
 filterHistory(); // 初期表示（管理フォルダを非表示）
+
+async function regenerateSelected() {
+  const names = Array.from(document.querySelectorAll('.history-check:checked')).map(el => el.value);
+  if (!names.length) { alert('再生成する履歴を選択してください'); return; }
+  if (!confirm(`${names.length}件のscript.txtから再生成ジョブを作成します。よろしいですか？`)) return;
+  const res = await fetch('/api/history/regenerate', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({history_names: names, confirmed: true}),
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('エラー: ' + (data.detail || JSON.stringify(data))); return; }
+  alert(`生成ジョブを登録しました: ${data.count}件`);
+  location.href = '/logs';
+}
 </script>
 {% endblock %}

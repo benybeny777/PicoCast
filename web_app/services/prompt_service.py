@@ -1,6 +1,6 @@
 """
 台本生成プロンプト・タイトル案プロンプトを組み立てて返すサービス。
-GUIの copy_script_generation_prompt / copy_title_prompt と同等のロジック。
+Web UIのプロンプト生成ボタンから呼び出す。
 """
 import os
 from typing import Optional

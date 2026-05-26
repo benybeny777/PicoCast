@@ -14,6 +14,18 @@
 
 ## 2026-05-26
 
+### Web UI一本化・旧GUI/CLI廃止
+
+- `gui.py`: 旧Tkinter GUIを削除し、操作入口をローカルWeb UIへ一本化
+- `main.py`: 直接CLI生成入口を削除し、`run_pipeline()` をWeb UIから呼ぶ生成パイプラインとして維持
+- `start.bat`: `python -m web_app.app --open-browser` 起動へ変更
+- `web_app/templates/generate.html` / `web_app/schemas.py` / `web_app/services/generation_service.py`: Web生成画面に LongサムネAB、Long節約、SD生成、背景再利用を追加し、`run_pipeline()` へ渡すようにした
+- `web_app/templates/history.html` / `web_app/routes/api_history.py`: 履歴から複数選択して `script.txt` ベースで再生成する導線を追加
+- `config.py`: Web UIの既定画像スタイル、画像スタイル選択肢、生成オプション既定値、ジョブポーリング間隔を追加。認証情報以外のWeb設定を `config.py` に集約
+- `config.py` / `web_app/services/config_service.py` / `web_app/templates/settings.html`: Web UI表示名、ジョブ成功後再読み込み、トースト表示時間、サービス確認タイムアウトを設定値化。設定画面には変更頻度が高い生成・表示・モデル設定を追加し、APIキー状態表示と変更欄を常に最下部へ移動
+- `README.md` / `SPEC.md` / `AGENTS.md`: Web UI一本化後の起動方法、主要機能、設定、旧GUI/CLI廃止方針へ更新
+- `README.md` / `SPEC.md`: 現状のWeb専用入口、依存パッケージ、Web生成オプション、履歴再生成API、`start.bat` 起動に合わせて説明を再整理
+
 ### よみがな正規化（VOICEVOX誤読対策）
 
 - `core/reading_normalizer.py`: Ollama を使い、VOICEVOX に渡す前に全セリフチャンクを一括でよみがな変換。固有名詞・難読漢字等の誤読を防ぐ。Ollama未起動時は元テキストへフォールバックして生成継続
@@ -54,7 +66,7 @@
 - `web_app/templates/`: 12画面 (dashboard, generate, check, history, history_detail, images, analytics, schedule, upload, fixed_comment, settings, logs)
 - `web_app/static/app.css, app.js`: ダークテーマUI、スコアバッジ色付け、ジョブポーリングユーティリティ
 - `tests/test_web.py`: 23テスト追加。/health、ジョブ状態遷移、パストラバーサル、管理フォルダ除外、設定診断秘密値非返却、外部API不要起動テスト等
-- 既存の `gui.py` / `main.py` / `core/*` への変更なし。Tkinter GUIと完全共存
+- 追加時点では既存Tkinter GUIと共存していたが、同日のWeb UI一本化で旧GUI/CLI導線は廃止
 
 ### 設定診断画面追加
 

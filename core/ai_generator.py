@@ -6,8 +6,8 @@ from config import GOOGLE_API_KEY, GEMINI_MODEL
 from core.ng_words import apply_ng_word_replacements
 from core.script_prompts import build_gemini_system_prompt
 
-# generate_script() はGUIからは呼ばれない（常に pregenerated_script が渡される）がCLIパスで使用。
-# __init__ / client は gui.py の接続確認チェックでのみ使用。
+# generate_script() は通常のWeb生成では呼ばれない（通常は pregenerated_script が渡される）。
+# __init__ / client は生成・画像プロンプト強化で必要なときに初期化する。
 class AIGenerator:
     def __init__(self, debug=False):
         self.debug = debug

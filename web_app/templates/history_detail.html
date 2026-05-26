@@ -147,10 +147,10 @@ async function renderVideo() {
         statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
         if (['success', 'failed', 'cancelled'].includes(job.status)) {
           clearInterval(interval);
-          if (job.status === 'success') setTimeout(() => location.reload(), 1500);
+          if (job.status === 'success') setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
         }
       } catch {}
-    }, 2000);
+    }, window.WEB_JOB_POLL_INTERVAL_MS);
   } catch(e) {
     statusBox.textContent = '通信エラー: ' + e;
   }

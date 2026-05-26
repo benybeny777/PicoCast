@@ -42,13 +42,22 @@
     <div class="form-group">
       <label for="image-style">画像スタイル</label>
       <select id="image-style">
-        <option value="通常">通常</option>
-        <option value="アニメ">アニメ</option>
-        <option value="水彩">水彩</option>
+        {% for style in image_style_choices %}
+        <option value="{{ style }}" {% if style == default_image_style %}selected{% endif %}>{{ style }}</option>
+        {% endfor %}
       </select>
     </div>
     <div class="form-group check-group">
-      <label><input type="checkbox" id="reuse-backgrounds"> 背景を再利用する</label>
+      <label><input type="checkbox" id="reuse-backgrounds" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
+    </div>
+    <div class="form-group check-group">
+      <label><input type="checkbox" id="long-thumbnail-ab" {% if default_long_thumbnail_ab_test %}checked{% endif %}> LongサムネAB</label>
+    </div>
+    <div class="form-group check-group">
+      <label><input type="checkbox" id="long-budget-mode" {% if default_long_budget_mode %}checked{% endif %}> Long節約</label>
+    </div>
+    <div class="form-group check-group">
+      <label><input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> SD生成</label>
     </div>
   </div>
   <div class="action-row">
@@ -102,8 +111,8 @@ function showToast() {
   _toastTimer = setTimeout(() => {
     toast.style.transition = 'opacity 0.4s';
     toast.style.opacity = '0';
-    setTimeout(() => { toast.style.display = 'none'; toast.style.transition = ''; }, 420);
-  }, 2000);
+    setTimeout(() => { toast.style.display = 'none'; toast.style.transition = ''; }, window.WEB_TOAST_HIDE_DELAY_MS);
+  }, window.WEB_TOAST_VISIBLE_MS);
 }
 
 async function fetchPrompt(type) {
@@ -163,6 +172,9 @@ async function startGenerate() {
 
   const imageStyle = document.getElementById('image-style').value;
   const reuseBg = document.getElementById('reuse-backgrounds').checked;
+  const longThumbnailAb = document.getElementById('long-thumbnail-ab').checked;
+  const longBudgetMode = document.getElementById('long-budget-mode').checked;
+  const sdSizeMode = document.getElementById('sd-size-mode').checked;
 
   document.getElementById('generate-btn').disabled = true;
   document.getElementById('cancel-btn').style.display = 'inline-block';
@@ -175,7 +187,14 @@ async function startGenerate() {
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({script, image_style: imageStyle, reuse_backgrounds: reuseBg}),
+      body: JSON.stringify({
+        script,
+        image_style: imageStyle,
+        reuse_backgrounds: reuseBg,
+        long_thumbnail_ab_test: longThumbnailAb,
+        long_budget_mode: longBudgetMode,
+        sd_size_mode: sdSizeMode,
+      }),
     });
     const data = await res.json();
     if (!res.ok) { appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error'); finishGenerate(); return; }
@@ -206,7 +225,7 @@ function pollJobs() {
     if (!activeJobIds.length) { clearInterval(pollTimer); return; }
     const allDone = await updateJobLogs();
     if (allDone) { clearInterval(pollTimer); finishGenerate(); }
-  }, 2000);
+  }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
 async function updateJobLogs() {

@@ -45,6 +45,9 @@ def test_dashboard_page(client):
 def test_generate_page(client):
     res = client.get("/generate")
     assert res.status_code == 200
+    assert "LongサムネAB" in res.text
+    assert "Long節約" in res.text
+    assert "SD生成" in res.text
 
 
 # 5. /history ページが 200 を返す
@@ -57,6 +60,26 @@ def test_history_page(client):
 def test_settings_page(client):
     res = client.get("/settings")
     assert res.status_code == 200
+
+
+def test_dashboard_scheduled_count_only_future_scheduled(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    import core.upload_records as upload_records
+    from web_app.services.status_service import _count_scheduled
+
+    now = datetime.now(timezone.utc)
+    future = (now + timedelta(days=1)).isoformat()
+    past = (now - timedelta(days=1)).isoformat()
+    monkeypatch.setattr(upload_records, "load_upload_records", lambda: [
+        {"publish_status": "scheduled", "publish_at": future},
+        {"publish_status": "scheduled", "publish_at": past},
+        {"publish_status": "private", "publish_at": future},
+        {"publish_status": "unlisted", "publish_at": future},
+        {"publish_status": "", "publish_at": future},
+        {"publish_status": "published", "publish_at": past},
+    ])
+
+    assert _count_scheduled() == 1
 
 
 # 7. /logs ページが 200 を返す
@@ -208,6 +231,11 @@ def test_api_history_list(client):
 def test_api_history_missing(client):
     res = client.get("/api/history/nonexistent-theme-xyz123")
     assert res.status_code == 404
+
+
+def test_api_history_regenerate_requires_confirmation(client):
+    res = client.post("/api/history/regenerate", json={"history_names": ["x"], "confirmed": False})
+    assert res.status_code == 400
 
 
 # ── 外部APIなしでもWebアプリが起動できる ──────────────────────────────────

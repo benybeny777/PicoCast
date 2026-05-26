@@ -31,7 +31,7 @@
 
 - Web UI は `127.0.0.1` のみバインドする。外部公開・認証なし運用は禁止。
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の中身をレスポンスやログへ絶対に含めない。APIキー設定はbool（有無）のみ返す。
-- 既存 `gui.py` / `main.py` を破壊しない。Web UIから `gui.py` の内部関数を直接呼ばない。
+- Web UI を唯一の操作入口とする。`main.py` は生成パイプラインとして使い、旧Tkinter GUI/CLI導線を復活させない。
 - 大規模リファクタはしない。`core/` の既存インターフェースを壊さない形で `services/` からラップする。
 - 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
 - output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
@@ -49,15 +49,15 @@
 
 - Windows / Mac を想定する。ffmpeg/native生成を主経路とし、YMM4プロジェクト出力は廃止済み。
 - Python 仮想環境: `.venv/`
-- 起動: `python gui.py`
+- 起動: `python -m web_app.app`
 - VOICEVOX をローカルで起動しておく必要がある（`http://localhost:50021`）
 
 ## 主要ファイル
 
 | ファイル | 役割 |
 |---|---|
-| `gui.py` | Tkinter GUI。ユーザー操作・バッチ処理・アップロード |
-| `main.py` | `run_pipeline()` — 1本分の動画生成パイプライン |
+| `web_app/app.py` | FastAPI Web UI エントリポイント |
+| `main.py` | `run_pipeline()` — Web UI から呼ぶ1本分の動画生成パイプライン |
 | `config.py` | 定数・設定（音声速度・モデル名・パスなど） |
 | `core/parser.py` | 台本パーサー `ScriptParser` |
 | `core/ai_generator.py` | Gemini台本生成・画像プロンプト強化 |
@@ -98,7 +98,7 @@ output/{テーマ名}/
 
 ### ScriptParser
 
-- メタタイプの判定には必ず `ScriptParser.META_TYPES` を使う（`gui.py` / `main.py` 両方で共有）
+- メタタイプの判定には必ず `ScriptParser.META_TYPES` を使う（Web UI / `main.py` で共有）
 - `parse_string(text)` はメモリ内処理（tempfileを使わない）
 
 ### アップロードスロット

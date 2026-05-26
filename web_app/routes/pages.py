@@ -8,6 +8,19 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import os
 
+from config import (
+    WEB_APP_NAME,
+    WEB_DEFAULT_IMAGE_STYLE,
+    WEB_DEFAULT_LONG_BUDGET_MODE,
+    WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
+    WEB_DEFAULT_REUSE_BACKGROUNDS,
+    WEB_DEFAULT_SD_SIZE_MODE,
+    WEB_IMAGE_STYLE_CHOICES,
+    WEB_JOB_POLL_INTERVAL_MS,
+    WEB_SUCCESS_RELOAD_DELAY_MS,
+    WEB_TOAST_HIDE_DELAY_MS,
+    WEB_TOAST_VISIBLE_MS,
+)
 from web_app.services import (
     status_service,
     history_service,
@@ -28,6 +41,11 @@ router = APIRouter(tags=["pages"])
 def _render(request: Request, name: str, ctx: dict):
     """Starlette 1.x の TemplateResponse API を吸収するラッパー。"""
     ctx["request"] = request
+    ctx["web_app_name"] = WEB_APP_NAME
+    ctx["web_job_poll_interval_ms"] = WEB_JOB_POLL_INTERVAL_MS
+    ctx["web_success_reload_delay_ms"] = WEB_SUCCESS_RELOAD_DELAY_MS
+    ctx["web_toast_visible_ms"] = WEB_TOAST_VISIBLE_MS
+    ctx["web_toast_hide_delay_ms"] = WEB_TOAST_HIDE_DELAY_MS
     return templates.TemplateResponse(request, name, ctx)
 
 
@@ -47,7 +65,15 @@ def page_dashboard(request: Request):
 def page_generate(request: Request):
     jobs = get_job_manager().list_jobs()
     gen_jobs = [j for j in jobs if j["type"] == "generate"][:10]
-    return _render(request, "generate.html", {"recent_jobs": gen_jobs})
+    return _render(request, "generate.html", {
+        "recent_jobs": gen_jobs,
+        "image_style_choices": WEB_IMAGE_STYLE_CHOICES,
+        "default_image_style": WEB_DEFAULT_IMAGE_STYLE,
+        "default_reuse_backgrounds": WEB_DEFAULT_REUSE_BACKGROUNDS,
+        "default_long_thumbnail_ab_test": WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
+        "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
+        "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
+    })
 
 
 @router.get("/check", response_class=HTMLResponse)

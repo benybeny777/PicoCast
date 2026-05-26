@@ -142,7 +142,7 @@ function pollJobs(jobIds, names) {
     if (done.size === jobIds.length) {
       clearInterval(interval);
       appendLog('全ジョブ完了。ページを再読み込みします...', 'info');
-      setTimeout(() => location.reload(), 2000);
+      setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
     }
   }, 3000);
 }

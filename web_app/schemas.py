@@ -3,13 +3,23 @@ APIリクエスト / レスポンス用 Pydantic スキーマ。
 """
 from pydantic import BaseModel, field_validator
 from typing import Any
+from config import (
+    WEB_DEFAULT_IMAGE_STYLE,
+    WEB_DEFAULT_LONG_BUDGET_MODE,
+    WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
+    WEB_DEFAULT_REUSE_BACKGROUNDS,
+    WEB_DEFAULT_SD_SIZE_MODE,
+)
 
 
 # ── 生成 ─────────────────────────────────────────────
 class GenerateRequest(BaseModel):
     script: str
-    image_style: str = "通常"
-    reuse_backgrounds: bool = False
+    image_style: str = WEB_DEFAULT_IMAGE_STYLE
+    reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
+    long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
+    long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
+    sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
 
     @field_validator("script")
     @classmethod
@@ -21,8 +31,21 @@ class GenerateRequest(BaseModel):
 
 class BatchGenerateRequest(BaseModel):
     scripts: list[str]
-    image_style: str = "通常"
-    reuse_backgrounds: bool = False
+    image_style: str = WEB_DEFAULT_IMAGE_STYLE
+    reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
+    long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
+    long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
+    sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
+
+
+class HistoryRegenerateRequest(BaseModel):
+    history_names: list[str]
+    image_style: str = WEB_DEFAULT_IMAGE_STYLE
+    reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
+    long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
+    long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
+    sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
+    confirmed: bool = False
 
 
 # ── チェック ─────────────────────────────────────────

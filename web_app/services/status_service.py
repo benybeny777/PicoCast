@@ -5,6 +5,7 @@
 import os
 import subprocess
 import shutil
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -15,7 +16,7 @@ from core.output_paths import OUTPUT_DIR, ANALYTICS_DIR
 
 def check_voicevox() -> dict[str, Any]:
     try:
-        r = httpx.get(f"{config.VOICEVOX_URL}/version", timeout=2.0)
+        r = httpx.get(f"{config.VOICEVOX_URL}/version", timeout=config.WEB_VOICEVOX_CHECK_TIMEOUT_SEC)
         return {"ok": True, "version": r.text.strip('"')}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -26,7 +27,7 @@ def check_ffmpeg() -> dict[str, Any]:
     try:
         result = subprocess.run(
             [bin_path, "-version"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=config.WEB_FFMPEG_CHECK_TIMEOUT_SEC
         )
         first_line = result.stdout.splitlines()[0] if result.stdout else ""
         return {"ok": result.returncode == 0, "version": first_line}
@@ -47,7 +48,7 @@ def get_settings_status() -> dict[str, Any]:
         "token_analytics_json": os.path.isfile(os.path.join(root, "token_analytics.json")),
         "output_dir": OUTPUT_DIR,
         "output_dir_exists": os.path.isdir(OUTPUT_DIR),
-        "default_shorts_render_engine": os.environ.get("DEFAULT_SHORTS_RENDER_ENGINE", "native"),
+        "render_engine": "native",
         "native_shorts_body_voice_speed": config.NATIVE_SHORTS_BODY_VOICE_SPEED,
         "native_shorts_intro_voice_speed": config.NATIVE_SHORTS_INTRO_VOICE_SPEED,
         "native_long_body_voice_speed": config.NATIVE_LONG_BODY_VOICE_SPEED,
@@ -110,11 +111,23 @@ def _count_scheduled() -> int:
     try:
         from core.upload_records import load_upload_records
         records = load_upload_records()
+        now_utc = datetime.now(timezone.utc)
         count = 0
         for r in records:
             s = str(r.get("publish_status") or "").lower()
-            if s in ("", "scheduled", "unlisted", "private") and r.get("publish_at"):
+            publish_at = r.get("publish_at") or ""
+            if s == "scheduled" and _is_future_publish_at(publish_at, now_utc):
                 count += 1
         return count
     except Exception:
         return 0
+
+
+def _is_future_publish_at(publish_at_str: str, now_utc: datetime) -> bool:
+    if not publish_at_str:
+        return False
+    try:
+        dt = datetime.fromisoformat(publish_at_str.replace("Z", "+00:00"))
+        return dt > now_utc
+    except Exception:
+        return False

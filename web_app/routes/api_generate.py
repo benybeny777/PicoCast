@@ -18,10 +18,24 @@ def api_generate(req: GenerateRequest):
         raise HTTPException(status_code=400, detail="台本が空です")
 
     if len(scripts) == 1:
-        job_id = submit_generate_job(scripts[0], req.image_style, req.reuse_backgrounds)
+        job_id = submit_generate_job(
+            scripts[0],
+            req.image_style,
+            req.reuse_backgrounds,
+            req.long_thumbnail_ab_test,
+            req.long_budget_mode,
+            req.sd_size_mode,
+        )
         return {"job_ids": [job_id], "count": 1}
     else:
-        job_ids = submit_batch_generate_jobs(scripts, req.image_style, req.reuse_backgrounds)
+        job_ids = submit_batch_generate_jobs(
+            scripts,
+            req.image_style,
+            req.reuse_backgrounds,
+            req.long_thumbnail_ab_test,
+            req.long_budget_mode,
+            req.sd_size_mode,
+        )
         return {"job_ids": job_ids, "count": len(job_ids)}
 
 
@@ -30,5 +44,12 @@ def api_batch_generate(req: BatchGenerateRequest):
     """明示的に複数台本を指定して生成ジョブを登録する。"""
     if not req.scripts:
         raise HTTPException(status_code=400, detail="台本リストが空です")
-    job_ids = submit_batch_generate_jobs(req.scripts, req.image_style, req.reuse_backgrounds)
+    job_ids = submit_batch_generate_jobs(
+        req.scripts,
+        req.image_style,
+        req.reuse_backgrounds,
+        req.long_thumbnail_ab_test,
+        req.long_budget_mode,
+        req.sd_size_mode,
+    )
     return {"job_ids": job_ids, "count": len(job_ids)}

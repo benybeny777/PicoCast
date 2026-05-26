@@ -1,7 +1,7 @@
 """
 動画生成ジョブサービス。
 既存の run_pipeline をジョブ化して実行する。
-gui.py の生成動作を壊さないよう、run_pipeline のインターフェースをそのまま使う。
+Web UI は run_pipeline を唯一の生成入口として使う。
 """
 import os
 from typing import Any
@@ -9,26 +9,72 @@ from typing import Any
 from core.gui_support import split_input_scripts
 from core.output_paths import OUTPUT_DIR
 from web_app.job_manager import Job, _log, get_job_manager
+from web_app.security import safe_output_path
 
 
-def submit_generate_job(script: str, image_style: str = "通常", reuse_backgrounds: bool = False) -> str:
+def submit_generate_job(
+    script: str,
+    image_style: str = "通常",
+    reuse_backgrounds: bool = False,
+    long_thumbnail_ab_test: bool = False,
+    long_budget_mode: bool = False,
+    sd_size_mode: bool = False,
+) -> str:
     """台本1本分の生成ジョブを登録してjob_idを返す。"""
     mgr = get_job_manager()
     job = mgr.create_job("generate")
     _log(job, "生成ジョブを登録しました", "info")
-    mgr.submit(job, _run_generate, script, image_style, reuse_backgrounds)
+    mgr.submit(job, _run_generate, script, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode)
     return job.job_id
 
 
-def submit_batch_generate_jobs(scripts: list[str], image_style: str = "通常", reuse_backgrounds: bool = False) -> list[str]:
+def submit_batch_generate_jobs(
+    scripts: list[str],
+    image_style: str = "通常",
+    reuse_backgrounds: bool = False,
+    long_thumbnail_ab_test: bool = False,
+    long_budget_mode: bool = False,
+    sd_size_mode: bool = False,
+) -> list[str]:
     """複数台本の生成ジョブを登録してjob_id一覧を返す。"""
     job_ids = []
     for script in scripts:
-        job_ids.append(submit_generate_job(script, image_style, reuse_backgrounds))
+        job_ids.append(submit_generate_job(script, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode))
     return job_ids
 
 
-def _run_generate(job: Job, script: str, image_style: str, reuse_backgrounds: bool) -> dict[str, Any]:
+def submit_history_regenerate_jobs(
+    history_names: list[str],
+    image_style: str = "通常",
+    reuse_backgrounds: bool = False,
+    long_thumbnail_ab_test: bool = False,
+    long_budget_mode: bool = False,
+    sd_size_mode: bool = False,
+) -> list[str]:
+    scripts: list[str] = []
+    for name in history_names:
+        if ".." in name or "/" in name or "\\" in name:
+            continue
+        theme_dir = safe_output_path(name)
+        script_path = os.path.join(theme_dir, "script.txt")
+        if not os.path.isfile(script_path):
+            continue
+        with open(script_path, "r", encoding="utf-8") as f:
+            text = f.read().strip()
+        if text:
+            scripts.append(text)
+    return submit_batch_generate_jobs(scripts, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode)
+
+
+def _run_generate(
+    job: Job,
+    script: str,
+    image_style: str,
+    reuse_backgrounds: bool,
+    long_thumbnail_ab_test: bool,
+    long_budget_mode: bool,
+    sd_size_mode: bool,
+) -> dict[str, Any]:
     """バックグラウンドスレッドで呼ばれる生成ロジック。"""
     from main import run_pipeline
     from core.parser import ScriptParser
@@ -58,6 +104,9 @@ def _run_generate(job: Job, script: str, image_style: str, reuse_backgrounds: bo
             reuse_backgrounds=reuse_backgrounds,
             cancel_event=job.cancel_event,
             progress_callback=progress,
+            long_thumbnail_ab_test=long_thumbnail_ab_test,
+            long_budget_mode=long_budget_mode,
+            sd_size_mode=sd_size_mode,
         )
     except _CancelledError:
         return {"cancelled": True}
