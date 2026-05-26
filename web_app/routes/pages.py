@@ -56,6 +56,7 @@ def _static_asset_version() -> int:
         paths = [
             os.path.join(_STATIC_DIR, "app.css"),
             os.path.join(_STATIC_DIR, "app.js"),
+            os.path.join(_STATIC_DIR, "job_poll.js"),
         ]
         return int(max(os.path.getmtime(path) for path in paths if os.path.exists(path)))
     except Exception:

@@ -211,15 +211,16 @@ function pollJobs(onSuccess) {
   const handleSuccess = onSuccess || reloadWithLogs;
   if (pollTimer) clearInterval(pollTimer);
   let _polling = false;
+  const logBox = document.getElementById('log-container');
   pollTimer = setInterval(async () => {
     if (!activeJobIds.length) { clearInterval(pollTimer); return; }
     if (_polling) return;
     _polling = true;
     try {
-      const result = await updateJobLogs();
-      if (result.allDone) {
+      const { allDone, hasFailed } = await updateJobLogs(activeJobIds, logBox);
+      if (allDone) {
         clearInterval(pollTimer);
-        if (result.hasFailed) {
+        if (hasFailed) {
           appendLog('一部の処理が失敗またはキャンセルされました。', 'error');
           finishGenerate();
         } else {
@@ -230,73 +231,6 @@ function pollJobs(onSuccess) {
       _polling = false;
     }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
-}
-
-function escapeHtml(str) {
-  if (typeof str !== 'string') return str;
-  return str.replace(/[&<>'"]/g, tag => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;'
-  }[tag] || tag));
-}
-
-async function updateJobLogs() {
-  let allDone = true;
-  let hasFailed = false;
-  const logBox = document.getElementById('log-container');
-  let htmlContent = '';
-
-  function buildLogLine(msg, tag) {
-    let resolvedTag = tag || 'info';
-    if (msg.includes('スコア') && msg.includes('点')) {
-      const scoreMatch = msg.match(/(\d+)点/);
-      if (scoreMatch) {
-        const scoreVal = parseInt(scoreMatch[1]);
-        if (scoreVal >= 80) resolvedTag = 'score_ok';
-        else if (scoreVal >= 70) resolvedTag = 'score_warn';
-        else resolvedTag = 'score';
-      }
-    }
-    let displayMsg = escapeHtml(msg);
-    displayMsg = displayMsg.replace(/(\d+点)/g, '<strong style="font-size: 1.15em; text-decoration: underline; color: #fff;">$1</strong>');
-    displayMsg = displayMsg.replace(/(スコア)/g, '<strong style="color: #fff;">$1</strong>');
-    return `<div class="log-line log-${resolvedTag}">${displayMsg}</div>`;
-  }
-
-  for (const jobId of activeJobIds) {
-    try {
-      const res = await fetch(`/api/jobs/${jobId}`);
-      const job = await res.json();
-      htmlContent += buildLogLine(`[${job.type}] ${job.status}: ${job.progress_text}`, job.status);
-
-      for (const entry of (job.logs || [])) {
-        htmlContent += buildLogLine(entry.message, entry.tag);
-      }
-      if (!['success','failed','cancelled'].includes(job.status)) {
-        allDone = false;
-      }
-      if (['failed', 'cancelled'].includes(job.status)) {
-        hasFailed = true;
-      }
-
-      if (job.status === 'success' && job.result) {
-        htmlContent += buildLogLine(`完了: ${job.result.message || ''}`, 'success');
-      }
-    } catch(e) {
-      allDone = false;
-    }
-  }
-
-  const isScrolledToBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 30;
-  logBox.innerHTML = htmlContent;
-  if (isScrolledToBottom) {
-    logBox.scrollTop = logBox.scrollHeight;
-  }
-
-  return { allDone, hasFailed };
 }
 
 async function renderVideo() {
