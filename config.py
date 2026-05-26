@@ -121,7 +121,7 @@ LONG_FULL_SCRIPT_REVIEW      = os.environ.get("LONG_FULL_SCRIPT_REVIEW",     "0"
 AUTO_FULL_REWRITE_ENABLED    = os.environ.get("AUTO_FULL_REWRITE_ENABLED",   "0").strip().lower() in ("1", "true", "yes", "on")  # must_fix 時に自動全文リライトするか
 
 # ───────────────────────────────────────────────
-# よみがな正規化（VOICEVOX 誤読対策 / Ollama使用）
+# よみがな正規化（VOICEVOX 誤読対策 / SudachiPy + 自前辞書）
 # ───────────────────────────────────────────────
 # [DEPRECATED] LLM全文読み補正は廃止されました
 # VOICE_READING_NORMALIZE_ENABLED    = os.environ.get("VOICE_READING_NORMALIZE_ENABLED",    "1").strip().lower() in ("1", "true", "yes", "on")
@@ -130,6 +130,9 @@ AUTO_FULL_REWRITE_ENABLED    = os.environ.get("AUTO_FULL_REWRITE_ENABLED",   "0"
 
 # 新しい読み補正モード: "off", "dictionary", "safe_auto"
 VOICE_READING_MODE = os.environ.get("VOICE_READING_MODE", "safe_auto")  # 読み補正モード
+VOICE_READING_BASE_DICT_PATH = os.environ.get("VOICE_READING_BASE_DICT_PATH", "data/reading_dictionary_base.json")  # 同梱読み辞書パス
+VOICE_READING_USER_DICT_PATH = os.environ.get("VOICE_READING_USER_DICT_PATH", "data/reading_dictionary_user.json")  # ユーザー読み辞書パス
+VOICE_READING_CANDIDATES_PATH = os.environ.get("VOICE_READING_CANDIDATES_PATH", "data/reading_candidates.json")  # 読み補正候補保存パス
 
 # ───────────────────────────────────────────────
 # Google AI モデル（Nano Banana Suite）

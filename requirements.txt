@@ -1,0 +1,14 @@
+requests
+google-genai
+python-dotenv
+Pillow
+google-api-python-client
+google-auth-oauthlib
+openai
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+httpx
+sudachipy
+sudachidict_core

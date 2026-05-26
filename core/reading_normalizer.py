@@ -30,9 +30,9 @@ class ReadingNormalizer:
         self.user_dict = {}
         self.candidates = {}
         
-        self.base_path = "data/reading_dictionary_base.json"
-        self.user_path = "data/reading_dictionary_user.json"
-        self.cand_path = "data/reading_candidates.json"
+        self.base_path = _cfg.VOICE_READING_BASE_DICT_PATH
+        self.user_path = _cfg.VOICE_READING_USER_DICT_PATH
+        self.cand_path = _cfg.VOICE_READING_CANDIDATES_PATH
         
         # 統計・ロギング用
         self.applied_base = set()
@@ -57,32 +57,28 @@ class ReadingNormalizer:
     def _load_dicts(self):
         os.makedirs("data", exist_ok=True)
         if os.path.exists(self.base_path):
-            try:
-                with open(self.base_path, encoding="utf-8") as f:
-                    self.base_dict = json.load(f)
-            except Exception:
-                pass
+            with open(self.base_path, encoding="utf-8") as f:
+                self.base_dict = json.load(f)
+            if not isinstance(self.base_dict, dict):
+                raise RuntimeError(f"読み補正の同梱辞書が不正です: {self.base_path}")
         if os.path.exists(self.user_path):
-            try:
-                with open(self.user_path, encoding="utf-8") as f:
-                    self.user_dict = json.load(f)
-            except Exception:
-                pass
+            with open(self.user_path, encoding="utf-8") as f:
+                self.user_dict = json.load(f)
+            if not isinstance(self.user_dict, dict):
+                raise RuntimeError(f"読み補正のユーザー辞書が不正です: {self.user_path}")
         if os.path.exists(self.cand_path):
-            try:
-                with open(self.cand_path, encoding="utf-8") as f:
-                    self.candidates = json.load(f)
-            except Exception:
-                pass
+            with open(self.cand_path, encoding="utf-8") as f:
+                self.candidates = json.load(f)
+            if not isinstance(self.candidates, dict):
+                raise RuntimeError(f"読み補正候補ファイルが不正です: {self.cand_path}")
 
     def _save_dicts(self):
-        try:
-            with open(self.user_path, "w", encoding="utf-8") as f:
-                json.dump(self.user_dict, f, ensure_ascii=False, indent=2)
-            with open(self.cand_path, "w", encoding="utf-8") as f:
-                json.dump(self.candidates, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
+        os.makedirs(os.path.dirname(self.user_path) or ".", exist_ok=True)
+        os.makedirs(os.path.dirname(self.cand_path) or ".", exist_ok=True)
+        with open(self.user_path, "w", encoding="utf-8") as f:
+            json.dump(self.user_dict, f, ensure_ascii=False, indent=2)
+        with open(self.cand_path, "w", encoding="utf-8") as f:
+            json.dump(self.candidates, f, ensure_ascii=False, indent=2)
 
     def normalize_batch(self, texts: list[str]) -> dict[str, str]:
         """複数テキストを一括でよみがな補正する。"""
@@ -116,10 +112,7 @@ class ReadingNormalizer:
             return res
 
         # safe_auto
-        try:
-            tokens = self.tokenizer_obj.tokenize(text)
-        except Exception:
-            return text
+        tokens = self.tokenizer_obj.tokenize(text)
             
         res_text = []
         has_kanji = re.compile(r'[\u4E00-\u9FFF]')

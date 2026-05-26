@@ -14,6 +14,14 @@
 
 ## 2026-05-27
 
+### よみがな補正の依存関係とエラー処理を修正
+
+- `requirements.txt` を追加し、`safe_auto` に必要な `sudachipy` / `sudachidict_core` を依存関係へ追加
+- READMEのセットアップ手順を `pip install --upgrade -r requirements.txt` に統一し、依存漏れが起きないよう修正
+- 読み補正の辞書パスを `config.py` の設定値へ移し、辞書JSON不正・候補保存失敗・SudachiPy解析失敗を無言でスキップしないよう修正
+- 運用中に生成される `data/reading_dictionary_user.json` / `data/reading_candidates.json` をgitignore対象に追加
+- `SPEC.md` のよみがな正規化説明を、廃止済みのOllama方式からSudachiPy + 自前辞書方式へ更新
+
 ### ComfyUI背景生成の失敗記録を修正
 
 - `local_comfyui` の必要モデル確認を生成処理内へ移し、モデル不足で中止する場合も `_meta/image_generation.json` に `status=failed`、`error_message`、`fallback_used=false` を保存するよう修正

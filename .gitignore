@@ -10,3 +10,5 @@ __pycache__/
 *.pyo
 output/
 dev/
+data/reading_dictionary_user.json
+data/reading_candidates.json

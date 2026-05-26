@@ -520,18 +520,20 @@ GET  /api/settings/ollama-models
 
 ## よみがな正規化 (`core/reading_normalizer.py`)
 
-VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防ぐため、音声合成前に Ollama でセリフをひらがな/カタカナ寄りに変換する。
+VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防ぐため、音声合成前に SudachiPy と自前辞書で読み補正する。
 
-- 動画1本あたり全セリフチャンクを **1回の API 呼び出し** でまとめて変換（コスト効率優先）
-- 変換後テキスト → VOICEVOX へ渡す（読み上げ用）
+- `VOICE_READING_MODE` は `off` / `dictionary` / `safe_auto` から選択する
+- `dictionary`: `data/reading_dictionary_base.json` と `data/reading_dictionary_user.json` の単純置換だけを使う
+- `safe_auto`: SudachiPy / `sudachidict_core` で形態素解析し、安全な名詞類だけを自動でひらがな化する
+- 補正後テキスト → VOICEVOX へ渡す（読み上げ用）
 - 元テキスト → ファイル名・字幕に使う（字幕マッチング維持）
-- `VOICE_READING_NORMALIZE_ENABLED = True` の状態で Ollama に接続できない場合は `RuntimeError` を投げて生成を中止する（サイレントスキップ禁止）
-- `VOICE_READING_NORMALIZE_ENABLED = False` で無効化可能
+- 必要ライブラリ不足、辞書JSON不正、候補保存失敗などは `RuntimeError` または元例外で生成を中止する（サイレントスキップ禁止）
 
 ```
-VOICE_READING_NORMALIZE_ENABLED    = True
-VOICE_READING_NORMALIZE_MODEL      = "qwen2.5:7b-instruct"
-VOICE_READING_NORMALIZE_OLLAMA_URL = "http://localhost:11434"
+VOICE_READING_MODE = "safe_auto"
+VOICE_READING_BASE_DICT_PATH = "data/reading_dictionary_base.json"
+VOICE_READING_USER_DICT_PATH = "data/reading_dictionary_user.json"
+VOICE_READING_CANDIDATES_PATH = "data/reading_candidates.json"
 ```
 
 ---

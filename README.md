@@ -78,14 +78,14 @@ py -3 -m venv .venv
     # 仮想環境のアクティベート
     .venv\Scripts\Activate.ps1
     # 依存関係のインストール・更新
-    pip install --upgrade requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib openai fastapi "uvicorn[standard]" jinja2 python-multipart
+    pip install --upgrade -r requirements.txt
     ```
 *   **コマンドプロンプト (cmd) の場合:**
     ```cmd
     :: 仮想環境のアクティベート
     .venv\Scripts\activate.bat
     :: 依存関係のインストール・更新
-    pip install --upgrade requests google-genai python-dotenv Pillow google-api-python-client google-auth-oauthlib openai fastapi "uvicorn[standard]" jinja2 python-multipart
+    pip install --upgrade -r requirements.txt
     ```
 
 ### Step 2. APIキーとOAuth設定ファイルの配置
