@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}LLM/尺チェック{% endblock %}
+{% block content %}
+<h1>LLM/尺チェック</h1>
+<p class="hint">台本を貼り付けてチェックします。複数台本は <code>---</code> で区切ってください。</p>
+
+<div class="card">
+  <div class="form-group">
+    <label for="check-input">台本</label>
+    <textarea id="check-input" rows="18" placeholder="動画タイトル: ...&#10;ずんだもん: ..."></textarea>
+  </div>
+  <div class="action-row">
+    <button class="btn btn-primary" onclick="startCheck()">チェック開始</button>
+  </div>
+</div>
+
+<div id="check-status" class="card mt" style="display:none">
+  <h2>チェック進行中...</h2>
+  <div id="check-log" class="log-box"></div>
+</div>
+
+<div id="check-results" class="mt"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function startCheck() {
+  const script = document.getElementById('check-input').value.trim();
+  if (!script) { alert('台本を入力してください'); return; }
+
+  document.getElementById('check-status').style.display = 'block';
+  document.getElementById('check-results').innerHTML = '';
+  const logBox = document.getElementById('check-log');
+  logBox.innerHTML = '';
+  appendCheckLog('チェックリクエストを送信中...', 'info');
+
+  try {
+    const res = await fetch('/api/check', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({script}),
+    });
+    const data = await res.json();
+    if (!res.ok) { appendCheckLog('エラー: ' + (data.detail || ''), 'error'); return; }
+
+    appendCheckLog(`ジョブ登録: ${data.job_id}`, 'info');
+    pollCheckJob(data.job_id);
+  } catch(e) {
+    appendCheckLog('通信エラー: ' + e, 'error');
+  }
+}
+
+async function pollCheckJob(jobId) {
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`);
+      const job = await res.json();
+      const logBox = document.getElementById('check-log');
+      logBox.innerHTML = '';
+      appendCheckLog(`[${job.status}] ${job.progress_text}`, job.status);
+      for (const entry of (job.logs || [])) {
+        appendCheckLog(entry.message, entry.tag);
+      }
+      if (['success','failed','cancelled'].includes(job.status)) {
+        clearInterval(interval);
+        document.getElementById('check-status').querySelector('h2').textContent = `チェック ${job.status}`;
+        if (job.status === 'success' && Array.isArray(job.result)) {
+          renderResults(job.result);
+        }
+      }
+    } catch {}
+  }, 2000);
+}
+
+function renderResults(results) {
+  const container = document.getElementById('check-results');
+  container.innerHTML = results.map(r => {
+    const score = r.opening_score;
+    const scoreClass = score >= 80 ? 'badge-ok' : score >= 70 ? 'badge-warn' : 'badge-ng';
+    const mustFix = (r.must_fix || []).map(m => `<li class="error-text">${m}</li>`).join('');
+    const warnings = (r.warnings || []).map(w => `<li class="warning-text">${w}</li>`).join('');
+    const estSec = r.estimated_seconds ? `${r.estimated_seconds.toFixed(1)}秒` : '—';
+    return `<div class="card">
+      <h3>${esc(r.title)} <span class="badge ${scoreClass}">${score != null ? score : '—'}点</span></h3>
+      <p>形式: ${esc(r.video_format)} / セリフ数: ${r.dialogue_count} / 推定尺: ${estSec} <span class="badge">${esc(r.duration_label)}</span></p>
+      ${mustFix ? `<ul class="fix-list">${mustFix}</ul>` : ''}
+      ${warnings ? `<ul class="warn-list">${warnings}</ul>` : ''}
+      ${score >= 70 && !mustFix ? '<p class="ok-text">問題なし</p>' : ''}
+      <details>
+        <summary>AI修正依頼文コピー</summary>
+        <button onclick="copyFix(this)" data-script="${esc(r.script)}">クリップボードにコピー</button>
+      </details>
+    </div>`;
+  }).join('');
+}
+
+function copyFix(btn) {
+  const script = btn.dataset.script;
+  const text = `以下の台本を改善してください:\n\n${script}`;
+  navigator.clipboard.writeText(text).then(() => { btn.textContent = 'コピーしました！'; });
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function appendCheckLog(msg, tag) {
+  const logBox = document.getElementById('check-log');
+  const div = document.createElement('div');
+  div.className = `log-line log-${tag || 'info'}`;
+  div.textContent = msg;
+  logBox.appendChild(div);
+  logBox.scrollTop = logBox.scrollHeight;
+}
+</script>
+{% endblock %}

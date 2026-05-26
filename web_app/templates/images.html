@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}画像確認 / 再生成{% endblock %}
+{% block content %}
+<h1>画像確認 / 再生成</h1>
+
+<div class="card">
+  <div class="form-row">
+    <div class="form-group">
+      <label for="history-select">履歴を選択</label>
+      <select id="history-select" onchange="selectHistory(this.value)">
+        <option value="">— 選択してください —</option>
+        {% for h in histories %}
+        {% if not h.is_management %}
+        <option value="{{ h.name }}" {% if h.name == selected_history %}selected{% endif %}>{{ h.name }}</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</div>
+
+{% if image_data %}
+<div class="card mt">
+  <h2>{{ selected_history }}</h2>
+
+  {% if image_data.thumbnails %}
+  <h3>サムネイル</h3>
+  <div class="image-grid" id="thumbnail-grid">
+    {% for img in image_data.thumbnails %}
+    <div class="image-card">
+      <label>
+        <input type="checkbox" class="img-check" value="{{ img.key }}">
+        <img src="/api/images/{{ selected_history }}/file/{{ img.key }}" alt="{{ img.filename }}" loading="lazy">
+      </label>
+      <p>{{ img.filename }}</p>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if image_data.backgrounds %}
+  <h3 class="mt">背景画像</h3>
+  <div id="bg-list">
+    {% for img in image_data.backgrounds %}
+    <div class="bg-prompt-row" id="row-{{ loop.index0 }}">
+      <div class="bg-prompt-img">
+        <label style="display:block">
+          <input type="checkbox" class="img-check" value="{{ img.key }}">
+          <img src="/api/images/{{ selected_history }}/file/{{ img.key }}"
+               alt="{{ img.filename }}" loading="lazy"
+               onclick="openLightbox(this.src, '{{ img.filename }}'); event.preventDefault(); event.stopPropagation();">
+        </label>
+        <p>{{ img.filename }}</p>
+      </div>
+      <div class="bg-prompt-editor">
+        <textarea
+          class="prompt-area form-input"
+          data-key="{{ img.key }}"
+          data-original="{{ img.prompt | e }}"
+          rows="5"
+          oninput="markDirty(this)"
+        >{{ img.prompt }}</textarea>
+        <span class="prompt-dirty-badge" id="dirty-{{ loop.index0 }}" style="display:none">未保存</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="action-row mt">
+    <button class="btn btn-primary" onclick="regenerateSelected()">選択画像を再生成</button>
+    <button class="btn btn-secondary" onclick="savePrompts()">プロンプトを保存</button>
+    <button class="btn btn-secondary" onclick="selectAll(true)">全選択</button>
+    <button class="btn btn-secondary" onclick="selectAll(false)">全解除</button>
+  </div>
+  <p class="hint">※ 背景画像は表示中のプロンプトで再生成します（保存前でも反映）。Google API 費用が発生します。</p>
+  <div id="regen-status" style="display:none" class="log-box mt"></div>
+</div>
+{% endif %}
+
+<!-- ライトボックス -->
+<div id="lightbox" onclick="closeLightbox()">
+  <span id="lightbox-close" onclick="closeLightbox()">&times;</span>
+  <img id="lightbox-img" src="" alt="">
+  <div id="lightbox-caption"></div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function selectHistory(name) {
+  if (name) window.location.href = '/images?history=' + encodeURIComponent(name);
+}
+
+function selectAll(val) {
+  document.querySelectorAll('.img-check').forEach(c => c.checked = val);
+}
+
+function markDirty(ta) {
+  const idx = ta.closest('.bg-prompt-row').id.replace('row-', '');
+  const badge = document.getElementById('dirty-' + idx);
+  if (badge) badge.style.display = ta.value !== ta.dataset.original ? 'inline' : 'none';
+}
+
+function getCurrentPrompts() {
+  const prompts = {};
+  document.querySelectorAll('.prompt-area').forEach(ta => {
+    prompts[ta.dataset.key] = ta.value;
+  });
+  return prompts;
+}
+
+async function regenerateSelected() {
+  const keys = Array.from(document.querySelectorAll('.img-check:checked')).map(c => c.value);
+  if (!keys.length) { alert('画像を選択してください'); return; }
+  if (!confirm(`選択した ${keys.length} 枚を再生成しますか？\nGoogle API 費用が発生します。`)) return;
+
+  const historyName = '{{ selected_history }}';
+  const prompts = getCurrentPrompts();
+
+  const statusBox = document.getElementById('regen-status');
+  statusBox.style.display = 'block';
+  statusBox.textContent = '再生成ジョブを送信中...';
+
+  try {
+    const res = await fetch(`/api/images/${historyName}/regenerate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({history_name: historyName, image_keys: keys, prompts}),
+    });
+    const data = await res.json();
+    if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || ''); return; }
+    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
+    pollRegenJob(data.job_id, statusBox);
+  } catch(e) {
+    statusBox.textContent = '通信エラー: ' + e;
+  }
+}
+
+async function savePrompts() {
+  const historyName = '{{ selected_history }}';
+  const prompts = getCurrentPrompts();
+
+  try {
+    const res = await fetch(`/api/images/${historyName}/save-prompts`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({prompts}),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert('保存エラー: ' + (data.detail || '')); return; }
+
+    // 保存後に original を更新してバッジを消す
+    document.querySelectorAll('.prompt-area').forEach(ta => {
+      ta.dataset.original = ta.value;
+    });
+    document.querySelectorAll('.prompt-dirty-badge').forEach(b => b.style.display = 'none');
+
+    const statusBox = document.getElementById('regen-status');
+    statusBox.style.display = 'block';
+    statusBox.textContent = `プロンプトを保存しました（${data.count}件）`;
+  } catch(e) {
+    alert('通信エラー: ' + e);
+  }
+}
+
+async function pollRegenJob(jobId, statusBox) {
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`);
+      const job = await res.json();
+      const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length - 1].message : '';
+      statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
+      if (['success','failed','cancelled'].includes(job.status)) {
+        clearInterval(interval);
+        if (job.status === 'success') setTimeout(() => location.reload(), 1500);
+      }
+    } catch {}
+  }, 2000);
+}
+
+function openLightbox(src, caption) {
+  const lb = document.getElementById('lightbox');
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox-caption').textContent = caption || '';
+  lb.classList.add('open');
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.getElementById('lightbox-img').src = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeLightbox();
+});
+</script>
+{% endblock %}

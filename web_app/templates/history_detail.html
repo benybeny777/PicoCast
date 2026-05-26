@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}{{ detail.name }}{% endblock %}
+{% block content %}
+<div class="breadcrumb"><a href="/history">← 履歴一覧</a></div>
+<h1>{{ detail.render_info.get('video_title', detail.name) }}</h1>
+
+<div class="card-grid">
+  <!-- ファイル状態 -->
+  <div class="card">
+    <h2>ファイル状態</h2>
+    <table class="status-table">
+      <tr><td>MP4</td><td>{% if detail.has_mp4 %}<span class="badge badge-ok">{{ detail.mp4_name }}</span>{% else %}<span class="badge badge-ng">なし</span>{% endif %}</td></tr>
+      <tr><td>サムネイル</td><td>{% if detail.has_thumbnail %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-ng">なし</span>{% endif %}</td></tr>
+      <tr><td>背景画像数</td><td>{{ detail.backgrounds | length }} 枚</td></tr>
+    </table>
+    {% if detail.has_mp4 %}
+    <a href="/api/images/{{ detail.name }}/file/{{ detail.mp4_name }}" class="btn btn-secondary mt-sm" target="_blank">MP4を確認</a>
+    {% endif %}
+    <a href="/images?history={{ detail.name }}" class="btn btn-secondary mt-sm">画像確認・再生成</a>
+    <button class="btn btn-primary mt-sm" onclick="renderVideo()">動画を再生成</button>
+    <div id="render-status" style="display:none" class="log-box mt-sm"></div>
+  </div>
+
+  <!-- アップロード状態 -->
+  <div class="card">
+    <h2>アップロード状態</h2>
+    {% if detail.upload_record %}
+    <table class="status-table">
+      <tr><td>video_id</td><td>{{ detail.upload_record.get('video_id', '—') }}</td></tr>
+      <tr><td>publish_status</td><td>{{ detail.upload_record.get('publish_status', '—') }}</td></tr>
+      <tr><td>publish_at</td><td>{{ detail.upload_record.get('publish_at', '—') }}</td></tr>
+      <tr><td>comment_thread_id</td><td>{{ detail.upload_record.get('comment_thread_id', '—') }}</td></tr>
+    </table>
+    {% if detail.upload_record.get('video_id') %}
+    <a href="https://youtu.be/{{ detail.upload_record.video_id }}" class="btn btn-secondary mt-sm" target="_blank">YouTubeで確認</a>
+    {% endif %}
+    {% else %}
+    <p>アップロード記録なし</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- スコア情報 -->
+{% if detail.opening_review or detail.duration_review or detail.final_review %}
+<div class="card mt">
+  <h2>品質レビュー</h2>
+  <div class="card-grid">
+    {% if detail.opening_review %}
+    <div>
+      <h3>冒頭レビュー</h3>
+      <p>スコア: <span class="score-badge" data-score="{{ detail.opening_review.get('final_score') or detail.opening_review.get('overall_score', 0) }}">{{ detail.opening_review.get('final_score') or detail.opening_review.get('overall_score', '—') }}</span></p>
+      {% if detail.opening_review.get('must_fix') %}
+      <p class="error-text">must_fix: {{ detail.opening_review.must_fix | join(', ') }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if detail.duration_review %}
+    <div>
+      <h3>尺レビュー</h3>
+      <p>推定尺: {{ detail.duration_review.get('seconds', '—') }} 秒</p>
+      <p>状態: {{ detail.duration_review.get('status', '—') }}</p>
+    </div>
+    {% endif %}
+    {% if detail.final_review %}
+    <div>
+      <h3>最終レビュー</h3>
+      <p>スコア: <span class="score-badge" data-score="{{ detail.final_review.get('final_score', 0) }}">{{ detail.final_review.get('final_score', '—') }}</span></p>
+      {% if detail.final_review.get('must_fix') %}
+      <p class="error-text">must_fix: {{ detail.final_review.must_fix | join(', ') }}</p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- サムネイル -->
+{% if detail.has_thumbnail %}
+<div class="card mt">
+  <h2>サムネイル</h2>
+  <img src="/api/images/{{ detail.name }}/file/{{ detail.thumbnail_rel }}" class="thumbnail-preview" alt="thumbnail">
+</div>
+{% endif %}
+
+{% if detail.long_thumbnails %}
+<div class="card mt">
+  <h2>Long サムネイル A/B/C</h2>
+  <div class="image-grid">
+    {% for t in detail.long_thumbnails %}
+    <div class="image-card">
+      <img src="/api/images/{{ detail.name }}/file/{{ t }}" alt="{{ t }}" loading="lazy">
+      <p>{{ t }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- 台本 -->
+{% if detail.script_txt %}
+<div class="card mt">
+  <h2>台本</h2>
+  <pre class="script-display">{{ detail.script_txt }}</pre>
+</div>
+{% endif %}
+
+<!-- メタデータ -->
+{% if detail.metadata_txt %}
+<div class="card mt">
+  <h2>メタデータ</h2>
+  <pre class="script-display">{{ detail.metadata_txt }}</pre>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+document.querySelectorAll('.score-badge').forEach(el => {
+  const s = parseInt(el.dataset.score);
+  if (s >= 80) el.classList.add('badge-ok');
+  else if (s >= 70) el.classList.add('badge-warn');
+  else el.classList.add('badge-ng');
+});
+
+async function renderVideo() {
+  if (!confirm('既存の audio/ と backgrounds/ から MP4 を再生成します。\n現在の MP4 は上書きされます。よろしいですか？')) return;
+
+  const statusBox = document.getElementById('render-status');
+  statusBox.style.display = 'block';
+  statusBox.textContent = 'ジョブ送信中...';
+
+  try {
+    const res = await fetch('/api/history/{{ detail.name }}/render', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirmed: true}),
+    });
+    const data = await res.json();
+    if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
+    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
+
+    const interval = setInterval(async () => {
+      try {
+        const r = await fetch(`/api/jobs/${data.job_id}`);
+        const job = await r.json();
+        const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length - 1].message : '';
+        statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
+        if (['success', 'failed', 'cancelled'].includes(job.status)) {
+          clearInterval(interval);
+          if (job.status === 'success') setTimeout(() => location.reload(), 1500);
+        }
+      } catch {}
+    }, 2000);
+  } catch(e) {
+    statusBox.textContent = '通信エラー: ' + e;
+  }
+}
+</script>
+{% endblock %}

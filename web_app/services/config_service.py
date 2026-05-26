@@ -69,8 +69,12 @@ def _validate(updates: dict[str, str]) -> list[str]:
     errors = []
     key_map = {item["key"]: item for item in EDITABLE_CONFIG}
     for key, raw_val in updates.items():
+        raw_val = str(raw_val)
         if key not in _ALLOWED_KEYS:
             errors.append(f"不正なキー: {key}")
+            continue
+        if "\n" in raw_val or "\r" in raw_val:
+            errors.append(f"{key}: 改行は使用できません")
             continue
         spec = key_map[key]
         try:

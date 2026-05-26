@@ -27,6 +27,19 @@
 
 詳細仕様は [SPEC.md](SPEC.md) を参照。ここには作業上の注意点だけを書く。
 
+## Web UI 作業時の注意点
+
+- Web UI は `127.0.0.1` のみバインドする。外部公開・認証なし運用は禁止。
+- `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の中身をレスポンスやログへ絶対に含めない。APIキー設定はbool（有無）のみ返す。
+- 既存 `gui.py` / `main.py` を破壊しない。Web UIから `gui.py` の内部関数を直接呼ばない。
+- 大規模リファクタはしない。`core/` の既存インターフェースを壊さない形で `services/` からラップする。
+- 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
+- output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
+- 破壊的操作（アップロード・固定コメント・スケジュール変更）は `confirmed=true` 必須 + 画面確認ダイアログ必須。
+- 実装が不安定な機能は `[DISABLED]` / `[dry-run]` として画面とコードコメントに明記し、無効ではなくユーザーに理由を提示する。
+- テストは `tests/test_web.py` で行う。外部API実通信が必要なテストはモックまたはskip可能にする。
+- Starlette 1.1.0以降: `TemplateResponse(request, name, context)` の引数順に従う（旧API `TemplateResponse(name, {request: ...})` は使わない）。
+
 ## プロジェクト概要
 
 「ずんだもんとめたんの食べ物雑学堂」YouTube チャンネル向け動画自動生成ツール。

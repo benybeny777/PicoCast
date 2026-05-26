@@ -98,9 +98,63 @@ APIキーやOAuthファイルなどの認証情報以外は、原則として [c
 
 ## 起動
 
+### Tkinter GUI（従来）
+
 ```bash
 python gui.py
 ```
+
+### ローカル Web UI（新規追加）
+
+```bash
+python web_app/app.py
+```
+
+または
+
+```bash
+python -m web_app.app
+```
+
+起動後、ブラウザで `http://127.0.0.1:58080` を開きます。ポートを変える場合は `--port` または `WEB_UI_PORT` を使います。
+
+起動時にブラウザを自動で開くには `--open-browser` を付けます。
+
+```bash
+python web_app/app.py --open-browser
+```
+
+**セキュリティ注意:**
+- Web UI は **127.0.0.1 のみ**にバインドします。外部には公開しません。
+- `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の中身は Web 画面に**絶対に表示されません**。
+- Tkinter GUI と Web UI は**同時に起動できます**（独立したプロセス）。
+
+### Web UI でできること
+
+| 画面 | 機能 |
+|---|---|
+| ダッシュボード | サービス接続状態、統計、直近履歴、クイックアクション |
+| 台本貼り付け / 生成 | 台本入力 → 生成ジョブ開始 → ログ表示 |
+| LLM/尺チェック | 台本の冒頭品質・推定尺・AI評価を確認 |
+| 生成履歴 | output/ 配下の履歴一覧・詳細表示 |
+| 画像確認 / 再生成 | サムネイル・背景画像の確認、プロンプト編集、選択画像の再生成 |
+| Analytics | YouTube Analytics データの表示・取得 |
+| スケジュール | 予約中動画一覧・YouTube同期 |
+| アップロード | MP4がある履歴をYouTubeにアップロード |
+| 固定コメント | アップロード済み動画への固定コメント投稿 |
+| 設定 / サービス確認 | VOICEVOX・APIキー設定状態の診断 |
+| ログ | バックグラウンドジョブのログ確認 |
+
+### Web UI のセットアップ（追加パッケージ）
+
+```bash
+pip install fastapi "uvicorn[standard]" jinja2 python-multipart
+```
+
+### 販売・配布時の注意
+
+- Web UI はローカル専用です。SaaS 化・外部公開する場合は認証機構を別途追加してください。
+- `.env` や OAuth トークンはGit管理外です。配布パッケージには含めないでください。
 
 ## 基本の使い方
 

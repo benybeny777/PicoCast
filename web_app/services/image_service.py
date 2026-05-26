@@ -1,0 +1,181 @@
+"""
+画像確認・再生成サービス。
+output/{history_name}/backgrounds/ および thumbnails/ を走査する。
+再生成はジョブ化して実行。パストラバーサル対策は security.py 経由で行う。
+"""
+import os
+from typing import Any
+
+from core.output_paths import OUTPUT_DIR
+from web_app.job_manager import Job, _log, get_job_manager
+from web_app.security import safe_output_path
+
+
+def _detect_is_shorts_from_dir(theme_dir: str) -> bool:
+    """script.txt の動画形式行から Shorts か判定する。読めなければ True を返す。"""
+    script_path = os.path.join(theme_dir, "script.txt")
+    try:
+        with open(script_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        from main import _detect_is_shorts
+        return _detect_is_shorts(content)
+    except Exception:
+        return True
+
+
+def list_images(history_name: str) -> dict[str, Any]:
+    """指定履歴の画像一覧を返す。"""
+    _validate_name(history_name)
+    theme_dir = safe_output_path(history_name)
+
+    thumbnails = []
+    thumbs_dir = os.path.join(theme_dir, "thumbnails")
+    if os.path.isdir(thumbs_dir):
+        for fname in sorted(os.listdir(thumbs_dir)):
+            if fname.endswith(".png"):
+                thumbnails.append({
+                    "key": f"thumbnails/{fname}",
+                    "filename": fname,
+                    "is_main": fname == "thumbnail.png",
+                })
+
+    backgrounds = []
+    bg_dir = os.path.join(theme_dir, "backgrounds")
+    if os.path.isdir(bg_dir):
+        for fname in sorted(os.listdir(bg_dir)):
+            if fname.endswith(".png"):
+                prompt = _read_bg_prompt(bg_dir, fname)
+                backgrounds.append({
+                    "key": f"backgrounds/{fname}",
+                    "filename": fname,
+                    "prompt": prompt,
+                })
+
+    return {
+        "history_name": history_name,
+        "thumbnails": thumbnails,
+        "backgrounds": backgrounds,
+    }
+
+
+def _read_bg_prompt(bg_dir: str, fname: str) -> str:
+    try:
+        bg_num = int(fname.split("_")[1])
+        path = os.path.join(bg_dir, f"prompt_bg_{bg_num:04d}.txt")
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return ""
+
+
+def save_bg_prompts(history_name: str, prompts: dict[str, str]) -> list[str]:
+    """
+    {key: prompt_text} を受け取り backgrounds/prompt_bg_XXXX.txt に書き込む。
+    保存済みキーの一覧を返す。
+    """
+    _validate_name(history_name)
+    theme_dir = safe_output_path(history_name)
+    bg_dir = os.path.join(theme_dir, "backgrounds")
+    saved = []
+    for key, text in prompts.items():
+        if not key.startswith("backgrounds/"):
+            continue
+        fname = os.path.basename(key)
+        try:
+            bg_num = int(fname.split("_")[1])
+        except (ValueError, IndexError):
+            continue
+        prompt_path = os.path.join(bg_dir, f"prompt_bg_{bg_num:04d}.txt")
+        with open(prompt_path, "w", encoding="utf-8") as f:
+            f.write(text)
+        saved.append(key)
+    return saved
+
+
+def submit_regenerate_job(history_name: str, image_keys: list[str], prompts: dict[str, str] | None = None) -> str:
+    _validate_name(history_name)
+    mgr = get_job_manager()
+    job = mgr.create_job("image_regenerate")
+    _log(job, f"画像再生成ジョブを登録: {len(image_keys)}枚", "info")
+    mgr.submit(job, _run_regenerate, history_name, image_keys, prompts or {})
+    return job.job_id
+
+
+def _run_regenerate(job: Job, history_name: str, image_keys: list[str], prompts: dict[str, str]) -> dict[str, Any]:
+    """
+    背景画像: prompts に上書きがあればそれを使用、なければ prompt_bg_XXXX.txt を読む。
+    サムネイル: main.regenerate_thumbnail_only() を使用。
+    """
+    from core.image_generator import ImageGenerator
+    from main import regenerate_thumbnail_only
+
+    theme_dir = safe_output_path(history_name)
+    bg_dir = os.path.join(theme_dir, "backgrounds")
+
+    is_shorts = _detect_is_shorts_from_dir(theme_dir)
+    width = 1080 if is_shorts else 1920
+    height = 1920 if is_shorts else 1080
+
+    _log(job, f"画像再生成開始: {len(image_keys)}枚 ({'Shorts' if is_shorts else 'Long'})", "info")
+
+    regenerated: list[str] = []
+    failed: list[str] = []
+
+    for key in image_keys:
+        if job.cancel_event.is_set():
+            _log(job, "キャンセルされました", "warning")
+            break
+
+        try:
+            if key.startswith("backgrounds/"):
+                fname = os.path.basename(key)
+                try:
+                    bg_num = int(fname.split("_")[1])
+                except (ValueError, IndexError):
+                    raise ValueError(f"ファイル名からbg番号を解析できません: {fname}")
+
+                # フォームで編集済みのプロンプトがあればそれを優先、なければファイルから読む
+                if key in prompts and prompts[key].strip():
+                    prompt = prompts[key].strip()
+                    _log(job, f"編集済みプロンプトを使用: {fname}", "info")
+                else:
+                    prompt_file = os.path.join(bg_dir, f"prompt_bg_{bg_num:04d}.txt")
+                    if not os.path.isfile(prompt_file):
+                        raise FileNotFoundError(f"プロンプトファイルが見つかりません: prompt_bg_{bg_num:04d}.txt")
+                    with open(prompt_file, "r", encoding="utf-8") as pf:
+                        prompt = pf.read()
+
+                _log(job, f"背景再生成中: {fname}", "info")
+                with ImageGenerator(width=width, height=height) as img_gen:
+                    img_gen.generate_background(prompt, target_dir=bg_dir, fname=fname)
+                _log(job, f"背景再生成完了: {fname}", "success")
+                regenerated.append(key)
+
+            elif key.startswith("thumbnails/"):
+                _log(job, "サムネイル再生成中...", "info")
+                thumb_path = regenerate_thumbnail_only(
+                    theme_dir,
+                    progress_callback=lambda msg, tag="info": _log(job, msg, tag),
+                )
+                _log(job, f"サムネイル再生成完了: {os.path.basename(thumb_path)}", "success")
+                regenerated.append(key)
+
+            else:
+                raise ValueError(f"未対応のキー: {key}")
+
+        except Exception as e:
+            _log(job, f"再生成エラー ({key}): {e}", "error")
+            failed.append(key)
+
+    if failed:
+        _log(job, f"完了: 成功{len(regenerated)}枚 / 失敗{len(failed)}枚", "warning")
+    else:
+        _log(job, f"完了: {len(regenerated)}枚すべて成功", "success")
+
+    return {"regenerated": regenerated, "failed": failed}
+
+
+def _validate_name(name: str) -> None:
+    if ".." in name or "/" in name or "\\" in name:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="無効な履歴名です")

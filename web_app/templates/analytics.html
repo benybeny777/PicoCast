@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+{% block title %}アナリティクス{% endblock %}
+{% block content %}
+<h1>アナリティクス</h1>
+
+<div class="card">
+  <div class="action-row">
+    <button class="btn btn-primary" onclick="refreshAnalytics()">Analytics取得・更新</button>
+    <button class="btn btn-secondary" onclick="copyTSV()">TSVコピー</button>
+  </div>
+  {% if analytics_files %}
+  <p class="hint">ファイル: {% for f in analytics_files %}<code>{{ f }}</code>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+  {% endif %}
+  <div id="refresh-status" class="log-box mt" style="display:none"></div>
+</div>
+
+{% if analytics_data %}
+<div class="card mt">
+  <div class="filter-row" style="flex-wrap:wrap; gap:0.5rem">
+    <input type="text" id="ana-filter" placeholder="タイトルで絞り込み..." oninput="applyFilters()" class="filter-input">
+    <select id="score-filter" onchange="applyFilters()">
+      <option value="">すべてのスコア</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="C">C</option>
+      <option value="D">D</option>
+      <option value="E">E</option>
+      <option value="">—（未評価）</option>
+    </select>
+    <select id="action-filter" onchange="applyFilters()">
+      <option value="">すべてのaction</option>
+      <option value="横展開候補">横展開候補</option>
+      <option value="改善候補">改善候補</option>
+      <option value="data_wait">data_wait</option>
+    </select>
+    <select id="type-filter" onchange="applyFilters()">
+      <option value="">すべての形式</option>
+      <option value="Shorts">Shorts</option>
+      <option value="Long">Long</option>
+    </select>
+    <select id="status-filter" onchange="applyFilters()">
+      <option value="">すべてのステータス</option>
+      <option value="published">published</option>
+      <option value="scheduled">scheduled</option>
+      <option value="private">private</option>
+    </select>
+    <button class="btn btn-xs btn-secondary" onclick="clearFilters()">絞り込みクリア</button>
+  </div>
+  <p id="filter-count" class="hint mt-sm"></p>
+
+  <div style="overflow-x:auto">
+  <table class="data-table" id="analytics-table">
+    <thead>
+      <tr>
+        <th class="sortable" onclick="sortTable('title')">タイトル<span class="sort-icon" data-col="title"></span></th>
+        <th class="sortable" onclick="sortTable('published_at')">公開日<span class="sort-icon" data-col="published_at"></span></th>
+        <th>形式</th>
+        <th class="sortable" onclick="sortTable('score')">スコア<span class="sort-icon" data-col="score"></span></th>
+        <th class="sortable" onclick="sortTable('views')">視聴数<span class="sort-icon" data-col="views"></span></th>
+        <th class="sortable" onclick="sortTable('average_percentage_viewed')">視聴率%<span class="sort-icon" data-col="average_percentage_viewed"></span></th>
+        <th class="sortable" onclick="sortTable('likes')">いいね<span class="sort-icon" data-col="likes"></span></th>
+        <th class="sortable" onclick="sortTable('comments')">コメント<span class="sort-icon" data-col="comments"></span></th>
+        <th class="sortable" onclick="sortTable('subscribers_net')">登録±<span class="sort-icon" data-col="subscribers_net"></span></th>
+        <th>action</th>
+        <th>ステータス</th>
+      </tr>
+    </thead>
+    <tbody id="analytics-tbody">
+      {% for row in analytics_data %}
+      <tr class="ana-row"
+          data-title="{{ row.get('title','') | lower }}"
+          data-score="{{ row.get('score','') }}"
+          data-action="{{ row.get('action','') }}"
+          data-type="{{ row.get('video_type','') }}"
+          data-status="{{ row.get('publish_status','') | lower }}"
+          data-published_at="{{ row.get('published_at','') }}"
+          data-views="{{ row.get('views','0') or 0 }}"
+          data-average_percentage_viewed="{{ row.get('average_percentage_viewed','0') or 0 }}"
+          data-likes="{{ row.get('likes','0') or 0 }}"
+          data-comments="{{ row.get('comments','0') or 0 }}"
+          data-subscribers_net="{{ row.get('subscribers_net','0') or 0 }}">
+        <td title="{{ row.get('title','') }}">{{ (row.get('title','') or '')[:32] }}</td>
+        <td>{{ (row.get('published_at','') or '')[:10] }}</td>
+        <td>
+          <span class="badge {% if 'Short' in (row.get('video_type','')) %}badge-shorts{% else %}badge-long{% endif %}">
+            {{ row.get('video_type','—') }}
+          </span>
+        </td>
+        <td>
+          {% set score = row.get('score','') %}
+          {% if score %}<span class="score-badge score-letter-{{ score }}">{{ score }}</span>{% else %}—{% endif %}
+        </td>
+        <td>{{ row.get('views','—') }}</td>
+        <td>{{ row.get('average_percentage_viewed','—') }}</td>
+        <td>{{ row.get('likes','—') }}</td>
+        <td>{{ row.get('comments','—') }}</td>
+        <td>{{ row.get('subscribers_net','—') }}</td>
+        <td>
+          {% set action = row.get('action','') %}
+          {% if action %}
+          <span class="badge {% if '横展開' in action %}badge-ok{% elif '改善' in action %}badge-warn{% else %}badge-info{% endif %}">
+            {{ action[:15] }}
+          </span>
+          {% else %}—{% endif %}
+        </td>
+        <td><small>{{ row.get('publish_status','—') }}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% else %}
+<div class="card mt">
+  <p class="empty-msg">Analyticsデータがありません。「Analytics取得・更新」ボタンを押してください。</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<style>
+.sort-icon::after { content: '　'; }
+.sort-icon.asc::after { content: ' ▲'; }
+.sort-icon.desc::after { content: ' ▼'; }
+.sortable { cursor: pointer; user-select: none; }
+.sortable:hover { background: rgba(255,255,255,0.05); }
+.score-letter-A { background:#27ae60; color:#fff; padding:2px 6px; border-radius:4px; }
+.score-letter-B { background:#2980b9; color:#fff; padding:2px 6px; border-radius:4px; }
+.score-letter-C { background:#f39c12; color:#fff; padding:2px 6px; border-radius:4px; }
+.score-letter-D { background:#e67e22; color:#fff; padding:2px 6px; border-radius:4px; }
+.score-letter-E { background:#c0392b; color:#fff; padding:2px 6px; border-radius:4px; }
+</style>
+<script>
+const SCORE_ORDER = {'A':1,'B':2,'C':3,'D':4,'E':5,'':99};
+let _sortCol = 'published_at';
+let _sortDir = -1;  // -1=降順, 1=昇順
+
+async function refreshAnalytics() {
+  const statusBox = document.getElementById('refresh-status');
+  statusBox.style.display = 'block';
+  statusBox.textContent = 'Analytics取得ジョブを送信中...';
+  try {
+    const res = await fetch('/api/analytics/refresh', {method: 'POST'});
+    const data = await res.json();
+    if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || ''); return; }
+    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
+    const interval = setInterval(async () => {
+      try {
+        const r2 = await fetch(`/api/jobs/${data.job_id}`);
+        const job = await r2.json();
+        const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length-1].message : '';
+        statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
+        if (['success','failed','cancelled'].includes(job.status)) {
+          clearInterval(interval);
+          if (job.status === 'success') setTimeout(() => location.reload(), 1000);
+        }
+      } catch {}
+    }, 3000);
+  } catch(e) {
+    statusBox.textContent = '通信エラー: ' + e;
+  }
+}
+
+async function copyTSV() {
+  try {
+    const res = await fetch('/api/analytics/tsv');
+    const data = await res.json();
+    await navigator.clipboard.writeText(data.tsv || '');
+    alert('TSVをクリップボードにコピーしました');
+  } catch(e) {
+    alert('コピー失敗: ' + e);
+  }
+}
+
+function applyFilters() {
+  const q = document.getElementById('ana-filter').value.toLowerCase();
+  const score = document.getElementById('score-filter').value;
+  const action = document.getElementById('action-filter').value;
+  const vtype = document.getElementById('type-filter').value;
+  const status = document.getElementById('status-filter').value;
+
+  let shown = 0;
+  document.querySelectorAll('.ana-row').forEach(row => {
+    const ok =
+      (!q      || row.dataset.title.includes(q)) &&
+      (!score  || row.dataset.score === score) &&
+      (!action || row.dataset.action.includes(action)) &&
+      (!vtype  || row.dataset.type === vtype) &&
+      (!status || row.dataset.status === status);
+    row.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+  const total = document.querySelectorAll('.ana-row').length;
+  document.getElementById('filter-count').textContent =
+    shown === total ? `${total} 件` : `${shown} / ${total} 件 表示中`;
+}
+
+function clearFilters() {
+  document.getElementById('ana-filter').value = '';
+  document.getElementById('score-filter').value = '';
+  document.getElementById('action-filter').value = '';
+  document.getElementById('type-filter').value = '';
+  document.getElementById('status-filter').value = '';
+  applyFilters();
+}
+
+function sortTable(col) {
+  if (_sortCol === col) {
+    _sortDir = -_sortDir;
+  } else {
+    _sortCol = col;
+    _sortDir = col === 'published_at' ? -1 : -1;
+  }
+
+  // アイコン更新
+  document.querySelectorAll('.sort-icon').forEach(el => {
+    el.className = 'sort-icon' + (el.dataset.col === col ? (_sortDir === -1 ? ' desc' : ' asc') : '');
+  });
+
+  const tbody = document.getElementById('analytics-tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.sort((a, b) => {
+    const va = (a.dataset[col] || '').trim();
+    const vb = (b.dataset[col] || '').trim();
+
+    if (col === 'score') {
+      return _sortDir * ((SCORE_ORDER[va] || 99) - (SCORE_ORDER[vb] || 99));
+    }
+    const na = parseFloat(va), nb = parseFloat(vb);
+    if (!isNaN(na) && !isNaN(nb)) return _sortDir * (na - nb);
+    return _sortDir * va.localeCompare(vb, 'ja');
+  });
+  rows.forEach(r => tbody.appendChild(r));
+
+  // フィルタ再適用（ソート後も絞り込み状態を維持）
+  applyFilters();
+}
+
+// 初期表示件数
+applyFilters();
+// 初期ソート（公開日降順）
+sortTable('published_at');
+</script>
+{% endblock %}

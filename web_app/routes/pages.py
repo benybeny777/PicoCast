@@ -1,0 +1,127 @@
+"""
+Jinja2テンプレートを使ったページルート。
+将来のReact化を考慮してAPI層とページ層を分離する。
+Starlette 1.1.0以降: TemplateResponse(request, name, context) の順で呼ぶ。
+"""
+from fastapi import APIRouter, Request, HTTPException
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+import os
+
+from web_app.services import (
+    status_service,
+    history_service,
+    analytics_service,
+    schedule_service,
+    upload_service,
+    fixed_comment_service,
+    image_service,
+)
+from web_app.job_manager import get_job_manager
+
+_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
+templates = Jinja2Templates(directory=_TEMPLATES_DIR)
+
+router = APIRouter(tags=["pages"])
+
+
+def _render(request: Request, name: str, ctx: dict):
+    """Starlette 1.x の TemplateResponse API を吸収するラッパー。"""
+    ctx["request"] = request
+    return templates.TemplateResponse(request, name, ctx)
+
+
+@router.get("/", response_class=HTMLResponse)
+def page_dashboard(request: Request):
+    summary = status_service.get_dashboard_summary()
+    histories = history_service.list_histories()[:10]
+    jobs = get_job_manager().list_jobs()[:5]
+    return _render(request, "dashboard.html", {
+        "summary": summary,
+        "histories": histories,
+        "recent_jobs": jobs,
+    })
+
+
+@router.get("/generate", response_class=HTMLResponse)
+def page_generate(request: Request):
+    jobs = get_job_manager().list_jobs()
+    gen_jobs = [j for j in jobs if j["type"] == "generate"][:10]
+    return _render(request, "generate.html", {"recent_jobs": gen_jobs})
+
+
+@router.get("/check", response_class=HTMLResponse)
+def page_check(request: Request):
+    jobs = get_job_manager().list_jobs()
+    check_jobs = [j for j in jobs if j["type"] == "check"][:10]
+    return _render(request, "check.html", {"recent_jobs": check_jobs})
+
+
+@router.get("/history", response_class=HTMLResponse)
+def page_history(request: Request):
+    histories = history_service.list_histories()
+    return _render(request, "history.html", {"histories": histories})
+
+
+@router.get("/history/{history_name}", response_class=HTMLResponse)
+def page_history_detail(request: Request, history_name: str):
+    detail = history_service.get_history_detail(history_name)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="履歴が見つかりません")
+    return _render(request, "history_detail.html", {"detail": detail})
+
+
+@router.get("/images", response_class=HTMLResponse)
+def page_images(request: Request, history: str = ""):
+    histories = history_service.list_histories()
+    selected = None
+    if history:
+        try:
+            selected = image_service.list_images(history)
+        except Exception:
+            selected = None
+    return _render(request, "images.html", {
+        "histories": histories,
+        "selected_history": history,
+        "image_data": selected,
+    })
+
+
+@router.get("/analytics", response_class=HTMLResponse)
+def page_analytics(request: Request):
+    data = analytics_service.load_latest_analytics()
+    files = analytics_service.list_analytics_files()
+    return _render(request, "analytics.html", {
+        "analytics_data": data,
+        "analytics_files": files,
+    })
+
+
+@router.get("/schedule", response_class=HTMLResponse)
+def page_schedule(request: Request):
+    scheduled = schedule_service.list_schedule(include_published=False)
+    return _render(request, "schedule.html", {"schedule_items": scheduled})
+
+
+@router.get("/upload", response_class=HTMLResponse)
+def page_upload(request: Request):
+    candidates = upload_service.list_upload_candidates()
+    return _render(request, "upload.html", {"candidates": candidates})
+
+
+@router.get("/fixed-comment", response_class=HTMLResponse)
+def page_fixed_comment(request: Request):
+    candidates = fixed_comment_service.list_fixed_comment_candidates()
+    return _render(request, "fixed_comment.html", {"candidates": candidates})
+
+
+@router.get("/settings", response_class=HTMLResponse)
+def page_settings(request: Request):
+    status = status_service.get_settings_status()
+    return _render(request, "settings.html", {"status": status})
+
+
+@router.get("/logs", response_class=HTMLResponse)
+def page_logs(request: Request):
+    jobs = get_job_manager().list_jobs()
+    return _render(request, "logs.html", {"jobs": jobs})

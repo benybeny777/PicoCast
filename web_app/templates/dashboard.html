@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}ダッシュボード{% endblock %}
+{% block content %}
+<h1>ダッシュボード</h1>
+
+<div class="card-grid">
+  <!-- サービス状態 -->
+  <div class="card">
+    <h2>サービス状態</h2>
+    <table class="status-table">
+      <tr>
+        <td>VOICEVOX</td>
+        <td>
+          {% if summary.voicevox.ok %}
+            <span class="badge badge-ok">接続OK{% if summary.voicevox.version %} v{{ summary.voicevox.version }}{% endif %}</span>
+          {% else %}
+            <span class="badge badge-ng">未接続</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>ffmpeg</td>
+        <td>
+          {% if summary.ffmpeg.ok %}
+            <span class="badge badge-ok">利用可</span>
+          {% else %}
+            <span class="badge badge-ng">見つからない</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>Google APIキー</td>
+        <td>{% if summary.google_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>OpenAI APIキー</td>
+        <td>{% if summary.openai_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>client_secrets.json</td>
+        <td>{% if summary.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>token.json</td>
+        <td>{% if summary.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- 統計 -->
+  <div class="card">
+    <h2>統計</h2>
+    <div class="stat-grid">
+      <div class="stat-item">
+        <span class="stat-num">{{ summary.history_count }}</span>
+        <span class="stat-label">生成済み</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">{{ summary.mp4_count }}</span>
+        <span class="stat-label">MP4あり</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-num">{{ summary.scheduled_count }}</span>
+        <span class="stat-label">予約中</span>
+      </div>
+    </div>
+    <p class="meta-info">出力フォルダ: <code>{{ summary.output_dir }}</code></p>
+    {% if summary.latest_analytics %}
+    <p class="meta-info">最新Analytics: <code>{{ summary.latest_analytics }}</code></p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- クイックアクション -->
+<div class="card mt">
+  <h2>クイックアクション</h2>
+  <div class="action-row">
+    <a href="/generate" class="btn btn-primary">台本から生成</a>
+    <a href="/check" class="btn btn-secondary">LLM/尺チェック</a>
+    <a href="/history" class="btn btn-secondary">履歴一覧</a>
+    <a href="/upload" class="btn btn-secondary">アップロード</a>
+    <a href="/analytics" class="btn btn-secondary">Analytics</a>
+  </div>
+</div>
+
+<!-- 直近履歴 -->
+{% if histories %}
+<div class="card mt">
+  <h2>直近の生成履歴</h2>
+  <table class="data-table">
+    <thead>
+      <tr><th>テーマ名</th><th>形式</th><th>MP4</th><th>スコア</th><th>アップロード</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for h in histories %}
+      <tr>
+        <td>{{ h.title[:40] }}</td>
+        <td><span class="badge {% if 'Short' in h.video_format %}badge-shorts{% else %}badge-long{% endif %}">{{ h.video_format }}</span></td>
+        <td>{% if h.has_mp4 %}<span class="badge badge-ok">あり</span>{% else %}—{% endif %}</td>
+        <td>{% if h.opening_score %}<span class="score-badge" data-score="{{ h.opening_score }}">{{ h.opening_score }}</span>{% else %}—{% endif %}</td>
+        <td>{{ h.upload_status or "—" }}</td>
+        <td><a href="/history/{{ h.name }}" class="btn btn-xs">詳細</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <a href="/history" class="btn btn-secondary mt-sm">すべての履歴を見る</a>
+</div>
+{% endif %}
+
+<!-- 直近ジョブ -->
+{% if recent_jobs %}
+<div class="card mt">
+  <h2>直近のジョブ</h2>
+  <div id="job-list">
+    {% for job in recent_jobs %}
+    <div class="job-item status-{{ job.status }}">
+      <span class="job-type">{{ job.type }}</span>
+      <span class="job-status">{{ job.status }}</span>
+      <span class="job-progress">{{ job.progress_text }}</span>
+      <a href="/logs" class="btn btn-xs">詳細</a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

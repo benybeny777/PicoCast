@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}固定コメント{% endblock %}
+{% block content %}
+<h1>固定コメント</h1>
+<p class="hint">アップロード済み動画への固定コメント投稿。二重投稿防止チェック済み。</p>
+
+<div class="card">
+  <label><input type="checkbox" id="show-posted" onchange="togglePosted()"> 投稿済みも表示</label>
+</div>
+
+<div id="post-status" class="log-box mt" style="display:none"></div>
+
+{% if candidates %}
+<div class="card mt">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>タイトル</th>
+        <th>video_id</th>
+        <th>公開状態</th>
+        <th>固定コメント（先頭30文字）</th>
+        <th>投稿状態</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in candidates %}
+      <tr class="comment-row {% if c.already_posted %}posted-row{% endif %}" data-posted="{{ c.already_posted | lower }}">
+        <td>{{ c.title[:30] }}</td>
+        <td>{{ c.video_id }}</td>
+        <td>{{ c.publish_status or "—" }}</td>
+        <td>{{ (c.fixed_comment or "")[:30] }}…</td>
+        <td>
+          {% if c.already_posted %}
+            <span class="badge badge-ok">投稿済み ({{ c.comment_thread_id[:12] }}…)</span>
+          {% else %}
+            <span class="badge badge-warn">未投稿</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if not c.already_posted %}
+          <button class="btn btn-primary btn-sm" onclick="confirmPost('{{ c.name }}', '{{ c.title[:20] | replace("'","") }}')">投稿</button>
+          {% else %}
+          <a href="https://youtu.be/{{ c.video_id }}" target="_blank" class="btn btn-xs">YouTube</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card mt">
+  <p class="empty-msg">固定コメント対象がありません。</p>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function togglePosted() {
+  const show = document.getElementById('show-posted').checked;
+  document.querySelectorAll('.posted-row').forEach(r => {
+    r.style.display = show ? '' : 'none';
+  });
+}
+// 初期表示: 投稿済みは非表示
+document.querySelectorAll('.posted-row').forEach(r => r.style.display = 'none');
+
+async function confirmPost(historyName, title) {
+  if (!confirm(`以下の動画に固定コメントを投稿しますか？\n\n${title}\n\n投稿後は取り消せません。`)) return;
+
+  const statusBox = document.getElementById('post-status');
+  statusBox.style.display = 'block';
+  statusBox.textContent = '投稿ジョブを送信中...';
+
+  try {
+    const res = await fetch('/api/fixed-comment', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({history_name: historyName, confirmed: true}),
+    });
+    const data = await res.json();
+    if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
+    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
+
+    const interval = setInterval(async () => {
+      try {
+        const r2 = await fetch(`/api/jobs/${data.job_id}`);
+        const job = await r2.json();
+        statusBox.textContent = `[${job.status}] ${job.progress_text}`;
+        if (['success','failed','cancelled'].includes(job.status)) {
+          clearInterval(interval);
+          if (job.status === 'success') setTimeout(() => location.reload(), 1500);
+        }
+      } catch {}
+    }, 2000);
+  } catch(e) {
+    statusBox.textContent = '通信エラー: ' + e;
+  }
+}
+</script>
+{% endblock %}

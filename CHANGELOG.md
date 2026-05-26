@@ -30,11 +30,14 @@
 - `web_app/templates/base.html`: 「画像」タブを削除（履歴詳細から遷移）
 - `web_app/services/prompt_service.py`: プロンプト生成ロジックをWeb UI用に実装
 - `web_app/services/image_service.py`: 背景プロンプト読み込み・保存・再生成時の上書き対応
+- `web_app/services/history_service.py` / `upload_service.py` / `fixed_comment_service.py`: 履歴フォルダ参照を `safe_output_path()` 経由に統一し、Web UIの output/ 配下制限を徹底
+- `web_app/services/config_service.py` / `secrets_service.py`: `.env` 書き込み値の改行混入を拒否し、許可外キーや秘密値のログ出力を防止
 - `web_app/routes/api_prompt.py`: `/api/prompt/script`、`/api/prompt/title` エンドポイント追加
 - `web_app/routes/api_images.py`: `POST /api/images/{name}/save-prompts` エンドポイント追加
 - `web_app/routes/api_upload.py`: `POST /api/upload/batch` エンドポイント追加
 - `web_app/services/secrets_service.py`: APIキー書き込み専用サービス（値はレスポンス/ログに含めない）
 - `web_app/static/app.css`: lightbox、image-card object-fit、背景プロンプト行レイアウト追加
+- `README.md` / `SPEC.md`: Web UIの既定ポート、API一覧、画像再生成の現状仕様、セキュリティ方針を現状へ更新
 
 ---
 
@@ -46,8 +49,8 @@
 - `web_app/job_manager.py`: バックグラウンドジョブ管理。生成・チェック・アップロード・Analytics等をメモリ内でジョブ化。status/logs/cancel対応。将来DB移行しやすい構造
 - `web_app/security.py`: output/配下のみアクセス可、パストラバーサル拒否、秘密ファイル読み取り禁止
 - `web_app/schemas.py`: Pydantic リクエスト/レスポンススキーマ
-- `web_app/services/`: 9サービス (status, history, generation, script_check, image, analytics, schedule, upload, fixed_comment)
-- `web_app/routes/`: 12ルート (pages + 11 API)
+- `web_app/services/`: 13サービス (status, config, secrets, history, generation, script_check, image, prompt, render, analytics, schedule, upload, fixed_comment)
+- `web_app/routes/`: 13ルート (pages + 12 API)
 - `web_app/templates/`: 12画面 (dashboard, generate, check, history, history_detail, images, analytics, schedule, upload, fixed_comment, settings, logs)
 - `web_app/static/app.css, app.js`: ダークテーマUI、スコアバッジ色付け、ジョブポーリングユーティリティ
 - `tests/test_web.py`: 23テスト追加。/health、ジョブ状態遷移、パストラバーサル、管理フォルダ除外、設定診断秘密値非返却、外部API不要起動テスト等

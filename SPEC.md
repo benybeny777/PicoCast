@@ -42,10 +42,14 @@ yukkurijidou/
 │   ├── security.py         # パストラバーサル対策・output/配下制限
 │   ├── services/           # ビジネスロジック層
 │   │   ├── status_service.py       # 設定診断・ダッシュボード状態
+│   │   ├── config_service.py       # Web UIから編集できる非秘密設定
+│   │   ├── secrets_service.py      # APIキーの安全な .env 書き込み
 │   │   ├── history_service.py      # 生成履歴一覧・詳細
 │   │   ├── generation_service.py   # 動画生成ジョブ
 │   │   ├── script_check_service.py # LLM/尺チェックジョブ
 │   │   ├── image_service.py        # 画像確認・再生成
+│   │   ├── prompt_service.py       # 台本/タイトルプロンプト生成
+│   │   ├── render_service.py       # 履歴MP4再レンダー
 │   │   ├── analytics_service.py    # Analytics取得・表示
 │   │   ├── schedule_service.py     # スケジュール管理
 │   │   ├── upload_service.py       # YouTubeアップロード
@@ -62,7 +66,8 @@ yukkurijidou/
 │   │   ├── api_schedule.py  # GET/POST /api/schedule
 │   │   ├── api_upload.py    # GET/POST /api/upload
 │   │   ├── api_fixed_comment.py # GET/POST /api/fixed-comment
-│   │   └── api_settings.py # GET /api/settings/status
+│   │   ├── api_prompt.py   # GET /api/prompt
+│   │   └── api_settings.py # GET/POST /api/settings
 │   ├── templates/          # Jinja2 HTMLテンプレート (12画面)
 │   └── static/             # CSS/JS (app.css, app.js)
 ├── core/
@@ -291,10 +296,10 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 ### 起動
 
 ```bash
-python web_app/app.py [--open-browser] [--port 8000]
+python web_app/app.py [--open-browser] [--port 58080]
 ```
 
-アクセス: `http://127.0.0.1:8000`
+アクセス: `http://127.0.0.1:58080`
 
 ### FastAPI 構成
 
@@ -356,6 +361,7 @@ POST /api/check
 
 GET  /api/images/{history_name}
 GET  /api/images/{history_name}/file/{file_path}
+POST /api/images/{history_name}/save-prompts
 POST /api/images/{history_name}/regenerate
 
 GET  /api/analytics
@@ -364,17 +370,24 @@ POST /api/analytics/refresh
 
 GET  /api/schedule
 POST /api/schedule/sync
-POST /api/schedule/rebalance  # dry-run
-POST /api/schedule/update     # [disabled: YouTube API書き込み未実装]
-POST /api/schedule/delete     # [disabled: YouTube API書き込み未実装]
+POST /api/schedule/rebalance  # dry-run（YouTube APIへの書き込みなし）
+POST /api/schedule/update     # confirmed=true 必須
+POST /api/schedule/delete     # Web UIでは無効化、YouTube Studioで手動操作
 
 GET  /api/upload/candidates
 POST /api/upload
+POST /api/upload/batch
 
 GET  /api/fixed-comment/candidates
 POST /api/fixed-comment
 
+GET  /api/prompt/script
+GET  /api/prompt/title
 GET  /api/settings/status
+GET  /api/settings/config
+POST /api/settings/config
+POST /api/settings/secrets
+GET  /api/settings/ollama-models
 ```
 
 ### セキュリティ方針
@@ -383,6 +396,7 @@ GET  /api/settings/status
 - output/ 配下のみファイルアクセス可（`security.py` で検証）
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の内容は返さない
 - APIキー設定は有無（bool）のみ返す
+- `.env` 書き込みAPIは許可キーだけを受け付け、値に改行を含む場合は拒否する
 - パストラバーサル拒否
 - 破壊的操作（アップロード・固定コメント投稿）は `confirmed=true` が必須
 - 例外時に秘密値をログへ出さない

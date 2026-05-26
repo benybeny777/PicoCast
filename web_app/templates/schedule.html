@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}スケジュール管理{% endblock %}
+{% block content %}
+<h1>スケジュール管理</h1>
+
+<div class="card">
+  <div class="action-row">
+    <button class="btn btn-primary" onclick="syncSchedule()">YouTube同期</button>
+    <button class="btn btn-secondary" onclick="rebalanceCalc()">スロット詰め直し計算</button>
+  </div>
+  <div class="filter-row mt-sm">
+    <select id="type-filter" onchange="filterSchedule()">
+      <option value="all">すべて</option>
+      <option value="shorts">Shorts</option>
+      <option value="long">Long</option>
+    </select>
+    <label><input type="checkbox" id="show-published" onchange="filterSchedule()"> 公開済みも表示</label>
+  </div>
+  <div id="sync-status" class="log-box mt" style="display:none"></div>
+</div>
+
+{% if schedule_items %}
+<div class="card mt">
+  <table class="data-table" id="schedule-table">
+    <thead>
+      <tr>
+        <th>タイトル</th>
+        <th>形式</th>
+        <th>公開予定</th>
+        <th>状態</th>
+        <th>video_id</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in schedule_items %}
+      <tr class="sched-row" data-type="{% if 'short' in (item.video_type or '') | lower %}shorts{% else %}long{% endif %}" data-published="{{ 'true' if item.is_published else 'false' }}">
+        <td>{{ item.title[:35] }}</td>
+        <td>
+          <span class="badge {% if 'Short' in (item.video_type or '') %}badge-shorts{% else %}badge-long{% endif %}">
+            {{ item.video_type or "—" }}
+          </span>
+        </td>
+        <td>{{ (item.publish_at or "—")[:16] }}</td>
+        <td>
+          {% if item.is_published %}
+            <span class="badge badge-ok">公開済み</span>
+          {% else %}
+            <span class="badge badge-warn">予約中</span>
+          {% endif %}
+        </td>
+        <td><small>{{ item.video_id or "—" }}</small></td>
+        <td>
+          {% if not item.is_published and item.video_id %}
+          <button class="btn btn-xs btn-secondary" onclick="openUpdateDialog('{{ item.video_id }}', '{{ item.publish_at[:16] if item.publish_at else '' }}', '{{ item.title[:30] | replace("'","") }}')">予定変更</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card mt">
+  <p class="empty-msg">予約中の動画がありません。</p>
+</div>
+{% endif %}
+
+<!-- 公開予定変更ダイアログ -->
+<div id="update-dialog" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
+  <div class="card" style="width:420px; margin:0 auto;">
+    <h3>公開予定変更</h3>
+    <p id="update-dialog-title" style="color:var(--text-muted); margin-bottom:0.5rem"></p>
+    <div class="form-group">
+      <label for="new-publish-at">新しい公開予定日時 (JST)</label>
+      <input type="datetime-local" id="new-publish-at" class="form-input" style="width:100%">
+    </div>
+    <p class="hint">※ YouTube APIを使って公開予定を変更します。変更後は元に戻せません。</p>
+    <div class="action-row">
+      <button class="btn btn-primary" onclick="confirmUpdateSchedule()">変更する</button>
+      <button class="btn btn-secondary" onclick="closeUpdateDialog()">キャンセル</button>
+    </div>
+    <div id="update-status" class="log-box mt" style="display:none"></div>
+  </div>
+</div>
+
+<div class="card mt">
+  <p class="hint">
+    <strong>注意:</strong> 削除は <a href="https://studio.youtube.com/" target="_blank">YouTube Studio</a> から手動で操作してください。
+    スロット詰め直し計算は変更案の確認のみで、YouTube への書き込みは行いません。
+  </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _updateVideoId = '';
+
+async function syncSchedule() {
+  if (!confirm('YouTube APIからスケジュールを同期しますか？')) return;
+  const statusBox = document.getElementById('sync-status');
+  statusBox.style.display = 'block';
+  statusBox.textContent = '同期中...';
+  try {
+    const res = await fetch('/api/schedule/sync', {method: 'POST'});
+    const data = await res.json();
+    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
+    pollJob(data.job_id, statusBox, true);
+  } catch(e) {
+    statusBox.textContent = 'エラー: ' + e;
+  }
+}
+
+async function rebalanceCalc() {
+  if (!confirm('スロット詰め直し変更案を計算しますか？（YouTube への書き込みは行いません）')) return;
+  const statusBox = document.getElementById('sync-status');
+  statusBox.style.display = 'block';
+  statusBox.textContent = '計算中...';
+  try {
+    const res = await fetch('/api/schedule/rebalance', {method: 'POST'});
+    const data = await res.json();
+    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
+    pollJob(data.job_id, statusBox, false);
+  } catch(e) {
+    statusBox.textContent = 'エラー: ' + e;
+  }
+}
+
+function pollJob(jobId, statusBox, reloadOnSuccess) {
+  const interval = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/jobs/${jobId}`);
+      const job = await r.json();
+      const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length - 1].message : '';
+      statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
+      if (['success', 'failed', 'cancelled'].includes(job.status)) {
+        clearInterval(interval);
+        if (job.status === 'success' && reloadOnSuccess) {
+          setTimeout(() => location.reload(), 1200);
+        }
+      }
+    } catch {}
+  }, 2000);
+}
+
+function openUpdateDialog(videoId, currentPublishAt, title) {
+  _updateVideoId = videoId;
+  document.getElementById('update-dialog-title').textContent = title;
+  document.getElementById('new-publish-at').value = currentPublishAt;
+  document.getElementById('update-status').style.display = 'none';
+  document.getElementById('update-dialog').style.display = 'flex';
+}
+
+function closeUpdateDialog() {
+  document.getElementById('update-dialog').style.display = 'none';
+}
+
+async function confirmUpdateSchedule() {
+  const publishAt = document.getElementById('new-publish-at').value;
+  if (!publishAt) { alert('公開予定日時を入力してください'); return; }
+  if (!confirm(`公開予定を ${publishAt} に変更してよろしいですか？\nYouTube APIを使って変更します。`)) return;
+
+  const statusBox = document.getElementById('update-status');
+  statusBox.style.display = 'block';
+  statusBox.textContent = '変更中...';
+
+  try {
+    const res = await fetch('/api/schedule/update', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({video_id: _updateVideoId, publish_at: publishAt, confirmed: true}),
+    });
+    const data = await res.json();
+    if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
+    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
+    pollJob(data.job_id, statusBox, true);
+  } catch(e) {
+    statusBox.textContent = '通信エラー: ' + e;
+  }
+}
+
+function filterSchedule() {
+  const vtype = document.getElementById('type-filter').value;
+  const showPub = document.getElementById('show-published').checked;
+  document.querySelectorAll('.sched-row').forEach(row => {
+    const rt = row.dataset.type;          // "shorts" or "long"
+    const isPub = row.dataset.published === 'true';
+    const matchType = vtype === 'all' || rt === vtype;
+    const matchPub = showPub || !isPub;
+    row.style.display = (matchType && matchPub) ? '' : 'none';
+  });
+}
+</script>
+{% endblock %}

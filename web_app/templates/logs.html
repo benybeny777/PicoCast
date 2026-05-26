@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}ログ{% endblock %}
+{% block content %}
+<h1>ジョブログ</h1>
+
+<div class="card">
+  <div class="filter-row">
+    <select id="status-filter" onchange="filterJobs()">
+      <option value="">すべてのステータス</option>
+      <option value="running">running</option>
+      <option value="success">success</option>
+      <option value="failed">failed</option>
+      <option value="cancelled">cancelled</option>
+      <option value="queued">queued</option>
+    </select>
+    <select id="type-filter" onchange="filterJobs()">
+      <option value="">すべてのタイプ</option>
+      <option value="generate">generate</option>
+      <option value="check">check</option>
+      <option value="upload">upload</option>
+      <option value="analytics_refresh">analytics</option>
+      <option value="schedule_sync">schedule_sync</option>
+      <option value="fixed_comment">fixed_comment</option>
+      <option value="image_regenerate">image_regenerate</option>
+    </select>
+    <button class="btn btn-secondary" onclick="location.reload()">更新</button>
+  </div>
+</div>
+
+{% if jobs %}
+<div id="job-container">
+{% for job in jobs %}
+<div class="card mt job-card status-{{ job.status }}" data-status="{{ job.status }}" data-type="{{ job.type }}">
+  <div class="job-header">
+    <span class="job-type-badge">{{ job.type }}</span>
+    <span class="badge {% if job.status == 'success' %}badge-ok{% elif job.status == 'failed' %}badge-ng{% elif job.status == 'running' %}badge-running{% else %}badge-warn{% endif %}">
+      {{ job.status }}
+    </span>
+    <span class="job-id-small">{{ job.job_id[:8] }}…</span>
+    <span class="job-time">{{ (job.started_at or "")[:19] }}</span>
+    {% if job.status == 'running' %}
+    <button class="btn btn-xs btn-danger" onclick="cancelJob('{{ job.job_id }}')">中止</button>
+    {% endif %}
+  </div>
+  <div class="job-progress">{{ job.progress_text }}</div>
+  {% if job.error %}
+  <div class="error-text">エラー: {{ job.error }}</div>
+  {% endif %}
+  {% if job.logs %}
+  <details>
+    <summary>ログ詳細 ({{ job.logs | length }} 件)</summary>
+    <div class="log-box">
+      {% for entry in job.logs %}
+      <div class="log-line log-{{ entry.tag }}">{{ entry.time[11:19] }} [{{ entry.tag }}] {{ entry.message }}</div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+{% else %}
+<div class="card mt">
+  <p class="empty-msg">ジョブ履歴がありません。</p>
+</div>
+{% endif %}
+
+<!-- 自動更新: 実行中ジョブがある場合 -->
+<script>
+const hasRunning = {{ 'true' if jobs and (jobs | selectattr('status', 'equalto', 'running') | list) else 'false' }};
+if (hasRunning) {
+  setTimeout(() => location.reload(), 5000);
+}
+
+function filterJobs() {
+  const status = document.getElementById('status-filter').value;
+  const type = document.getElementById('type-filter').value;
+  document.querySelectorAll('.job-card').forEach(card => {
+    const matchS = !status || card.dataset.status === status;
+    const matchT = !type || card.dataset.type === type;
+    card.style.display = (matchS && matchT) ? '' : 'none';
+  });
+}
+
+async function cancelJob(jobId) {
+  if (!confirm(`ジョブ ${jobId.slice(0,8)}… を中止しますか？`)) return;
+  try {
+    await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'});
+    location.reload();
+  } catch(e) {
+    alert('エラー: ' + e);
+  }
+}
+</script>
+{% endblock %}

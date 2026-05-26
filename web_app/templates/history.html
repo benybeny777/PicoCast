@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}生成履歴{% endblock %}
+{% block content %}
+<h1>生成履歴</h1>
+
+<div class="card">
+  <div class="filter-row">
+    <input type="text" id="filter-input" placeholder="テーマ名で絞り込み..." oninput="filterHistory()" class="filter-input">
+    <label><input type="checkbox" id="show-mgmt" onchange="filterHistory()"> 管理フォルダも表示</label>
+  </div>
+</div>
+
+<div class="card mt">
+  <table class="data-table" id="history-table">
+    <thead>
+      <tr>
+        <th>テーマ名</th>
+        <th>形式</th>
+        <th>生成区分</th>
+        <th>元動画</th>
+        <th>目的</th>
+        <th>エンジン</th>
+        <th>MP4</th>
+        <th>サムネ</th>
+        <th>冒頭スコア</th>
+        <th>最終スコア</th>
+        <th>アップ状態</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in histories %}
+      <tr class="history-row {% if h.is_management %}mgmt-row{% endif %}" data-name="{{ h.name }}" data-mgmt="{{ h.is_management | lower }}">
+        <td>
+          <a href="/history/{{ h.name }}">{{ h.title[:35] }}{% if h.title|length > 35 %}…{% endif %}</a>
+        </td>
+        <td>
+          {% if h.video_format %}
+          <span class="badge {% if 'Short' in h.video_format %}badge-shorts{% else %}badge-long{% endif %}">{{ h.video_format }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ h.generation_kind or "—" }}</td>
+        <td>{{ (h.source_video_title or "")[:20] or "—" }}</td>
+        <td>{{ (h.generation_purpose or "")[:15] or "—" }}</td>
+        <td>{{ h.render_engine or "—" }}</td>
+        <td>{% if h.has_mp4 %}<span class="badge badge-ok">あり</span>{% else %}—{% endif %}</td>
+        <td>{% if h.has_thumbnail %}<span class="badge badge-ok">あり</span>{% else %}—{% endif %}</td>
+        <td>
+          {% if h.opening_score %}
+          <span class="score-badge" data-score="{{ h.opening_score }}">{{ h.opening_score }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if h.final_score %}
+          <span class="score-badge" data-score="{{ h.final_score }}">{{ h.final_score }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ h.upload_status or "—" }}</td>
+        <td><a href="/history/{{ h.name }}" class="btn btn-xs">詳細</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if not histories %}
+  <p class="empty-msg">履歴がありません。生成を開始してください。</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// スコアバッジの色付け
+document.querySelectorAll('.score-badge').forEach(el => {
+  const s = parseInt(el.dataset.score);
+  if (s >= 80) el.classList.add('badge-ok');
+  else if (s >= 70) el.classList.add('badge-warn');
+  else el.classList.add('badge-ng');
+});
+
+function filterHistory() {
+  const q = document.getElementById('filter-input').value.toLowerCase();
+  const showMgmt = document.getElementById('show-mgmt').checked;
+  document.querySelectorAll('.history-row').forEach(row => {
+    const name = (row.dataset.name || '').toLowerCase();
+    const isMgmt = row.dataset.mgmt === 'true';
+    const matchQ = !q || name.includes(q);
+    const matchMgmt = showMgmt || !isMgmt;
+    row.style.display = (matchQ && matchMgmt) ? '' : 'none';
+  });
+}
+filterHistory(); // 初期表示（管理フォルダを非表示）
+</script>
+{% endblock %}
