@@ -134,7 +134,7 @@ class ScriptParser:
                     is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, meeting_candidates_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
                     is_ignore = any(p.match(line) for p in ignore_patterns)
-                    if not is_keyword and not is_dialogue and (not is_ignore or last_meta["type"] in ("description", "meeting_candidates")):
+                    if not is_keyword and (not is_dialogue or last_meta["type"] == "meeting_candidates") and (not is_ignore or last_meta["type"] in ("description", "meeting_candidates")):
                         if last_meta["type"] in ("description", "meeting_candidates"):
                             last_meta["text"] = (last_meta["text"] + "\n" + line).strip()
                             continue
