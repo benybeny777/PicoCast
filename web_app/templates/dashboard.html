@@ -4,39 +4,38 @@
 <h1>ダッシュボード</h1>
 
 <div class="card-grid">
-  <!-- 連携アプリ状態 -->
+  <!-- 外部サービス接続状態 -->
   <div class="card">
-    <h2>連携アプリ</h2>
+    <h2>外部サービス接続</h2>
     <table class="status-table">
       <tr>
-        <td>Google AI</td>
-        <td>{% if summary.google_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
-      </tr>
-      <tr>
-        <td>OpenAI</td>
-        <td>{% if summary.openai_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
-      </tr>
-      <tr>
-        <td>YouTubeアップロード</td>
+        <td>VOICEVOX</td>
         <td>
-          {% if summary.client_secrets_json and summary.token_json %}
-            <span class="badge badge-ok">連携済み</span>
-          {% elif summary.client_secrets_json %}
-            <span class="badge badge-warn">認証待ち</span>
+          {% if summary.voicevox.ok %}
+            <span class="badge badge-ok">接続OK{% if summary.voicevox.version %} v{{ summary.voicevox.version }}{% endif %}</span>
           {% else %}
-            <span class="badge badge-ng">未設定</span>
+            <span class="badge badge-ng">未接続</span>
           {% endif %}
         </td>
       </tr>
       <tr>
-        <td>YouTube Analytics</td>
+        <td>Ollama</td>
         <td>
-          {% if summary.client_secrets_json and summary.token_analytics_json %}
-            <span class="badge badge-ok">連携済み</span>
-          {% elif summary.client_secrets_json %}
-            <span class="badge badge-warn">認証待ち</span>
+          {% if summary.ollama.ok %}
+            <span class="badge badge-ok">接続OK ({{ summary.ollama.model_count }}モデル)</span>
           {% else %}
-            <span class="badge badge-ng">未設定</span>
+            <span class="badge badge-ng">未接続</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>ffmpeg</td>
+        <td>
+          {% if summary.ffmpeg.ok %}
+            <span class="badge badge-ok">利用可{% if summary.ffmpeg.version %} v{{ summary.ffmpeg.version }}{% endif %}</span>
+            <br><small style="color:var(--text-muted)">動作: {{ summary.ffmpeg.gpu }}</small>
+          {% else %}
+            <span class="badge badge-ng">見つからない</span>
           {% endif %}
         </td>
       </tr>

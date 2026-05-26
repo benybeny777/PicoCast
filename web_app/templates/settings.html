@@ -4,10 +4,42 @@
 <h1>設定 / サービス確認</h1>
 
 <div class="card-grid">
-  <!-- サービス状態 -->
+  <!-- 連携サービス状態 -->
   <div class="card">
-    <h2>サービス接続</h2>
+    <h2>連携アプリ</h2>
     <table class="status-table">
+      <tr>
+        <td>Google AI</td>
+        <td>{% if status.google_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>OpenAI</td>
+        <td>{% if status.openai_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
+      </tr>
+      <tr>
+        <td>YouTubeアップロード</td>
+        <td>
+          {% if status.client_secrets_json and status.token_json %}
+          <span class="badge badge-ok">連携済み</span>
+          {% elif status.client_secrets_json %}
+          <span class="badge badge-warn">認証待ち</span>
+          {% else %}
+          <span class="badge badge-ng">未設定</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr>
+        <td>YouTube Analytics</td>
+        <td>
+          {% if status.client_secrets_json and status.token_analytics_json %}
+          <span class="badge badge-ok">連携済み</span>
+          {% elif status.client_secrets_json %}
+          <span class="badge badge-warn">認証待ち</span>
+          {% else %}
+          <span class="badge badge-ng">未設定</span>
+          {% endif %}
+        </td>
+      </tr>
       <tr>
         <td>VOICEVOX</td>
         <td>

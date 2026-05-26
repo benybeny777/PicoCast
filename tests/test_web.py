@@ -39,11 +39,13 @@ def test_dashboard_page(client):
     res = client.get("/")
     assert res.status_code == 200
     assert "ダッシュボード" in res.text or "Web UI" in res.text
+    # ダッシュボードにはAPIキー名や秘密ファイル名を表示しない
     assert "Google APIキー" not in res.text
     assert "client_secrets.json" not in res.text
-    assert "Google AI" in res.text
-    assert "YouTubeアップロード" in res.text
-    assert "YouTube Analytics" in res.text
+    # ダッシュボードにはローカルサービス接続状態を表示する
+    assert "外部サービス接続" in res.text
+    assert "VOICEVOX" in res.text
+    assert "ffmpeg" in res.text
 
 
 # 4. /generate ページが 200 を返す
