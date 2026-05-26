@@ -114,26 +114,29 @@ APIキーやOAuthファイルなどの認証情報以外は、原則として [c
 
 ## 起動
 
-### ローカル Web UI
-
 ```bash
-python -m web_app.app
+python web_app/app.py
 ```
 
-起動後、ブラウザで `http://127.0.0.1:58080` を開きます。ポートを変える場合は `--port` または `WEB_UI_PORT` を使います。
+起動後、ブラウザで `http://127.0.0.1:58080` を開きます。
 
-起動時にブラウザを自動で開くには `--open-browser` を付けます。
+| オプション | 説明 |
+|---|---|
+| `--port N` | ポートを指定（省略時は `WEB_UI_PORT` の値） |
+| `--auto-port` | 指定ポートが使用中の場合、自動で空きポートを探して起動 |
+| `--open-browser` | 起動後にブラウザを自動で開く |
 
 ```bash
-python -m web_app.app --open-browser
+python web_app/app.py --open-browser          # 通常起動
+python web_app/app.py --port 58081            # ポート競合時に別ポートを指定
+python web_app/app.py --auto-port             # 空きポートを自動選択
 ```
 
-Windowsでは `start.bat` からも同じWeb UIを起動できます。
+Windowsでは `start.bat` からも起動できます。
 
 **セキュリティ注意:**
 - Web UI は **127.0.0.1 のみ**にバインドします。外部には公開しません。
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の中身は Web 画面に**絶対に表示されません**。
-- 旧Tkinter GUI / CLI生成入口は廃止済みです。操作はWeb UIに一本化しています。
 
 ### Web UI でできること
 
