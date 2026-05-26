@@ -14,9 +14,16 @@
 
 ## 2026-05-26
 
+### ネタ募集CTAの通算制御とAnalytics表示
+
+- `core/cta_policy.py` / `web_app/services/generation_service.py`: Shortsの新規/横展開を既存出力から通算し、`TOPIC_REQUEST_CTA_EVERY_N`（既定5）本に1本だけ `ネタ募集CTA: 許可` を自動付与するよう変更
+- `core/youtube_analytics.py` / `core/analytics_score.py` / `web_app/templates/analytics.html`: ネタ募集CTAの対象有無と理由をYouTube Analytics取得結果へ取り込み、Analytics画面とTSVで確認できるよう変更
+- `README.md` / `SPEC.md` / `core/script_generation_prompt.txt` / `samples/prompt_parts/food/script_generation_prompt.txt`: 旧来の「同時生成5本以上で最大1本」記述を、通算5本に1本の運用へ更新
+
 ### ドキュメント整合性整理
 
 - `README.md`: 環境準備、APIキー/OAuth、日常操作手順をWeb UI前提で整理し、通常起動は `start.bat` 推奨であることを明記
+- `README.md`: ユーザー向け注意事項から削除済み機能の説明を外し、現行運用に必要な注意へ整理
 - `SPEC.md` / `AGENTS.md`: 起動手順の記述を `start.bat` 推奨に統一し、手動起動は補助導線として説明
 
 ### Web UI一本化・旧GUI/CLI廃止
@@ -494,11 +501,11 @@
 
 - 台本生成プロンプトに、Shortsは他動画誘導よりループ視聴を優先する方針を追加。
 - Shorts本編の「次回は」「他の動画も見て」「チャンネル登録お願いします」系を生成前レビューで警告するように変更。
-- `core/cta_policy.py` を追加し、同時生成時の「ネタ募集CTA: 許可 / 禁止」をアプリ側で付与。
+- `core/cta_policy.py` を追加し、「ネタ募集CTA: 許可 / 禁止」をアプリ側で付与。
   - Shortsのみ対象。
   - 生成区分が `新規` / `横展開` の場合のみ候補。
-  - 5本以上の同時生成では最大1本だけ許可。
-  - 5本未満、品質改善版、再挑戦は原則禁止。
+  - 現行仕様ではShorts新規/横展開の通算5本に1本だけ許可。
+  - 品質改善版、再挑戦は原則禁止。
 - ネタ募集CTAを許可した場合、固定コメントが未指定ならネタ募集用固定コメントを自動差し込み。
 - Longでは関連動画誘導、vidIQタイトル調整、説明欄YouTubeチャプター追加を許可。
 - Longアップロード時、説明欄にチャプターがなければ `チャプター:` 行または既定章立てから `【目次】` を自動追加。

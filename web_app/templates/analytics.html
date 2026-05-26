@@ -36,6 +36,11 @@
       <option value="Shorts">Shorts</option>
       <option value="Long">Long</option>
     </select>
+    <select id="topic-cta-filter" onchange="applyFilters()">
+      <option value="">すべてのネタ募集CTA</option>
+      <option value="許可">対象のみ</option>
+      <option value="禁止">対象外のみ</option>
+    </select>
     <select id="status-filter" onchange="applyFilters()">
       <option value="">すべてのステータス</option>
       <option value="published">published</option>
@@ -59,6 +64,7 @@
         <th class="sortable" onclick="sortTable('likes')">いいね<span class="sort-icon" data-col="likes"></span></th>
         <th class="sortable" onclick="sortTable('comments')">コメント<span class="sort-icon" data-col="comments"></span></th>
         <th class="sortable" onclick="sortTable('subscribers_net')">登録±<span class="sort-icon" data-col="subscribers_net"></span></th>
+        <th>ネタ募集CTA</th>
         <th>action</th>
         <th>ステータス</th>
       </tr>
@@ -70,6 +76,7 @@
           data-score="{{ row.get('score','') }}"
           data-action="{{ row.get('action','') }}"
           data-type="{{ row.get('video_type','') }}"
+          data-topic-request-cta="{{ row.get('topic_request_cta','') }}"
           data-status="{{ row.get('publish_status','') | lower }}"
           data-published_at="{{ row.get('published_at','') }}"
           data-views="{{ row.get('views','0') or 0 }}"
@@ -93,6 +100,16 @@
         <td>{{ row.get('likes','—') }}</td>
         <td>{{ row.get('comments','—') }}</td>
         <td>{{ row.get('subscribers_net','—') }}</td>
+        <td title="{{ row.get('topic_request_cta_reason','') }}">
+          {% set topic_cta = row.get('topic_request_cta','') %}
+          {% if topic_cta == '許可' %}
+          <span class="badge badge-ok">対象</span>
+          {% elif topic_cta == '禁止' %}
+          <span class="badge badge-info">対象外</span>
+          {% else %}
+          —
+          {% endif %}
+        </td>
         <td>
           {% set action = row.get('action','') %}
           {% if action %}
@@ -175,6 +192,7 @@ function applyFilters() {
   const score = document.getElementById('score-filter').value;
   const action = document.getElementById('action-filter').value;
   const vtype = document.getElementById('type-filter').value;
+  const topicCta = document.getElementById('topic-cta-filter').value;
   const status = document.getElementById('status-filter').value;
 
   let shown = 0;
@@ -184,6 +202,7 @@ function applyFilters() {
       (!score  || row.dataset.score === score) &&
       (!action || row.dataset.action.includes(action)) &&
       (!vtype  || row.dataset.type === vtype) &&
+      (!topicCta || row.getAttribute('data-topic-request-cta') === topicCta) &&
       (!status || row.dataset.status === status);
     row.style.display = ok ? '' : 'none';
     if (ok) shown++;
@@ -198,6 +217,7 @@ function clearFilters() {
   document.getElementById('score-filter').value = '';
   document.getElementById('action-filter').value = '';
   document.getElementById('type-filter').value = '';
+  document.getElementById('topic-cta-filter').value = '';
   document.getElementById('status-filter').value = '';
   applyFilters();
 }

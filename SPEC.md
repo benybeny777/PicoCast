@@ -618,6 +618,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_VOICEVOX_CHECK_TIMEOUT_SEC` | 2.0 | Web UIのVOICEVOX疎通確認タイムアウト(秒) |
 | `WEB_FFMPEG_CHECK_TIMEOUT_SEC` | 5.0 | Web UIのffmpeg疎通確認タイムアウト(秒) |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
+| `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
 
 ---
 
@@ -1241,6 +1242,7 @@ YouTube OAuth:
 | `MAX_BACKGROUNDS_SHORTS` | `config.py` | Shortsの最大背景生成枚数 |
 | `MAX_BACKGROUNDS_LONG` | `config.py` | Longの最大背景生成枚数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `.env` / `config.py` | Longアップロード後に自動追加する再生リスト名。未設定時は `ロング動画`。完全一致で検索 |
+| `TOPIC_REQUEST_CTA_EVERY_N` | `.env` / `config.py` | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。未設定時は5。0なら自動付与しない |
 
 `.env` の例:
 
@@ -1259,12 +1261,13 @@ NATIVE_AUDIO_LOUDNORM_TP=-1.5
 NATIVE_AUDIO_LOUDNORM_LRA=6
 LONG_FULL_SCRIPT_REVIEW=0
 LONG_UPLOAD_PLAYLIST_NAME=ロング動画
+TOPIC_REQUEST_CTA_EVERY_N=5
 ```
 ## CTA / 導線制御
 
 - Shortsは本編内の他動画誘導より、完走率・平均視聴率・ループ視聴を優先する。
 - Shortsの `次回は` / `次の動画` / `他の動画も見て` / `チャンネル登録お願いします` / `高評価お願いします` は生成前チェックで警告する。
-- `core/cta_policy.py` が一括生成時の `ネタ募集CTA: 許可 / 禁止` を判定する。Shortsかつ生成区分が `新規` / `横展開`、同時生成5本以上の場合のみ最大1本許可する。
+- `core/cta_policy.py` が生成登録時に `ネタ募集CTA: 許可 / 禁止` を判定する。Shortsかつ生成区分が `新規` / `横展開` の対象を既存出力から通算し、`TOPIC_REQUEST_CTA_EVERY_N`（既定5）本に1本だけ許可する。`TOPIC_REQUEST_CTA_EVERY_N=0` の場合は自動付与しない。
 - ネタ募集CTAを許可した台本で固定コメントが未指定なら、ネタ募集用固定コメントを自動差し込みする。
 - Longでは関連動画誘導・vidIQタイトル調整・説明欄YouTubeチャプター追加を許可する。アップロード時に `チャプター:` 行または既定章立てから `【目次】` を説明欄末尾へ追加する。
-- CTA方針は `_meta/cta_policy.json`、アップロード時のYouTubeメタ方針は `_meta/youtube_metadata.json` に保存する。
+- CTA方針は `_meta/cta_policy.json`、アップロード時のYouTubeメタ方針は `_meta/youtube_metadata.json` に保存する。YouTube Analytics取得時は `ネタ募集CTA` / `ネタ募集CTA理由` を取り込み、Analytics画面とTSVで確認できるようにする。

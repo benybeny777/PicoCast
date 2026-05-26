@@ -6,6 +6,7 @@ Web UI は run_pipeline を唯一の生成入口として使う。
 import os
 from typing import Any
 
+from core.cta_policy import apply_topic_request_cta_policy_to_scripts
 from core.gui_support import split_input_scripts
 from core.output_paths import OUTPUT_DIR
 from web_app.job_manager import Job, _log, get_job_manager
@@ -21,6 +22,27 @@ def submit_generate_job(
     sd_size_mode: bool = False,
 ) -> str:
     """台本1本分の生成ジョブを登録してjob_idを返す。"""
+    prepared = apply_topic_request_cta_policy_to_scripts([script])
+    script = prepared[0] if prepared else script
+    return _submit_generate_job_prepared(
+        script,
+        image_style,
+        reuse_backgrounds,
+        long_thumbnail_ab_test,
+        long_budget_mode,
+        sd_size_mode,
+    )
+
+
+def _submit_generate_job_prepared(
+    script: str,
+    image_style: str = "通常",
+    reuse_backgrounds: bool = False,
+    long_thumbnail_ab_test: bool = False,
+    long_budget_mode: bool = False,
+    sd_size_mode: bool = False,
+) -> str:
+    """CTA方針反映済み台本を生成ジョブへ登録する。"""
     mgr = get_job_manager()
     job = mgr.create_job("generate")
     _log(job, "生成ジョブを登録しました", "info")
@@ -38,8 +60,8 @@ def submit_batch_generate_jobs(
 ) -> list[str]:
     """複数台本の生成ジョブを登録してjob_id一覧を返す。"""
     job_ids = []
-    for script in scripts:
-        job_ids.append(submit_generate_job(script, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode))
+    for script in apply_topic_request_cta_policy_to_scripts(scripts):
+        job_ids.append(_submit_generate_job_prepared(script, image_style, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode))
     return job_ids
 
 

@@ -285,6 +285,7 @@ UPLOADED_TITLES_FILE  = os.environ.get("UPLOADED_TITLES_FILE",  os.path.join(OUT
 # ───────────────────────────────────────────────
 LONG_THUMBNAIL_AB_TEST     = os.environ.get("LONG_THUMBNAIL_AB_TEST",     "0").strip().lower() in ("1", "true", "yes", "on")  # Long サムネ A/B テスト（OFF: A のみ生成）
 LONG_UPLOAD_PLAYLIST_NAME  = os.environ.get("LONG_UPLOAD_PLAYLIST_NAME",  "ロング動画").strip()  # Long アップロード後に自動追加する再生リスト名（空で無効）
+TOPIC_REQUEST_CTA_EVERY_N  = int(os.environ.get("TOPIC_REQUEST_CTA_EVERY_N", "5"))  # Shorts新規/横展開のネタ募集CTAを許可する間隔（N本に1本、0で自動付与なし）
 
 # ───────────────────────────────────────────────
 # 背景画像生成枚数上限
@@ -333,4 +334,3 @@ NATIVE_SHAKE_AMP_Y = int(os.environ.get("NATIVE_SHAKE_AMP_Y", "5"))             
 NATIVE_CHARACTER_BOUNCE_SEC = float(os.environ.get("NATIVE_CHARACTER_BOUNCE_SEC", "0.22"))          # キャラクターバウンス演出時間(秒)
 NATIVE_TELOP_POP_START_SEC = float(os.environ.get("NATIVE_TELOP_POP_START_SEC", "0.05"))            # ポップテロップの表示開始ディレイ(秒)
 NATIVE_TELOP_POP_MAX_SEC = float(os.environ.get("NATIVE_TELOP_POP_MAX_SEC", "1.5"))                  # ポップテロップの最大表示持続時間(秒)
-

@@ -1,3 +1,4 @@
+import json
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -83,6 +84,7 @@ def _local_upload_records_by_video_id() -> dict:
             continue
         video_id = record.get("video_id")
         if video_id:
+            policy_path = os.path.join(root, "cta_policy.json") if os.path.basename(root) == "_meta" else os.path.join(root, "_meta", "cta_policy.json")
             script_path = os.path.join(os.path.dirname(root), "script.txt") if os.path.basename(root) == "_meta" else os.path.join(root, "script.txt")
             if os.path.exists(script_path):
                 try:
@@ -97,6 +99,21 @@ def _local_upload_records_by_video_id() -> dict:
                     record.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
                     record.setdefault("character_pattern", script_meta.get("character_pattern", ""))
                     record.setdefault("genre_group", script_meta.get("genre_group", ""))
+                    record.setdefault("topic_request_cta", script_meta.get("topic_request_cta", ""))
+                    record.setdefault("topic_request_cta_reason", script_meta.get("topic_request_cta_reason", ""))
+                except Exception:
+                    pass
+            if os.path.exists(policy_path):
+                try:
+                    with open(policy_path, "r", encoding="utf-8") as f:
+                        policy = json.load(f).get("cta_policy", {})
+                    topic_state = str(policy.get("topic_request_cta", ""))
+                    if topic_state == "allowed":
+                        record["topic_request_cta"] = "許可"
+                    elif topic_state == "blocked":
+                        record["topic_request_cta"] = "禁止"
+                    record.setdefault("topic_request_cta_reason", policy.get("topic_request_cta_reason", ""))
+                    record.setdefault("final_cta_type", policy.get("final_cta_type", ""))
                 except Exception:
                     pass
             merged = dict(records.get(video_id, {}))
@@ -302,6 +319,9 @@ def fetch_video_analytics(days=28):
                 "generation_purpose": local_record.get("generation_purpose", ""),
                 "character_pattern": local_record.get("character_pattern", ""),
                 "genre_group": local_record.get("genre_group", ""),
+                "topic_request_cta": local_record.get("topic_request_cta", ""),
+                "topic_request_cta_reason": local_record.get("topic_request_cta_reason", ""),
+                "final_cta_type": local_record.get("final_cta_type", ""),
             })
 
         ch_subs = _fetch_channel_subscriber_totals(analytics, start_date, end_date)

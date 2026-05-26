@@ -3,6 +3,8 @@ import os
 import re
 import subprocess
 
+from config import OUTPUT_DIR, TOPIC_REQUEST_CTA_EVERY_N
+
 
 SHORTS_DIRECT_NAVIGATION_NG = [
     "次回は",
@@ -42,6 +44,14 @@ def normalize_generation_kind(generation_kind: str | None) -> str:
     return aliases.get(text, text)
 
 
+def is_topic_request_cta_candidate(video_type: str | None, generation_kind: str | None) -> bool:
+    return is_shorts_video_type(video_type) and normalize_generation_kind(generation_kind) in {"新規", "横展開"}
+
+
+def topic_request_cta_interval() -> int:
+    return int(TOPIC_REQUEST_CTA_EVERY_N or 0)
+
+
 def should_allow_topic_request_cta(
     video_type: str,
     generation_kind: str,
@@ -49,17 +59,17 @@ def should_allow_topic_request_cta(
     batch_size: int,
     already_allowed_in_batch: bool,
 ) -> bool:
-    # ネタ募集CTAは「Shorts 新規/横展開 5本以上バッチの最終1本のみ」に限定。
-    # 単発・4本以下では視聴者へのノイズになるため原則禁止。
-    if not is_shorts_video_type(video_type):
+    # batch_index は対象Shortsの通算0始まり位置として扱う。
+    # batch_size / already_allowed_in_batch は旧呼び出し互換のため受ける。
+    del batch_size, already_allowed_in_batch
+    if not is_topic_request_cta_candidate(video_type, generation_kind):
         return False
-    if normalize_generation_kind(generation_kind) not in {"新規", "横展開"}:
+    interval = topic_request_cta_interval()
+    if interval <= 0:
         return False
-    if already_allowed_in_batch:
+    if batch_index < 0:
         return False
-    if batch_size >= 5:
-        return batch_index == batch_size - 1
-    return False
+    return (batch_index + 1) % interval == 0
 
 
 def topic_request_cta_reason(
@@ -74,13 +84,103 @@ def topic_request_cta_reason(
     kind = normalize_generation_kind(generation_kind)
     if kind not in {"新規", "横展開"}:
         return f"生成区分={kind or '未設定'} のため禁止"
-    if already_allowed_in_batch:
-        return "同時生成バッチ内で既に許可済み"
-    if batch_size >= 5 and batch_index == batch_size - 1:
-        return f"batch_size={batch_size} and generation_kind={kind}"
-    if batch_size >= 5:
-        return "同時生成5本以上だが許可枠ではない"
-    return "5本未満の同時生成では原則禁止"
+    interval = topic_request_cta_interval()
+    if interval <= 0:
+        return "TOPIC_REQUEST_CTA_EVERY_N=0 のためネタ募集CTA自動付与なし"
+    if should_allow_topic_request_cta(video_type, generation_kind, batch_index, batch_size, already_allowed_in_batch):
+        return f"通算{batch_index + 1}本目の対象Shorts（{interval}本に1本）"
+    return f"通算{batch_index + 1}本目の対象Shortsのため禁止（{interval}本に1本のみ許可）"
+
+
+def _script_meta_from_text(script_text: str) -> dict[str, str]:
+    try:
+        from core.parser import ScriptParser
+
+        return {
+            item["type"]: item["text"]
+            for item in ScriptParser.parse_string(script_text)
+            if item["type"] in ScriptParser.META_TYPES
+        }
+    except Exception:
+        return {}
+
+
+def _script_meta_from_path(script_path: str) -> dict[str, str]:
+    try:
+        from core.parser import ScriptParser
+
+        return {
+            item["type"]: item["text"]
+            for item in ScriptParser.parse(script_path)
+            if item["type"] in ScriptParser.META_TYPES
+        }
+    except Exception:
+        return {}
+
+
+def count_existing_topic_request_candidates(output_dir: str | None = None) -> int:
+    base_dir = os.path.abspath(output_dir or OUTPUT_DIR)
+    if not os.path.isdir(base_dir):
+        return 0
+    count = 0
+    skip_root_dirs = {"000_analytics", "000_backups", "000_data", "000_debug", "000_legacy"}
+    for root, dirs, files in os.walk(base_dir):
+        if os.path.abspath(root) == base_dir:
+            dirs[:] = [name for name in dirs if name not in skip_root_dirs]
+        if "script.txt" not in files:
+            continue
+        meta = _script_meta_from_path(os.path.join(root, "script.txt"))
+        if is_topic_request_cta_candidate(meta.get("video_format"), meta.get("generation_kind")):
+            count += 1
+    return count
+
+
+def apply_topic_request_cta_policy_to_scripts(
+    scripts: list[str],
+    existing_candidate_count: int | None = None,
+    output_dir: str | None = None,
+) -> list[str]:
+    base_count = (
+        count_existing_topic_request_candidates(output_dir)
+        if existing_candidate_count is None
+        else int(existing_candidate_count)
+    )
+    eligible_seen = 0
+    updated_scripts: list[str] = []
+    for script in scripts:
+        meta = _script_meta_from_text(script)
+        video_type = meta.get("video_format", "")
+        generation_kind = meta.get("generation_kind", "")
+        if is_topic_request_cta_candidate(video_type, generation_kind):
+            sequence_index = base_count + eligible_seen
+            allowed = should_allow_topic_request_cta(
+                video_type=video_type,
+                generation_kind=generation_kind,
+                batch_index=sequence_index,
+                batch_size=len(scripts),
+                already_allowed_in_batch=False,
+            )
+            reason = topic_request_cta_reason(
+                video_type=video_type,
+                generation_kind=generation_kind,
+                batch_index=sequence_index,
+                batch_size=len(scripts),
+                already_allowed_in_batch=False,
+            )
+            eligible_seen += 1
+        else:
+            allowed = False
+            reason = topic_request_cta_reason(
+                video_type=video_type,
+                generation_kind=generation_kind,
+                batch_index=base_count + eligible_seen,
+                batch_size=len(scripts),
+                already_allowed_in_batch=False,
+            )
+        text = update_script_topic_request_cta(script, allowed, reason)
+        text = ensure_topic_request_fixed_comment(text, allowed)
+        updated_scripts.append(text)
+    return updated_scripts
 
 
 def check_shorts_navigation_ng(script_text: str, video_type: str) -> list[str]:

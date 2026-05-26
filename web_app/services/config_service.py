@@ -30,6 +30,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "MAX_BACKGROUNDS_LONG",            "type": "int",   "label": "最大背景枚数 (Long)",         "default": str(cfg.MAX_BACKGROUNDS_LONG),   "min": 1,   "max": 200},
     {"key": "MAX_BACKGROUNDS_LONG_BUDGET",     "type": "int",   "label": "最大背景枚数 (Long節約)",     "default": str(cfg.MAX_BACKGROUNDS_LONG_BUDGET),   "min": 1,   "max": 50},
     {"key": "LONG_UPLOAD_PLAYLIST_NAME",       "type": "str",   "label": "Long追加先再生リスト名",      "default": str(cfg.LONG_UPLOAD_PLAYLIST_NAME), "allow_empty": True},
+    {"key": "TOPIC_REQUEST_CTA_EVERY_N",       "type": "int",   "label": "ネタ募集CTA間隔 (0=OFF)",     "default": str(cfg.TOPIC_REQUEST_CTA_EVERY_N), "min": 0, "max": 100},
     {"key": "GEMINI_MODEL",                    "type": "str",   "label": "Gemini 台本生成モデル",       "default": str(cfg.GEMINI_MODEL)},
     {"key": "NANOBANANA_PRO_MODEL",            "type": "str",   "label": "画像生成モデル(高品質)",      "default": str(cfg.NANOBANANA_PRO_MODEL)},
     {"key": "NANOBANANA_FLASH_MODEL",          "type": "str",   "label": "画像生成モデル(高速)",        "default": str(cfg.NANOBANANA_FLASH_MODEL)},

@@ -77,6 +77,18 @@ class AnalyticsScoreTests(unittest.TestCase):
         self.assertIn("audio_cutoff_risk", header.split("\t"))
         self.assertIn("True", first_row.split("\t"))
 
+    def test_tsv_includes_topic_request_cta_columns(self):
+        items = score_items([_short(topic_request_cta="許可", topic_request_cta_reason="通算5本目", final_cta_type="topic_request")])
+        tsv = to_tsv(items)
+
+        header, first_row = tsv.splitlines()[:2]
+        columns = header.split("\t")
+        values = first_row.split("\t")
+        self.assertIn("topic_request_cta", columns)
+        self.assertIn("topic_request_cta_reason", columns)
+        self.assertIn("final_cta_type", columns)
+        self.assertEqual(values[columns.index("topic_request_cta")], "許可")
+
 
 if __name__ == "__main__":
     unittest.main()
