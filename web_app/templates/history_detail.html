@@ -210,17 +210,24 @@ function reloadWithLogs() {
 function pollJobs(onSuccess) {
   const handleSuccess = onSuccess || reloadWithLogs;
   if (pollTimer) clearInterval(pollTimer);
+  let _polling = false;
   pollTimer = setInterval(async () => {
     if (!activeJobIds.length) { clearInterval(pollTimer); return; }
-    const result = await updateJobLogs();
-    if (result.allDone) {
-      clearInterval(pollTimer);
-      if (result.hasFailed) {
-        appendLog('一部の処理が失敗またはキャンセルされました。', 'error');
-        finishGenerate();
-      } else {
-        handleSuccess();
+    if (_polling) return;
+    _polling = true;
+    try {
+      const result = await updateJobLogs();
+      if (result.allDone) {
+        clearInterval(pollTimer);
+        if (result.hasFailed) {
+          appendLog('一部の処理が失敗またはキャンセルされました。', 'error');
+          finishGenerate();
+        } else {
+          handleSuccess();
+        }
       }
+    } finally {
+      _polling = false;
     }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
@@ -322,8 +329,18 @@ async function renderVideo() {
   }
 }
 
-async function _submitPipelineJob(imageStyle, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode) {
-  const res = await fetch('/api/history/regenerate', {
+function _readPipelineParams() {
+  return {
+    imageStyle:      document.getElementById('image-style').value,
+    reuseBg:         document.getElementById('reuse-backgrounds').checked,
+    longThumbnailAb: document.getElementById('long-thumbnail-ab').checked,
+    longBudgetMode:  document.getElementById('long-budget-mode').checked,
+    sdSizeMode:      document.getElementById('sd-size-mode').checked,
+  };
+}
+
+async function _submitPipelineJob({ imageStyle, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode }) {
+  return fetch('/api/history/regenerate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
@@ -336,93 +353,61 @@ async function _submitPipelineJob(imageStyle, reuseBg, longThumbnailAb, longBudg
       confirmed: true
     }),
   });
-  return res;
+}
+
+async function _startPipelineJob(onSuccess) {
+  prepareLogView();
+  disableButtons();
+  appendLog('再生成リクエストを送信中...', 'info');
+  try {
+    const res = await _submitPipelineJob(_readPipelineParams());
+    const data = await res.json();
+    if (!res.ok) {
+      appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error');
+      finishGenerate();
+      return;
+    }
+    activeJobIds = data.job_ids || [];
+    document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')} (${data.count}本)`;
+    appendLog(`再生成ジョブを登録しました (${data.count}本)`, 'info');
+    pollJobs(onSuccess);
+  } catch(e) {
+    appendLog('通信エラー: ' + e, 'error');
+    finishGenerate();
+  }
 }
 
 async function regenerateFull() {
   if (!confirm('台本(script.txt)を元に全工程を再生成し、最後にMP4化まで実施します。\n現在の生成物はすべて上書きされます。よろしいですか？')) return;
 
-  const imageStyle = document.getElementById('image-style').value;
-  const reuseBg = document.getElementById('reuse-backgrounds').checked;
-  const longThumbnailAb = document.getElementById('long-thumbnail-ab').checked;
-  const longBudgetMode = document.getElementById('long-budget-mode').checked;
-  const sdSizeMode = document.getElementById('sd-size-mode').checked;
-
-  prepareLogView();
-  disableButtons();
-  appendLog('再生成リクエストを送信中...', 'info');
-
-  try {
-    const res = await _submitPipelineJob(imageStyle, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode);
-    const data = await res.json();
-    if (!res.ok) {
-      appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error');
-      finishGenerate();
-      return;
-    }
-
-    activeJobIds = data.job_ids || [];
-    document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')} (${data.count}本)`;
-    appendLog(`再生成ジョブを登録しました (${data.count}本)`, 'info');
-    pollJobs(async () => {
-      appendLog('アセット生成完了。MP4化を開始します...', 'info');
-      try {
-        const rres = await fetch(`/api/history/${encodeURIComponent(historyName)}/render`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({confirmed: true}),
-        });
-        const rdata = await rres.json();
-        if (!rres.ok) {
-          appendLog('レンダーエラー: ' + (rdata.detail || JSON.stringify(rdata)), 'error');
-          finishGenerate();
-          return;
-        }
-        activeJobIds = [rdata.job_id];
-        document.getElementById('job-ids-info').textContent = `レンダージョブ: ${rdata.job_id}`;
-        appendLog('MP4レンダージョブを登録しました', 'info');
-        pollJobs();
-      } catch(e) {
-        appendLog('レンダー通信エラー: ' + e, 'error');
+  await _startPipelineJob(async () => {
+    appendLog('アセット生成完了。MP4化を開始します...', 'info');
+    try {
+      const rres = await fetch(`/api/history/${encodeURIComponent(historyName)}/render`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({confirmed: true}),
+      });
+      const rdata = await rres.json();
+      if (!rres.ok) {
+        appendLog('レンダーエラー: ' + (rdata.detail || JSON.stringify(rdata)), 'error');
         finishGenerate();
+        return;
       }
-    });
-  } catch(e) {
-    appendLog('通信エラー: ' + e, 'error');
-    finishGenerate();
-  }
+      activeJobIds = [rdata.job_id];
+      document.getElementById('job-ids-info').textContent = `レンダージョブ: ${rdata.job_id}`;
+      appendLog('MP4レンダージョブを登録しました', 'info');
+      pollJobs(/* → reloadWithLogs */);
+    } catch(e) {
+      appendLog('レンダー通信エラー: ' + e, 'error');
+      finishGenerate();
+    }
+  });
 }
 
 async function regenerateWithoutRender() {
   if (!confirm('台本(script.txt)を元に、チェック・音声生成・画像生成の工程を再生成します（MP4化は除く）。\n現在の生成物はすべて上書きされます。よろしいですか？')) return;
-
-  const imageStyle = document.getElementById('image-style').value;
-  const reuseBg = document.getElementById('reuse-backgrounds').checked;
-  const longThumbnailAb = document.getElementById('long-thumbnail-ab').checked;
-  const longBudgetMode = document.getElementById('long-budget-mode').checked;
-  const sdSizeMode = document.getElementById('sd-size-mode').checked;
-
-  prepareLogView();
-  disableButtons();
-  appendLog('再生成リクエストを送信中...', 'info');
-
-  try {
-    const res = await _submitPipelineJob(imageStyle, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode);
-    const data = await res.json();
-    if (!res.ok) {
-      appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error');
-      finishGenerate();
-      return;
-    }
-
-    activeJobIds = data.job_ids || [];
-    document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')} (${data.count}本)`;
-    appendLog(`再生成ジョブを登録しました (${data.count}本)`, 'info');
-    pollJobs();
-  } catch(e) {
-    appendLog('通信エラー: ' + e, 'error');
-    finishGenerate();
-  }
+  await _startPipelineJob();
 }
 
 function prepareLogView() {

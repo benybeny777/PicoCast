@@ -567,7 +567,7 @@ def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review
     return path
 
 
-def duration_review(total_sec: float, is_shorts: bool) -> dict[str, Any]:
+def duration_review(total_sec: float, is_shorts: bool, estimated: bool = True) -> dict[str, Any]:
     if is_shorts:
         if 38 <= total_sec <= 50:
             status = "ideal"
@@ -585,6 +585,7 @@ def duration_review(total_sec: float, is_shorts: bool) -> dict[str, Any]:
             "ideal": "38-50秒",
             "acceptable": "35-55秒",
             "status": status,
+            "estimated": estimated,
         }
     if 270 <= total_sec <= 600:
         status = "ok"
@@ -598,6 +599,7 @@ def duration_review(total_sec: float, is_shorts: bool) -> dict[str, Any]:
         "ideal": "5-8分",
         "acceptable": "4分30秒-10分",
         "status": status,
+        "estimated": estimated,
     }
 
 

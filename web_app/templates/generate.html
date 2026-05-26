@@ -221,10 +221,17 @@ async function cancelGenerate() {
 
 function pollJobs() {
   if (pollTimer) clearInterval(pollTimer);
+  let _polling = false;
   pollTimer = setInterval(async () => {
     if (!activeJobIds.length) { clearInterval(pollTimer); return; }
-    const allDone = await updateJobLogs();
-    if (allDone) { clearInterval(pollTimer); finishGenerate(); }
+    if (_polling) return;
+    _polling = true;
+    try {
+      const allDone = await updateJobLogs();
+      if (allDone) { clearInterval(pollTimer); finishGenerate(); }
+    } finally {
+      _polling = false;
+    }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 

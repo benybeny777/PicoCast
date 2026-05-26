@@ -73,6 +73,9 @@ class ReadingNormalizer:
 
         return {t: self._cache.get(t, t) for t in texts}
 
+    def load_cache(self, saved: dict[str, str]) -> None:
+        self._cache.update(saved)
+
     def normalize(self, text: str) -> str:
         if text in self._cache:
             return self._cache[text]

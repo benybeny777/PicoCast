@@ -1200,19 +1200,19 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         _all_chunks.extend(_split_at_punctuation(_item.get("text", "")))
     reading_normalizer = ReadingNormalizer()
     _reading_map_path = os.path.join(_meta_dir(theme_dir), "reading_map.json")
-    if os.path.exists(_reading_map_path):
-        try:
-            with open(_reading_map_path, encoding="utf-8") as _rmf:
-                _saved_map = json.load(_rmf)
-            reading_normalizer._cache.update(_saved_map)
-            update_status(f"🔤 よみがな: 保存済みマップ読み込み ({len(_saved_map)}件)")
-        except Exception as _e:
-            update_status(f"⚠ よみがなマップ読み込みスキップ: {_e}", "warning")
+    try:
+        with open(_reading_map_path, encoding="utf-8") as _rmf:
+            _saved_map = json.load(_rmf)
+        reading_normalizer.load_cache(_saved_map)
+        update_status(f"🔤 よみがな: 保存済みマップ読み込み ({len(_saved_map)}件)")
+    except FileNotFoundError:
+        pass
+    except Exception as _e:
+        update_status(f"⚠ よみがなマップ読み込みスキップ: {_e}", "warning")
     if reading_normalizer._available and _all_chunks:
         update_status(f"🔤 よみがな正規化中: {len(_all_chunks)}チャンク...")
     reading_map = reading_normalizer.normalize_batch(_all_chunks)
     try:
-        os.makedirs(_meta_dir(theme_dir), exist_ok=True)
         with open(_reading_map_path, "w", encoding="utf-8") as _rmf:
             json.dump(reading_map, _rmf, ensure_ascii=False, indent=2)
     except Exception as _e:
@@ -1470,7 +1470,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # 実尺チェック: 全WAVの実際の長さを合算して duration_review で評価
     _actual_sec = 0.0
     try:
-        for _wf in sorted(os.listdir(theme_audio_dir)):
+        for _wf in os.listdir(theme_audio_dir):
             if not _wf.lower().endswith(".wav"):
                 continue
             _wp = os.path.join(theme_audio_dir, _wf)
@@ -1481,8 +1481,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         _actual_sec = 0.0
 
     if _actual_sec > 0:
-        actual_duration_result = duration_review(_actual_sec, is_shorts)
-        actual_duration_result["estimated"] = False
+        actual_duration_result = duration_review(_actual_sec, is_shorts, estimated=False)
         dr_path = save_duration_review(theme_dir, actual_duration_result)
         _dur_status = actual_duration_result["status"]
         _dur_label = duration_status_label(_dur_status)
