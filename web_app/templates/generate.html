@@ -228,29 +228,51 @@ function pollJobs() {
   }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[&<>'"]/g, tag => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[tag] || tag));
+}
+
 async function updateJobLogs() {
   let allDone = true;
   const logBox = document.getElementById('log-container');
-  logBox.innerHTML = '';
+  let htmlContent = '';
+
+  function buildLogLine(msg, tag) {
+    return `<div class="log-line log-${tag || 'info'}">${escapeHtml(msg)}</div>`;
+  }
 
   for (const jobId of activeJobIds) {
     try {
       const res = await fetch(`/api/jobs/${jobId}`);
       const job = await res.json();
-      appendLog(`[${job.type}] ${job.status}: ${job.progress_text}`, job.status);
+      htmlContent += buildLogLine(`[${job.type}] ${job.status}: ${job.progress_text}`, job.status);
 
       for (const entry of (job.logs || [])) {
-        appendLog(entry.message, entry.tag);
+        htmlContent += buildLogLine(entry.message, entry.tag);
       }
       if (!['success','failed','cancelled'].includes(job.status)) allDone = false;
 
       if (job.status === 'success' && job.result) {
-        appendLog(`完了: ${job.result.topic || ''} — ${job.result.message || ''}`, 'success');
+        htmlContent += buildLogLine(`完了: ${job.result.topic || ''} — ${job.result.message || ''}`, 'success');
       }
     } catch(e) {
       allDone = false;
     }
   }
+
+  const isScrolledToBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 30;
+  logBox.innerHTML = htmlContent;
+  if (isScrolledToBottom) {
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
   return allDone;
 }
 
