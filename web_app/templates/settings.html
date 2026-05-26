@@ -55,43 +55,47 @@
   <div id="save-status" style="display:none" class="log-box mt"></div>
 </div>
 
-<!-- APIキー状態・変更（最下部） -->
+<!-- APIキー設定・変更 -->
 <div class="card mt">
   <h2>APIキー設定</h2>
+  <p class="hint">APIキーは <code>.env</code> に直接保存され、<strong>アプリ再起動後</strong>に反映されます（空欄は変更されません）。</p>
   <table class="status-table">
-    <tr><td>GOOGLE_API_KEY</td><td>{% if status.google_api_key %}<span class="badge badge-ok">設定済み（値は非表示）</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td></tr>
-    <tr><td>OPENAI_API_KEY</td><td>{% if status.openai_api_key %}<span class="badge badge-ok">設定済み（値は非表示）</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td></tr>
-    <tr><td>client_secrets.json</td><td>{% if status.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
-    <tr><td>token.json</td><td>{% if status.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
-    <tr><td>token_analytics.json</td><td>{% if status.token_analytics_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
+    <tr>
+      <td style="width:55%">
+        <label for="secret-GOOGLE_API_KEY"><strong>GOOGLE_API_KEY</strong></label>
+        <br><small style="color:var(--text-muted)">現在: {% if status.google_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</small>
+      </td>
+      <td>
+        <input id="secret-GOOGLE_API_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px">
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <label for="secret-OPENAI_API_KEY"><strong>OPENAI_API_KEY</strong></label>
+        <br><small style="color:var(--text-muted)">現在: {% if status.openai_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</small>
+      </td>
+      <td>
+        <input id="secret-OPENAI_API_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px">
+      </td>
+    </tr>
+    <tr>
+      <td><strong>client_secrets.json</strong></td>
+      <td>{% if status.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
+    </tr>
+    <tr>
+      <td><strong>token.json</strong></td>
+      <td>{% if status.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
+    </tr>
+    <tr>
+      <td><strong>token_analytics.json</strong></td>
+      <td>{% if status.token_analytics_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
+    </tr>
   </table>
-  <p class="hint">APIキー本体は表示しません。変更欄はこの下にあります。</p>
-</div>
-
-<details class="card mt" style="font-size:13px">
-  <summary style="cursor:pointer; color:var(--text-muted); user-select:none">APIキー変更 ▸</summary>
-  <div style="margin-top:12px">
-    <p class="hint">空欄のキーは変更されません。保存すると <code>.env</code> に書き込まれます（アプリ再起動後に反映）。</p>
-    <table class="status-table">
-      <tr>
-        <td style="width:55%"><label for="secret-GOOGLE_API_KEY">GOOGLE_API_KEY</label>
-          <br><small style="color:var(--text-muted)">現在: {% if status.google_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</small>
-        </td>
-        <td><input id="secret-GOOGLE_API_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px"></td>
-      </tr>
-      <tr>
-        <td><label for="secret-OPENAI_API_KEY">OPENAI_API_KEY</label>
-          <br><small style="color:var(--text-muted)">現在: {% if status.openai_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</small>
-        </td>
-        <td><input id="secret-OPENAI_API_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px"></td>
-      </tr>
-    </table>
-    <div class="action-row mt">
-      <button class="btn btn-secondary" onclick="saveSecrets()">APIキーを保存</button>
-    </div>
-    <div id="secrets-status" style="display:none" class="log-box mt"></div>
+  <div class="action-row mt">
+    <button class="btn btn-primary" onclick="saveSecrets()">APIキーを保存</button>
   </div>
-</details>
+  <div id="secrets-status" style="display:none" class="log-box mt"></div>
+</div>
 
 {% endblock %}
 {% block scripts %}
