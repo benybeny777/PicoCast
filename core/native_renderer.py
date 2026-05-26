@@ -40,6 +40,8 @@ from config import (
     NATIVE_FFMPEG_CRF,
     NATIVE_FFMPEG_ENCODER,
     NATIVE_FFMPEG_PRESET,
+    NATIVE_FFMPEG_TIMEOUT_SEC,
+    NATIVE_FFPROBE_TIMEOUT_SEC,
     NATIVE_MAX_ICON_COUNT_SHORTS,
     NATIVE_MAX_SHAKE_COUNT_SHORTS,
     NATIVE_RENDER_CHARACTERS,
@@ -125,15 +127,22 @@ def _run_ffmpeg(args: list[str]) -> None:
     if os.name == "nt":
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    proc = subprocess.run(
-        args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        startupinfo=startupinfo,
-    )
+    run_args = _ffmpeg_noninteractive_args(args)
+    try:
+        proc = subprocess.run(
+            run_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            startupinfo=startupinfo,
+            timeout=NATIVE_FFMPEG_TIMEOUT_SEC,
+        )
+    except subprocess.TimeoutExpired as exc:
+        tail = _subprocess_tail(exc.stderr or exc.stdout)
+        raise TimeoutError(f"ffmpeg timed out after {NATIVE_FFMPEG_TIMEOUT_SEC:g}秒\n{tail}") from exc
     if proc.returncode != 0:
         tail = "\n".join((proc.stderr or proc.stdout or "").splitlines()[-20:])
         raise RuntimeError(f"ffmpeg failed ({proc.returncode})\n{tail}")
@@ -144,15 +153,34 @@ def _run_ffmpeg_capture(args: list[str]) -> subprocess.CompletedProcess:
     if os.name == "nt":
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    run_args = _ffmpeg_noninteractive_args(args)
     return subprocess.run(
-        args,
+        run_args,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        stdin=subprocess.DEVNULL,
         text=True,
         encoding="utf-8",
         errors="replace",
         startupinfo=startupinfo,
+        timeout=NATIVE_FFMPEG_TIMEOUT_SEC,
     )
+
+
+def _ffmpeg_noninteractive_args(args: list[str]) -> list[str]:
+    if not args:
+        return args
+    if "-nostdin" in args:
+        return args
+    return [args[0], "-nostdin", *args[1:]]
+
+
+def _subprocess_tail(output: str | bytes | None) -> str:
+    if output is None:
+        return ""
+    if isinstance(output, bytes):
+        output = output.decode("utf-8", errors="replace")
+    return "\n".join(str(output).splitlines()[-20:])
 
 
 def _ffprobe_bin() -> str:
@@ -184,6 +212,7 @@ def media_duration_sec(path: str) -> float | None:
             encoding="utf-8",
             errors="replace",
             startupinfo=startupinfo,
+            timeout=NATIVE_FFPROBE_TIMEOUT_SEC,
         )
         if proc.returncode != 0:
             return None

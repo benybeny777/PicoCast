@@ -57,7 +57,7 @@ graph TD
 1. **Python 3.10 以上** (本プロジェクトでは `.venv` 仮想環境を使用します)
 2. **VOICEVOX** ([公式ホームページ](https://voicevox.nero.ne.jp/)からダウンロード)
 3. **ffmpeg** (パスを通しておくか、環境変数 `FFMPEG_BIN` にバイナリパスを指定してください)
-4. **Ollama** (よみがな正規化および冒頭品質レビューに利用。デフォルトモデル: `qwen2.5:7b-instruct` / `qwen3:8b`)
+4. **Ollama** (冒頭品質レビューに利用。デフォルトモデル: `qwen3:8b`)
 5. **ComfyUI** (任意。背景生成エンジンに `Local / ComfyUI` を選ぶ場合のみ必要。デフォルトURL: `http://127.0.0.1:8188`)
 
 ---

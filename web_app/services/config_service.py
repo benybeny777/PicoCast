@@ -63,6 +63,8 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "WEB_VOICEVOX_CHECK_TIMEOUT_SEC",  "type": "float", "label": "VOICEVOX確認タイムアウト(秒)", "default": str(cfg.WEB_VOICEVOX_CHECK_TIMEOUT_SEC), "min": 0.2, "max": 30},
     {"key": "WEB_FFMPEG_CHECK_TIMEOUT_SEC",    "type": "float", "label": "ffmpeg確認タイムアウト(秒)",   "default": str(cfg.WEB_FFMPEG_CHECK_TIMEOUT_SEC), "min": 0.2, "max": 30},
     {"key": "FFMPEG_BIN",                      "type": "str",   "label": "ffmpeg バイナリパス",        "default": str(cfg.FFMPEG_BIN)},
+    {"key": "NATIVE_FFMPEG_TIMEOUT_SEC",       "type": "float", "label": "native ffmpegタイムアウト(秒)", "default": str(cfg.NATIVE_FFMPEG_TIMEOUT_SEC), "min": 30, "max": 7200},
+    {"key": "NATIVE_FFPROBE_TIMEOUT_SEC",      "type": "float", "label": "native ffprobeタイムアウト(秒)", "default": str(cfg.NATIVE_FFPROBE_TIMEOUT_SEC), "min": 5, "max": 300},
 ]
 
 _ALLOWED_KEYS = {item["key"] for item in EDITABLE_CONFIG}

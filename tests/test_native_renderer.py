@@ -1,13 +1,15 @@
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.native_character_assets import CharacterVariantSet
-from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _save_render_info, _write_subtitles
+from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _run_ffmpeg, _save_render_info, _write_subtitles
 
 
 class TestDurationStatus(unittest.TestCase):
@@ -51,6 +53,29 @@ class TestLoudnormFilter(unittest.TestCase):
         f = _native_loudnorm_filter()
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
             self.assertTrue(f.startswith("loudnorm"))
+
+
+class TestFfmpegRunner(unittest.TestCase):
+    def test_ffmpeg_runs_noninteractive_with_timeout(self):
+        calls = {}
+
+        def fake_run(args, **kwargs):
+            calls["args"] = args
+            calls["kwargs"] = kwargs
+
+            class Result:
+                returncode = 0
+                stdout = ""
+                stderr = ""
+
+            return Result()
+
+        with patch("core.native_renderer.subprocess.run", fake_run):
+            _run_ffmpeg(["ffmpeg", "-y", "-i", "in.mp4", "out.mp4"])
+
+        self.assertIn("-nostdin", calls["args"])
+        self.assertEqual(calls["kwargs"]["stdin"], subprocess.DEVNULL)
+        self.assertGreater(calls["kwargs"]["timeout"], 0)
 
 
 class TestSaveRenderInfo(unittest.TestCase):

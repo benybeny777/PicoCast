@@ -178,6 +178,8 @@ CHARACTERS = {
 # ───────────────────────────────────────────────
 VIDEO_FPS  = 30                                                  # 出力フレームレート
 FFMPEG_BIN = os.environ.get("FFMPEG_BIN", "ffmpeg")             # ffmpeg バイナリパス
+NATIVE_FFMPEG_TIMEOUT_SEC = float(os.environ.get("NATIVE_FFMPEG_TIMEOUT_SEC", "900"))  # nativeレンダーのffmpeg 1コマンド最大実行秒数
+NATIVE_FFPROBE_TIMEOUT_SEC = float(os.environ.get("NATIVE_FFPROBE_TIMEOUT_SEC", "30"))  # nativeレンダーのffprobe 最大実行秒数
 
 # Shorts 先頭サムネイルフレーム保持数（1〜5フレーム。デフォルト3≒0.1秒）
 # 1=0.033s(最小), 3=0.100s(標準), 5=0.167s(サムネ重視)

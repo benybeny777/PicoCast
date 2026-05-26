@@ -661,6 +661,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_TOAST_HIDE_DELAY_MS` | 420 | Web UIトースト非表示待ち時間(ms) |
 | `WEB_VOICEVOX_CHECK_TIMEOUT_SEC` | 2.0 | Web UIのVOICEVOX疎通確認タイムアウト(秒) |
 | `WEB_FFMPEG_CHECK_TIMEOUT_SEC` | 5.0 | Web UIのffmpeg疎通確認タイムアウト(秒) |
+| `NATIVE_FFMPEG_TIMEOUT_SEC` | 900 | nativeレンダーのffmpeg 1コマンド最大実行秒数 |
+| `NATIVE_FFPROBE_TIMEOUT_SEC` | 30 | nativeレンダーのffprobe 最大実行秒数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
 
@@ -673,6 +675,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - **デフォルト動作**: `run_pipeline()` は常にnative用素材を生成する。YMM4プロジェクト出力とYMM4本番レンダリングは廃止済み。
 - `.ymmp` プロジェクトは生成しない。素材生成後、Web UIジョブが `render_native_test()` を呼び出してnative MP4を作る。
 - `render_native_test(output_dir, voice_speed_intro, voice_speed_body, estimated_duration_sec)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
+- ffmpeg は常に `-nostdin` と `stdin=DEVNULL` で非対話実行し、履歴からの再作成で既存ファイルや入力待ちによりWebジョブがハングしないようにする。1コマンドの上限は `NATIVE_FFMPEG_TIMEOUT_SEC`、ffprobe は `NATIVE_FFPROBE_TIMEOUT_SEC` で制御する。
 - 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。
 - native出力のBGM音量は `NATIVE_BGM_VOLUME_DB=-20` (dB) で管理する。
 - 出力後に ffmpeg `ebur128=peak=true` で最終MP4の音量解析を行い、Integrated loudness / LRA / True peak の要約をログに出す。
@@ -1289,6 +1292,8 @@ YouTube OAuth:
 | `WEB_TOAST_HIDE_DELAY_MS` | `.env` / `config.py` | Web UIのトースト非表示待ち時間(ms) |
 | `WEB_VOICEVOX_CHECK_TIMEOUT_SEC` | `.env` / `config.py` | Web UIのVOICEVOX疎通確認タイムアウト(秒) |
 | `WEB_FFMPEG_CHECK_TIMEOUT_SEC` | `.env` / `config.py` | Web UIのffmpeg疎通確認タイムアウト(秒) |
+| `NATIVE_FFMPEG_TIMEOUT_SEC` | `.env` / `config.py` | nativeレンダーのffmpeg 1コマンド最大実行秒数 |
+| `NATIVE_FFPROBE_TIMEOUT_SEC` | `.env` / `config.py` | nativeレンダーのffprobe 最大実行秒数 |
 | `MAX_BACKGROUNDS_SHORTS` | `config.py` | Shortsの最大背景生成枚数 |
 | `MAX_BACKGROUNDS_LONG` | `config.py` | Longの最大背景生成枚数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `.env` / `config.py` | Longアップロード後に自動追加する再生リスト名。未設定時は `ロング動画`。完全一致で検索 |

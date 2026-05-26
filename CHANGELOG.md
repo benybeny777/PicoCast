@@ -14,6 +14,12 @@
 
 ## 2026-05-27
 
+### 履歴再レンダー時のffmpegハング対策
+
+- nativeレンダーのffmpeg実行を `-nostdin` + `stdin=DEVNULL` の非対話モードに統一し、履歴からの再作成で入力待ちによりジョブが固まらないよう修正
+- `NATIVE_FFMPEG_TIMEOUT_SEC` / `NATIVE_FFPROBE_TIMEOUT_SEC` を追加し、ffmpeg / ffprobe が停止した場合にタイムアウトで失敗として上位へ伝播するよう修正
+- Web UI設定画面から native ffmpeg / ffprobe タイムアウトを変更できるよう追加
+
 ### よみがな補正の依存関係とエラー処理を修正
 
 - `requirements.txt` を追加し、`safe_auto` に必要な `sudachipy` / `sudachidict_core` を依存関係へ追加
