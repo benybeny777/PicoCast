@@ -19,6 +19,8 @@
 - `core/cta_policy.py` / `web_app/services/generation_service.py`: Shortsの新規/横展開を既存出力から通算し、`TOPIC_REQUEST_CTA_EVERY_N`（既定5）本に1本だけ `ネタ募集CTA: 許可` を自動付与するよう変更
 - `core/youtube_analytics.py` / `core/analytics_score.py` / `web_app/templates/analytics.html`: ネタ募集CTAの対象有無と理由をYouTube Analytics取得結果へ取り込み、Analytics画面とTSVで確認できるよう変更
 - `README.md` / `SPEC.md` / `core/script_generation_prompt.txt` / `samples/prompt_parts/food/script_generation_prompt.txt`: 旧来の「同時生成5本以上で最大1本」記述を、通算5本に1本の運用へ更新
+- `README.md`: `config.py` は共通の既定値、`.env` / 環境変数はローカル上書きとして優先される関係を明記
+- `web_app/services/config_service.py`: Web UIで保存した非秘密設定を、可能な範囲で現在のWebプロセスへ即時反映するよう変更
 
 ### ドキュメント整合性整理
 

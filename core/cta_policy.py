@@ -3,7 +3,7 @@ import os
 import re
 import subprocess
 
-from config import OUTPUT_DIR, TOPIC_REQUEST_CTA_EVERY_N
+import config as cfg
 
 
 SHORTS_DIRECT_NAVIGATION_NG = [
@@ -49,7 +49,7 @@ def is_topic_request_cta_candidate(video_type: str | None, generation_kind: str 
 
 
 def topic_request_cta_interval() -> int:
-    return int(TOPIC_REQUEST_CTA_EVERY_N or 0)
+    return int(getattr(cfg, "TOPIC_REQUEST_CTA_EVERY_N", 0) or 0)
 
 
 def should_allow_topic_request_cta(
@@ -119,7 +119,7 @@ def _script_meta_from_path(script_path: str) -> dict[str, str]:
 
 
 def count_existing_topic_request_candidates(output_dir: str | None = None) -> int:
-    base_dir = os.path.abspath(output_dir or OUTPUT_DIR)
+    base_dir = os.path.abspath(output_dir or cfg.OUTPUT_DIR)
     if not os.path.isdir(base_dir):
         return 0
     count = 0

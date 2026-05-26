@@ -1,6 +1,6 @@
 """
 .env ファイルの読み書きによる設定変更サービス。
-APIキー・トークンなど秘密値は対象外。変更後はアプリ再起動が必要。
+APIキー・トークンなど秘密値は対象外。一部設定は保存直後に現在プロセスへ反映する。
 """
 import os
 from typing import Any
@@ -90,6 +90,7 @@ def save_config(updates: dict[str, str]) -> list[str]:
 
     safe_updates = {k: v for k, v in updates.items() if k in _ALLOWED_KEYS}
     _write_env(safe_updates)
+    _apply_runtime_updates(safe_updates)
     return []
 
 
@@ -174,3 +175,25 @@ def _write_env(updates: dict[str, str]) -> None:
 
     with open(_ENV_PATH, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
+
+
+def _apply_runtime_updates(updates: dict[str, str]) -> None:
+    """保存した設定を、可能な範囲で現在のWebプロセスへ即時反映する。"""
+    key_map = {item["key"]: item for item in EDITABLE_CONFIG}
+    for key, raw_val in updates.items():
+        spec = key_map.get(key)
+        if not spec:
+            continue
+        os.environ[key] = str(raw_val)
+        try:
+            if spec["type"] == "int":
+                value: Any = int(raw_val)
+            elif spec["type"] == "float":
+                value = float(raw_val)
+            elif spec["type"] == "bool":
+                value = str(raw_val) == "1"
+            else:
+                value = str(raw_val)
+            setattr(cfg, key, value)
+        except (ValueError, TypeError):
+            continue

@@ -44,7 +44,7 @@
 <!-- 設定変更フォーム -->
 <div class="card mt">
   <h2>設定変更</h2>
-  <p class="hint">変更は .env に書き込まれ、<strong>アプリ再起動後</strong>に反映されます。</p>
+  <p class="hint">変更は <code>.env</code> に書き込まれます。多くの設定は保存後すぐ反映されますが、起動時にだけ読む設定はアプリ再起動後に反映されます。</p>
   <div class="action-row mt">
     <button class="btn btn-primary" onclick="saveConfig()">保存</button>
     <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
@@ -223,7 +223,7 @@ async function saveConfig() {
       statusBox.textContent = 'エラー:\n' + errs;
       statusBox.style.color = 'var(--error)';
     } else {
-      statusBox.textContent = `保存しました (${data.saved.length}件)。アプリを再起動すると反映されます。`;
+      statusBox.textContent = data.note || `保存しました (${data.saved.length}件)。`;
       statusBox.style.color = 'var(--success)';
     }
   } catch(e) {

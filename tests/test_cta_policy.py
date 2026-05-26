@@ -51,9 +51,9 @@ class CtaPolicyTests(unittest.TestCase):
         self.assertIn("ネタ募集CTA: 禁止", updated[1])
 
     def test_topic_request_cta_interval_zero_disables_auto_allow(self):
-        original = cta_policy.TOPIC_REQUEST_CTA_EVERY_N
+        original = cta_policy.cfg.TOPIC_REQUEST_CTA_EVERY_N
         try:
-            cta_policy.TOPIC_REQUEST_CTA_EVERY_N = 0
+            cta_policy.cfg.TOPIC_REQUEST_CTA_EVERY_N = 0
             ok = cta_policy.should_allow_topic_request_cta(
                 video_type="Shorts",
                 generation_kind="新規",
@@ -69,7 +69,7 @@ class CtaPolicyTests(unittest.TestCase):
                 already_allowed_in_batch=False,
             )
         finally:
-            cta_policy.TOPIC_REQUEST_CTA_EVERY_N = original
+            cta_policy.cfg.TOPIC_REQUEST_CTA_EVERY_N = original
 
         self.assertFalse(ok)
         self.assertIn("自動付与なし", reason)
