@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import wave
 import time
@@ -330,12 +330,13 @@ def _split_at_punctuation(text):
 
 
 def _detect_is_shorts(script_content):
-    """台本テキストから動画形式を検出する。Shorts/ショート のみ True。Long/ロング は False。"""
+    """台本テキストから動画形式を検出する。Shorts/ショート のみ True。Long/ロング/ネタ会議 は False。"""
     for line in script_content.splitlines():
         line = line.strip().replace("**", "")
         m = re.match(r'^(?:動画形式|Format)[:：]\s*(.+)$', line, re.IGNORECASE)
         if m:
-            return m.group(1).strip().lower() in ("shorts", "ショート")
+            val = m.group(1).strip().lower()
+            return "shorts" in val or "ショート" in val
     return False
 
 
@@ -1142,6 +1143,23 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             lines += ["【目的】", meta["generation_purpose"], ""]
         if "thumbnail" in meta:
             lines += ["【サムネイルプロンプト】", meta["thumbnail"], ""]
+        if "meeting_candidates" in meta:
+            lines += ["【候補ネタ】", meta["meeting_candidates"], ""]
+            
+            # Save netakaigi.json for Phase 2
+            from core.parser import ScriptParser
+            cands = ScriptParser.parse_meeting_candidates(meta["meeting_candidates"])
+            netakaigi_data = {
+                "mode": "netakaigi",
+                "purpose": "premiere_poll",
+                "candidate_count": len(cands),
+                "candidates": cands,
+                "poll_method": "comments_and_poll",
+                "winner": None,
+                "later_shorts_video_id": None
+            }
+            with open(os.path.join(_meta_dir(theme_dir), "netakaigi.json"), "w", encoding="utf-8") as nf:
+                json.dump(netakaigi_data, nf, ensure_ascii=False, indent=2)
         # 台本に固定コメントがなければめたん調テンプレートで生成
         pinned_comment = meta.get("fixed_comment", "")
         if not pinned_comment:

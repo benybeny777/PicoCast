@@ -228,6 +228,26 @@ def build_script_generation_prompt(existing_titles=None) -> str:
     return base + "\n"
 
 
+def build_meeting_script_prompt(existing_titles=None, analytics_tsv=None) -> str:
+    local_prompt = PROMPT_PARTS_LOCAL_DIR / "script_generation_prompt_meeting.txt"
+    prompt_path = local_prompt if local_prompt.exists() else PROMPT_PARTS_DIR / "script_generation_prompt_meeting.txt"
+    base = prompt_path.read_text(encoding="utf-8").strip()
+
+    existing_titles = existing_titles or []
+    existing_title_lines = _format_existing_title_lines(existing_titles)
+    analytics_data_block = _format_title_analytics_block(analytics_tsv)
+
+    appended_context = (
+        f"\\n\\n━━━━━━━━━━━━━━━━━━\\n既存タイトル・実績データ (Analytics TSV)\\n━━━━━━━━━━━━━━━━━━\\n"
+        f"以下の過去タイトルと直近の実績データを参考に、ウケの良かったジャンル（横展開）や、不発だったが切り口を変えれば伸びるネタ（再挑戦）などを検討してください。\\n"
+        f"完全な既存重複は「既存重複リスク」として懸念点に挙げてください。\\n\\n"
+        f"【既存タイトル】\\n{existing_title_lines}\\n\\n"
+        f"【実績データ】\\n{analytics_data_block}\\n"
+    )
+
+    return base + appended_context
+
+
 def build_vidiq_prompt() -> str:
     """旧インポート向け後方互換エイリアス。"""
     return build_script_generation_prompt()

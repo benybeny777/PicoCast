@@ -17,7 +17,7 @@
   "4": {
     "class_type": "CheckpointLoaderSimple",
     "inputs": {
-      "ckpt_name": "Animagine XL 3.1"
+      "ckpt_name": "animagine-xl-3.1.safetensors"
     }
   },
   "5": {

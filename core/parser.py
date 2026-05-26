@@ -19,9 +19,10 @@ class ScriptParser:
     _genre_group_re = re.compile(r'^(?:ジャンル|Genre(?:Group)?)[:：](.*)$', re.IGNORECASE)
     _topic_request_cta_re = re.compile(r'^(?:ネタ募集CTA|TopicRequestCTA)[:：](.*)$', re.IGNORECASE)
     _topic_request_cta_reason_re = re.compile(r'^(?:ネタ募集CTA理由|TopicRequestCTAReason)[:：](.*)$', re.IGNORECASE)
+    _meeting_candidates_re = re.compile(r'^(?:候補ネタ|MeetingCandidates|Candidates)[:：](.*)$', re.IGNORECASE)
     _chapter_re = re.compile(r'^(?:チャプター|チャプター一覧|Chapter(?:s|List)?)[:：]', re.IGNORECASE)
     _bracket_meta_re = re.compile(
-        r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?|固定コメント|PinnedComment|生成区分|GenerationKind|元動画|派生元|SourceVideo|目的|生成目的|GenerationPurpose|ネタ募集CTA|TopicRequestCTA|ネタ募集CTA理由|TopicRequestCTAReason)\s*】\s*(.*)$',
+        r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?|固定コメント|PinnedComment|生成区分|GenerationKind|元動画|派生元|SourceVideo|目的|生成目的|GenerationPurpose|ネタ募集CTA|TopicRequestCTA|ネタ募集CTA理由|TopicRequestCTAReason|候補ネタ|MeetingCandidates|Candidates)\s*】\s*(.*)$',
         re.IGNORECASE,
     )
     _bracket_meta_types = {
@@ -56,6 +57,9 @@ class ScriptParser:
         "topicrequestcta": "topic_request_cta",
         "ネタ募集cta理由": "topic_request_cta_reason",
         "topicrequestctareason": "topic_request_cta_reason",
+        "候補ネタ": "meeting_candidates",
+        "meetingcandidates": "meeting_candidates",
+        "candidates": "meeting_candidates",
     }
     _ignore_patterns = [
         re.compile(r'^```.*$'),
@@ -74,6 +78,7 @@ class ScriptParser:
         "video_format", "thumbnail_text", "fixed_comment",
         "generation_kind", "source_video_title", "generation_purpose",
         "character_pattern", "genre_group", "topic_request_cta", "topic_request_cta_reason",
+        "meeting_candidates",
     })
 
     @staticmethod
@@ -96,6 +101,7 @@ class ScriptParser:
         genre_group_re = ScriptParser._genre_group_re
         topic_request_cta_re = ScriptParser._topic_request_cta_re
         topic_request_cta_reason_re = ScriptParser._topic_request_cta_reason_re
+        meeting_candidates_re = ScriptParser._meeting_candidates_re
         bracket_meta_re = ScriptParser._bracket_meta_re
         ignore_patterns = ScriptParser._ignore_patterns
 
@@ -125,11 +131,11 @@ class ScriptParser:
 
                 # メタ値の続き（description=複数行、それ以外=次の1行のみ）
                 if last_meta:
-                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, bracket_meta_re])
+                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, meeting_candidates_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
                     is_ignore = any(p.match(line) for p in ignore_patterns)
-                    if not is_keyword and not is_dialogue and (not is_ignore or last_meta["type"] == "description"):
-                        if last_meta["type"] == "description":
+                    if not is_keyword and not is_dialogue and (not is_ignore or last_meta["type"] in ("description", "meeting_candidates")):
+                        if last_meta["type"] in ("description", "meeting_candidates"):
                             last_meta["text"] = (last_meta["text"] + "\n" + line).strip()
                             continue
                         elif not last_meta["text"]:
@@ -179,6 +185,7 @@ class ScriptParser:
                     (genre_group_re, "genre_group"),
                     (topic_request_cta_re, "topic_request_cta"),
                     (topic_request_cta_reason_re, "topic_request_cta_reason"),
+                    (meeting_candidates_re, "meeting_candidates"),
                 ]:
                     m = meta_re.match(line)
                     if m:
@@ -246,6 +253,44 @@ class ScriptParser:
     def parse(file_path):
         with open(file_path, "r", encoding="utf-8") as f:
             return ScriptParser._parse_lines(line.strip() for line in f)
+
+    @staticmethod
+    def parse_meeting_candidates(text: str) -> list:
+        candidates = []
+        current = {}
+        for line in text.splitlines():
+            line = line.strip()
+            if not line: continue
+            
+            m_num = re.match(r'^候補番号[:：]\s*(.+)$', line)
+            if m_num:
+                if current:
+                    candidates.append(current)
+                    current = {}
+                current["number"] = m_num.group(1).strip()
+                continue
+                
+            if current is not None:
+                if m_title := re.match(r'^候補タイトル[:：]\s*(.+)$', line):
+                    current["title"] = m_title.group(1).strip()
+                elif m_cat := re.match(r'^分類[:：]\s*(.+)$', line):
+                    current["category"] = m_cat.group(1).strip()
+                elif m_src := re.match(r'^横展開元[:：]\s*(.+)$', line):
+                    current["source_video"] = m_src.group(1).strip()
+                elif m_evi := re.match(r'^実績根拠[:：]\s*(.+)$', line):
+                    current["evidence"] = m_evi.group(1).strip()
+                elif m_risk := re.match(r'^既存重複リスク[:：]\s*(.+)$', line):
+                    current["duplicate_risk"] = m_risk.group(1).strip()
+                elif m_thumb := re.match(r'^サムネ一言[:：]\s*(.+)$', line):
+                    current["thumbnail_word"] = m_thumb.group(1).strip()
+                elif m_hook := re.match(r'^冒頭1秒案[:：]\s*(.+)$', line):
+                    current["opening_hook"] = m_hook.group(1).strip()
+                elif m_judg := re.match(r'^めたん判定[:：]\s*(.+)$', line):
+                    current["metan_judgement"] = m_judg.group(1).strip()
+                    
+        if current:
+            candidates.append(current)
+        return candidates
 
     @staticmethod
     def parse_string(text: str):

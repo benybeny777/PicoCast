@@ -132,6 +132,20 @@ def get_script_generation_prompt() -> dict:
     return {"prompt": prompt, "title_count": len(food_titles)}
 
 
+def get_meeting_prompt() -> dict:
+    from core.script_prompts import build_meeting_script_prompt
+    food_titles = _collect_food_titles()
+    tsv, tsv_count = _read_latest_analytics_tsv()
+    summary = _read_latest_analytics_summary()
+    analytics_tsv = None
+    if tsv and summary:
+        analytics_tsv = f"{summary}\n\n【動画別TSV】\n{tsv}"
+    elif tsv:
+        analytics_tsv = tsv
+    prompt = build_meeting_script_prompt(food_titles, analytics_tsv=analytics_tsv)
+    return {"prompt": prompt, "title_count": len(food_titles)}
+
+
 def get_title_prompt(long_only: bool = False) -> dict:
     from core.script_prompts import build_title_prompt
     food_titles = _collect_food_titles()

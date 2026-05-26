@@ -46,7 +46,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "OLLAMA_REWRITE_MODEL",            "type": "ollama_model", "label": "Ollama リライトモデル",         "default": str(cfg.OLLAMA_REWRITE_MODEL)},
     {"key": "OLLAMA_REWRITE_FALLBACK_MODEL",   "type": "ollama_model", "label": "Ollama リライト fallback モデル", "default": str(cfg.OLLAMA_REWRITE_FALLBACK_MODEL)},
     {"key": "AUTO_FIXED_COMMENT_ENABLED",         "type": "bool",         "label": "固定コメント 自動投稿",        "default": "1" if cfg.AUTO_FIXED_COMMENT_ENABLED else "0"},
-    {"key": "VOICE_READING_MODE",                     "type": "select",         "label": "よみがな補正モード",            "default": str(cfg.VOICE_READING_MODE), "choices": ["off", "dictionary", "safe_auto"]},
+    {"key": "VOICE_READING_MODE",                     "type": "select",         "label": "よみがな補正モード",            "default": str(cfg.VOICE_READING_MODE), "choices": [("off", "無効 (off)"), ("dictionary", "自前辞書のみ (dictionary)"), ("safe_auto", "安全自動補正 (safe_auto)")]},
     {"key": "OPENAI_FINAL_REVIEW_ENABLED",     "type": "bool",  "label": "ChatGPT 最終レビュー有効",   "default": "1" if cfg.OPENAI_FINAL_REVIEW_ENABLED else "0"},
     {"key": "OPENAI_FINAL_REVIEW_MODEL",       "type": "str",   "label": "ChatGPT 最終レビューモデル", "default": str(cfg.OPENAI_FINAL_REVIEW_MODEL)},
     {"key": "WEB_UI_PORT",                     "type": "int",   "label": "Web UI ポート番号",          "default": str(cfg.WEB_UI_PORT), "min": 1024, "max": 65535},

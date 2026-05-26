@@ -2,7 +2,7 @@
   "anime_standard": {
     "label": "背景（漫画風・標準）",
     "model_type": "sdxl",
-    "checkpoint": "Animagine XL 3.1",
+    "checkpoint": "animagine-xl-3.1.safetensors",
     "loras": [],
     "sampler": "dpmpp_2m_karras",
     "steps": 24,

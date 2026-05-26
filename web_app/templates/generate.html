@@ -20,6 +20,10 @@
       <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('title-long')">Longタイトル案プロンプト</button>
       <span class="hint" style="font-size:12px">Long動画専用タイトル20案を依頼</span>
     </div>
+    <div style="display:flex; align-items:center; gap:12px">
+      <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('meeting')">ネタ会議台本案プロンプト</button>
+      <span class="hint" style="font-size:12px">制作会議コント形式の候補ネタ会議（Shorts）</span>
+    </div>
   </div>
   <div id="prompt-result" style="display:none" class="mt">
     <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
@@ -140,6 +144,7 @@ async function fetchPrompt(type) {
     let url = '/api/prompt/script';
     if (type === 'title') url = '/api/prompt/title';
     else if (type === 'title-long') url = '/api/prompt/title?long_only=true';
+    else if (type === 'meeting') url = '/api/prompt/meeting';
 
     const res = await fetch(url);
     const data = await res.json();
