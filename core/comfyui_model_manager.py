@@ -15,11 +15,11 @@ class ComfyUIModelManager:
     def _load_manifest(self):
         if not os.path.exists(self.manifest_path):
             return []
-        try:
-            with open(self.manifest_path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return []
+        with open(self.manifest_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            raise RuntimeError(f"ComfyUIモデルマニフェストが不正です: {self.manifest_path}")
+        return data
 
     def get_model_status(self):
         """全モデルの導入状況を返す"""
@@ -50,13 +50,10 @@ class ComfyUIModelManager:
             return True
             
         sha256_hash = hashlib.sha256()
-        try:
-            with open(file_path, "rb") as f:
-                for byte_block in iter(lambda: f.read(4096), b""):
-                    sha256_hash.update(byte_block)
-            return sha256_hash.hexdigest() == expected_hash
-        except Exception:
-            return False
+        with open(file_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return sha256_hash.hexdigest() == expected_hash
 
     def download_model(self, model_name):
         """特定のモデルをダウンロードする"""
@@ -88,10 +85,7 @@ class ComfyUIModelManager:
             return True
         except Exception as e:
             if os.path.exists(target_path):
-                try:
-                    os.remove(target_path)
-                except Exception:
-                    pass
+                os.remove(target_path)
             raise RuntimeError(f"モデルのダウンロードに失敗しました: {e}") from e
 
     def check_all_models_ready(self):

@@ -133,7 +133,7 @@ LOCAL_COMFYUI_TIMEOUT_SEC=300
 
 プリセット定義は `assets/comfyui/presets.json`、workflow は `assets/comfyui/workflows/` にあります。初期プリセットは「背景（漫画風・標準）」「背景（資料風・写実）」「背景（難プロンプト用）」の3つです。モデル名はユーザーに直接選ばせず、用途別プリセットとして扱います。
 
-ComfyUI未起動、workflow不正、checkpoint未配置、タイムアウト、出力画像不正の場合は、Nano Banana / Gemini や別プリセットへ自動切替せず、原因を表示して生成を中止します。
+ComfyUI未起動、モデルマニフェスト不正、必要モデル不足、workflow不正、checkpoint未配置、タイムアウト、出力画像不正の場合は、Nano Banana / Gemini や別プリセットへ自動切替せず、原因を表示して生成を中止します。失敗内容は `_meta/image_generation.json` の最新結果と `entries[]` 履歴に保存されます。
 
 ---
 

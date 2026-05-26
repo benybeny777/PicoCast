@@ -40,15 +40,6 @@ class ImageGenerator:
                 self.client = genai.Client(api_key=GOOGLE_API_KEY)
             except Exception as e:
                 print(f"  [Warning] Failed to initialize Google GenAI Client: {e}")
-        elif self.background_engine == "local_comfyui":
-            from core.comfyui_model_manager import ComfyUIModelManager
-            try:
-                manager = ComfyUIModelManager()
-                manager.check_all_models_ready()
-            except Exception as e:
-                print(f"❌ {e}")
-                print("自動フォールバックは行いません")
-                raise RuntimeError(str(e))
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):
@@ -154,6 +145,7 @@ class ImageGenerator:
                 current = loaded
                 current.setdefault("entries", [])
         current["entries"].append(entry)
+        current.update(entry)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(current, f, ensure_ascii=False, indent=2)
 
@@ -181,6 +173,10 @@ class ImageGenerator:
             "fallback_used": False,
         }
         try:
+            from core.comfyui_model_manager import ComfyUIModelManager
+
+            manager = ComfyUIModelManager()
+            manager.check_all_models_ready()
             client = ComfyUIClient()
             result = client.generate_image(
                 prompt=prompt,

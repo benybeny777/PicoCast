@@ -54,6 +54,18 @@ def test_preset_file_invalid_aborts(tmp_path):
         ComfyUIClient(preset_file=str(preset_path)).load_presets()
 
 
+def test_model_manifest_invalid_aborts(tmp_path):
+    from core.comfyui_model_manager import ComfyUIModelManager
+
+    manifest_path = tmp_path / "model_manifest.json"
+    manifest_path.write_text("{}", encoding="utf-8")
+    manager = ComfyUIModelManager()
+    manager.manifest_path = str(manifest_path)
+
+    with pytest.raises(RuntimeError, match="モデルマニフェストが不正"):
+        manager._load_manifest()
+
+
 def test_workflow_file_invalid_aborts(tmp_path):
     from core.comfyui_client import ComfyUIClient
 
@@ -114,7 +126,10 @@ def test_invalid_output_image_aborts(tmp_path):
 
 def test_local_comfyui_failure_writes_failed_meta_and_does_not_call_nanobanana(monkeypatch, tmp_path):
     from core.comfyui_client import ComfyUIClient
+    from core.comfyui_model_manager import ComfyUIModelManager
     from core.image_generator import ImageGenerator
+
+    monkeypatch.setattr(ComfyUIModelManager, "check_all_models_ready", lambda self: True)
 
     def fail_generate(self, **kwargs):
         raise RuntimeError("ComfyUI down")
@@ -135,6 +150,28 @@ def test_local_comfyui_failure_writes_failed_meta_and_does_not_call_nanobanana(m
     assert data["status"] == "failed"
     assert data["fallback_used"] is False
     assert "ComfyUI down" in data["error_message"]
+    assert data["entries"][-1]["status"] == "failed"
+
+
+def test_local_comfyui_model_missing_writes_failed_meta(monkeypatch, tmp_path):
+    from core.comfyui_model_manager import ComfyUIModelManager
+    from core.image_generator import ImageGenerator
+
+    def fail_model_check(self):
+        raise RuntimeError("ComfyUI必要モデルが不足しています。不足: TestModel.safetensors")
+
+    monkeypatch.setattr(ComfyUIModelManager, "check_all_models_ready", fail_model_check)
+
+    bg_dir = tmp_path / "theme" / "backgrounds"
+    gen = ImageGenerator(background_engine="local_comfyui", comfyui_preset="anime_standard")
+    with pytest.raises(RuntimeError, match="TestModel"):
+        gen.generate_background("背景: テスト", target_dir=str(bg_dir), fname="bg_001_001.png")
+
+    meta_path = tmp_path / "theme" / "_meta" / "image_generation.json"
+    data = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert data["status"] == "failed"
+    assert data["fallback_used"] is False
+    assert "TestModel.safetensors" in data["error_message"]
 
 
 def test_nanobanana_engine_keeps_existing_no_key_behavior(monkeypatch):

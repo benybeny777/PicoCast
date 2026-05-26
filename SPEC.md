@@ -210,7 +210,7 @@ ComfyUIプリセットは `assets/comfyui/presets.json` に定義する。初期
 
 ComfyUI背景生成では、日本語背景文をローカル向けに短縮し、人物・テキスト・ロゴ・看板文字・赤丸・矢印・注釈を禁止する。背景だけを生成し、文字や装飾は描かせない。
 
-ComfyUI未起動、workflow不正、checkpoint未設定/未配置、タイムアウト、出力画像不正はすべて失敗として扱い、Nano Banana / Gemini、別プリセット、別モデルへ自動フォールバックしない。失敗時は `_meta/image_generation.json` に `status=failed`、`error_message`、`fallback_used=false` を保存して処理を中止する。
+ComfyUI未起動、モデルマニフェスト不正、必要モデル不足、workflow不正、checkpoint未設定/未配置、タイムアウト、出力画像不正はすべて失敗として扱い、Nano Banana / Gemini、別プリセット、別モデルへ自動フォールバックしない。失敗時は `_meta/image_generation.json` に最新結果として `status=failed`、`error_message`、`fallback_used=false` を保存し、同時に `entries[]` へ履歴を追記して処理を中止する。
 
 ---
 

@@ -14,6 +14,12 @@
 
 ## 2026-05-27
 
+### ComfyUI背景生成の失敗記録を修正
+
+- `local_comfyui` の必要モデル確認を生成処理内へ移し、モデル不足で中止する場合も `_meta/image_generation.json` に `status=failed`、`error_message`、`fallback_used=false` を保存するよう修正
+- `_meta/image_generation.json` は最新結果をトップレベルに保持しつつ、`entries[]` に生成試行履歴も追記する形式に整理
+- ComfyUIモデルマニフェスト不正やSHA256検証時の読み取り失敗を無言で握りつぶさず、原因が分かる例外として扱うよう修正
+
 ### ネタ会議モードの改修（ShortLong・ミニ番組化 / Phase 1〜3）
 - Web UIの「ネタ会議台本案プロンプト」を全面刷新し、2〜4分尺のプレミア公開・投票用ミニ番組として出力するよう変更
 - プロンプト生成時に過去の動画タイトルと直近のAnalyticsデータをTSVで渡し、横展開や再挑戦の判断を含めてAIに候補ネタを出させる機能を追加 (Phase 2)
