@@ -5,13 +5,7 @@ VOICEVOXの誤読を防ぐため、Ollamaでよみがなを生成してからTTS
 import json
 import re
 import requests
-from config import (
-    VOICE_READING_NORMALIZE_ENABLED,
-    VOICE_READING_NORMALIZE_MODEL,
-    VOICE_READING_NORMALIZE_OLLAMA_URL,
-    READING_NORMALIZE_CHECK_TIMEOUT_SEC,
-    READING_NORMALIZE_CHAT_TIMEOUT_SEC,
-)
+import config as _cfg
 
 _PROMPT_HEADER = (
     "以下のVOICEVOX音声合成用セリフ一覧を変換してください。\n"
@@ -26,10 +20,10 @@ class ReadingNormalizer:
     def __init__(self):
         self._cache: dict[str, str] = {}
         self._available = False
-        if not VOICE_READING_NORMALIZE_ENABLED:
+        if not _cfg.VOICE_READING_NORMALIZE_ENABLED:
             return
         try:
-            res = requests.get(f"{VOICE_READING_NORMALIZE_OLLAMA_URL}/api/tags", timeout=READING_NORMALIZE_CHECK_TIMEOUT_SEC)
+            res = requests.get(f"{_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}/api/tags", timeout=_cfg.READING_NORMALIZE_CHECK_TIMEOUT_SEC)
             self._available = res.status_code == 200
         except Exception:
             pass
@@ -48,13 +42,13 @@ class ReadingNormalizer:
 
         try:
             res = requests.post(
-                f"{VOICE_READING_NORMALIZE_OLLAMA_URL}/api/chat",
+                f"{_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}/api/chat",
                 json={
-                    "model": VOICE_READING_NORMALIZE_MODEL,
+                    "model": _cfg.VOICE_READING_NORMALIZE_MODEL,
                     "messages": [{"role": "user", "content": prompt}],
                     "stream": False,
                 },
-                timeout=READING_NORMALIZE_CHAT_TIMEOUT_SEC,
+                timeout=_cfg.READING_NORMALIZE_CHAT_TIMEOUT_SEC,
             )
             res.raise_for_status()
             content = res.json()["message"]["content"].strip()

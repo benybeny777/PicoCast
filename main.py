@@ -1214,9 +1214,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if reading_normalizer._available and _all_chunks:
         update_status(f"🔤 よみがな正規化中: {len(_all_chunks)}チャンク...")
     reading_map = reading_normalizer.normalize_batch(_all_chunks)
+    _changed_map = {k: v for k, v in reading_map.items() if k != v}
+    if _changed_map:
+        update_status(f"🔤 よみがな補正: {len(_changed_map)}件")
     try:
         with open(_reading_map_path, "w", encoding="utf-8") as _rmf:
-            json.dump(reading_map, _rmf, ensure_ascii=False, indent=2)
+            json.dump(_changed_map, _rmf, ensure_ascii=False, indent=2)
     except Exception as _e:
         update_status(f"⚠ よみがなマップ保存失敗: {_e}", "warning")
 
