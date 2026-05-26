@@ -733,32 +733,25 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             removed_old_backups = _cleanup_old_theme_backups(backup_base, safe_topic, keep=backup_dir, keep_count=1)
             if removed_old_backups:
                 update_status(f"🧹 古い同一テーマのバックアップを削除しました: {removed_old_backups}件")
-        except PermissionError as e:
-            locker = _find_locking_process(theme_dir)
-            locker_info = f"\nロック中のプロセス: {locker}" if locker else ""
-            raise OutputDirectoryLockedError(
-                f"既存フォルダをバックアップへ退避できませんでした。\n{theme_dir}{locker_info}\n\n"
-                "エクスプローラーや動画プレイヤーで出力フォルダ・MP4を閉じてからOKを押してください。"
-            ) from e
-        except Exception as e:
-            raise OutputDirectoryLockedError(
-                f"既存フォルダをバックアップへ退避できませんでした。\n"
-                f"エクスプローラーや動画プレイヤーでフォルダを開いていないか確認してください。\n({theme_dir})\n\n{e}"
-            ) from e
+        except (PermissionError, Exception) as e:
+            locker = _find_locking_process(theme_dir) if isinstance(e, PermissionError) else None
+            locker_info = f" (ロック: {locker})" if locker else ""
+            update_status(f"⚠️ バックアップをスキップして上書き生成します{locker_info}")
 
-        if reuse_backgrounds:
-            _old_bg_dir = os.path.join(_existing_theme_backup, "backgrounds")
-            if os.path.exists(_old_bg_dir):
-                reusable_bgs = [
-                    f for f in os.listdir(_old_bg_dir)
-                    if f.lower().endswith(".png") and f.lower().startswith("bg_")
-                ]
-                if reusable_bgs:
-                    _saved_bg_dir = _old_bg_dir
-        # サムネイルは再生成の有無に関係なく常に退避（再生成失敗時のフォールバック用）
-        _thumb_candidate = os.path.join(_existing_theme_backup, "thumbnails", "thumbnail.png")
-        if os.path.exists(_thumb_candidate):
-            _saved_thumb_path = _thumb_candidate
+        if _existing_theme_backup:
+            if reuse_backgrounds:
+                _old_bg_dir = os.path.join(_existing_theme_backup, "backgrounds")
+                if os.path.exists(_old_bg_dir):
+                    reusable_bgs = [
+                        f for f in os.listdir(_old_bg_dir)
+                        if f.lower().endswith(".png") and f.lower().startswith("bg_")
+                    ]
+                    if reusable_bgs:
+                        _saved_bg_dir = _old_bg_dir
+            # サムネイルは再生成の有無に関係なく常に退避（再生成失敗時のフォールバック用）
+            _thumb_candidate = os.path.join(_existing_theme_backup, "thumbnails", "thumbnail.png")
+            if os.path.exists(_thumb_candidate):
+                _saved_thumb_path = _thumb_candidate
 
     theme_audio_dir = os.path.join(theme_dir, "audio")
     theme_bg_dir = os.path.join(theme_dir, "backgrounds")
