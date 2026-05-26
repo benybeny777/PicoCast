@@ -91,13 +91,18 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
     if job.cancel_event.is_set():
         return {"cancelled": True}
 
+    # サムネイルパスを探す
+    thumbnail_path = os.path.join(theme_dir, "thumbnails", "thumbnail.png")
+    if not os.path.exists(thumbnail_path):
+        thumbnail_path = None
+
     try:
         result = upload_video(
-            video_path=mp4_path,
+            mp4_path=mp4_path,
             title=render_info.get("video_title", history_name),
             description=render_info.get("description", ""),
             tags=render_info.get("tags", []),
-            theme_dir=theme_dir,
+            thumbnail_path=thumbnail_path,
             progress_callback=lambda msg, tag="info": _log(job, msg, tag),
         )
     except Exception as e:
