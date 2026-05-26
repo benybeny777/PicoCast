@@ -48,7 +48,7 @@
 
 - Windows / Mac を想定する。ffmpeg/native生成を主経路とし、YMM4プロジェクト出力は廃止済み。
 - Python 仮想環境: `.venv/`
-- 起動: `python -m web_app.app`
+- 起動: 通常は `start.bat` 推奨（手動起動時は `python -m web_app.app --open-browser`）
 - VOICEVOX をローカルで起動しておく必要がある（`http://localhost:50021`）
 
 ## 主要ファイル

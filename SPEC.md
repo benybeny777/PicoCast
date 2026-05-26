@@ -33,7 +33,7 @@
 ```
 yukkurijidou/
 ├── web_app/                # ローカル Web UI (FastAPI)
-│   ├── app.py              # FastAPI エントリポイント (python -m web_app.app)
+│   ├── app.py              # FastAPI エントリポイント (通常起動は start.bat 推奨)
 │   ├── job_manager.py      # バックグラウンドジョブ管理
 │   ├── schemas.py          # Pydantic リクエスト/レスポンススキーマ
 │   ├── security.py         # パストラバーサル対策・output/配下制限
@@ -294,8 +294,10 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 ### 起動
 
-```bash
-python web_app/app.py [--open-browser] [--port 58080] [--auto-port]
+```text
+start.bat
+# 手動起動する場合:
+python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 ```
 
 | オプション | 説明 |
@@ -818,7 +820,7 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 ### 生成
 
-1. `python -m web_app.app` で起動
+1. VOICEVOXを起動し、通常は `start.bat` でWeb UIを起動（手動起動時のみ `python -m web_app.app --open-browser` を使用）
 2. 必要に応じて `📊 アナリティクス` で実績データを取得
 3. `Shortsタイトル案` でタイトル案作成プロンプトをコピーし、候補を作成
 4. `AI台本作成` で食べ物雑学特化の台本作成プロンプトをコピー

@@ -14,6 +14,11 @@
 
 ## 2026-05-26
 
+### ドキュメント整合性整理
+
+- `README.md`: 環境準備、APIキー/OAuth、日常操作手順をWeb UI前提で整理し、通常起動は `start.bat` 推奨であることを明記
+- `SPEC.md` / `AGENTS.md`: 起動手順の記述を `start.bat` 推奨に統一し、手動起動は補助導線として説明
+
 ### Web UI一本化・旧GUI/CLI廃止
 
 - `gui.py`: 旧Tkinter GUIを削除し、操作入口をローカルWeb UIへ一本化
