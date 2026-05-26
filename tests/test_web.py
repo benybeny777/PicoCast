@@ -57,6 +57,9 @@ def test_generate_page(client):
     assert "SD生成" in res.text
     assert "背景生成エンジン" in res.text
     assert "Local / ComfyUI" in res.text
+    assert ">通常</option>" in res.text
+    assert ">’通常’</option>" not in res.text
+    assert ">'通常'</option>" not in res.text
 
 
 # 5. /history ページが 200 を返す
@@ -247,6 +250,29 @@ def test_config_rejects_newline_injection():
     errors = save_config({"FFMPEG_BIN": "ffmpeg\nOPENAI_API_KEY=leak"})
     assert errors
     assert "改行" in errors[0]
+
+
+def test_config_image_style_choices_current_is_csv(monkeypatch):
+    import config
+    from web_app.services.config_service import get_editable_config
+
+    monkeypatch.setattr(config, "WEB_IMAGE_STYLE_CHOICES", ("通常", "アニメ", "水彩"))
+
+    item = next(row for row in get_editable_config() if row["key"] == "WEB_IMAGE_STYLE_CHOICES")
+    assert item["current"] == "通常,アニメ,水彩"
+    assert "('" not in item["current"]
+
+
+def test_config_image_style_choices_save_normalizes_quotes(tmp_path, monkeypatch):
+    import web_app.services.config_service as cs
+
+    env_path = tmp_path / ".env"
+    monkeypatch.setattr(cs, "_ENV_PATH", str(env_path))
+
+    errors = cs.save_config({"WEB_IMAGE_STYLE_CHOICES": "('通常', 'アニメ', '水彩')"})
+
+    assert errors == []
+    assert env_path.read_text(encoding="utf-8").strip() == "WEB_IMAGE_STYLE_CHOICES=通常,アニメ,水彩"
 
 
 def test_secrets_reject_newline_injection():

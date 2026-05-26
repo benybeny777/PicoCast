@@ -81,6 +81,8 @@ def get_editable_config() -> list[dict[str, Any]]:
             raw = env_values.get(key, item["default"])
         if isinstance(raw, bool):
             current_str = "1" if raw else "0"
+        elif isinstance(raw, (tuple, list)):
+            current_str = ",".join(str(v) for v in raw)
         else:
             current_str = str(raw)
         result.append({**item, "current": current_str})
@@ -96,10 +98,18 @@ def save_config(updates: dict[str, str]) -> list[str]:
     if errors:
         return errors
 
-    safe_updates = {k: v for k, v in updates.items() if k in _ALLOWED_KEYS}
+    safe_updates = {_key: _normalize_update_value(_key, _value) for _key, _value in updates.items() if _key in _ALLOWED_KEYS}
     _write_env(safe_updates)
     _apply_runtime_updates(safe_updates)
     return []
+
+
+def _normalize_update_value(key: str, value: str) -> str:
+    if key == "WEB_IMAGE_STYLE_CHOICES":
+        return ",".join(cfg._split_env_choices(value))
+    if key == "WEB_DEFAULT_IMAGE_STYLE":
+        return cfg._clean_env_choice(value)
+    return str(value)
 
 
 def _validate(updates: dict[str, str]) -> list[str]:
@@ -204,6 +214,10 @@ def _apply_runtime_updates(updates: dict[str, str]) -> None:
                 value = float(raw_val)
             elif spec["type"] == "bool":
                 value = str(raw_val) == "1"
+            elif key == "WEB_IMAGE_STYLE_CHOICES":
+                value = cfg._split_env_choices(raw_val)
+            elif key == "WEB_DEFAULT_IMAGE_STYLE":
+                value = cfg._clean_env_choice(raw_val)
             else:
                 value = str(raw_val)
             setattr(cfg, key, value)

@@ -1,6 +1,32 @@
+import ast
 import os
 from dotenv import load_dotenv
 load_dotenv()
+
+_ENV_VALUE_QUOTES = "\"'`´‘’“”＇＂"
+
+
+def _clean_env_choice(value: str) -> str:
+    """設定画面に出す選択肢から、.env由来の余分な引用符を取り除く。"""
+    cleaned = str(value).strip()
+    while len(cleaned) >= 2 and cleaned[0] in _ENV_VALUE_QUOTES and cleaned[-1] in _ENV_VALUE_QUOTES:
+        cleaned = cleaned[1:-1].strip()
+    return cleaned
+
+
+def _split_env_choices(value: str) -> tuple[str, ...]:
+    if isinstance(value, (list, tuple)):
+        return tuple(choice for raw in value if (choice := _clean_env_choice(raw)))
+    text = str(value).strip()
+    if text.startswith(("[", "(")) and text.endswith(("]", ")")):
+        try:
+            parsed = ast.literal_eval(text)
+        except (ValueError, SyntaxError):
+            parsed = None
+        if isinstance(parsed, (list, tuple)):
+            return tuple(choice for raw in parsed if (choice := _clean_env_choice(raw)))
+    return tuple(choice for raw in text.split(",") if (choice := _clean_env_choice(raw)))
+
 
 # ───────────────────────────────────────────────
 # VOICEVOX
@@ -338,8 +364,8 @@ MAX_BACKGROUNDS             = MAX_BACKGROUNDS_SHORTS  # 後方互換エイリア
 WEB_APP_NAME = os.environ.get("WEB_APP_NAME", "Native Video Factory")  # Web UI の表示アプリ名
 WEB_UI_HOST = os.environ.get("WEB_UI_HOST", "127.0.0.1")  # バインドホスト（外部公開禁止）
 WEB_UI_PORT = int(os.environ.get("WEB_UI_PORT", "58080"))  # ポート番号（他アプリと競合しにくい高番号）
-WEB_DEFAULT_IMAGE_STYLE = os.environ.get("WEB_DEFAULT_IMAGE_STYLE", "通常")  # Web UI の既定画像スタイル
-WEB_IMAGE_STYLE_CHOICES = tuple(s.strip() for s in os.environ.get("WEB_IMAGE_STYLE_CHOICES", "通常,アニメ,水彩").split(",") if s.strip())  # Web UI 画像スタイル選択肢
+WEB_DEFAULT_IMAGE_STYLE = _clean_env_choice(os.environ.get("WEB_DEFAULT_IMAGE_STYLE", "通常"))  # Web UI の既定画像スタイル
+WEB_IMAGE_STYLE_CHOICES = _split_env_choices(os.environ.get("WEB_IMAGE_STYLE_CHOICES", "通常,アニメ,水彩"))  # Web UI 画像スタイル選択肢
 WEB_DEFAULT_REUSE_BACKGROUNDS = os.environ.get("WEB_DEFAULT_REUSE_BACKGROUNDS", "1").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時の背景再利用既定値
 WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST = os.environ.get("WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のLongサムネAB既定値
 WEB_DEFAULT_LONG_BUDGET_MODE = os.environ.get("WEB_DEFAULT_LONG_BUDGET_MODE", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のLong節約既定値

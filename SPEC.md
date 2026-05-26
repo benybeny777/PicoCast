@@ -650,7 +650,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_APP_NAME` | `Native Video Factory` | Web UI表示アプリ名 |
 | `WEB_UI_PORT` | 58080 | Web UIポート番号 |
 | `WEB_DEFAULT_IMAGE_STYLE` | `通常` | Web UI生成画面の既定画像スタイル |
-| `WEB_IMAGE_STYLE_CHOICES` | `通常,アニメ,水彩` | Web UI生成画面の画像スタイル選択肢 |
+| `WEB_IMAGE_STYLE_CHOICES` | `通常,アニメ,水彩` | Web UI生成画面の画像スタイル選択肢。正本はカンマ区切り。互換のため引用符付き値・Python/JSON配列風の値も読み込み時に正規化する |
 | `WEB_DEFAULT_REUSE_BACKGROUNDS` | `false` | Web UI生成画面の背景再利用既定値 |
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `false` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `false` | Web UI生成画面のLong節約既定値 |
@@ -1281,7 +1281,7 @@ YouTube OAuth:
 | `WEB_UI_HOST` | `.env` / `config.py` | Web UIのバインドホスト。既定は `127.0.0.1` |
 | `WEB_UI_PORT` | `.env` / `config.py` | Web UIのポート番号 |
 | `WEB_DEFAULT_IMAGE_STYLE` | `.env` / `config.py` | Web UI生成画面の既定画像スタイル |
-| `WEB_IMAGE_STYLE_CHOICES` | `.env` / `config.py` | Web UI生成画面の画像スタイル選択肢（カンマ区切り） |
+| `WEB_IMAGE_STYLE_CHOICES` | `.env` / `config.py` | Web UI生成画面の画像スタイル選択肢（正本はカンマ区切り）。互換のため引用符付き値・Python/JSON配列風の値も読み込み時に正規化する |
 | `WEB_DEFAULT_REUSE_BACKGROUNDS` | `.env` / `config.py` | Web UI生成画面の背景再利用既定値 |
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `.env` / `config.py` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `.env` / `config.py` | Web UI生成画面のLong節約既定値 |
