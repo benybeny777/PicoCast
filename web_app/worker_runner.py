@@ -6,6 +6,7 @@ stdout JSONL を Job.logs へ転送する。
 """
 from __future__ import annotations
 
+import atexit
 import json
 import os
 import subprocess
@@ -21,6 +22,23 @@ _WORKER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # subprocess に渡す環境変数（PYTHONIOENCODING を強制して文字化けを防ぐ）
 _WORKER_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+
+# 起動中ワーカープロセスを追跡して atexit で強制終了する
+_running_procs: set[subprocess.Popen] = set()
+_procs_lock = threading.Lock()
+
+
+def _kill_all_workers() -> None:
+    with _procs_lock:
+        procs = list(_running_procs)
+    for proc in procs:
+        try:
+            _kill_tree(proc)
+        except Exception:
+            pass
+
+
+atexit.register(_kill_all_workers)
 
 # Windows ではプロセスグループを新規作成して子プロセスツリーをまとめて kill できるようにする
 _POPEN_EXTRA: dict[str, Any] = (
@@ -75,6 +93,9 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
             **_POPEN_EXTRA,
         )
 
+        with _procs_lock:
+            _running_procs.add(proc)
+
         def _cancel_monitor() -> None:
             """cancel_event を監視して stdin に cancel を送り、タイムアウト後にツリーごと kill する。
             プロセスが正常終了した場合は何もせずに抜ける（①スレッドリーク対策）。"""
@@ -121,6 +142,9 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
             proc.wait(timeout=60)
         except subprocess.TimeoutExpired:
             _kill_tree(proc)
+        finally:
+            with _procs_lock:
+                _running_procs.discard(proc)
         stderr_thread.join(timeout=2)
 
         if os.path.exists(result_path):

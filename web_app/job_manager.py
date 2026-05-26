@@ -3,6 +3,7 @@
 長時間処理をバックグラウンドスレッドで実行し、ステータスを追跡する。
 初期実装はメモリ内管理。将来DB/JSON保存へ移行しやすい構造にする。
 """
+import atexit
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -50,6 +51,7 @@ class JobManager:
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
+        atexit.register(lambda: self._executor.shutdown(wait=False))
 
     def create_job(self, job_type: str) -> Job:
         job_id = str(uuid.uuid4())
