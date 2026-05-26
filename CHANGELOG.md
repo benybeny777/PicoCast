@@ -12,6 +12,20 @@
 
 ---
 
+## 2026-05-27
+
+### 視聴者維持率分析（Analytics画面）
+
+- `core/youtube_analytics.py`: `fetch_audience_retention()` を追加。YouTube Analytics API の `elapsedVideoTimeRatio` ディメンションを使い、指定動画の秒単位維持率データを取得する
+- `core/retention_analysis.py`: 新規。離脱ポイント（連続行で5pt以上の低下）・ループ可能性（audienceWatchRatio > 1.0）を検出し、自動コメントを生成する `analyze_retention()` を実装
+- `web_app/routes/api_analytics.py`: `GET /api/analytics/retention?video_id=...&duration=...` エンドポイントを追加
+- `web_app/templates/analytics.html`: Analytics一覧表で行を選択すると「維持率分析」ボタンが有効化され、モーダルで分析結果（テーブル・離脱ポイント・自動コメント）を表示。TSVコピー機能付き
+
+### 固定コメント自動生成をめたん調テンプレートに変更
+
+- `core/comment_templates.py`: 新規。四国めたん調（お嬢様口調・軽い毒舌）の固定コメントテンプレートを実装。タイトルからトピックを抽出し、`normal` / `topic_request` の2モードでランダム生成する `build_fixed_comment()` を提供
+- `main.py`: 固定コメント生成を Gemini API 呼び出しから `build_fixed_comment()` のテンプレート生成へ変更。APIコスト削減および安定しためたん口調を実現
+
 ## 2026-05-26
 
 ### 実尺チェックをよみがな正規化・音声生成後に移動

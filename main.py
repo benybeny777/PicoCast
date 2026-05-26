@@ -64,6 +64,7 @@ from config import (
     VOICEVOX_PATH,
     VOICE_TAIL_SAFETY_SEC,
 )
+from core.comment_templates import build_fixed_comment
 from core.cta_policy import (
     build_cta_policy,
     check_shorts_navigation_ng,
@@ -1146,11 +1147,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             lines += ["【目的】", meta["generation_purpose"], ""]
         if "thumbnail" in meta:
             lines += ["【サムネイルプロンプト】", meta["thumbnail"], ""]
-        # 台本に固定コメントがなければAIで生成
+        # 台本に固定コメントがなければめたん調テンプレートで生成
         pinned_comment = meta.get("fixed_comment", "")
         if not pinned_comment:
-            update_status("💬 固定コメントを生成中...")
-            pinned_comment = ai.generate_pinned_comment(script_content)
+            _cmt_mode = "topic_request" if topic_request_allowed else "normal"
+            pinned_comment = build_fixed_comment(meta.get("video_title", topic), mode=_cmt_mode)
+            update_status(f"💬 固定コメント自動生成: めたん調（{_cmt_mode}）")
         if pinned_comment:
             lines += ["【固定コメント】", pinned_comment, ""]
         with open(meta_path, "w", encoding="utf-8") as mf:

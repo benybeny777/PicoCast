@@ -85,7 +85,9 @@ yukkurijidou/
 │   │   ├── title_used_foods_food.txt        # 初期食べ物用の既存食材リスト
 │   │   └── local/           # 個人用差し替え欄（Git管理外・同名ファイル優先）
 │   ├── analytics_score.py  # YouTube Analytics評価・TSV保存
-│   ├── youtube_analytics.py # YouTube Analytics API取得
+│   ├── youtube_analytics.py # YouTube Analytics API取得（維持率取得含む）
+│   ├── retention_analysis.py # 視聴者維持率の離脱・ループ点分析
+│   ├── comment_templates.py # 固定コメント自動生成テンプレート（めたん調）
 │   ├── upload_scheduler.py # アップロードスケジュール管理（schedule_from_recordsで台帳から派生）
 │   ├── upload_records.py   # アップロード台帳の読み書き・upsert
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
@@ -379,6 +381,7 @@ POST /api/images/{history_name}/regenerate
 GET  /api/analytics
 GET  /api/analytics/tsv
 POST /api/analytics/refresh
+GET  /api/analytics/retention?video_id=...&duration=...
 
 GET  /api/schedule
 POST /api/schedule/sync

@@ -339,3 +339,46 @@ def fetch_video_analytics(days=28):
     finally:
         _close_google_resource(analytics)
         _close_google_resource(youtube)
+
+
+def fetch_audience_retention(video_id: str, start_date: str, end_date: str, duration_seconds: int) -> list[dict]:
+    """
+    指定動画の視聴者維持率データを取得する。
+
+    Returns:
+        dict のリスト。各要素は elapsed_ratio / second / audience_watch_ratio /
+        retention_percent / relative_retention を持つ。データなしは空リスト。
+    """
+    creds = _get_credentials()
+    analytics = build("youtubeAnalytics", "v2", credentials=creds)
+    try:
+        response = analytics.reports().query(
+            ids="channel==MINE",
+            startDate=start_date,
+            endDate=end_date,
+            metrics="audienceWatchRatio,relativeRetentionPerformance",
+            dimensions="elapsedVideoTimeRatio",
+            filters=f"video=={video_id}",
+        ).execute()
+
+        headers = [h.get("name") for h in response.get("columnHeaders", [])]
+        rows = response.get("rows") or []
+        if not rows:
+            return []
+
+        result = []
+        for row in rows:
+            data = dict(zip(headers, row))
+            elapsed = float(data.get("elapsedVideoTimeRatio") or 0)
+            watch = float(data.get("audienceWatchRatio") or 0)
+            relative = float(data.get("relativeRetentionPerformance") or 0)
+            result.append({
+                "elapsed_ratio": round(elapsed, 4),
+                "second": round(elapsed * duration_seconds, 1),
+                "audience_watch_ratio": round(watch, 4),
+                "retention_percent": round(watch * 100, 1),
+                "relative_retention": round(relative, 4),
+            })
+        return result
+    finally:
+        _close_google_resource(analytics)

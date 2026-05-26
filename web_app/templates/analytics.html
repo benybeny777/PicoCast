@@ -7,6 +7,7 @@
   <div class="action-row">
     <button class="btn btn-primary" onclick="refreshAnalytics()">Analytics取得・更新</button>
     <button class="btn btn-secondary" onclick="copyTSV()">TSVコピー</button>
+    <button id="retention-btn" class="btn btn-secondary" onclick="showRetention()" disabled>維持率分析</button>
   </div>
 
   <div id="refresh-status" class="log-box mt" style="display:none"></div>
@@ -83,7 +84,11 @@
           data-average_percentage_viewed="{{ row.get('average_percentage_viewed','0') or 0 }}"
           data-likes="{{ row.get('likes','0') or 0 }}"
           data-comments="{{ row.get('comments','0') or 0 }}"
-          data-subscribers_net="{{ row.get('subscribers_net','0') or 0 }}">
+          data-subscribers_net="{{ row.get('subscribers_net','0') or 0 }}"
+          data-video-id="{{ row.get('video_id','') }}"
+          data-duration="{{ row.get('duration','0') or 0 }}"
+          data-full-title="{{ row.get('title','') }}"
+          onclick="selectRow(this)" style="cursor:pointer">
         <td title="{{ row.get('title','') }}">{{ (row.get('title','') or '')[:32] }}</td>
         <td>{{ (row.get('published_at','') or '')[:10] }}</td>
         <td>
@@ -130,6 +135,22 @@
   <p class="empty-msg">Analyticsデータがありません。「Analytics取得・更新」ボタンを押してください。</p>
 </div>
 {% endif %}
+
+<!-- 維持率分析モーダル -->
+<div id="retention-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; overflow-y:auto; padding:2rem">
+  <div style="background:var(--color-surface,#1e1e2e); border-radius:8px; max-width:860px; margin:0 auto; padding:1.5rem">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem">
+      <h2 id="retention-title" style="margin:0">維持率分析</h2>
+      <div style="display:flex; gap:0.5rem">
+        <button class="btn btn-secondary btn-xs" onclick="copyRetentionTSV()">TSVコピー</button>
+        <button class="btn btn-secondary btn-xs" onclick="closeRetention()">✕ 閉じる</button>
+      </div>
+    </div>
+    <div id="retention-status" class="hint"></div>
+    <div id="retention-summary" class="card mt" style="display:none; white-space:pre-wrap; padding:0.75rem"></div>
+    <div id="retention-table-wrap" style="overflow-x:auto; margin-top:0.75rem"></div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -258,5 +279,97 @@ function sortTable(col) {
 applyFilters();
 // 初期ソート（公開日降順）
 sortTable('published_at');
+
+// ── 行選択 ──────────────────────────────────────────────────────────────────
+let _selectedRow = null;
+
+function selectRow(tr) {
+  if (_selectedRow) _selectedRow.classList.remove('selected');
+  if (_selectedRow === tr) {
+    _selectedRow = null;
+    document.getElementById('retention-btn').disabled = true;
+    return;
+  }
+  _selectedRow = tr;
+  tr.classList.add('selected');
+  const hasId = !!tr.dataset.videoId;
+  document.getElementById('retention-btn').disabled = !hasId;
+}
+
+// ── 維持率分析 ───────────────────────────────────────────────────────────────
+let _retentionRows = [];
+
+async function showRetention() {
+  if (!_selectedRow) return;
+  const videoId = _selectedRow.dataset.videoId;
+  const duration = parseInt(_selectedRow.dataset.duration) || 60;
+  const title = _selectedRow.dataset.fullTitle || videoId;
+
+  document.getElementById('retention-modal').style.display = 'block';
+  document.getElementById('retention-title').textContent = `維持率分析: ${title.slice(0, 40)}`;
+  document.getElementById('retention-status').textContent = '取得中...';
+  document.getElementById('retention-summary').style.display = 'none';
+  document.getElementById('retention-table-wrap').innerHTML = '';
+  _retentionRows = [];
+
+  try {
+    const res = await fetch(`/api/analytics/retention?video_id=${encodeURIComponent(videoId)}&duration=${duration}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      document.getElementById('retention-status').textContent = 'エラー: ' + (data.detail || JSON.stringify(data));
+      return;
+    }
+    if (!data.ok) {
+      document.getElementById('retention-status').textContent = data.message || '維持率データ未取得またはデータ待ちです。';
+      return;
+    }
+
+    document.getElementById('retention-status').textContent = `${data.rows.length} データ点取得`;
+    _retentionRows = data.rows.map(r => ({...r, videoId, title}));
+
+    const analysis = data.analysis;
+    if (analysis && analysis.summary) {
+      const summaryEl = document.getElementById('retention-summary');
+      summaryEl.textContent = analysis.summary;
+      summaryEl.style.display = 'block';
+    }
+
+    const rows = (analysis && analysis.rows) ? analysis.rows : data.rows;
+    let html = '<table class="data-table"><thead><tr>'
+      + '<th>位置%</th><th>秒数</th><th>維持率%</th><th>相対維持率</th><th>判定メモ</th>'
+      + '</tr></thead><tbody>';
+    for (const r of rows) {
+      const pct = (r.elapsed_ratio * 100).toFixed(1);
+      const ret = r.retention_percent != null ? r.retention_percent.toFixed(1) : '—';
+      const rel = r.relative_retention != null ? r.relative_retention.toFixed(3) : '—';
+      const memo = r.memo || '';
+      const warn = memo.includes('⚠') ? ' style="color:#e67e22"' : memo.includes('★') ? ' style="color:#27ae60"' : '';
+      html += `<tr><td>${pct}%</td><td>${r.second}</td><td${warn}>${ret}%</td><td>${rel}</td><td${warn}>${escapeHtml(memo)}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('retention-table-wrap').innerHTML = html;
+  } catch(e) {
+    document.getElementById('retention-status').textContent = '通信エラー: ' + e;
+  }
+}
+
+function closeRetention() {
+  document.getElementById('retention-modal').style.display = 'none';
+}
+
+async function copyRetentionTSV() {
+  if (!_retentionRows.length) return;
+  const header = 'title\tvideo_id\tduration\telapsed_ratio\tsecond\tretention_percent\trelative_retention';
+  const lines = _retentionRows.map(r =>
+    [r.title, r.videoId, r.second / (r.elapsed_ratio || 1), r.elapsed_ratio, r.second, r.retention_percent, r.relative_retention].join('\t')
+  );
+  try {
+    await navigator.clipboard.writeText([header, ...lines].join('\n'));
+    alert('維持率TSVをクリップボードにコピーしました');
+  } catch(e) {
+    alert('コピー失敗: ' + e);
+  }
+}
 </script>
 {% endblock %}
