@@ -333,7 +333,7 @@ async function regenerateFull() {
         finishGenerate();
         return;
       }
-      activeJobIds = [rdata.job_id];
+      activeJobIds = [...activeJobIds, rdata.job_id];
       document.getElementById('job-ids-info').textContent = `レンダージョブ: ${rdata.job_id}`;
       appendLog('MP4レンダージョブを登録しました', 'info');
       pollJobs(/* → reloadWithLogs */);
