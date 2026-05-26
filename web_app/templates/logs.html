@@ -128,7 +128,7 @@ function _updateCard(card, job) {
     let logBox = details.querySelector('.log-box');
     if (!logBox) { logBox = document.createElement('div'); logBox.className = 'log-box'; details.appendChild(logBox); }
 
-    const atBottom = details.open && (logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 5);
+    const atBottom = details.open && (logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80);
     logBox.innerHTML = _buildLogHtml(logs);
     if (atBottom) logBox.scrollTop = logBox.scrollHeight;
   } else if (details) {

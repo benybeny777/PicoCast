@@ -63,7 +63,7 @@ async function updateJobLogs(activeJobIds, logBox, options = {}) {
     }
   }
 
-  const isScrolledToBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 30;
+  const isScrolledToBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80;
   logBox.innerHTML = htmlContent;
   if (isScrolledToBottom) logBox.scrollTop = logBox.scrollHeight;
 
