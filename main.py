@@ -567,7 +567,7 @@ def normalize_background_order(items):
     return normalized
 
 
-def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None, sd_size_mode=False):
+def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None, sd_size_mode=False, long_thumbnail_ab_test=None):
     """既存の出力フォルダのサムネイルのみ再生成する。"""
     def update_status(msg, tag="info"):
         if progress_callback:
@@ -1147,7 +1147,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             lines += ["【候補ネタ】", meta["meeting_candidates"], ""]
             
             # Save netakaigi.json for Phase 2
-            from core.parser import ScriptParser
             cands = ScriptParser.parse_meeting_candidates(meta["meeting_candidates"])
             netakaigi_data = {
                 "mode": "netakaigi",
@@ -1220,8 +1219,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status("🔤 読み補正: safe_auto (Sudachi形態素解析)")
     elif reading_normalizer.mode == "dictionary":
         update_status("🔤 読み補正: dictionary (辞書のみ)")
-    elif hasattr(_cfg, "VOICE_READING_NORMALIZE_ENABLED") and _cfg.VOICE_READING_NORMALIZE_ENABLED:
-        update_status("⚠ LLM全文読み補正は廃止済みです。VOICE_READING_MODE を使用してください。", "warning")
 
     reading_map = reading_normalizer.normalize_batch(_all_chunks)
     _changed_map = {k: v for k, v in reading_map.items() if k != v}

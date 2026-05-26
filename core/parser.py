@@ -270,23 +270,22 @@ class ScriptParser:
                 current["number"] = m_num.group(1).strip()
                 continue
                 
-            if current is not None:
-                if m_title := re.match(r'^候補タイトル[:：]\s*(.+)$', line):
-                    current["title"] = m_title.group(1).strip()
-                elif m_cat := re.match(r'^分類[:：]\s*(.+)$', line):
-                    current["category"] = m_cat.group(1).strip()
-                elif m_src := re.match(r'^横展開元[:：]\s*(.+)$', line):
-                    current["source_video"] = m_src.group(1).strip()
-                elif m_evi := re.match(r'^実績根拠[:：]\s*(.+)$', line):
-                    current["evidence"] = m_evi.group(1).strip()
-                elif m_risk := re.match(r'^既存重複リスク[:：]\s*(.+)$', line):
-                    current["duplicate_risk"] = m_risk.group(1).strip()
-                elif m_thumb := re.match(r'^サムネ一言[:：]\s*(.+)$', line):
-                    current["thumbnail_word"] = m_thumb.group(1).strip()
-                elif m_hook := re.match(r'^冒頭1秒案[:：]\s*(.+)$', line):
-                    current["opening_hook"] = m_hook.group(1).strip()
-                elif m_judg := re.match(r'^めたん判定[:：]\s*(.+)$', line):
-                    current["metan_judgement"] = m_judg.group(1).strip()
+            if m_title := re.match(r'^候補タイトル[:：]\s*(.+)$', line):
+                current["title"] = m_title.group(1).strip()
+            elif m_cat := re.match(r'^分類[:：]\s*(.+)$', line):
+                current["category"] = m_cat.group(1).strip()
+            elif m_src := re.match(r'^横展開元[:：]\s*(.+)$', line):
+                current["source_video"] = m_src.group(1).strip()
+            elif m_evi := re.match(r'^実績根拠[:：]\s*(.+)$', line):
+                current["evidence"] = m_evi.group(1).strip()
+            elif m_risk := re.match(r'^既存重複リスク[:：]\s*(.+)$', line):
+                current["duplicate_risk"] = m_risk.group(1).strip()
+            elif m_thumb := re.match(r'^サムネ一言[:：]\s*(.+)$', line):
+                current["thumbnail_word"] = m_thumb.group(1).strip()
+            elif m_hook := re.match(r'^冒頭1秒案[:：]\s*(.+)$', line):
+                current["opening_hook"] = m_hook.group(1).strip()
+            elif m_judg := re.match(r'^めたん判定[:：]\s*(.+)$', line):
+                current["metan_judgement"] = m_judg.group(1).strip()
                     
         if current:
             candidates.append(current)
