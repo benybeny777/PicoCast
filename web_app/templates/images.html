@@ -23,15 +23,26 @@
 <div class="card mt">
   <h2>{{ selected_history }}</h2>
 
+  <div class="action-row mt">
+    <button class="btn btn-primary" onclick="regenerateSelected()">選択画像を再生成</button>
+    <button class="btn btn-secondary" onclick="savePrompts()">プロンプトを保存</button>
+    <button class="btn btn-secondary" onclick="selectAll(true)">全選択</button>
+    <button class="btn btn-secondary" onclick="selectAll(false)">全解除</button>
+  </div>
+  <p class="hint">※ 背景画像は表示中のプロンプトで再生成します（保存前でも反映）。Google API 費用が発生します。</p>
+  <div id="regen-status" style="display:none" class="log-box mt"></div>
+
   {% if image_data.thumbnails %}
   <h3>サムネイル</h3>
   <div class="image-grid" id="thumbnail-grid">
     {% for img in image_data.thumbnails %}
     <div class="image-card">
-      <label>
-        <input type="checkbox" class="img-check" value="{{ img.key }}">
+      <div class="image-select-row">
+        <label class="image-check-label" title="再生成対象に選択">
+          <input type="checkbox" class="img-check" value="{{ img.key }}">
+        </label>
         <img src="/api/images/{{ selected_history }}/file/{{ img.key }}" alt="{{ img.filename }}" loading="lazy">
-      </label>
+      </div>
       <p>{{ img.filename }}</p>
     </div>
     {% endfor %}
@@ -44,12 +55,14 @@
     {% for img in image_data.backgrounds %}
     <div class="bg-prompt-row" id="row-{{ loop.index0 }}">
       <div class="bg-prompt-img">
-        <label style="display:block">
-          <input type="checkbox" class="img-check" value="{{ img.key }}">
+        <div class="image-select-row">
+          <label class="image-check-label" title="再生成対象に選択">
+            <input type="checkbox" class="img-check" value="{{ img.key }}">
+          </label>
           <img src="/api/images/{{ selected_history }}/file/{{ img.key }}"
                alt="{{ img.filename }}" loading="lazy"
                onclick="openLightbox(this.src, '{{ img.filename }}'); event.preventDefault(); event.stopPropagation();">
-        </label>
+        </div>
         <p>{{ img.filename }}</p>
       </div>
       <div class="bg-prompt-editor">
@@ -67,14 +80,6 @@
   </div>
   {% endif %}
 
-  <div class="action-row mt">
-    <button class="btn btn-primary" onclick="regenerateSelected()">選択画像を再生成</button>
-    <button class="btn btn-secondary" onclick="savePrompts()">プロンプトを保存</button>
-    <button class="btn btn-secondary" onclick="selectAll(true)">全選択</button>
-    <button class="btn btn-secondary" onclick="selectAll(false)">全解除</button>
-  </div>
-  <p class="hint">※ 背景画像は表示中のプロンプトで再生成します（保存前でも反映）。Google API 費用が発生します。</p>
-  <div id="regen-status" style="display:none" class="log-box mt"></div>
 </div>
 {% endif %}
 

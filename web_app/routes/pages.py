@@ -145,7 +145,7 @@ def page_upload(request: Request):
 
 @router.get("/fixed-comment", response_class=HTMLResponse)
 def page_fixed_comment(request: Request):
-    candidates = fixed_comment_service.list_fixed_comment_candidates()
+    candidates = fixed_comment_service.list_fixed_comment_candidates(only_unposted=False)
     return _render(request, "fixed_comment.html", {"candidates": candidates})
 
 

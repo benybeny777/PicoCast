@@ -96,6 +96,11 @@ class FixedCommentRequest(BaseModel):
     confirmed: bool = False
 
 
+class FixedCommentMarkPostedRequest(BaseModel):
+    history_name: str
+    confirmed: bool = False
+
+
 # ── 汎用レスポンス ────────────────────────────────────
 class JobResponse(BaseModel):
     job_id: str

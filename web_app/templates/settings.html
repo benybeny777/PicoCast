@@ -45,6 +45,10 @@
 <div class="card mt">
   <h2>設定変更</h2>
   <p class="hint">変更は .env に書き込まれ、<strong>アプリ再起動後</strong>に反映されます。</p>
+  <div class="action-row mt">
+    <button class="btn btn-primary" onclick="saveConfig()">保存</button>
+    <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
+  </div>
   <div id="config-form">
     <p>読み込み中...</p>
   </div>

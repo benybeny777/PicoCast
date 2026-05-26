@@ -897,8 +897,8 @@ def _write_subtitles(
             escaped_telop = _ass_escape(telop)
             pop = (
                 f"{{\\an5\\pos({width // 2},{telop_y})\\fscx72\\fscy72\\alpha&H20&"
-                "\\t(0,180,\\fscx112\\fscy112\\alpha&H00&)\\t(180,330,\\fscx100\\fscy100)"
-                "\\fad(40,120)}}"
+                f"\\t(0,180,\\fscx112\\fscy112\\alpha&H00&)\\t(180,330,\\fscx100\\fscy100)"
+                f"\\fad(40,120)}}"
             )
             lines.append(f"Dialogue: 5,{_ass_time(start)},{_ass_time(end)},PopTelopOuter,,0,0,0,,{pop}{escaped_telop}")
             lines.append(f"Dialogue: 6,{_ass_time(start)},{_ass_time(end)},PopTelop,,0,0,0,,{pop}{escaped_telop}")
@@ -910,8 +910,8 @@ def _write_subtitles(
             icon_y = int(height * (0.23 if height > width else 0.20))
             pop = (
                 f"{{\\an5\\pos({icon_x},{icon_y})\\fscx60\\fscy60\\alpha&H20&"
-                "\\t(0,150,\\fscx115\\fscy115\\alpha&H00&)\\t(150,260,\\fscx100\\fscy100)"
-                "\\fad(20,120)}}"
+                f"\\t(0,150,\\fscx115\\fscy115\\alpha&H00&)\\t(150,260,\\fscx100\\fscy100)"
+                f"\\fad(20,120)}}"
             )
             lines.append(f"Dialogue: 7,{_ass_time(start)},{_ass_time(end)},ReactionIcon,,0,0,0,,{pop}{_ass_escape(icon)}")
     with open(path, "w", encoding="utf-8-sig", newline="\n") as f:

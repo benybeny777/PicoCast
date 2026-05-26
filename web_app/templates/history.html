@@ -8,6 +8,8 @@
     <input type="text" id="filter-input" placeholder="テーマ名で絞り込み..." oninput="filterHistory()" class="filter-input">
     <label><input type="checkbox" id="show-mgmt" onchange="filterHistory()"> 管理フォルダも表示</label>
     <button class="btn btn-primary" onclick="regenerateSelected()">選択履歴を再生成</button>
+    <button class="btn btn-secondary" onclick="selectVisibleHistories(true)">表示中を全選択</button>
+    <button class="btn btn-secondary" onclick="selectVisibleHistories(false)">全解除</button>
   </div>
 </div>
 
@@ -92,6 +94,14 @@ function filterHistory() {
   });
 }
 filterHistory(); // 初期表示（管理フォルダを非表示）
+
+function selectVisibleHistories(checked) {
+  document.querySelectorAll('.history-row').forEach(row => {
+    if (row.style.display === 'none') return;
+    const checkbox = row.querySelector('.history-check');
+    if (checkbox) checkbox.checked = checked;
+  });
+}
 
 async function regenerateSelected() {
   const names = Array.from(document.querySelectorAll('.history-check:checked')).map(el => el.value);

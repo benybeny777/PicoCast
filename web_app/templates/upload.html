@@ -44,7 +44,7 @@
         <td>
           {% if c.already_uploaded %}
             <span class="badge badge-ok">アップ済み</span>
-            <a href="https://youtu.be/{{ c.video_id }}" target="_blank" class="btn btn-xs">YouTube</a>
+            <a href="https://youtu.be/{{ c.video_id }}" target="_blank" class="btn btn-secondary btn-sm">YouTubeを開く</a>
           {% else %}
             <span class="badge badge-warn" id="status-{{ loop.index }}">未アップロード</span>
           {% endif %}

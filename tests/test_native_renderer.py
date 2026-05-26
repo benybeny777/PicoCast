@@ -7,7 +7,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.native_character_assets import CharacterVariantSet
-from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _save_render_info
+from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _save_render_info, _write_subtitles
 
 
 class TestDurationStatus(unittest.TestCase):
@@ -118,6 +118,31 @@ class TestCharacterExpressionFallback(unittest.TestCase):
             expressions={},
         )
         self.assertEqual(_expression_fallback_reason([character], "metan", "未知顔"), "unknown")
+
+
+class TestWriteSubtitles(unittest.TestCase):
+    def test_telop_icon_escaping(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ass_path = os.path.join(tmpdir, "test.ass")
+            _write_subtitles(
+                path=ass_path,
+                chunks=[("テストセリフ", "Default", None)],
+                audio_durations=[2.0],
+                width=1080,
+                height=1920,
+                offset_sec=0.0,
+                telop="チューブ文化",
+                icon="？",
+            )
+            self.assertTrue(os.path.exists(ass_path))
+            with open(ass_path, "r", encoding="utf-8-sig") as f:
+                content = f.read()
+            
+            # テロップやアイコンのアニメーションタグが「}}」ではなく「}」で閉じられていることを検証
+            self.assertNotIn("}}チューブ文化", content)
+            self.assertNotIn("}}？", content)
+            self.assertIn("}チューブ文化", content)
+            self.assertIn("}？", content)
 
 
 if __name__ == "__main__":

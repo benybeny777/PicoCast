@@ -37,7 +37,16 @@
 
 - `web_app/templates/generate.html`: プロンプト生成機能追加（AI台本作成・Shortsタイトル案・Longタイトル案）、クリップボード自動コピー、目立つトースト通知
 - `web_app/templates/upload.html`: 個別→チェックボックス複数選択で一括アップロードに変更
+- `web_app/services/fixed_comment_service.py` / `web_app/templates/fixed_comment.html`: 固定コメント候補が `output/000_uploaded/` 配下のアップロード済み履歴と `_meta/metadata.txt` の固定コメントを参照するよう修正。`fixed_comment_pinned_at` のみ記録済みの動画も投稿済み扱いにした
+- `web_app/templates/fixed_comment.html`: 投稿ボタンのインライン `onclick` を廃止し、引用符や `000_uploaded\...` を含む履歴名でもクリック処理が壊れないよう修正
+- `web_app/routes/api_fixed_comment.py` / `web_app/templates/fixed_comment.html`: 固定コメント一覧の全行にYouTubeを開くボタンを表示し、手動投稿後に `fixed_comment_posted_at` を記録する「投稿済みにする」ボタンを追加
+- `web_app/services/fixed_comment_service.py` / `web_app/templates/fixed_comment.html`: 固定コメント候補から予約中動画を除外し、YouTube上で存在しない動画・公開済み以外の動画を状態取得できる場合は非表示にした。公開日列を追加し、YouTubeリンクを通常サイズのボタンへ変更
+- `web_app/routes/pages.py`: 固定コメント画面では投稿済み行もHTMLへ読み込み、「投稿済みも表示」チェックで切り替えられるよう修正
 - `web_app/templates/images.html`: 背景画像のプロンプト表示・編集・保存機能追加（未保存でも再生成時に反映）
+- `web_app/templates/images.html` / `web_app/static/app.css`: 画像確認 / 再生成画面のチェックボックスを画像左側の操作カラムへ移動し、再生成・保存・全選択操作を画像一覧の上へ配置して操作しやすくした
+- `web_app/templates/settings.html`: 設定変更の保存・リセットボタンを設定フォーム上にも配置し、下までスクロールせず操作できるようにした
+- `web_app/templates/history.html`: 履歴一覧に表示中の全選択・全解除ボタンを追加
+- `web_app/templates/upload.html`: アップロード済み動画のYouTubeリンクを通常サイズのボタンへ変更
 - `web_app/templates/settings.html`: APIキー変更をアコーディオン最下部に移動
 - `web_app/templates/base.html`: 「画像」タブを削除（履歴詳細から遷移）
 - `web_app/services/prompt_service.py`: プロンプト生成ロジックをWeb UI用に実装
@@ -50,6 +59,11 @@
 - `web_app/services/secrets_service.py`: APIキー書き込み専用サービス（値はレスポンス/ログに含めない）
 - `web_app/static/app.css`: lightbox、image-card object-fit、背景プロンプト行レイアウト追加
 - `README.md` / `SPEC.md`: Web UIの既定ポート、API一覧、画像再生成の現状仕様、セキュリティ方針を現状へ更新
+
+### native字幕のASSタグ修正
+
+- `core/native_renderer.py`: テロップ・リアクションアイコンのASSアニメーションタグ末尾が余分な `}` を出力しないよう修正
+- `tests/test_native_renderer.py`: テロップ・アイコンのASSタグ閉じを検証するテストを追加
 
 ---
 

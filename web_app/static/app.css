@@ -331,6 +331,28 @@ select {
   cursor: zoom-in;
 }
 
+.image-select-row {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: stretch;
+  gap: 6px;
+}
+.image-check-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--surface2);
+  cursor: pointer;
+}
+.image-check-label input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
 /* ── ライトボックス ── */
 #lightbox {
   display: none;
@@ -367,7 +389,6 @@ select {
 }
 
 .image-card p { font-size: 10px; color: var(--text-dim); margin-top: 4px; word-break: break-all; }
-.image-card label { cursor: pointer; display: block; }
 
 /* ── 背景プロンプト行 ── */
 .bg-prompt-row {
@@ -379,7 +400,7 @@ select {
 }
 .bg-prompt-row:last-child { border-bottom: none; }
 .bg-prompt-img {
-  flex: 0 0 120px;
+  flex: 0 0 152px;
   text-align: center;
 }
 .bg-prompt-img img {

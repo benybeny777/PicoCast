@@ -265,6 +265,67 @@ def test_fixed_comment_page(client):
     assert res.status_code == 200
     assert "固定コメント" in res.text
 
+
+def test_fixed_comment_post_button_uses_data_attributes(client, monkeypatch):
+    import web_app.routes.pages as pages
+
+    monkeypatch.setattr(
+        pages.fixed_comment_service,
+        "list_fixed_comment_candidates",
+        lambda only_unposted=True: [{
+            "name": os.path.join("000_uploaded", "[Shorts]引用符'テスト"),
+            "location": "アップロード済み",
+            "title": "引用符'と\"を含むタイトル",
+            "video_id": "abc123",
+            "publish_status": "public",
+            "published_at": "2026-05-26T00:00:00Z",
+            "fixed_comment": "コメント",
+            "comment_thread_id": "",
+            "already_posted": False,
+        }],
+    )
+
+    res = client.get("/fixed-comment")
+    assert res.status_code == 200
+    assert "js-post-comment" in res.text
+    assert "js-mark-posted" in res.text
+    assert "https://youtu.be/abc123" in res.text
+    assert "YouTubeを開く" in res.text
+    assert "2026-05-26" in res.text
+    assert "data-history-name=" in res.text
+    assert "onclick=\"confirmPost" not in res.text
+
+
+def test_fixed_comment_page_loads_posted_rows_for_toggle(client, monkeypatch):
+    import web_app.routes.pages as pages
+
+    called = {}
+
+    def fake_candidates(only_unposted=True):
+        called["only_unposted"] = only_unposted
+        return [{
+            "name": os.path.join("000_uploaded", "[Shorts]投稿済みテスト"),
+            "location": "アップロード済み",
+            "title": "投稿済みテスト",
+            "video_id": "posted123",
+            "publish_status": "public",
+            "published_at": "2026-05-26T00:00:00Z",
+            "fixed_comment": "コメント",
+            "comment_thread_id": "comment123",
+            "fixed_comment_posted_at": "2026-05-26T01:00:00+09:00",
+            "fixed_comment_pinned_at": "",
+            "already_posted": True,
+        }]
+
+    monkeypatch.setattr(pages.fixed_comment_service, "list_fixed_comment_candidates", fake_candidates)
+
+    res = client.get("/fixed-comment")
+    assert res.status_code == 200
+    assert called["only_unposted"] is False
+    assert "posted-row" in res.text
+    assert "投稿済みテスト" in res.text
+
+
 def test_api_fixed_comment_candidates(client):
     res = client.get("/api/fixed-comment/candidates")
     assert res.status_code == 200
@@ -274,3 +335,157 @@ def test_api_fixed_comment_requires_confirmation(client):
     res = client.post("/api/fixed-comment", json={"history_name": "test", "confirmed": False})
     assert res.status_code == 400
 
+
+def test_api_fixed_comment_mark_posted_requires_confirmation(client):
+    res = client.post("/api/fixed-comment/mark-posted", json={"history_name": "test", "confirmed": False})
+    assert res.status_code == 400
+
+
+def test_fixed_comment_candidates_include_uploaded_metadata(tmp_path, monkeypatch):
+    import json
+    import web_app.services.fixed_comment_service as fcs
+
+    fake_output = tmp_path / "output"
+    theme_dir = fake_output / "000_uploaded" / "[Shorts]固定コメントテスト"
+    meta_dir = theme_dir / "_meta"
+    meta_dir.mkdir(parents=True)
+    (meta_dir / "metadata.txt").write_text(
+        "【動画タイトル】\n固定コメントのテスト\n\n【固定コメント】\n投稿するコメントです\n",
+        encoding="utf-8",
+    )
+    (meta_dir / "upload_record.json").write_text(
+        json.dumps({"video_id": "abc123", "publish_status": "public"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
+
+    candidates = fcs.list_fixed_comment_candidates()
+    assert len(candidates) == 1
+    assert candidates[0]["name"] == os.path.join("000_uploaded", "[Shorts]固定コメントテスト")
+    assert candidates[0]["fixed_comment"] == "投稿するコメントです"
+    assert candidates[0]["title"] == "固定コメントのテスト"
+
+
+def test_fixed_comment_candidates_filter_scheduled_locally(tmp_path, monkeypatch):
+    import json
+    import web_app.services.fixed_comment_service as fcs
+
+    fake_output = tmp_path / "output"
+    theme_dir = fake_output / "000_uploaded" / "[Shorts]予約中テスト"
+    meta_dir = theme_dir / "_meta"
+    meta_dir.mkdir(parents=True)
+    (meta_dir / "metadata.txt").write_text(
+        "【固定コメント】\n予約中コメントです\n",
+        encoding="utf-8",
+    )
+    (meta_dir / "upload_record.json").write_text(
+        json.dumps({
+            "video_id": "scheduled123",
+            "publish_status": "scheduled",
+            "publish_at": "2026-05-27T07:00:00+09:00",
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
+
+    assert fcs.list_fixed_comment_candidates() == []
+
+
+def test_fixed_comment_candidates_filter_missing_and_non_public_youtube(tmp_path, monkeypatch):
+    import json
+    import web_app.services.fixed_comment_service as fcs
+
+    fake_output = tmp_path / "output"
+    for name, video_id in [
+        ("[Shorts]公開テスト", "public123"),
+        ("[Shorts]非公開テスト", "private123"),
+        ("[Shorts]存在しないテスト", "missing123"),
+    ]:
+        meta_dir = fake_output / "000_uploaded" / name / "_meta"
+        meta_dir.mkdir(parents=True)
+        (meta_dir / "metadata.txt").write_text("【固定コメント】\nコメントです\n", encoding="utf-8")
+        (meta_dir / "upload_record.json").write_text(
+            json.dumps({"video_id": video_id, "publish_status": "public"}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: {
+        "public123": {
+            "privacyStatus": "public",
+            "publishedAt": "2026-05-26T00:00:00Z",
+            "title": "YouTube側タイトル",
+        },
+        "private123": {"privacyStatus": "private", "publishedAt": "2026-05-26T00:00:00Z"},
+    })
+
+    candidates = fcs.list_fixed_comment_candidates()
+    assert len(candidates) == 1
+    assert candidates[0]["video_id"] == "public123"
+    assert candidates[0]["published_at"] == "2026-05-26T00:00:00Z"
+    assert candidates[0]["title"] == "YouTube側タイトル"
+
+
+def test_fixed_comment_mark_posted_writes_record(tmp_path, monkeypatch):
+    import json
+    import web_app.services.fixed_comment_service as fcs
+
+    fake_output = tmp_path / "output"
+    theme_dir = fake_output / "000_uploaded" / "[Shorts]手動投稿済みテスト"
+    meta_dir = theme_dir / "_meta"
+    meta_dir.mkdir(parents=True)
+    (meta_dir / "metadata.txt").write_text(
+        "【固定コメント】\n手動で投稿したコメントです\n",
+        encoding="utf-8",
+    )
+    record_path = meta_dir / "upload_record.json"
+    record_path.write_text(
+        json.dumps({"video_id": "abc123", "publish_status": "public"}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
+
+    result = fcs.mark_fixed_comment_posted(os.path.join("000_uploaded", "[Shorts]手動投稿済みテスト"))
+    assert result["video_id"] == "abc123"
+
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    assert record["fixed_comment_text"] == "手動で投稿したコメントです"
+    assert record["fixed_comment_posted_at"]
+    assert record["fixed_comment_manual_recorded_at"]
+    assert fcs.list_fixed_comment_candidates() == []
+
+
+def test_fixed_comment_candidates_treat_pinned_as_posted(tmp_path, monkeypatch):
+    import json
+    import web_app.services.fixed_comment_service as fcs
+
+    fake_output = tmp_path / "output"
+    theme_dir = fake_output / "000_uploaded" / "[Shorts]ピン留め済みテスト"
+    meta_dir = theme_dir / "_meta"
+    meta_dir.mkdir(parents=True)
+    (meta_dir / "metadata.txt").write_text(
+        "【固定コメント】\n投稿済みコメントです\n",
+        encoding="utf-8",
+    )
+    (meta_dir / "upload_record.json").write_text(
+        json.dumps({
+            "video_id": "abc123",
+            "publish_status": "public",
+            "fixed_comment_pinned_at": "2026-05-25T01:57:25+0900",
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
+
+    assert fcs.list_fixed_comment_candidates() == []
+    candidates = fcs.list_fixed_comment_candidates(only_unposted=False)
+    assert len(candidates) == 1
+    assert candidates[0]["already_posted"] is True
