@@ -38,8 +38,11 @@
           {% if c.already_posted %}
             <span class="badge badge-ok">
               投稿済み
+              {% if c.auto_posted %}<span class="badge badge-info" title="{{ c.auto_submitted_at }}">自動</span>{% endif %}
               {% if c.comment_thread_id %}({{ c.comment_thread_id[:12] }}…){% endif %}
             </span>
+          {% elif c.auto_submitted_at %}
+            <span class="badge badge-warn">自動投稿中…</span>
           {% else %}
             <span class="badge badge-warn">未投稿</span>
           {% endif %}

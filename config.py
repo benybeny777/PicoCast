@@ -334,3 +334,9 @@ NATIVE_SHAKE_AMP_Y = int(os.environ.get("NATIVE_SHAKE_AMP_Y", "5"))             
 NATIVE_CHARACTER_BOUNCE_SEC = float(os.environ.get("NATIVE_CHARACTER_BOUNCE_SEC", "0.22"))          # キャラクターバウンス演出時間(秒)
 NATIVE_TELOP_POP_START_SEC = float(os.environ.get("NATIVE_TELOP_POP_START_SEC", "0.05"))            # ポップテロップの表示開始ディレイ(秒)
 NATIVE_TELOP_POP_MAX_SEC = float(os.environ.get("NATIVE_TELOP_POP_MAX_SEC", "1.5"))                  # ポップテロップの最大表示持続時間(秒)
+
+# ───────────────────────────────────────────────
+# 固定コメント自動投稿
+# ───────────────────────────────────────────────
+AUTO_FIXED_COMMENT_ENABLED       = os.environ.get("AUTO_FIXED_COMMENT_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")
+AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC", "600"))  # 確認間隔（秒）既定10分

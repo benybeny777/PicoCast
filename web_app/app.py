@@ -26,10 +26,19 @@ import config
 from core.gui_support import build_app_version
 
 # ── アプリ生成 ────────────────────────────────────────────────────────────
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def _lifespan(app):
+    from web_app.services.auto_fixed_comment_service import start_auto_watcher
+    start_auto_watcher()
+    yield
+
 app = FastAPI(
     title=f"{config.WEB_APP_NAME} — Web UI",
     version=build_app_version(),
     description=f"{config.WEB_APP_NAME} ローカルWeb UI",
+    lifespan=_lifespan,
 )
 
 # 静的ファイル

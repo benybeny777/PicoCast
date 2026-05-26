@@ -64,11 +64,13 @@ def list_fixed_comment_candidates(only_unposted: bool = True) -> list[dict[str, 
             "fixed_comment_posted_at": fixed_comment_posted_at,
             "fixed_comment_pinned_at": fixed_comment_pinned_at,
             "already_posted": already_posted,
+            "auto_posted": bool(upload_record.get("fixed_comment_auto_posted")),
+            "auto_submitted_at": upload_record.get("fixed_comment_auto_submitted_at", ""),
         })
     return _filter_existing_public_videos(results)
 
 
-def submit_fixed_comment_job(history_name: str) -> str:
+def submit_fixed_comment_job(history_name: str, auto_posted: bool = False) -> str:
     if _is_unsafe_history_name(history_name):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")
@@ -80,7 +82,7 @@ def submit_fixed_comment_job(history_name: str) -> str:
     mgr = get_job_manager()
     job = mgr.create_job("fixed_comment")
     _log(job, f"固定コメントジョブを登録: {history_name}", "info")
-    mgr.submit(job, _run_fixed_comment, history_name)
+    mgr.submit(job, _run_fixed_comment, history_name, auto_posted)
     return job.job_id
 
 
@@ -128,7 +130,7 @@ def mark_fixed_comment_posted(history_name: str) -> dict[str, Any]:
     }
 
 
-def _run_fixed_comment(job: Job, history_name: str) -> dict[str, Any]:
+def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False) -> dict[str, Any]:
     theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
     if not os.path.isdir(theme_dir):
         raise FileNotFoundError(f"履歴フォルダが見つかりません: {history_name}")
@@ -181,13 +183,15 @@ def _run_fixed_comment(job: Job, history_name: str) -> dict[str, Any]:
 
     # upload_record.json に固定コメント投稿済みIDを記録
     upload_record["fixed_comment_thread_id"] = comment_thread_id
+    if auto_posted:
+        upload_record["fixed_comment_auto_posted"] = True
     try:
         with open(upload_record_path, "w", encoding="utf-8") as f:
             json.dump(upload_record, f, ensure_ascii=False, indent=2)
     except OSError as e:
         _log(job, f"upload_record.json の更新に失敗: {e}", "warning")
 
-    return {"comment_thread_id": comment_thread_id, "video_id": video_id}
+    return {"comment_thread_id": comment_thread_id, "video_id": video_id, "auto_posted": auto_posted}
 
 
 def _safe_json(path: str) -> dict:

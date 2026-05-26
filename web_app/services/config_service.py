@@ -38,6 +38,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "OLLAMA_REVIEW_MODEL",             "type": "ollama_model", "label": "Ollama レビューモデル",         "default": str(cfg.OLLAMA_REVIEW_MODEL)},
     {"key": "OLLAMA_REWRITE_MODEL",            "type": "ollama_model", "label": "Ollama リライトモデル",         "default": str(cfg.OLLAMA_REWRITE_MODEL)},
     {"key": "OLLAMA_REWRITE_FALLBACK_MODEL",   "type": "ollama_model", "label": "Ollama リライト fallback モデル", "default": str(cfg.OLLAMA_REWRITE_FALLBACK_MODEL)},
+    {"key": "AUTO_FIXED_COMMENT_ENABLED",         "type": "bool",         "label": "固定コメント 自動投稿",        "default": "1" if cfg.AUTO_FIXED_COMMENT_ENABLED else "0"},
     {"key": "VOICE_READING_NORMALIZE_ENABLED",    "type": "bool",         "label": "よみがな正規化 有効",          "default": "1" if cfg.VOICE_READING_NORMALIZE_ENABLED else "0"},
     {"key": "VOICE_READING_NORMALIZE_MODEL",      "type": "ollama_model", "label": "よみがな正規化 モデル",         "default": str(cfg.VOICE_READING_NORMALIZE_MODEL)},
     {"key": "VOICE_READING_NORMALIZE_OLLAMA_URL", "type": "str",          "label": "よみがな正規化 Ollama URL",     "default": str(cfg.VOICE_READING_NORMALIZE_OLLAMA_URL)},
