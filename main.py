@@ -1191,32 +1191,46 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     for warn in _messages:
         update_status(f"  ⚠ {warn}")
 
-    # よみがな正規化: 全セリフチャンクをLLMで一括変換（VOICEVOX誤読対策）
+    # よみがな正規化: 辞書・形態素解析による安全な読み補正
     _all_chunks = []
     for _item in dialogue_items:
         _all_chunks.extend(_split_at_punctuation(_item.get("text", "")))
+    
     reading_normalizer = ReadingNormalizer()
-    _reading_map_path = os.path.join(_meta_dir(theme_dir), "reading_map.json")
-    try:
-        with open(_reading_map_path, encoding="utf-8") as _rmf:
-            _saved_map = json.load(_rmf)
-        reading_normalizer.load_cache(_saved_map)
-        update_status(f"🔤 よみがな: 保存済みマップ読み込み ({len(_saved_map)}件)")
-    except FileNotFoundError:
-        pass
-    except Exception as _e:
-        update_status(f"⚠ よみがなマップ読み込みスキップ: {_e}", "warning")
-    if reading_normalizer._available and _all_chunks:
-        update_status(f"🔤 よみがな正規化中: {len(_all_chunks)}チャンク...")
+    
+    if reading_normalizer.mode == "safe_auto":
+        update_status("🔤 読み補正: safe_auto (Sudachi形態素解析)")
+    elif reading_normalizer.mode == "dictionary":
+        update_status("🔤 読み補正: dictionary (辞書のみ)")
+    elif hasattr(_cfg, "VOICE_READING_NORMALIZE_ENABLED") and _cfg.VOICE_READING_NORMALIZE_ENABLED:
+        update_status("⚠ LLM全文読み補正は廃止済みです。VOICE_READING_MODE を使用してください。", "warning")
+
     reading_map = reading_normalizer.normalize_batch(_all_chunks)
     _changed_map = {k: v for k, v in reading_map.items() if k != v}
+    
     if _changed_map:
-        update_status(f"🔤 よみがな補正: {len(_changed_map)}件")
-    try:
-        with open(_reading_map_path, "w", encoding="utf-8") as _rmf:
-            json.dump(_changed_map, _rmf, ensure_ascii=False, indent=2)
-    except Exception as _e:
-        update_status(f"⚠ よみがなマップ保存失敗: {_e}", "warning")
+        _replacements = [f"{k}→{v}" for k, v in _changed_map.items()]
+        update_status(f"🔤 読み置換: {', '.join(_replacements)}")
+    
+    if reading_normalizer.mode in ("dictionary", "safe_auto"):
+        # メタ情報保存
+        _reading_map_path = os.path.join(_meta_dir(theme_dir), "reading_map.json")
+        try:
+            with open(_reading_map_path, "w", encoding="utf-8") as _rmf:
+                _meta_info = reading_normalizer.get_meta_info()
+                _meta_info["original_to_tts"] = _changed_map
+                json.dump(_meta_info, _rmf, ensure_ascii=False, indent=2)
+        except Exception as _e:
+            update_status(f"⚠ reading_map保存失敗: {_e}", "warning")
+            
+        if reading_normalizer.mode == "safe_auto" and reading_normalizer.candidates:
+            _candidates_path = os.path.join(_meta_dir(theme_dir), "reading_candidates.json")
+            try:
+                with open(_candidates_path, "w", encoding="utf-8") as _rmf:
+                    json.dump(reading_normalizer.candidates, _rmf, ensure_ascii=False, indent=2)
+                update_status("🔎 読み候補を保存しました")
+            except Exception as _e:
+                update_status(f"⚠ reading_candidates保存失敗: {_e}", "warning")
 
     vv = VoicevoxAPI()
     if not vv.check_connection() and os.path.exists(VOICEVOX_PATH):

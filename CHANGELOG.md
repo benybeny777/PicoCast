@@ -14,6 +14,16 @@
 
 ## 2026-05-27
 
+### VOICEVOX読み補正の自前辞書移行とComfyUIモデル管理機能追加
+
+- core/reading_normalizer.py: VOICEVOX読み間違い対策をLLM方式から、SudachiPy形態素解析と自前辞書を組み合わせた安全な補正方式へ刷新
+- core/comfyui_model_manager.py: ComfyUI使用時のモデル導入状態チェック・半自動ダウンロード機能を追加
+- web_app/routes/api_comfyui.py / web_app/templates/comfyui_models.html: Web UIにComfyUIモデル管理画面を追加
+- core/image_generator.py: ComfyUI生成開始前に必須モデルの不足を検知し、安全に停止する機構を追加
+- config.py: VOICE_READING_MODE、COMFYUI_ROOT_DIR 等の新設定を追加
+
+
+
 ### Local / ComfyUI 背景生成を追加
 
 - 背景画像のみ `Nano Banana` / `Local / ComfyUI` をWeb UIから選択可能にした。サムネイル生成は当面 Nano Banana / Gemini を維持

@@ -187,3 +187,8 @@ def page_settings(request: Request):
 def page_logs(request: Request):
     jobs = get_job_manager().list_jobs()
     return _render(request, "logs.html", {"jobs": jobs})
+
+
+@router.get("/comfyui-models", response_class=HTMLResponse)
+def page_comfyui_models(request: Request):
+    return _render(request, "comfyui_models.html", {})

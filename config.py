@@ -96,6 +96,20 @@ OPENING_REVIEW_MAX_LLM_RETRIES     = int(os.environ.get("OPENING_REVIEW_MAX_LLM_
 OLLAMA_BASE_URL              = os.environ.get("OLLAMA_BASE_URL",              "http://localhost:11434")  # Ollama API エンドポイント
 OLLAMA_REVIEW_MODEL          = os.environ.get("OLLAMA_REVIEW_MODEL",          "qwen3:8b")               # 冒頭レビューモデル
 OLLAMA_REWRITE_MODEL         = os.environ.get("OLLAMA_REWRITE_MODEL",         "qwen3:8b")               # 冒頭リライトモデル
+
+# ───────────────────────────────────────────────
+# Local ComfyUI
+# ───────────────────────────────────────────────
+LOCAL_COMFYUI_URL = os.environ.get("LOCAL_COMFYUI_URL", "http://127.0.0.1:8188")  # ローカルComfyUI URL
+COMFYUI_MAX_RETRIES = int(os.environ.get("COMFYUI_MAX_RETRIES", "3"))  # ComfyUI最大リトライ回数
+COMFYUI_RETRY_INTERVAL_SEC = int(os.environ.get("COMFYUI_RETRY_INTERVAL_SEC", "5"))  # リトライ間隔(秒)
+COMFYUI_POLLING_INTERVAL_SEC = int(os.environ.get("COMFYUI_POLLING_INTERVAL_SEC", "2"))  # 状態確認(ポーリング)間隔(秒)
+COMFYUI_TIMEOUT_SEC = int(os.environ.get("COMFYUI_TIMEOUT_SEC", "300"))  # ComfyUIタイムアウト(秒)
+COMFYUI_ROOT_DIR = os.environ.get("COMFYUI_ROOT_DIR", "C:\\ComfyUI_windows_portable\\ComfyUI")  # ComfyUIインストール先
+COMFYUI_MODEL_MANIFEST_PATH = os.environ.get("COMFYUI_MODEL_MANIFEST_PATH", "assets/comfyui/model_manifest.json")  # モデルマニフェストパス
+COMFYUI_MODEL_DOWNLOAD_TIMEOUT_SEC = int(os.environ.get("COMFYUI_MODEL_DOWNLOAD_TIMEOUT_SEC", 3600))  # ダウンロードタイムアウト(秒)
+COMFYUI_MODEL_VERIFY_SHA256 = os.environ.get("COMFYUI_MODEL_VERIFY_SHA256", "1").strip().lower() in ("1", "true", "yes", "on")  # SHA256検証を有効にするか
+
 OLLAMA_REWRITE_FALLBACK_MODEL = os.environ.get("OLLAMA_REWRITE_FALLBACK_MODEL", "gemma4:e4b")           # リライト失敗時のフォールバックモデル
 OPENING_REWRITE_MAX_FALLBACKS = int(os.environ.get("OPENING_REWRITE_MAX_FALLBACKS", "1"))               # フォールバック試行上限
 
@@ -109,9 +123,13 @@ AUTO_FULL_REWRITE_ENABLED    = os.environ.get("AUTO_FULL_REWRITE_ENABLED",   "0"
 # ───────────────────────────────────────────────
 # よみがな正規化（VOICEVOX 誤読対策 / Ollama使用）
 # ───────────────────────────────────────────────
-VOICE_READING_NORMALIZE_ENABLED    = os.environ.get("VOICE_READING_NORMALIZE_ENABLED",    "1").strip().lower() in ("1", "true", "yes", "on")
-VOICE_READING_NORMALIZE_MODEL      = os.environ.get("VOICE_READING_NORMALIZE_MODEL",      "qwen2.5:7b-instruct")
-VOICE_READING_NORMALIZE_OLLAMA_URL = os.environ.get("VOICE_READING_NORMALIZE_OLLAMA_URL", "http://localhost:11434")
+# [DEPRECATED] LLM全文読み補正は廃止されました
+# VOICE_READING_NORMALIZE_ENABLED    = os.environ.get("VOICE_READING_NORMALIZE_ENABLED",    "1").strip().lower() in ("1", "true", "yes", "on")
+# VOICE_READING_NORMALIZE_MODEL      = os.environ.get("VOICE_READING_NORMALIZE_MODEL",      "qwen2.5:7b-instruct")
+# VOICE_READING_NORMALIZE_OLLAMA_URL = os.environ.get("VOICE_READING_NORMALIZE_OLLAMA_URL", "http://localhost:11434")
+
+# 新しい読み補正モード: "off", "dictionary", "safe_auto"
+VOICE_READING_MODE = os.environ.get("VOICE_READING_MODE", "safe_auto")  # 読み補正モード
 
 # ───────────────────────────────────────────────
 # Google AI モデル（Nano Banana Suite）

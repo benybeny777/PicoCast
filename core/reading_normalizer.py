@@ -1,92 +1,203 @@
 """
-VOICEVOXの誤読を防ぐため、Ollamaでよみがなを生成してからTTSに渡す。
-字幕には元テキストをそのまま使用する。
+VOICEVOXの読み間違い対策。
+LLMによる全文変換を廃止し、形態素解析（SudachiPy）と自前辞書を組み合わせた
+「安全な自動読み補正」と「辞書育成」を行います。
+字幕には元テキストをそのまま使用し、音声合成用テキストのみを補正します。
 """
+import os
 import json
 import re
-import requests
 import config as _cfg
 
-_PROMPT_HEADER = (
-    "以下のVOICEVOX音声合成用セリフ一覧を変換してください。\n"
-    "誤読しやすい漢字・固有名詞・専門用語・数字表現はひらがなに変換し、"
-    "読みが自然な一般的な漢字はそのまま残してください。\n"
-    "句読点（。！？、）・文体・語調は変えないでください。\n"
-    "JSON形式のみで返答してください: {\"1\": \"変換後\", \"2\": \"変換後\", ...}\n\n"
-)
-
+def _kata_to_hira(text: str) -> str:
+    """カタカナをひらがなに変換する"""
+    res = []
+    for c in text:
+        if '\u30a1' <= c <= '\u30f6':
+            res.append(chr(ord(c) - 0x60))
+        elif c == 'ー':
+            res.append(c)
+        else:
+            res.append(c)
+    return "".join(res)
 
 class ReadingNormalizer:
     def __init__(self):
-        self._cache: dict[str, str] = {}
-        self._available = False
-        if not _cfg.VOICE_READING_NORMALIZE_ENABLED:
-            return
+        self.mode = getattr(_cfg, "VOICE_READING_MODE", "safe_auto")
+        self._available = self.mode in ("dictionary", "safe_auto")
+        
+        self.base_dict = {}
+        self.user_dict = {}
+        self.candidates = {}
+        
+        self.base_path = "data/reading_dictionary_base.json"
+        self.user_path = "data/reading_dictionary_user.json"
+        self.cand_path = "data/reading_candidates.json"
+        
+        # 統計・ロギング用
+        self.applied_base = set()
+        self.applied_user = set()
+        self.applied_auto = set()
+        self.skipped_terms = set()
+        
+        if self._available:
+            self._load_dicts()
+            
+            if self.mode == "safe_auto":
+                try:
+                    from sudachipy import dictionary, tokenizer
+                    self.tokenizer_obj = dictionary.Dictionary().create()
+                    self.split_mode = tokenizer.Tokenizer.SplitMode.C
+                except ImportError as e:
+                    raise RuntimeError(
+                        f"よみがな補正({self.mode})に必要なライブラリがありません: {e}\n"
+                        "pip install sudachipy sudachidict_core を実行してください。"
+                    ) from e
+
+    def _load_dicts(self):
+        os.makedirs("data", exist_ok=True)
+        if os.path.exists(self.base_path):
+            try:
+                with open(self.base_path, encoding="utf-8") as f:
+                    self.base_dict = json.load(f)
+            except Exception:
+                pass
+        if os.path.exists(self.user_path):
+            try:
+                with open(self.user_path, encoding="utf-8") as f:
+                    self.user_dict = json.load(f)
+            except Exception:
+                pass
+        if os.path.exists(self.cand_path):
+            try:
+                with open(self.cand_path, encoding="utf-8") as f:
+                    self.candidates = json.load(f)
+            except Exception:
+                pass
+
+    def _save_dicts(self):
         try:
-            res = requests.get(f"{_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}/api/tags", timeout=_cfg.READING_NORMALIZE_CHECK_TIMEOUT_SEC)
-            if res.status_code != 200:
-                raise RuntimeError(f"HTTP {res.status_code}")
-            models = res.json().get("models", [])
-            model_names = {m.get("name") for m in models if isinstance(m, dict)}
-            if _cfg.VOICE_READING_NORMALIZE_MODEL not in model_names:
-                raise RuntimeError(
-                    f"モデル未配置: {_cfg.VOICE_READING_NORMALIZE_MODEL} "
-                    f"(利用可能: {', '.join(sorted(n for n in model_names if n)) or 'なし'})"
-                )
-            self._available = True
-        except Exception as e:
-            raise RuntimeError(
-                f"よみがな正規化が有効ですがOllamaに接続できません ({_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}): {e}\n"
-                "Ollamaを起動するか、VOICE_READING_NORMALIZE_MODELを配置済みモデル名に変更するか、"
-                "VOICE_READING_NORMALIZE_ENABLED=0 に設定してください。"
-            ) from e
+            with open(self.user_path, "w", encoding="utf-8") as f:
+                json.dump(self.user_dict, f, ensure_ascii=False, indent=2)
+            with open(self.cand_path, "w", encoding="utf-8") as f:
+                json.dump(self.candidates, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
 
     def normalize_batch(self, texts: list[str]) -> dict[str, str]:
-        """複数テキストを一括でよみがな正規化する。"""
+        """複数テキストを一括でよみがな補正する。"""
         if not self._available:
             return {t: t for t in texts}
 
-        uncached = [t for t in texts if t not in self._cache]
-        if not uncached:
-            return {t: self._cache.get(t, t) for t in texts}
+        result = {}
+        for t in texts:
+            result[t] = self._normalize_single(t)
+            
+        if self.mode == "safe_auto":
+            self._save_dicts()
+            
+        return result
 
-        numbered = "\n".join(f"{i + 1}: {t}" for i, t in enumerate(uncached))
-        prompt = _PROMPT_HEADER + numbered
+    def _normalize_single(self, text: str) -> str:
+        if self.mode == "off":
+            return text
+            
+        if self.mode == "dictionary":
+            # Sudachi非依存の単純置換（ベース辞書優先、長い語から置換）
+            res = text
+            merged = {**self.user_dict, **self.base_dict}
+            for k in sorted(merged.keys(), key=len, reverse=True):
+                if k in res:
+                    res = res.replace(k, merged[k])
+                    if k in self.base_dict:
+                        self.applied_base.add(k)
+                    else:
+                        self.applied_user.add(k)
+            return res
 
-        res = requests.post(
-            f"{_cfg.VOICE_READING_NORMALIZE_OLLAMA_URL}/api/chat",
-            json={
-                "model": _cfg.VOICE_READING_NORMALIZE_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "stream": False,
-            },
-            timeout=_cfg.READING_NORMALIZE_CHAT_TIMEOUT_SEC,
-        )
-        if res.status_code == 404:
-            try:
-                detail = res.json().get("error", res.text)
-            except ValueError:
-                detail = res.text
-            raise RuntimeError(f"Ollamaよみがな正規化モデルが見つかりません: {_cfg.VOICE_READING_NORMALIZE_MODEL} ({detail})")
-        res.raise_for_status()
-        content = res.json()["message"]["content"].strip()
-        m = re.search(r"\{.*\}", content, re.DOTALL)
-        if m:
-            result = json.loads(m.group())
-            for i, original in enumerate(uncached):
-                normalized = result.get(str(i + 1), original)
-                self._cache[original] = normalized if isinstance(normalized, str) else original
-
-        for t in uncached:
-            if t not in self._cache:
-                self._cache[t] = t
-
-        return {t: self._cache.get(t, t) for t in texts}
+        # safe_auto
+        try:
+            tokens = self.tokenizer_obj.tokenize(text)
+        except Exception:
+            return text
+            
+        res_text = []
+        has_kanji = re.compile(r'[\u4E00-\u9FFF]')
+        
+        for t in tokens:
+            surface = t.surface()
+            
+            # 手動/同梱辞書を最優先
+            if surface in self.base_dict:
+                res_text.append(self.base_dict[surface])
+                self.applied_base.add(surface)
+                continue
+            # ユーザー辞書
+            if surface in self.user_dict:
+                res_text.append(self.user_dict[surface])
+                self.applied_user.add(surface)
+                continue
+                
+            pos = t.part_of_speech()
+            pos1, pos2 = pos[0], pos[1]
+            
+            # 除外判定
+            if len(surface) == 1 and has_kanji.search(surface):
+                self.skipped_terms.add(surface)
+                res_text.append(surface)
+                continue
+            if pos1 in ("動詞", "形容詞", "助詞", "助動詞", "補助記号", "記号"):
+                res_text.append(surface)
+                continue
+            if not has_kanji.search(surface):
+                res_text.append(surface)
+                continue
+                
+            reading = t.reading_form()
+            if not reading or reading == "*":
+                self.skipped_terms.add(surface)
+                res_text.append(surface)
+                continue
+                
+            hiragana = _kata_to_hira(reading)
+            
+            # 自動置換条件 (安全な名詞類)
+            is_safe_auto = False
+            if pos1 == "名詞":
+                if len(surface) >= 2 and pos2 != "数詞":
+                    is_safe_auto = True
+                elif pos2 == "固有名詞":
+                    is_safe_auto = True
+                    
+            if is_safe_auto:
+                self.user_dict[surface] = hiragana
+                self.applied_auto.add(surface)
+                res_text.append(hiragana)
+                continue
+            
+            # 判断が怪しい語は候補へ
+            if surface not in self.candidates:
+                self.candidates[surface] = {
+                    "surface": surface,
+                    "reading": hiragana,
+                    "reason": f"POS: {pos1},{pos2}",
+                    "source": "safe_auto",
+                    "auto_applied": False,
+                    "review_required": True
+                }
+            self.skipped_terms.add(surface)
+            res_text.append(surface)
+            
+        return "".join(res_text)
 
     def load_cache(self, saved: dict[str, str]) -> None:
-        self._cache.update(saved)
+        pass  # 互換性維持
 
-    def normalize(self, text: str) -> str:
-        if text in self._cache:
-            return self._cache[text]
-        return self.normalize_batch([text]).get(text, text)
+    def get_meta_info(self):
+        return {
+            "mode": self.mode,
+            "applied_base_terms": list(self.applied_base),
+            "applied_user_terms": list(self.applied_user),
+            "applied_auto_terms": list(self.applied_auto),
+            "skipped_terms": list(self.skipped_terms)
+        }

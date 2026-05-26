@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}ComfyUIモデル管理{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <h2>ComfyUIモデル管理</h2>
+  <div class="header-actions">
+    <button type="button" class="btn btn-secondary" onclick="loadModels()">再スキャン</button>
+    <button type="button" class="btn btn-primary" onclick="installAll()">自動導入可能分をインストール</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>導入状況</h3>
+  <p class="text-muted" style="margin-bottom: 1rem;">
+    Local ComfyUI を使用する場合に必要なモデルの一覧です。手動ダウンロード必須のモデルはご自身で配置してください。
+  </p>
+  
+  <div id="models-container">
+    <p>読み込み中...</p>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadModels() {
+  const container = document.getElementById('models-container');
+  container.innerHTML = '<p>スキャン中...</p>';
+  try {
+    const res = await fetch('/api/comfyui/models');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      renderModels(data.models);
+    } else {
+      container.innerHTML = '<p class="text-danger">エラー: ' + data.message + '</p>';
+    }
+  } catch (e) {
+    container.innerHTML = '<p class="text-danger">通信エラーが発生しました。</p>';
+  }
+}
+
+function renderModels(models) {
+  const container = document.getElementById('models-container');
+  if (models.length === 0) {
+    container.innerHTML = '<p>必要なモデルは定義されていません。</p>';
+    return;
+  }
+  
+  let html = '<table class="table" style="width:100%; border-collapse: collapse;">';
+  html += '<thead><tr style="text-align:left; border-bottom:1px solid #ccc;">';
+  html += '<th>状態</th><th>モデル名</th><th>配置先</th><th>アクション</th>';
+  html += '</tr></thead><tbody>';
+  
+  for (const m of models) {
+    html += '<tr style="border-bottom:1px solid #eee;">';
+    
+    // Status
+    if (m.status === 'installed') {
+      html += '<td style="color:green; padding:8px;">✅ 導入済み</td>';
+    } else {
+      html += '<td style="color:red; padding:8px;">❌ 未導入</td>';
+    }
+    
+    // Name and Type
+    html += `<td style="padding:8px;"><strong>${m.name}</strong><br><small class="text-muted">${m.type}</small></td>`;
+    
+    // Target Dir
+    html += `<td style="padding:8px; font-family:monospace; font-size:0.9em;">${m.target_dir}</td>`;
+    
+    // Action
+    html += '<td style="padding:8px;">';
+    if (m.status !== 'installed') {
+      if (m.manual_download) {
+        html += `<a href="${m.download_url}" target="_blank" class="btn btn-sm btn-outline">手動DL先へ</a><br>`;
+        html += `<small class="text-muted">ライセンス: ${m.license_note}</small>`;
+      } else {
+        html += `<button class="btn btn-sm btn-primary" onclick="installModel('${m.name}')">DLして配置</button>`;
+      }
+    } else {
+      html += '<span class="text-muted">OK</span>';
+    }
+    html += '</td>';
+    
+    html += '</tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+async function installModel(name) {
+  if (!confirm(`モデル ${name} をダウンロードしますか？時間がかかる場合があります。`)) return;
+  
+  const container = document.getElementById('models-container');
+  container.innerHTML = `<p>${name} をダウンロード中... ブラウザを閉じないでください。</p>`;
+  
+  try {
+    const res = await fetch('/api/comfyui/models/install', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name })
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      alert(data.message);
+    } else {
+      alert('エラー: ' + data.message);
+    }
+  } catch (e) {
+    alert('通信エラーが発生しました。');
+  }
+  loadModels();
+}
+
+async function installAll() {
+  if (!confirm(`自動ダウンロード可能なすべての不足モデルを一括ダウンロードしますか？時間がかかる場合があります。`)) return;
+  
+  const container = document.getElementById('models-container');
+  container.innerHTML = `<p>一括ダウンロード中... ブラウザを閉じないでください。</p>`;
+  
+  try {
+    const res = await fetch('/api/comfyui/models/install_all', {
+      method: 'POST'
+    });
+    const data = await res.json();
+    if (data.status === 'ok' || data.status === 'partial') {
+      alert(data.message);
+    } else {
+      alert('エラー: ' + data.message);
+    }
+  } catch (e) {
+    alert('通信エラーが発生しました。');
+  }
+  loadModels();
+}
+
+document.addEventListener('DOMContentLoaded', loadModels);
+</script>
+{% endblock %}

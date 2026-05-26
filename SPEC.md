@@ -1311,3 +1311,7 @@ TOPIC_REQUEST_CTA_EVERY_N=5
 - ネタ募集CTAを許可した台本で固定コメントが未指定なら、ネタ募集用固定コメントを自動差し込みする。
 - Longでは関連動画誘導・vidIQタイトル調整・説明欄YouTubeチャプター追加を許可する。アップロード時に `チャプター:` 行または既定章立てから `【目次】` を説明欄末尾へ追加する。
 - CTA方針は `_meta/cta_policy.json`、アップロード時のYouTubeメタ方針は `_meta/youtube_metadata.json` に保存する。YouTube Analytics取得時は `ネタ募集CTA` / `ネタ募集CTA理由` を取り込み、Analytics画面とTSVで確認できるようにする。
+
+## ComfyUIモデル管理
+- ssets/comfyui/model_manifest.json に必要なモデルを定義。
+- Web UIから半自動ダウンロードおよび充足チェックが可能。不足時は自動フォールバックせずに停止する。
