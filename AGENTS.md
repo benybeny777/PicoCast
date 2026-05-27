@@ -37,6 +37,7 @@
 - 実装が不安定な機能は `[DISABLED]` / `[dry-run]` として画面とコードコメントに明記し、無効ではなくユーザーに理由を提示する。
 - テストは `tests/test_web.py` で行う。外部API実通信が必要なテストはモックまたはskip可能にする。
 - Starlette 1.1.0以降: `TemplateResponse(request, name, context)` の引数順に従う（旧API `TemplateResponse(name, {request: ...})` は使わない）。
+- 設定画面で保存した値はアプリ再起動なしで即時反映する。`config_service._apply_runtime_updates()` で `setattr(cfg, key, value)` と `sys.modules` 全走査による伝搬を行う。`WEB_UI_PORT` など「アプリ起動時に固定されるパラメータ」だけを例外とし、それらは EDITABLE_CONFIG から除外する。UI上に「再起動後に反映」という文言を出さない。
 
 ## プロジェクト概要
 
