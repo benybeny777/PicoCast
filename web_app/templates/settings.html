@@ -230,7 +230,8 @@ async function loadConfig() {
         const step = item.type === 'float' ? '0.01' : '1';
         const minAttr = item.min !== undefined ? `min="${item.min}"` : '';
         const maxAttr = item.max !== undefined ? `max="${item.max}"` : '';
-        td.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="${inputType}" step="${step}" ${minAttr} ${maxAttr} value="${esc(item.current)}" class="form-input" style="width:120px">`;
+        const w = inputType === 'number' ? 'width:80px' : 'width:min(400px,100%)';
+        td.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="${inputType}" step="${step}" ${minAttr} ${maxAttr} value="${esc(item.current)}" class="form-input" style="${w}">`;
       }
       return td;
     }
