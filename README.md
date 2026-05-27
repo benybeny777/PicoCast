@@ -114,10 +114,12 @@ python3 -m venv .venv
 ```env
 GOOGLE_API_KEY=your_gemini_api_key
 OPENAI_API_KEY=your_openai_api_key
+HF_TOKEN=your_huggingface_token
 ```
 
 *   **`GOOGLE_API_KEY`:** Google AI Studio (Gemini API) から取得します。台本や背景画像の生成に使われます。
 *   **`OPENAI_API_KEY`:** OpenAI Platform から取得します。ChatGPT による台本の生成前最終レビュー（`gpt-5.2`）で使われます。
+*   **`HF_TOKEN`:** Hugging Face から取得します。Stable Diffusion の一部モデル（SD 1.5など）をアプリ内から自動ダウンロードする際に使用します（任意）。
 *   **`client_secrets.json`:** YouTube API を利用するための OAuth 2.0 クライアント認証情報（デスクトップアプリ用）です。Google Cloud Console からダウンロードし、**リポジトリ直下**に配置してください。
 
 > [!IMPORTANT]
@@ -329,6 +331,7 @@ APIキーやOAuthファイルなどの認証情報以外は、原則として `c
 | `MAX_BACKGROUNDS_LONG_BUDGET` | `16` | ロング動画の「画像節約モード」有効時の背景画像最大枚数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Long動画アップロード成功後に、自動的に追加する再生リスト名 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | `5` | Shorts新規/横展開の「ネタ募集CTA」を通算何本に1本許可するか。`0` なら自動付与しない |
+| `HF_TOKEN` | `""` | Hugging Face 認証が必要なSDモデルのダウンロードに使用するアクセストークン |
 
 ---
 

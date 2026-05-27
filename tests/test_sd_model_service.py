@@ -195,7 +195,7 @@ class TestPrepareSDWebUIModel:
         monkeypatch.setattr(_cfg, "SD_MODEL_MANIFEST_PATH", manifest_path)
 
         gen = ImageGenerator()
-        with pytest.raises(RuntimeError, match="インストールされていません"):
+        with pytest.raises(RuntimeError, match="SDモデル管理画面"):
             gen._prepare_sd_webui_model()
 
     def test_model_missing_with_auto_download_triggers_download(self, monkeypatch, tmp_path):
