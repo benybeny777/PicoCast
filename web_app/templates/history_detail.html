@@ -57,7 +57,7 @@
       <label for="background-engine">画像エンジン</label>
       <select id="background-engine">
         <option value="nanobanana" {% if image_backend == 'gemini' %}selected{% endif %}>Gemini AI</option>
-        <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>SD WebUI Forge</option>
+        <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI Forge</option>
       </select>
     </div>
     <div class="form-group check-group">
@@ -70,7 +70,7 @@
       <label><input type="checkbox" id="long-budget-mode" {% if default_long_budget_mode %}checked{% endif %}> Long節約</label>
     </div>
     <div class="form-group check-group">
-      <label><input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> SD生成</label>
+      <label><input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成</label>
     </div>
   </div>
 

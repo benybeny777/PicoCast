@@ -32,11 +32,11 @@
       エンジン:
       <select id="regen-engine" class="form-input" style="width:auto">
         <option value="nanobanana" {% if image_backend == 'gemini' %}selected{% endif %}>Google AI</option>
-        <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>SD WebUI Forge</option>
+        <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI Forge</option>
       </select>
     </label>
     <label style="font-size:13px; display:flex; align-items:center; gap:4px">
-      <input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> SD生成
+      <input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成
     </label>
   </div>
   <p class="hint">※ 背景画像は表示中のプロンプトで再生成します（保存前でも反映）。</p>

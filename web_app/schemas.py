@@ -70,7 +70,7 @@ class ImageRegenerateRequest(BaseModel):
     image_keys: list[str]          # "backgrounds/bg_NNN_001.png" / "thumbnails/..." 等
     prompts: dict[str, str] = {}   # key → テキスト（未保存のプロンプト上書き用）
     background_engine: str = ""    # "" = configデフォルト / "nanobanana" / "sd_webui"
-    sd_size_mode: bool = False     # True: SD生成サイズで生成して最終サイズにリサイズ（高速化）
+    sd_size_mode: bool = False     # True: 縮小サイズで生成して最終サイズにリサイズ（高速化）
 
 
 # ── アップロード ──────────────────────────────────────

@@ -43,7 +43,7 @@ def test_dashboard_page(client):
     assert "Google APIキー" not in res.text
     assert "client_secrets.json" not in res.text
     # ダッシュボードにはローカルサービス接続状態を表示する
-    assert "外部サービス接続" in res.text
+    assert "連携アプリ" in res.text
     assert "VOICEVOX" in res.text
     assert "ffmpeg" in res.text
 
@@ -54,7 +54,7 @@ def test_generate_page(client):
     assert res.status_code == 200
     assert "LongサムネAB" in res.text
     assert "Long節約" in res.text
-    assert "SD生成" in res.text
+    assert "縮小生成" in res.text
     assert ">通常</option>" in res.text
     assert ">’通常’</option>" not in res.text
     assert ">’通常’</option>" not in res.text

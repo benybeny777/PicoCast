@@ -349,7 +349,7 @@ class ImageGenerator:
         model_name = NANOBANANA_PRO_MODEL if (force_nanobanana_pro or "pro" in self.image_style) else NANOBANANA_FLASH_MODEL
 
         if self.debug:
-            size_note = f" SDサイズ生成({self.request_width}x{self.request_height}→{self.width}x{self.height})" if self.sd_size_mode else f" {self.width}x{self.height}"
+            size_note = f" 縮小サイズ生成({self.request_width}x{self.request_height}→{self.width}x{self.height})" if self.sd_size_mode else f" {self.width}x{self.height}"
             print(f"  [AI] Google {model_name} (Nano Banana){size_note} で描画を開始します: {description[:40]}...")
 
         try:
