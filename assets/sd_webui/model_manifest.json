@@ -12,7 +12,8 @@
       "description": "軽量な汎用ベースモデル。source_url 未設定の場合は手動配置対象。",
       "recommended": true,
       "requires_auth": false,
-      "api_match_hint": "v1-5-pruned-emaonly"
+      "api_match_hint": "v1-5-pruned-emaonly",
+      "download_page_url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5"
     }
   ]
 }

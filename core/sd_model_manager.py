@@ -141,6 +141,7 @@ class SDWebUIModelManager:
                 "installed": installed,
                 "path": file_path,
                 "can_download": bool(m["source_url"]),
+                "download_page_url": m.get("download_page_url", ""),
             })
         return result
 

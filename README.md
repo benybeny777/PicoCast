@@ -168,6 +168,10 @@ SD_WEBUI_NEGATIVE_PROMPT=people, human, person, face, hands, photorealistic, rea
 SD_WEBUI_ROOT=C:\path\to\stable-diffusion-webui
 SD_MODEL_MANIFEST_PATH=assets/sd_webui/model_manifest.json
 AUTO_DOWNLOAD_SD_MODELS=0
+
+# SD WebUI 自動起動（任意）— 画像生成時に未起動なら自動で起動する
+SD_WEBUI_START_COMMAND=C:\path\to\stable-diffusion-webui\webui-user.bat --api --nowebui
+SD_WEBUI_START_WAIT_SEC=120
 ```
 
 > [!IMPORTANT]
@@ -176,6 +180,39 @@ AUTO_DOWNLOAD_SD_MODELS=0
 > - `SD_WEBUI_MODEL` が空の場合は Forge に現在ロード中のモデルをそのまま使います。
 > - `SD_WEBUI_MODEL` を設定した場合、画像生成前にマニフェストでインストール確認 → 未インストールなら `AUTO_DOWNLOAD_SD_MODELS=1` 時は自動DL、`0` 時はエラー停止 → `set_active_model()` を実行します。
 > - Shorts（縦動画）では幅・高さが自動で入れ替わります（`SD_WEBUI_WIDTH` / `SD_WEBUI_HEIGHT` は横動画基準で設定してください）。
+
+#### SD WebUI 自動起動
+
+`.env` に `SD_WEBUI_START_COMMAND` を設定すると、**画像生成の開始時に SD WebUI が未起動であれば自動で起動**します。
+
+```env
+# Windows 例（Forge）
+SD_WEBUI_START_COMMAND=C:\path\to\stable-diffusion-webui\webui-user.bat --api --nowebui
+
+# 起動完了を待つ最大秒数（デフォルト: 120秒）
+SD_WEBUI_START_WAIT_SEC=120
+```
+
+> [!NOTE]
+> - SDモデル管理ページ（Web UI）でモデル一覧を表示するときは自動起動しません（表示を止めないため）。
+> - 自動起動が不要な場合は `SD_WEBUI_START_COMMAND` を空のままにしてください。その場合、SD WebUI を手動で先に起動してから動画生成を実行してください。
+
+#### SD WebUI モデルの手動インストール
+
+`URL未設定: 手動配置` と表示されたモデルは、以下の手順で手動インストールします。
+
+1. モデルファイルを配布ページからダウンロードします。  
+   例（SD 1.5 Base）: [https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5)
+
+2. SD WebUI のモデルフォルダに配置します。  
+   ```
+   {SD_WEBUI_ROOT}\models\Stable-diffusion\（ファイル名）
+   ```
+   例: `C:\stable-diffusion-webui\models\Stable-diffusion\v1-5-pruned-emaonly.safetensors`
+
+3. Web UI の「SDモデル」ページで **「WebUI 再スキャン」** ボタンを押すと一覧が更新されます。
+
+> `SD_WEBUI_ROOT` を `.env` に設定しておくと、配置先のフルパスが「インストール方法▼」欄に表示されます。
 
 #### SD WebUI モデル管理 Web UI
 

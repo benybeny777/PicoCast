@@ -67,31 +67,6 @@
   <div id="webui-models-container"><p>確認中...</p></div>
 </div>
 
-<div class="card" id="setup-guide" style="display:none">
-  <h3>SD WebUI セットアップ手順</h3>
-  <p style="margin-bottom:0.75rem">SD WebUI（Forge / AUTOMATIC1111）が起動していません。以下の手順で起動してください。</p>
-  <ol style="line-height:2">
-    <li><strong>SD WebUI Forge をインストール</strong>してください。<br>
-      <a href="https://github.com/lllyasviel/stable-diffusion-webui-forge" target="_blank" rel="noopener">
-        https://github.com/lllyasviel/stable-diffusion-webui-forge
-      </a>
-    </li>
-    <li>SD WebUI を <strong><code>--api</code> オプション付き</strong>で起動します。<br>
-      <code>webui-user.bat</code>（Windows）を編集して <code>COMMANDLINE_ARGS=--api</code> を追記するか、<br>
-      コマンドラインから直接 <code>python launch.py --api</code> で起動してください。
-    </li>
-    <li>起動後は <code>http://localhost:7860</code>（デフォルト）で動作確認し、ページをリロードしてください。</li>
-    <li>ポートが異なる場合は <strong>.env の <code>SD_WEBUI_BASE_URL</code></strong> を変更してください。<br>
-      例: <code>SD_WEBUI_BASE_URL=http://localhost:7860</code>
-    </li>
-    <li>SD WebUI が自動起動するよう設定したい場合は <strong>.env の <code>SD_WEBUI_START_COMMAND</code></strong> を設定してください。<br>
-      例: <code>SD_WEBUI_START_COMMAND=C:\sd.webui\run.bat --api --nowebui</code>
-    </li>
-  </ol>
-  <p style="margin-top:0.75rem;color:var(--text-dim);font-size:0.85em">
-    設定は <a href="/settings">設定ページ</a> から変更できます。
-  </p>
-</div>
 
 <style>
 .progress-wrap { background: var(--border); border-radius: 4px; height: 10px; overflow: hidden; margin: 4px 0; }
@@ -153,6 +128,55 @@ async function loadModels(progress = {}) {
   } catch (e) {
     container.innerHTML = '<p class="error-text">通信エラーが発生しました。</p>';
   }
+}
+
+/* ─── インストール方法トグル ─── */
+function renderInstallGuide(m) {
+  const guideId = 'guide-' + safeId(m.id);
+  // 配置先パス
+  const placePath = m.path
+    ? esc(m.path)
+    : `<em style="color:var(--text-dim)">{SD_WEBUI_ROOT}/</em>${esc(m.target_subdir)}/${esc(m.filename)}`;
+
+  let guideHtml = `
+    <div style="margin-top:6px">
+      <button class="btn btn-secondary" style="font-size:11px;padding:2px 8px"
+        onclick="toggleGuide('${guideId}')">インストール方法 ▼</button>
+    </div>
+    <div id="${guideId}" style="display:none;margin-top:8px;font-size:12px;line-height:1.8;
+         background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px 12px">
+      <strong>手動インストール手順</strong>
+      <ol style="margin:6px 0 0 1.2em;padding:0">
+        <li>ファイルをダウンロードします。<br>`;
+
+  if (m.download_page_url) {
+    guideHtml += `<a href="${esc(m.download_page_url)}" target="_blank" rel="noopener" style="word-break:break-all">${esc(m.download_page_url)}</a>`;
+  } else {
+    guideHtml += `<span style="color:var(--text-dim)">ダウンロード先は別途確認してください。</span>`;
+  }
+
+  guideHtml += `
+        </li>
+        <li>ダウンロードしたファイル名を確認します。<br>
+          <code>${esc(m.filename)}</code>
+        </li>
+        <li>SD WebUI のフォルダに配置します。<br>
+          配置先: <code>${placePath}</code>
+        </li>
+        <li>SD WebUI を再起動するか、ページ上部の <strong>「WebUI 再スキャン」</strong> ボタンを押してください。</li>
+      </ol>
+    </div>`;
+
+  return guideHtml;
+}
+
+function toggleGuide(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? '' : 'none';
+  // ボタンのテキストを▼/▲で切り替え
+  const btn = el.previousElementSibling?.querySelector('button');
+  if (btn) btn.textContent = el.style.display === 'none' ? 'インストール方法 ▼' : 'インストール方法 ▲';
 }
 
 function renderTable(models, progress) {
@@ -217,8 +241,10 @@ function renderTable(models, progress) {
       html += `<button class="btn btn-primary" style="font-size:12px" onclick="downloadModel('${esc(m.id)}')">DLして配置</button>`;
     } else if (m.requires_auth) {
       html += `<small style="color:var(--text-dim)">要認証: 手動配置が必要</small>`;
+      html += renderInstallGuide(m);
     } else {
       html += `<small style="color:var(--text-dim)">URL未設定: 手動配置</small>`;
+      html += renderInstallGuide(m);
     }
     if (m.path) {
       html += `<br><small style="color:var(--text-dim);font-size:10px">${esc(m.path)}</small>`;
@@ -232,12 +258,10 @@ function renderTable(models, progress) {
 /* ─── SD WebUI インストール済みモデル ─── */
 async function loadWebuiModels() {
   const container = document.getElementById('webui-models-container');
-  const guide = document.getElementById('setup-guide');
   try {
     const res = await fetch('/api/sd-models/webui');
     const data = await res.json();
     if (data.status === 'ok') {
-      if (guide) guide.style.display = 'none';
       const models = data.models || [];
       if (models.length === 0) {
         container.innerHTML = '<p style="color:var(--text-dim)">SD WebUI にモデルが見つかりません。</p>';
@@ -253,12 +277,12 @@ async function loadWebuiModels() {
       html += '</tbody></table>';
       container.innerHTML = html;
     } else {
-      container.innerHTML = `<p style="color:var(--text-dim)">SD WebUI 未起動: ${esc(data.message)}</p>`;
-      if (guide) guide.style.display = '';
+      container.innerHTML = `<p style="color:var(--text-dim)">SD WebUI 未起動: ${esc(data.message)}</p>
+        <p style="font-size:12px;color:var(--text-dim)">セットアップ手順は README の「SD WebUI 自動起動」セクションを参照してください。<br>
+        画像生成時に自動起動させるには <code>SD_WEBUI_START_COMMAND</code> を <a href="/settings">設定ページ</a> で設定してください。</p>`;
     }
   } catch (e) {
     container.innerHTML = '<p style="color:var(--text-dim)">通信エラー。SD WebUI が起動していない可能性があります。</p>';
-    if (guide) guide.style.display = '';
   }
 }
 
