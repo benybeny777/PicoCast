@@ -14,6 +14,13 @@
 
 ## 2026-05-27
 
+### macOS向けWeb UI起動手順を追加
+
+- macOS用の `start.command` を追加し、`.venv/bin/python -m web_app.app --open-browser --reload` でWeb UIを起動できるように整理
+- `VOICEVOX_URL` / `VOICEVOX_PATH` を環境変数で上書き可能にし、Windows固定パスを既定値から外して手動起動前提に変更
+- README / SPEC にWindowsとmacOSのセットアップ・起動手順を併記
+- Web UIのナビゲーションに `画像` を追加し、画像確認・再生成画面へ直接移動できるよう修正
+
 ### SD WebUI Forge 用モデル管理機能を追加
 
 - `core/sd_model_manager.py: SDWebUIModelManager` を新規追加。`assets/sd_webui/model_manifest.json` に基づきモデルのインストール確認・ダウンロード・SHA256検証を行う。
@@ -30,7 +37,6 @@
 
 - `IMAGE_BACKEND=sd_webui` を設定することで、Forge / AUTOMATIC1111互換APIから背景・サムネイルを生成できるようにした。
 - `IMAGE_BACKEND=gemini`（デフォルト）のときは従来どおり Nano Banana / Gemini 画像生成を使う。
-- ComfyUI依存を主ルートから外し、`IMAGE_BACKGROUND_ENGINE` は後方互換扱いに変更（既存の `local_comfyui` / `nanobanana` 設定は引き続き動作する）。
 - 画像生成失敗時は別エンジンへ自動フォールバックせず、明示エラーで停止する（設計方針不変）。
 - `core/sd_webui_generator.py: StableDiffusionWebUIGenerator` を新規追加。`POST /sdapi/v1/txt2img` で生成し、base64 PNG をファイル保存する。
 - サムネイル生成も `IMAGE_BACKEND` に従うよう変更。背景と同じエンジンでサムネを生成する。

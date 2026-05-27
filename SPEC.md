@@ -34,7 +34,7 @@
 ```
 yukkurijidou/
 ├── web_app/                # ローカル Web UI (FastAPI)
-│   ├── app.py              # FastAPI エントリポイント (通常起動は start.bat 推奨)
+│   ├── app.py              # FastAPI エントリポイント (通常起動はOS別起動スクリプト推奨)
 │   ├── job_manager.py      # バックグラウンドジョブ管理
 │   ├── worker_runner.py    # subprocess ワーカー起動・進捗転送・キャンセル共通ヘルパー
 │   ├── schemas.py          # Pydantic リクエスト/レスポンススキーマ
@@ -371,7 +371,8 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 ### 起動
 
 ```text
-start.bat
+Windows: start.bat
+macOS: ./start.command
 # 手動起動する場合:
 python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 ```
@@ -634,6 +635,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | 設定 | デフォルト | 説明 |
 |---|---|---|
 | `VOICEVOX_URL` | `http://localhost:50021` | VOICEVOX API URL |
+| `VOICEVOX_PATH` | 空 | VOICEVOX自動起動用パス（空の場合は手動起動） |
 | `NATIVE_SHORTS_BODY_VOICE_SPEED` | 1.25 | Shorts本編再生速度（native） |
 | `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.40 | Shortsイントロ再生速度（native） |
 | `NATIVE_LONG_BODY_VOICE_SPEED` | 1.20 | Long本編再生速度（native） |
@@ -902,7 +904,7 @@ Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local
 
 ### 生成
 
-1. VOICEVOXを起動し、通常は `start.bat` でWeb UIを起動（手動起動時のみ `python -m web_app.app --open-browser` を使用）
+1. VOICEVOXを起動し、通常はOS別の起動スクリプトでWeb UIを起動（手動起動時のみ `python -m web_app.app --open-browser` を使用）
 2. 必要に応じて `📊 アナリティクス` で実績データを取得
 3. `Shortsタイトル案` でタイトル案作成プロンプトをコピーし、候補を作成
 4. `AI台本作成` で食べ物雑学特化の台本作成プロンプトをコピー

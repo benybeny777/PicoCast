@@ -31,8 +31,8 @@ def _split_env_choices(value: str) -> tuple[str, ...]:
 # ───────────────────────────────────────────────
 # VOICEVOX
 # ───────────────────────────────────────────────
-VOICEVOX_URL = "http://localhost:50021"                          # VOICEVOX エンジン API エンドポイント
-VOICEVOX_PATH = r"C:\Users\benyb\AppData\Local\Programs\VOICEVOX\VOICEVOX.exe"  # 自動起動用パス
+VOICEVOX_URL = os.environ.get("VOICEVOX_URL", "http://localhost:50021")  # VOICEVOX エンジン API エンドポイント
+VOICEVOX_PATH = os.environ.get("VOICEVOX_PATH", "")                     # VOICEVOX 自動起動用パス（空=手動起動）
 
 # ───────────────────────────────────────────────
 # 音声速度 — native レンダラー用（字幕追従ズレ対策でやや遅め）

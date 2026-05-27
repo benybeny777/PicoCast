@@ -31,12 +31,17 @@ graph TD
 
 ## 🚀 クイックスタート
 
-通常運用では、リポジトリ直下の `start.bat` から起動する方法を推奨します。仮想環境の Python を直接指定して Web UI を起動し、ブラウザも自動で開きます。
+通常運用では、リポジトリ直下の起動スクリプトから起動する方法を推奨します。仮想環境の Python を直接指定して Web UI を起動し、ブラウザも自動で開きます。
 
 1. **VOICEVOX を起動**しておきます（デフォルトポート: `50021`）。
-2. リポジトリ直下の `start.bat` をダブルクリック、またはターミナルから起動します。
+2. リポジトリ直下の起動スクリプトをダブルクリック、またはターミナルから起動します。
+   Windows:
    ```powershell
    .\start.bat
+   ```
+   macOS:
+   ```bash
+   ./start.command
    ```
 3. 自動的にブラウザが立ち上がり、`http://127.0.0.1:58080` にアクセスできます。
 
@@ -44,6 +49,12 @@ graph TD
 
 ```cmd
 .venv\Scripts\python.exe -m web_app.app --open-browser --reload
+```
+
+`start.command` は内部で次を実行します。
+
+```bash
+.venv/bin/python -m web_app.app --open-browser --reload
 ```
 
 普段の操作入口はローカル Web UI です。
@@ -64,12 +75,18 @@ graph TD
 ## 📦 セットアップ手順
 
 ### Step 1. 仮想環境と依存パッケージの準備
-Windowsでは、システムの Python ではなく、プロジェクト専用の `.venv` を使います。既に `.venv` が用意済みなら作成手順は不要です。
+システムの Python ではなく、プロジェクト専用の `.venv` を使います。既に `.venv` が用意済みなら作成手順は不要です。
 
 `.venv` がない場合:
 
+Windows:
 ```powershell
 py -3 -m venv .venv
+```
+
+macOS:
+```bash
+python3 -m venv .venv
 ```
 
 *   **PowerShell の場合:**
@@ -85,6 +102,10 @@ py -3 -m venv .venv
     .venv\Scripts\activate.bat
     :: 依存関係のインストール・更新
     pip install --upgrade -r requirements.txt
+    ```
+*   **macOS の場合:**
+    ```bash
+    .venv/bin/python -m pip install --upgrade -r requirements.txt
     ```
 
 ### Step 2. APIキーとOAuth設定ファイルの配置
@@ -214,12 +235,18 @@ Web UI の「SDモデル」ページ（`/sd-models`）からマニフェスト�
 
 ## 💻 起動方法と起動オプション
 
-### 推奨: start.bat で起動
+### 推奨: 起動スクリプトで起動
 
-通常は `start.bat` を使います。仮想環境の有効化操作は不要です。
+通常はOS別の起動スクリプトを使います。仮想環境の有効化操作は不要です。
 
+Windows:
 ```powershell
 .\start.bat
+```
+
+macOS:
+```bash
+./start.command
 ```
 
 VOICEVOXを起動してから実行してください。起動後は `http://127.0.0.1:58080` を開きます。
@@ -232,13 +259,23 @@ VOICEVOXを起動してから実行してください。起動後は `http://127
     ```powershell
     .\.venv\Scripts\python.exe -m web_app.app
     ```
+*   **通常起動 (macOS):**
+    ```bash
+    .venv/bin/python -m web_app.app
+    ```
 *   **自動でブラウザを開く場合:**
     ```powershell
     .\.venv\Scripts\python.exe -m web_app.app --open-browser
     ```
+    ```bash
+    .venv/bin/python -m web_app.app --open-browser
+    ```
 *   **開発用（ファイル変更時の自動リロードを有効にする）:**
     ```powershell
     .\.venv\Scripts\python.exe -m web_app.app --reload --open-browser
+    ```
+    ```bash
+    .venv/bin/python -m web_app.app --reload --open-browser
     ```
 
 > [!TIP]
@@ -252,13 +289,13 @@ VOICEVOXを起動してから実行してください。起動後は `http://127
 | `--port N` | ポートを指定して起動（デフォルト: `58080`） |
 | `--auto-port` | 指定ポートが競合している場合、自動的に次の空きポートを探して起動 |
 | `--open-browser` | サーバー起動後、自動的に既定のウェブブラウザを開く |
-| `--reload` | 関連ソースコードの変更を検知した際に、自動でUvicornサーバーを再起動する（`start.bat` では既定で有効） |
+| `--reload` | 関連ソースコードの変更を検知した際に、自動でUvicornサーバーを再起動する（起動スクリプトでは既定で有効） |
 
 ---
 
 ## 📝 基本のワークフロー
 
-1.  **起動:** VOICEVOXを起動し、`start.bat` でWeb UIを開きます。
+1.  **起動:** VOICEVOXを起動し、OS別の起動スクリプトでWeb UIを開きます。
 2.  **実績の同期:** `Analytics` 画面で YouTube Analytics の最新実績データを取得します。
 3.  **タイトル案プロンプト作成:** `生成` 画面の `Shortsタイトル案プロンプト` / `Longタイトル案プロンプト` をコピーし、実績データを組み込んだプロンプトで AI にタイトル案を出させます。
 4.  **台本作成:** 採用したタイトルから、`AI台本作成プロンプト` をコピーして AI に台本を作成させます。
