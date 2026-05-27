@@ -784,7 +784,11 @@ def final_chatgpt_review(
     render_engine: str = "native",
 ) -> dict[str, Any] | None:
     if not OPENAI_FINAL_REVIEW_ENABLED:
-        return None
+        return {
+            "skipped": True,
+            "reason": "OPENAI_FINAL_REVIEW_ENABLED is false",
+            "model": OPENAI_FINAL_REVIEW_MODEL,
+        }
     if not OPENAI_API_KEY:
         return {
             "skipped": True,
@@ -821,6 +825,8 @@ def final_chatgpt_review(
         response.raise_for_status()
         text = _extract_openai_response_text(response.json())
     result = json.loads(_strip_json_text(text))
+    if not isinstance(result, dict) or not result:
+        raise RuntimeError("ChatGPT生成前レビューのJSONが空、またはオブジェクトではありません")
     result["model"] = OPENAI_FINAL_REVIEW_MODEL
     # native Shorts かつ dialogue_count <= 28 の場合、旧 YMM4 基準由来の誤 must_fix を除去
     if is_shorts and render_engine == "native":

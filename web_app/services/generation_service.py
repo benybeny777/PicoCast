@@ -150,6 +150,8 @@ def _run_generate(
         raise RuntimeError(worker_result.get("error", "ワーカーエラー"))
 
     msg = worker_result.get("message", "")
+    if str(msg).lstrip().startswith("❌"):
+        raise RuntimeError(msg)
     theme_dir = os.path.join(OUTPUT_DIR, _safe_dirname(topic))
     result = {
         "topic": topic,

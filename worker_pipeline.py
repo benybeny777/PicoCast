@@ -22,6 +22,10 @@ import traceback
 _cancel_event = threading.Event()
 
 
+def _is_failure_message(message: str) -> bool:
+    return str(message).lstrip().startswith("❌")
+
+
 def _stdin_watcher() -> None:
     """stdin から "cancel" を受け取ったらキャンセルイベントをセットする。"""
     try:
@@ -71,6 +75,12 @@ def main() -> None:
 
         if _cancel_event.is_set():
             result = {"status": "cancelled"}
+        elif _is_failure_message(msg):
+            result = {
+                "status": "failed",
+                "error": msg,
+                "elapsed_sec": getattr(report, "elapsed_sec", None),
+            }
         else:
             result = {
                 "status": "success",

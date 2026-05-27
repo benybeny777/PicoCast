@@ -1039,6 +1039,18 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         f"（{estimated_lines}行 / 平均{estimated_avg_chars:.1f}文字）"
     )
     openai_check = check_openai_final_review_connection()
+    if openai_check.get("skipped"):
+        final_review_path = save_final_review(
+            theme_dir,
+            {
+                "skipped": True,
+                "reason": openai_check.get("reason", "OPENAI_FINAL_REVIEW_ENABLED is false"),
+                "stage": "pre_generation",
+                "model": openai_check.get("model"),
+            },
+        )
+        update_status(f"⚠ ChatGPT生成前レビューをスキップ: {openai_check.get('reason')} ({final_review_path})", "warning")
+        openai_check = {"ok": True, "skipped_handled": True}
     if not openai_check.get("ok"):
         error = openai_check.get("error", "unknown error")
         final_review_path = save_final_review(
@@ -1052,63 +1064,61 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status(msg, "error")
         report.elapsed_sec = time.time() - pipeline_start
         return finish_result(msg)
-    try:
-        final_review = final_chatgpt_review(
-            title=meta.get("video_title", topic),
-            thumbnail_text=meta.get("thumbnail_text", ""),
-            fixed_comment=meta.get("fixed_comment", ""),
-            script_content=script_content,
-            items=items,
-            is_shorts=is_shorts,
-            estimated_duration=estimated_sec,
-            local_review=opening_review,
-            ollama_review=llm_review,
-            duration_result=estimated_duration_result,
-            render_engine=_render_engine,
-        )
-        final_review_path = save_final_review(theme_dir, final_review)
-        if final_review and final_review.get("skipped"):
-            msg = f"❌ ChatGPT生成前レビュー skipped: {final_review.get('reason')} ({final_review_path})"
-            update_status(msg, "error")
-            report.elapsed_sec = time.time() - pipeline_start
-            return finish_result(msg)
-        elif final_review:
-            pre_score = int(final_review.get("final_score") or 0)
-            pre_score_tag = opening_score_tag(pre_score)
-            final_model = final_review.get("model")
-            final_model_text = f" / model {final_model}" if final_model else ""
-            update_status(
-                f"■■■ ChatGPT生成前スコア {pre_score}点 "
-                f"/ publish_ok={final_review.get('publish_ok')} / risk={final_review.get('risk')}{final_model_text} ■■■\n"
-                f"  保存先: {final_review_path}",
-                pre_score_tag,
+    if not openai_check.get("skipped_handled"):
+        try:
+            final_review = final_chatgpt_review(
+                title=meta.get("video_title", topic),
+                thumbnail_text=meta.get("thumbnail_text", ""),
+                fixed_comment=meta.get("fixed_comment", ""),
+                script_content=script_content,
+                items=items,
+                is_shorts=is_shorts,
+                estimated_duration=estimated_sec,
+                local_review=opening_review,
+                ollama_review=llm_review,
+                duration_result=estimated_duration_result,
+                render_engine=_render_engine,
             )
-            for issue in (final_review.get("must_fix") or [])[:3]:
-                update_status(f"    must_fix: {issue}", "warning")
-
-            must_fix = final_review.get("must_fix") or []
-            if final_review.get("publish_ok") is False and not must_fix and pre_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD:
-                update_status("  ⚠ publish_ok=Falseですが、must_fixなしのため警告通過します", "warning")
-            if pre_score < OPENING_SCORE_HARD_ABORT_THRESHOLD or must_fix:
-                msg = (
-                    f"❌ ChatGPT生成前レビューで停止しました"
-                    f"（{pre_score}点 / publish_ok={final_review.get('publish_ok')} / 停止基準: {OPENING_SCORE_HARD_ABORT_THRESHOLD}点未満またはmust_fixあり）\n"
-                    "台本を修正してから再実行してください。"
+            final_review_path = save_final_review(theme_dir, final_review)
+            if final_review and final_review.get("skipped"):
+                update_status(f"⚠ ChatGPT生成前レビューをスキップ: {final_review.get('reason')} ({final_review_path})", "warning")
+            elif final_review:
+                pre_score = int(final_review.get("final_score") or 0)
+                pre_score_tag = opening_score_tag(pre_score)
+                final_model = final_review.get("model")
+                final_model_text = f" / model {final_model}" if final_model else ""
+                update_status(
+                    f"■■■ ChatGPT生成前スコア {pre_score}点 "
+                    f"/ publish_ok={final_review.get('publish_ok')} / risk={final_review.get('risk')}{final_model_text} ■■■\n"
+                    f"  保存先: {final_review_path}",
+                    pre_score_tag,
                 )
+                for issue in (final_review.get("must_fix") or [])[:3]:
+                    update_status(f"    must_fix: {issue}", "warning")
+
+                must_fix = final_review.get("must_fix") or []
+                if final_review.get("publish_ok") is False and not must_fix and pre_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD:
+                    update_status("  ⚠ publish_ok=Falseですが、must_fixなしのため警告通過します", "warning")
+                if pre_score < OPENING_SCORE_HARD_ABORT_THRESHOLD or must_fix:
+                    msg = (
+                        f"❌ ChatGPT生成前レビューで停止しました"
+                        f"（{pre_score}点 / publish_ok={final_review.get('publish_ok')} / 停止基準: {OPENING_SCORE_HARD_ABORT_THRESHOLD}点未満またはmust_fixあり）\n"
+                        "台本を修正してから再実行してください。"
+                    )
+                    update_status(msg, "error")
+                    report.elapsed_sec = time.time() - pipeline_start
+                    return finish_result(msg)
+            else:
+                msg = f"❌ ChatGPT生成前レビュー結果が空です ({final_review_path})"
                 update_status(msg, "error")
                 report.elapsed_sec = time.time() - pipeline_start
                 return finish_result(msg)
-        else:
-            msg = f"❌ ChatGPT生成前レビュー結果が空です ({final_review_path})"
+        except Exception as e:
+            final_review_path = save_final_review(theme_dir, {"error": str(e), "stage": "pre_generation"})
+            msg = f"❌ ChatGPT生成前レビュー失敗: {e} ({final_review_path})"
             update_status(msg, "error")
             report.elapsed_sec = time.time() - pipeline_start
             return finish_result(msg)
-    except Exception as e:
-        final_review_path = save_final_review(theme_dir, {"error": str(e), "stage": "pre_generation"})
-        msg = f"❌ ChatGPT生成前レビュー失敗: {e} ({final_review_path})"
-        update_status(msg, "error")
-        report.elapsed_sec = time.time() - pipeline_start
-        return finish_result(msg)
 
     if not is_shorts:
         base_title = meta.get("video_title", topic)
