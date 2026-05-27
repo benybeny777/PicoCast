@@ -71,6 +71,10 @@ body {
   background: var(--surface2);
 }
 
+.nav-settings {
+  margin-left: auto;
+}
+
 /* ── メインコンテンツ ── */
 .main-content {
   max-width: 1280px;
