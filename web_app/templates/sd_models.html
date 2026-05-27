@@ -159,12 +159,16 @@ function renderTable(models, progress) {
     return;
   }
 
-  let html = '<table class="status-table" style="width:100%">';
+  let html = '<table class="status-table" style="width:100%;table-layout:fixed">';
+  html += '<colgroup>'
+    + '<col style="width:7em">'   /* 状態 */
+    + '<col>'                      /* モデル情報（残り全幅） */
+    + '<col style="width:14em">'  /* アクション */
+    + '</colgroup>';
   html += '<thead><tr>'
-    + '<th style="width:6em">状態</th>'
-    + '<th>モデル名</th>'
-    + '<th style="width:16em">ファイル名</th>'
-    + '<th style="width:22em">アクション</th>'
+    + '<th>状態</th>'
+    + '<th>モデル情報</th>'
+    + '<th>アクション</th>'
     + '</tr></thead><tbody>';
 
   for (const m of models) {
@@ -179,32 +183,30 @@ function renderTable(models, progress) {
 
     /* 状態列 */
     if (installed) {
-      html += '<td><span class="badge badge-ok">導入済み</span></td>';
+      html += '<td style="white-space:nowrap"><span class="badge badge-ok">導入済み</span></td>';
     } else if (isDownloading) {
-      html += '<td><span class="badge badge-warn">DL中</span></td>';
+      html += '<td style="white-space:nowrap"><span class="badge badge-warn">DL中</span></td>';
     } else if (isError) {
-      html += '<td><span class="badge badge-ng">エラー</span></td>';
+      html += '<td style="white-space:nowrap"><span class="badge badge-ng">エラー</span></td>';
     } else {
-      html += '<td><span class="badge badge-ng">未導入</span></td>';
+      html += '<td style="white-space:nowrap"><span class="badge badge-ng">未導入</span></td>';
     }
 
-    /* モデル名列 */
-    let nameHtml = `<strong>${esc(m.display_name)}</strong>`;
+    /* モデル情報列（名前 + 説明 + ファイル名 + ライセンス + リンク） */
+    let nameHtml = `<strong style="font-size:0.95em">${esc(m.display_name)}</strong>`;
     if (m.recommended) nameHtml += ' <span style="color:var(--accent2);font-size:11px">★推奨</span>';
     if (m.description) nameHtml += `<br><small style="color:var(--text-dim)">${esc(m.description)}</small>`;
+    nameHtml += `<br><span style="font-family:monospace;font-size:0.82em;color:var(--text-dim)">`
+      + `${esc(m.filename)}</span>`;
     if (m.license_note) nameHtml += `<br><small class="license-note">📄 ${esc(m.license_note)}</small>`;
     if (m.source_page_url) {
-      nameHtml += `<br><a href="${esc(m.source_page_url)}" target="_blank" rel="noopener"
-        style="font-size:11px">配布元ページ →</a>`;
+      nameHtml += ` <a href="${esc(m.source_page_url)}" target="_blank" rel="noopener"
+        style="font-size:11px">配布元 →</a>`;
     }
-    html += `<td>${nameHtml}</td>`;
-
-    /* ファイル名列 */
-    html += `<td style="font-family:monospace;font-size:0.82em;word-break:break-all">`
-      + `${esc(m.filename)}<br><span style="color:var(--text-dim)">${esc(m.target_subdir)}</span></td>`;
+    html += `<td style="word-break:break-word;min-width:0">${nameHtml}</td>`;
 
     /* アクション列 */
-    html += '<td>';
+    html += '<td style="vertical-align:top;padding-top:8px">';
 
     if (isDownloading) {
       const pct = prog.percent || 0;
@@ -274,13 +276,15 @@ async function loadWebuiModels() {
         container.innerHTML = '<p style="color:var(--text-dim)">Forge にモデルが見つかりません。ダウンロード後に「WebUI 再スキャン」してください。</p>';
         return;
       }
-      let html = '<table class="status-table" style="width:100%"><thead>'
-        + '<tr><th>タイトル</th><th>ファイル名</th><th style="width:12em">アクション</th></tr>'
+      let html = '<table class="status-table" style="width:100%;table-layout:fixed"><colgroup>'
+        + '<col><col style="width:12em"></colgroup><thead>'
+        + '<tr><th>モデル（タイトル / ファイル名）</th><th>アクション</th></tr>'
         + '</thead><tbody>';
       for (const m of models) {
         const title = m.title || m.model_name || '?';
         const fname = m.filename ? m.filename.split(/[\\/]/).pop() : '';
-        html += `<tr><td>${esc(title)}</td><td style="font-family:monospace;font-size:0.85em">${esc(fname)}</td>`;
+        html += `<tr><td><span style="font-weight:600">${esc(title)}</span>`
+          + `<br><span style="font-family:monospace;font-size:0.82em;color:var(--text-dim)">${esc(fname)}</span></td>`;
         html += `<td><button class="btn btn-primary" style="font-size:12px" onclick="useModel('${esc(title)}')">このモデルを使う</button></td></tr>`;
       }
       html += '</tbody></table>';
