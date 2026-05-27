@@ -55,33 +55,38 @@ class ComfyUIModelManager:
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest() == expected_hash
 
-    def download_model(self, model_name):
-        """特定のモデルをダウンロードする"""
+    def download_model(self, model_name, progress_callback=None):
+        """特定のモデルをダウンロードする。progress_callback(downloaded_bytes, total_bytes) を随時呼ぶ。"""
         model = next((m for m in self.models if m["name"] == model_name), None)
         if not model:
             raise ValueError(f"マニフェストに存在しないモデルです: {model_name}")
-            
+
         if model.get("manual_download"):
             raise ValueError(f"{model_name} は手動ダウンロードが必要です。")
-            
+
         target_dir = os.path.join(self.root_dir, model["target_dir"])
         os.makedirs(target_dir, exist_ok=True)
         target_path = os.path.join(target_dir, model["name"])
-        
+
         try:
             response = requests.get(model["download_url"], stream=True, timeout=self.timeout)
             response.raise_for_status()
-            
+
+            total = int(response.headers.get("Content-Length", 0))
+            downloaded = 0
             with open(target_path, "wb") as f:
-                for chunk in response.iter_content(chunk_size=8192):
+                for chunk in response.iter_content(chunk_size=65536):
                     if chunk:
                         f.write(chunk)
-                        
+                        downloaded += len(chunk)
+                        if progress_callback:
+                            progress_callback(downloaded, total)
+
             # SHA256の検証
             if not self.verify_sha256_hash(target_path, model.get("sha256")):
                 os.remove(target_path)
                 raise ValueError(f"{model_name} のSHA256チェックサムが一致しませんでした。")
-                
+
             return True
         except Exception as e:
             if os.path.exists(target_path):
