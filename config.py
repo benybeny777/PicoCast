@@ -148,6 +148,7 @@ SD_MODEL_MANIFEST_PATH = os.environ.get(                                        
     os.path.join(os.path.dirname(__file__), "assets", "sd_webui", "model_manifest.json"),
 )
 AUTO_DOWNLOAD_SD_MODELS = os.environ.get("AUTO_DOWNLOAD_SD_MODELS", "0").strip().lower() in ("1", "true", "yes", "on")  # 未導入モデルの自動ダウンロード許可（0=停止/手動のみ, 1=自動可）
+HF_TOKEN = os.environ.get("HF_TOKEN", "")                                           # Hugging Face アクセストークン（認証付きモデルのダウンロードに使用）
 
 
 OLLAMA_REWRITE_FALLBACK_MODEL = os.environ.get("OLLAMA_REWRITE_FALLBACK_MODEL", "gemma4:e4b")           # リライト失敗時のフォールバックモデル

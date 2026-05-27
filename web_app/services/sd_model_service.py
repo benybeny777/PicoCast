@@ -3,7 +3,7 @@ SD WebUI Forge モデル管理サービス。
 Web UI ルートからの要求を受けてモデルマネージャーへ委譲する。
 """
 import logging
-from typing import Any
+from typing import Any, Callable
 
 import config
 from core.sd_model_manager import SDWebUIModelManager
@@ -65,3 +65,25 @@ def rescan_models() -> None:
     gen.rescan_models()
 
 
+def download_model(
+    model_id: str,
+    *,
+    progress_callback: Callable[[str, int, int], None] | None = None,
+) -> str:
+    """指定モデルをダウンロードする。
+
+    Raises:
+        RuntimeError: 各種エラー。
+    """
+    manager = SDWebUIModelManager()
+    return manager.download_model(model_id, progress_callback=progress_callback)
+
+
+def delete_model(model_id: str, *, confirmed: bool = False) -> str:
+    """指定モデルのファイルを削除する。confirmed=True が必須。
+
+    Raises:
+        RuntimeError: confirmed=False、ファイルが存在しない、パスが範囲外。
+    """
+    manager = SDWebUIModelManager()
+    return manager.delete_model(model_id, confirmed=confirmed)

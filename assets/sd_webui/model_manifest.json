@@ -2,18 +2,64 @@
   "version": 1,
   "models": [
     {
-      "id": "sd15_base",
-      "display_name": "Stable Diffusion 1.5 Base (pruned, ema-only)",
+      "id": "counterfeit_v30_fp16",
+      "display_name": "Counterfeit-V3.0 (fp16) ★アニメ・漫画風",
+      "type": "checkpoint",
+      "filename": "Counterfeit-V3.0_fp16.safetensors",
+      "target_subdir": "models/Stable-diffusion",
+      "source_url": "https://huggingface.co/gsdf/Counterfeit-V3.0/resolve/main/Counterfeit-V3.0_fp16.safetensors",
+      "sha256": "",
+      "description": "アニメ・漫画風イラストに特化したモデル。ずんだもん背景に最適。fp16版で比較的軽量。",
+      "recommended": true,
+      "requires_auth": false,
+      "license_note": "CreativeML OpenRAIL-M ライセンス。商用利用可否は配布元ページをご確認ください。",
+      "source_page_url": "https://huggingface.co/gsdf/Counterfeit-V3.0",
+      "api_match_hint": "Counterfeit-V3.0"
+    },
+    {
+      "id": "dreamshaper8",
+      "display_name": "DreamShaper 8 ★汎用・背景向け",
+      "type": "checkpoint",
+      "filename": "dreamshaper_8.safetensors",
+      "target_subdir": "models/Stable-diffusion",
+      "source_url": "https://huggingface.co/Lykon/DreamShaper/resolve/main/dreamshaper_8.safetensors",
+      "sha256": "",
+      "description": "汎用高品質モデル。背景・風景生成に優れる。アニメ寄りと実写寄りの中間。",
+      "recommended": true,
+      "requires_auth": false,
+      "license_note": "CreativeML OpenRAIL-M ライセンス。商用利用可否は配布元ページをご確認ください。",
+      "source_page_url": "https://huggingface.co/Lykon/DreamShaper",
+      "api_match_hint": "dreamshaper_8"
+    },
+    {
+      "id": "anything_v5",
+      "display_name": "Anything V5 / Ink ★アニメ特化",
+      "type": "checkpoint",
+      "filename": "AnythingV5Ink_ink.safetensors",
+      "target_subdir": "models/Stable-diffusion",
+      "source_url": "https://huggingface.co/stablediffusionapi/anything-v5/resolve/main/AnythingV5Ink_ink.safetensors",
+      "sha256": "",
+      "description": "Anything シリーズのアニメ特化版。鮮やかな色彩と漫画風タッチ。",
+      "recommended": true,
+      "requires_auth": false,
+      "license_note": "CreativeML OpenRAIL-M ライセンス。商用利用可否は配布元ページをご確認ください。",
+      "source_page_url": "https://huggingface.co/stablediffusionapi/anything-v5",
+      "api_match_hint": "AnythingV5Ink"
+    },
+    {
+      "id": "sd15_pruned_ema",
+      "display_name": "Stable Diffusion 1.5 (pruned, ema-only)",
       "type": "checkpoint",
       "filename": "v1-5-pruned-emaonly.safetensors",
       "target_subdir": "models/Stable-diffusion",
-      "source_url": "",
-      "sha256": "",
-      "description": "軽量な汎用ベースモデル。source_url 未設定の場合は手動配置対象。",
-      "recommended": true,
-      "requires_auth": false,
-      "api_match_hint": "v1-5-pruned-emaonly",
-      "download_page_url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5"
+      "source_url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/resolve/main/v1-5-pruned-emaonly.safetensors",
+      "sha256": "cc6cb27103417325ff94f52b7a5d2dde45a7515b25c255d8e396c90014281516",
+      "description": "軽量な汎用ベースモデル。Stable Diffusion 1.5 の標準版。ダウンロードには Hugging Face ログインが必要。",
+      "recommended": false,
+      "requires_auth": true,
+      "license_note": "CreativeML OpenRAIL-M ライセンス。Hugging Face でライセンス同意・ログインが必要です。",
+      "source_page_url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5",
+      "api_match_hint": "v1-5-pruned-emaonly"
     }
   ]
 }

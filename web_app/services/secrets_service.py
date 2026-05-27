@@ -7,7 +7,7 @@ import os
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 _ENV_PATH = os.path.join(_ROOT, ".env")
 
-_ALLOWED_SECRET_KEYS = {"GOOGLE_API_KEY", "OPENAI_API_KEY"}
+_ALLOWED_SECRET_KEYS = {"GOOGLE_API_KEY", "OPENAI_API_KEY", "HF_TOKEN"}
 
 
 def save_secrets(updates: dict[str, str]) -> list[str]:

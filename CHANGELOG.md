@@ -14,6 +14,18 @@
 
 ## 2026-05-28
 
+### SD WebUI モデル導入をアプリ内ワンクリック方式に整理
+
+- SD WebUI Forge 用 checkpoint モデルは原則として手動配置させず、`/sd-models` 画面からダウンロード・SHA256 検証・配置・Forge 再スキャン・使用モデル切替まで行う方針に変更。
+- 認証が必要なモデル向けに `HF_TOKEN` 設定を追加。Hugging Face 認証付きダウンロードに対応（`Authorization: Bearer {HF_TOKEN}` ヘッダー）。
+- `requires_auth=true` のモデルは HF_TOKEN 未設定またはライセンス未同意時に明示エラー。別モデルへフォールバックしない。
+- 既存ファイルが SHA256 一致なら再ダウンロードしない。SHA256 不一致は自動上書きせずエラーを表示。
+- 破損ファイルや SHA256 不一致時に Web UI から「削除して再ダウンロード」できる導線を追加（`confirmed=true` 必須、SD_WEBUI_ROOT 配下のみ削除可）。
+- `model_manifest.json` に推奨モデル 4 件（Counterfeit-V3.0・DreamShaper 8・Anything V5・SD 1.5）を追加。手動配置前提の空 URL エントリを廃止。
+- `/settings` の「APIキー設定」タブに `HF_TOKEN` フィールドを追加。値はレスポンス・ログに含めない。
+- エラーメッセージから「手動配置」の案内を削除し、「SDモデル管理画面 (/sd-models) からダウンロードしてください」に統一。
+- `test_sd_model_manager.py` に認証・既存ファイル・削除系テスト計 10 件を追加（88 件全パス）。
+
 ### Stable Diffusion WebUI プロンプトを Ollama で日→英翻訳
 
 - `core/image_generator.py` に `_translate_to_english_for_sd()` を追加。Stable Diffusion WebUI に送る前に日本語の背景描写を Ollama で英語プロンプトへ変換する。

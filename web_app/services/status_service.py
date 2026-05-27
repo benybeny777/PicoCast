@@ -142,6 +142,7 @@ def get_settings_status() -> dict[str, Any]:
         "image_backend": config.IMAGE_BACKEND,          # 現在のバックエンド種別
         "google_api_key": bool(config.GOOGLE_API_KEY),
         "openai_api_key": bool(config.OPENAI_API_KEY),
+        "hf_token": bool(config.HF_TOKEN),
         "client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),
         "token_json": os.path.isfile(os.path.join(root, "token.json")),
         "token_analytics_json": os.path.isfile(os.path.join(root, "token_analytics.json")),

@@ -341,6 +341,303 @@ class TestDownloadModel:
 
 
 # ─────────────────────────────────────────────────────────────────
+# 認証（HF_TOKEN）テスト
+# ─────────────────────────────────────────────────────────────────
+
+def _auth_model_entry():
+    return [{
+        "id": "auth_model",
+        "display_name": "Auth Required Model",
+        "type": "checkpoint",
+        "filename": "auth.safetensors",
+        "target_subdir": "models/Stable-diffusion",
+        "source_url": "https://huggingface.co/example/model/resolve/main/auth.safetensors",
+        "sha256": "",
+        "description": "",
+        "recommended": False,
+        "requires_auth": True,
+        "api_match_hint": "",
+    }]
+
+
+class TestAuthDownload:
+    def test_requires_auth_no_token_raises(self, tmp_path, monkeypatch):
+        """requires_auth=true かつ HF_TOKEN 未設定でエラー（ダウンロードを試みない）"""
+        import config
+        from core.sd_model_manager import SDWebUIModelManager
+        monkeypatch.setattr(config, "HF_TOKEN", "")
+        manifest_path = _write_manifest(tmp_path, _auth_model_entry())
+        manager = SDWebUIModelManager(sd_root=str(tmp_path / "sd_root"), manifest_path=manifest_path)
+        with pytest.raises(RuntimeError, match="HF_TOKEN"):
+            manager.download_model("auth_model")
+
+    def test_requires_auth_with_token_adds_authorization_header(self, tmp_path, monkeypatch):
+        """requires_auth=true かつ HF_TOKEN 設定済みで Authorization ヘッダーが付く"""
+        import config
+        import httpx
+        from core.sd_model_manager import SDWebUIModelManager
+
+        monkeypatch.setattr(config, "HF_TOKEN", "test_hf_token_xyz")
+        manifest_path = _write_manifest(tmp_path, _auth_model_entry())
+        sd_root = tmp_path / "sd_root"
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+
+        captured_headers = {}
+
+        class FakeStream:
+            status_code = 200
+            headers = {"content-length": "5"}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def iter_bytes(self, chunk_size=65536):
+                yield b"model"
+
+        def fake_stream(method, url, headers=None, **kw):
+            captured_headers.update(headers or {})
+            return FakeStream()
+
+        monkeypatch.setattr(httpx, "stream", fake_stream)
+
+        manager.download_model("auth_model")
+        assert captured_headers.get("Authorization") == "Bearer test_hf_token_xyz"
+
+    def test_requires_auth_401_raises_auth_error(self, tmp_path, monkeypatch):
+        """requires_auth=true かつ 401 応答 → 認証エラーメッセージ"""
+        import config
+        import httpx
+        from core.sd_model_manager import SDWebUIModelManager
+
+        monkeypatch.setattr(config, "HF_TOKEN", "bad_token")
+        manifest_path = _write_manifest(tmp_path, _auth_model_entry())
+        sd_root = tmp_path / "sd_root"
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+
+        class FakeStream:
+            status_code = 401
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def iter_bytes(self, chunk_size=65536):
+                return iter([])
+
+        monkeypatch.setattr(httpx, "stream", lambda *a, **kw: FakeStream())
+
+        with pytest.raises(RuntimeError, match="認証失敗|ライセンス同意"):
+            manager.download_model("auth_model")
+
+    def test_requires_auth_403_raises_auth_error(self, tmp_path, monkeypatch):
+        """requires_auth=true かつ 403 応答 → ライセンス同意エラーメッセージ"""
+        import config
+        import httpx
+        from core.sd_model_manager import SDWebUIModelManager
+
+        monkeypatch.setattr(config, "HF_TOKEN", "valid_token")
+        manifest_path = _write_manifest(tmp_path, _auth_model_entry())
+        sd_root = tmp_path / "sd_root"
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+
+        class FakeStream:
+            status_code = 403
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def iter_bytes(self, chunk_size=65536):
+                return iter([])
+
+        monkeypatch.setattr(httpx, "stream", lambda *a, **kw: FakeStream())
+
+        with pytest.raises(RuntimeError, match="認証失敗|ライセンス同意"):
+            manager.download_model("auth_model")
+
+
+# ─────────────────────────────────────────────────────────────────
+# 既存ファイルチェックテスト
+# ─────────────────────────────────────────────────────────────────
+
+class TestExistingFileCheck:
+    def test_existing_file_sha256_match_skips_download(self, tmp_path, monkeypatch):
+        """既存ファイルの SHA256 が一致する場合は再ダウンロードしない"""
+        import httpx
+        from core.sd_model_manager import SDWebUIModelManager
+
+        content = b"correct model data"
+        sha = _sha256_bytes(content)
+
+        models = [{
+            "id": "sha_model",
+            "display_name": "SHA Model",
+            "type": "checkpoint",
+            "filename": "sha.safetensors",
+            "target_subdir": "models/Stable-diffusion",
+            "source_url": "http://example.com/sha.safetensors",
+            "sha256": sha,
+            "description": "",
+            "recommended": False,
+            "requires_auth": False,
+            "api_match_hint": "",
+        }]
+        manifest_path = _write_manifest(tmp_path, models)
+        sd_root = tmp_path / "sd_root"
+        model_dir = sd_root / "models" / "Stable-diffusion"
+        model_dir.mkdir(parents=True)
+        (model_dir / "sha.safetensors").write_bytes(content)
+
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+
+        # httpx.stream が呼ばれないことを確認
+        called = []
+        monkeypatch.setattr(httpx, "stream", lambda *a, **kw: called.append(True) or (_ for _ in ()).throw(AssertionError("download should not be called")))
+
+        result = manager.download_model("sha_model")
+        assert called == [], "ダウンロードが呼ばれてしまいました"
+        assert os.path.normpath(result) == os.path.normpath(str(model_dir / "sha.safetensors"))
+
+    def test_existing_file_sha256_mismatch_raises(self, tmp_path, monkeypatch):
+        """既存ファイルの SHA256 が不一致の場合はエラー（自動上書き禁止）"""
+        import httpx
+        from core.sd_model_manager import SDWebUIModelManager
+
+        correct_sha = "a" * 64  # 明らかに不一致
+        actual_content = b"wrong content"
+
+        models = [{
+            "id": "sha_model",
+            "display_name": "SHA Model",
+            "type": "checkpoint",
+            "filename": "sha.safetensors",
+            "target_subdir": "models/Stable-diffusion",
+            "source_url": "http://example.com/sha.safetensors",
+            "sha256": correct_sha,
+            "description": "",
+            "recommended": False,
+            "requires_auth": False,
+            "api_match_hint": "",
+        }]
+        manifest_path = _write_manifest(tmp_path, models)
+        sd_root = tmp_path / "sd_root"
+        model_dir = sd_root / "models" / "Stable-diffusion"
+        model_dir.mkdir(parents=True)
+        (model_dir / "sha.safetensors").write_bytes(actual_content)
+
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+
+        # httpx.stream が呼ばれないことを確認（既存ファイルチェックで止まるため）
+        called = []
+        monkeypatch.setattr(httpx, "stream", lambda *a, **kw: called.append(True))
+
+        with pytest.raises(RuntimeError, match="SHA256.*一致しません|削除して再ダウンロード"):
+            manager.download_model("sha_model")
+
+        assert called == [], "ダウンロードが呼ばれてしまいました（既存ファイルで止まるべき）"
+
+    def test_existing_file_no_sha256_skips_download(self, tmp_path, monkeypatch):
+        """SHA256 未設定の場合は既存ファイルがあればスキップ"""
+        import httpx
+        from core.sd_model_manager import SDWebUIModelManager
+
+        manifest_path = _write_manifest(tmp_path)  # sha256=""
+        sd_root = tmp_path / "sd_root"
+        model_dir = sd_root / "models" / "Stable-diffusion"
+        model_dir.mkdir(parents=True)
+        (model_dir / "test.safetensors").write_bytes(b"existing")
+
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+
+        called = []
+        monkeypatch.setattr(httpx, "stream", lambda *a, **kw: called.append(True))
+
+        result = manager.download_model("test_model")
+        assert called == [], "ダウンロードが呼ばれてしまいました"
+        assert "test.safetensors" in result
+
+
+# ─────────────────────────────────────────────────────────────────
+# delete_model テスト
+# ─────────────────────────────────────────────────────────────────
+
+class TestDeleteModel:
+    def test_delete_requires_confirmed_true(self, tmp_path):
+        """confirmed=False では削除できない"""
+        from core.sd_model_manager import SDWebUIModelManager
+        manifest_path = _write_manifest(tmp_path)
+        manager = SDWebUIModelManager(sd_root=str(tmp_path / "sd_root"), manifest_path=manifest_path)
+        with pytest.raises(RuntimeError, match="confirmed=True"):
+            manager.delete_model("test_model", confirmed=False)
+
+    def test_delete_unknown_id_raises(self, tmp_path):
+        """マニフェストにないモデル ID は削除できない"""
+        from core.sd_model_manager import SDWebUIModelManager
+        manifest_path = _write_manifest(tmp_path)
+        manager = SDWebUIModelManager(sd_root=str(tmp_path / "sd_root"), manifest_path=manifest_path)
+        with pytest.raises(RuntimeError, match="見つかりません"):
+            manager.delete_model("nonexistent", confirmed=True)
+
+    def test_delete_file_not_exist_raises(self, tmp_path):
+        """ファイルが存在しない場合はエラー"""
+        from core.sd_model_manager import SDWebUIModelManager
+        manifest_path = _write_manifest(tmp_path)
+        sd_root = tmp_path / "sd_root"
+        sd_root.mkdir()
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+        with pytest.raises(RuntimeError, match="存在しません"):
+            manager.delete_model("test_model", confirmed=True)
+
+    def test_delete_outside_sd_root_raises(self, tmp_path):
+        """SD_WEBUI_ROOT 外のパスには削除できない（path traversal防止）"""
+        from core.sd_model_manager import SDWebUIModelManager
+        # target_subdir に .. を含む悪意あるマニフェスト
+        models = [{
+            "id": "evil_model",
+            "display_name": "Evil Model",
+            "type": "checkpoint",
+            "filename": "evil.safetensors",
+            "target_subdir": "../../outside",
+            "source_url": "http://example.com/evil.safetensors",
+            "sha256": "",
+            "description": "",
+            "recommended": False,
+            "requires_auth": False,
+            "api_match_hint": "",
+        }]
+        manifest_path = _write_manifest(tmp_path, models)
+        sd_root = tmp_path / "sd_root"
+        sd_root.mkdir()
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+        with pytest.raises(RuntimeError, match="SD_WEBUI_ROOT.*配下|配下にありません"):
+            manager.delete_model("evil_model", confirmed=True)
+
+    def test_delete_success(self, tmp_path):
+        """正常に削除される"""
+        from core.sd_model_manager import SDWebUIModelManager
+        manifest_path = _write_manifest(tmp_path)
+        sd_root = tmp_path / "sd_root"
+        model_dir = sd_root / "models" / "Stable-diffusion"
+        model_dir.mkdir(parents=True)
+        model_file = model_dir / "test.safetensors"
+        model_file.write_bytes(b"model data")
+
+        manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
+        deleted_path = manager.delete_model("test_model", confirmed=True)
+        assert not model_file.exists()
+        assert "test.safetensors" in deleted_path
+
+
+# ─────────────────────────────────────────────────────────────────
 # SHA256 ユーティリティ
 # ─────────────────────────────────────────────────────────────────
 

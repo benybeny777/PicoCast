@@ -245,9 +245,11 @@ class ImageGenerator:
             # requires_auth=true のモデルは自動ダウンロード不可
             if matched.get("requires_auth"):
                 raise RuntimeError(
-                    f"Stable Diffusion WebUI モデル '{matched['filename']}' は認証が必要なため"
-                    f"自動ダウンロードできません。\n"
-                    f"手動で '{matched['target_subdir']}' に配置後 rescan を実行してください。"
+                    f"Stable Diffusion WebUI モデル '{matched['filename']}' のダウンロードには"
+                    f" HF_TOKEN が必要です。\n"
+                    f"設定画面の「APIキー設定」タブで HF_TOKEN を保存し、\n"
+                    f"配布元ページでライセンス同意済みか確認してください。\n"
+                    f"SDモデル管理画面: /sd-models"
                 )
             if config.AUTO_DOWNLOAD_SD_MODELS:
                 def _progress(filename, downloaded, total):
@@ -266,10 +268,9 @@ class ImageGenerator:
                 StableDiffusionWebUIGenerator().rescan_models()
             else:
                 raise RuntimeError(
-                    f"Stable Diffusion WebUI モデル '{matched['filename']}' がインストールされていません。\n"
-                    f"対処方法:\n"
-                    f"  1. AUTO_DOWNLOAD_SD_MODELS=1 を設定して自動ダウンロードを有効にする\n"
-                    f"  2. 手動で '{matched['target_subdir']}' に配置後 rescan を実行する"
+                    f"Stable Diffusion WebUI モデル '{matched['filename']}' が未導入です。\n"
+                    f"SDモデル管理画面 (/sd-models) からダウンロードしてください。\n"
+                    f"または AUTO_DOWNLOAD_SD_MODELS=1 を設定すると生成前に自動ダウンロードします。"
                 )
 
         # モデル切り替え（SD WebUI API 経由）

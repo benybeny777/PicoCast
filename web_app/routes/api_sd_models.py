@@ -4,8 +4,10 @@ SD WebUI Forge モデル管理 API ルート。
 GET  /api/sd-models            — マニフェスト内全モデルのステータス
 GET  /api/sd-models/webui      — SD WebUI API からインストール済みモデル一覧
 GET  /api/sd-models/current    — SD WebUI の現在ロード済みモデル名
-POST /api/sd-models/download   — マニフェスト内モデルをダウンロード（バックグラウンド）
-POST /api/sd-models/download/progress — ダウンロード進捗確認（ポーリング用）
+GET  /api/sd-models/progress   — ダウンロード進捗確認（ポーリング用）
+POST /api/sd-models/download        — マニフェスト内モデルをダウンロード（バックグラウンド）
+POST /api/sd-models/delete          — モデルファイルを削除（confirmed=true 必須）
+POST /api/sd-models/delete-redownload — 削除して再ダウンロード（confirmed=true 必須）
 POST /api/sd-models/use        — SD WebUI のアクティブモデルを切り替える
 POST /api/sd-models/rescan     — SD WebUI に再スキャンを依頼する
 """
@@ -15,7 +17,6 @@ import threading
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from core.sd_model_manager import SDWebUIModelManager
 from web_app.services import sd_model_service
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,11 @@ _download_lock = threading.Lock()
 
 class ModelIdRequest(BaseModel):
     model_id: str
+
+
+class ModelIdConfirmedRequest(BaseModel):
+    model_id: str
+    confirmed: bool = False
 
 
 class ModelNameRequest(BaseModel):
@@ -54,21 +60,44 @@ def _make_progress(
 def _run_download(model_id: str) -> None:
     """バックグラウンドダウンロードスレッド。"""
     try:
-        manager = SDWebUIModelManager()
+        def cb(filename: str, downloaded: int, total: int) -> None:
+            _progress[model_id] = _make_progress("downloading", downloaded, total)
+
+        _progress[model_id] = _make_progress("downloading")
+        sd_model_service.download_model(model_id, progress_callback=cb)
+
+        # ダウンロード成功後に SD WebUI に再スキャンを依頼（API が起動していれば）
+        try:
+            sd_model_service.rescan_models()
+        except Exception:
+            pass  # フォールバック許可: rescan は補助的操作。ダウンロード完了後の通知のみ
+
+        _progress[model_id] = _make_progress("done")
+    except Exception as e:
+        logger.exception("SDモデルのダウンロードに失敗しました: %s", model_id)
+        _progress[model_id] = _make_progress("error", message=str(e))
+
+
+def _run_delete_redownload(model_id: str) -> None:
+    """削除して再ダウンロードするバックグラウンドスレッド。"""
+    try:
+        _progress[model_id] = _make_progress("downloading", message="削除中...")
+        sd_model_service.delete_model(model_id, confirmed=True)
 
         def cb(filename: str, downloaded: int, total: int) -> None:
             _progress[model_id] = _make_progress("downloading", downloaded, total)
 
         _progress[model_id] = _make_progress("downloading")
-        manager.download_model(model_id, progress_callback=cb)
-        # ダウンロード成功後に SD WebUI に再スキャンを依頼（API が起動していれば）
+        sd_model_service.download_model(model_id, progress_callback=cb)
+
         try:
             sd_model_service.rescan_models()
         except Exception:
-            pass  # フォールバック許可: rescan は補助的操作。失敗してもダウンロード自体は完了
+            pass
+
         _progress[model_id] = _make_progress("done")
     except Exception as e:
-        logger.exception("SDモデルのダウンロードに失敗しました: %s", model_id)
+        logger.exception("SDモデルの削除・再ダウンロードに失敗しました: %s", model_id)
         _progress[model_id] = _make_progress("error", message=str(e))
 
 
@@ -127,6 +156,31 @@ def download_model(req: ModelIdRequest):
     return {"status": "started", "model_id": model_id}
 
 
+@router.post("/delete")
+def delete_model(req: ModelIdConfirmedRequest):
+    """指定モデルのファイルを削除する。confirmed=true 必須。"""
+    if not req.confirmed:
+        return {"status": "error", "message": "confirmed=true が必要です"}
+    try:
+        path = sd_model_service.delete_model(req.model_id, confirmed=True)
+        return {"status": "ok", "deleted": path}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/delete-redownload")
+def delete_and_redownload(req: ModelIdConfirmedRequest):
+    """指定モデルを削除して再ダウンロードする（バックグラウンド）。confirmed=true 必須。"""
+    if not req.confirmed:
+        return {"status": "error", "message": "confirmed=true が必要です"}
+    model_id = req.model_id
+    with _download_lock:
+        if _progress.get(model_id, {}).get("status") == "downloading":
+            return {"status": "error", "message": "すでにダウンロード中です"}
+    threading.Thread(target=_run_delete_redownload, args=(model_id,), daemon=True).start()
+    return {"status": "started", "model_id": model_id}
+
+
 @router.post("/use")
 def use_model(req: ModelNameRequest):
     """SD WebUI のアクティブモデルを切り替える。"""
@@ -145,5 +199,3 @@ def rescan():
         return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
-
-

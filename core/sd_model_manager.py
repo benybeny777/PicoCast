@@ -4,9 +4,19 @@ SD WebUI Forge / AUTOMATIC1111 モデル管理クラス。
 モデルマニフェスト (model_manifest.json) に基づき、
 チェックポイントモデルのインストール確認・ダウンロード・SHA256検証を行う。
 
-ダウンロードは .part 一時ファイルを使用し、完了後に rename する。
-SHA256 が空文字列の場合は検証をスキップする。
-フォールバック・サイレントスキップは禁止: 例外は必ず上位に伝播させる。
+ダウンロードポリシー:
+- source_url が空ならエラー（通常マニフェストでは空にしない）
+- requires_auth=true かつ HF_TOKEN 未設定ならエラー（HF_TOKEN 設定を促す）
+- requires_auth=true かつ HF_TOKEN 設定済みなら Authorization ヘッダー付きで取得
+- ダウンロードは .part 一時ファイルを使用し、完了後に rename する
+- SHA256 が空文字列の場合は検証をスキップする
+- 既存ファイルが存在し SHA256 が一致するなら再ダウンロードしない
+- 既存ファイルが存在し SHA256 が不一致の場合はエラー（自動上書き禁止）
+- フォールバック・サイレントスキップは禁止: 例外は必ず上位に伝播させる
+
+削除ポリシー:
+- delete_model() は confirmed=True が必要
+- 削除対象が SD_WEBUI_ROOT 配下であることを確認する
 """
 import hashlib
 import json
@@ -107,6 +117,7 @@ class SDWebUIModelManager:
             - path (str | None): SD_WEBUI_ROOT が設定されている場合のみ解決済みパス
             - can_download (bool): source_url が設定されているか
             - source_url, sha256, requires_auth, api_match_hint
+            - license_note, source_page_url
         """
         manifest = self._load_manifest()
         result: list[dict[str, Any]] = []
@@ -138,10 +149,13 @@ class SDWebUIModelManager:
                 "api_match_hint": m.get("api_match_hint", ""),
                 "source_url": m["source_url"],
                 "sha256": m["sha256"],
+                "license_note": m.get("license_note", ""),
+                "source_page_url": m.get("source_page_url", ""),
                 "installed": installed,
                 "path": file_path,
                 "can_download": bool(m["source_url"]),
-                "download_page_url": m.get("download_page_url", ""),
+                # 後方互換
+                "download_page_url": m.get("download_page_url", m.get("source_page_url", "")),
             })
         return result
 
@@ -158,7 +172,8 @@ class SDWebUIModelManager:
         missing = [s["filename"] for s in statuses if not s["installed"]]
         if missing:
             raise RuntimeError(
-                f"SD WebUI必要モデルが不足しています。不足: {', '.join(missing)}"
+                f"SD WebUI必要モデルが不足しています。不足: {', '.join(missing)}\n"
+                f"SDモデル管理画面からダウンロードしてください。"
             )
         return True
 
@@ -188,6 +203,11 @@ class SDWebUIModelManager:
         ダウンロードは .part ファイルに行い、成功後に rename する。
         SHA256 が非空の場合は検証を行い、不一致であれば RuntimeError を送出する。
 
+        既存ファイルが存在する場合:
+        - SHA256 が設定済みで一致 → 再ダウンロードしない（パスを返す）
+        - SHA256 が設定済みで不一致 → RuntimeError（手動で削除して再DLを促す）
+        - SHA256 未設定 → 再ダウンロードしない（インストール済みと見なす）
+
         Args:
             model_id: マニフェスト内の id
             progress_callback: 進捗通知コールバック (filename, downloaded_bytes, total_bytes)
@@ -197,7 +217,7 @@ class SDWebUIModelManager:
             保存したファイルの絶対パス
 
         Raises:
-            RuntimeError: モデルが見つからない・ダウンロードURL未設定・HTTP失敗・SHA256不一致
+            RuntimeError: モデルが見つからない・URL未設定・認証不足・HTTP失敗・SHA256不一致
         """
         manifest = self._load_manifest()
         entry = next((m for m in manifest["models"] if m["id"] == model_id), None)
@@ -209,29 +229,72 @@ class SDWebUIModelManager:
         if not entry.get("source_url"):
             raise RuntimeError(
                 f"モデル '{entry['display_name']}' はダウンロードURLが設定されていません。"
-                f"手動で '{entry['filename']}' を '{entry['target_subdir']}' に配置してください。"
+                f"マニフェストを確認してください。"
             )
 
+        # 認証チェック
+        hf_token = config.HF_TOKEN
         if entry.get("requires_auth"):
-            raise RuntimeError(
-                f"モデル '{entry['display_name']}' は認証が必要なため自動ダウンロードできません。"
-                f"手動で '{entry['filename']}' を '{entry['target_subdir']}' に配置してください。"
-            )
+            if not hf_token:
+                raise RuntimeError(
+                    f"モデル '{entry['display_name']}' のダウンロードには HF_TOKEN が必要です。\n"
+                    f"設定画面の「APIキー設定」タブで HF_TOKEN を保存し、\n"
+                    f"配布元ページでライセンス同意済みか確認してください。\n"
+                    f"配布元: {entry.get('source_page_url') or entry.get('source_url', '')}"
+                )
 
         dest_path = self._resolve_model_path(entry)
+        sha256_expected = (entry.get("sha256") or "").strip().lower()
+
+        # 既存ファイルの確認
+        if os.path.isfile(dest_path):
+            if sha256_expected:
+                logger.info("既存ファイルの SHA256 を確認中: %s", dest_path)
+                actual = self._sha256_file(dest_path)
+                if actual == sha256_expected:
+                    logger.info("SHA256 一致。再ダウンロード不要: %s", entry["filename"])
+                    return dest_path
+                else:
+                    raise RuntimeError(
+                        f"モデル '{entry['filename']}' は既にインストールされていますが、SHA256 が一致しません。\n"
+                        f"  期待値: {sha256_expected}\n"
+                        f"  実際値: {actual}\n"
+                        f"ファイルが壊れている可能性があります。"
+                        f"SDモデル管理画面の「削除して再ダウンロード」で修復してください。"
+                    )
+            else:
+                logger.info("SHA256 未設定のため既存ファイルをそのまま使用: %s", entry["filename"])
+                return dest_path
+
         part_path = dest_path + ".part"
         dest_dir = os.path.dirname(dest_path)
-
         os.makedirs(dest_dir, exist_ok=True)
 
         url = entry["source_url"]
         filename = entry["filename"]
-        sha256_expected = (entry.get("sha256") or "").strip().lower()
 
-        logger.info("SDモデル ダウンロード開始: %s → %s", url, dest_path)
+        # Authorization ヘッダー（requires_auth=true かつ HF_TOKEN 設定済み）
+        headers = {}
+        if entry.get("requires_auth") and hf_token:
+            headers["Authorization"] = f"Bearer {hf_token}"
+            logger.info("SDモデル ダウンロード開始 (認証あり): %s → %s", filename, dest_path)
+        else:
+            logger.info("SDモデル ダウンロード開始: %s → %s", filename, dest_path)
 
         try:
-            with httpx.stream("GET", url, timeout=timeout, follow_redirects=True) as response:
+            with httpx.stream(
+                "GET", url, headers=headers, timeout=timeout, follow_redirects=True
+            ) as response:
+                if response.status_code in (401, 403):
+                    if entry.get("requires_auth"):
+                        raise RuntimeError(
+                            f"SDモデルダウンロード認証失敗: HTTP {response.status_code} ({filename})\n"
+                            f"HF_TOKEN が無効か、配布元ページでライセンス同意が未完了の可能性があります。\n"
+                            f"配布元: {entry.get('source_page_url') or url}"
+                        )
+                    raise RuntimeError(
+                        f"SDモデルダウンロード失敗: HTTP {response.status_code} ({url})"
+                    )
                 if response.status_code != 200:
                     raise RuntimeError(
                         f"SDモデルダウンロード失敗: HTTP {response.status_code} ({url})"
@@ -244,14 +307,25 @@ class SDWebUIModelManager:
                         downloaded += len(chunk)
                         if progress_callback:
                             progress_callback(filename, downloaded, total)
-        except Exception:
-            # ダウンロード失敗時は .part ファイルを削除
+        except RuntimeError:
+            raise
+        except Exception as e:
             if os.path.exists(part_path):
                 try:
                     os.remove(part_path)
                 except OSError:
                     pass
-            raise
+            raise RuntimeError(
+                f"SDモデルダウンロード中にエラーが発生しました: {filename}\n詳細: {e}"
+            ) from e
+        finally:
+            # RuntimeError 以外の例外でも .part を削除
+            if "e" in dir() and isinstance(locals().get("e"), Exception):
+                if os.path.exists(part_path):
+                    try:
+                        os.remove(part_path)
+                    except OSError:
+                        pass
 
         # SHA256 検証（非空時のみ）
         if sha256_expected:
@@ -263,13 +337,63 @@ class SDWebUIModelManager:
                     f"SDモデルのSHA256が一致しません: {filename}\n"
                     f"  期待値: {sha256_expected}\n"
                     f"  実際値: {actual}\n"
-                    f"ダウンロードしたファイルは削除しました。再度試みてください。"
+                    f"ダウンロードしたファイルは削除しました。再度お試しください。"
                 )
         else:
             logger.info("SHA256未設定のためスキップ: %s", filename)
 
         os.replace(part_path, dest_path)
         logger.info("SDモデル 保存完了: %s", dest_path)
+        return dest_path
+
+    # ─────────────────────────────────────────
+    # 削除
+    # ─────────────────────────────────────────
+
+    def delete_model(self, model_id: str, *, confirmed: bool = False) -> str:
+        """指定モデルのファイルを削除する。
+
+        confirmed=True が必須。SD_WEBUI_ROOT 配下のファイルのみ削除できる。
+
+        Args:
+            model_id: マニフェスト内の id
+            confirmed: True でなければ RuntimeError
+
+        Returns:
+            削除したファイルのパス
+
+        Raises:
+            RuntimeError: confirmed=False、ファイルが存在しない、パスが範囲外
+        """
+        if not confirmed:
+            raise RuntimeError(
+                "delete_model() には confirmed=True が必要です。"
+            )
+
+        manifest = self._load_manifest()
+        entry = next((m for m in manifest["models"] if m["id"] == model_id), None)
+        if entry is None:
+            raise RuntimeError(
+                f"SDモデルマニフェストにモデル id '{model_id}' が見つかりません。"
+            )
+
+        dest_path = self._resolve_model_path(entry)
+
+        # SD_WEBUI_ROOT の範囲外へのパス操作を防ぐ
+        sd_root_real = os.path.realpath(self.sd_root)
+        dest_real = os.path.realpath(dest_path)
+        if not dest_real.startswith(sd_root_real + os.sep) and dest_real != sd_root_real:
+            raise RuntimeError(
+                f"削除対象のパスが SD_WEBUI_ROOT 配下にありません: {dest_path}"
+            )
+
+        if not os.path.isfile(dest_path):
+            raise RuntimeError(
+                f"モデルファイルが存在しません: {dest_path}"
+            )
+
+        os.remove(dest_path)
+        logger.info("SDモデル 削除完了: %s", dest_path)
         return dest_path
 
     # ─────────────────────────────────────────
