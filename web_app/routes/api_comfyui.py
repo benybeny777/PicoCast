@@ -30,8 +30,11 @@ def _run_download(name: str) -> None:
         def cb(dl: int, total: int) -> None:
             _progress[name] = _make_progress("downloading", dl, total)
 
+        def on_verify() -> None:
+            _progress[name] = _make_progress("verifying")
+
         _progress[name] = _make_progress("downloading")
-        manager.download_model(name, progress_callback=cb)
+        manager.download_model(name, progress_callback=cb, on_verify_start=on_verify)
         _progress[name] = _make_progress("done")
     except Exception as e:
         logger.exception("モデルのダウンロードに失敗しました: %s", name)

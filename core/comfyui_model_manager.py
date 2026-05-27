@@ -55,8 +55,11 @@ class ComfyUIModelManager:
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest() == expected_hash
 
-    def download_model(self, model_name, progress_callback=None):
-        """特定のモデルをダウンロードする。progress_callback(downloaded_bytes, total_bytes) を随時呼ぶ。"""
+    def download_model(self, model_name, progress_callback=None, on_verify_start=None):
+        """特定のモデルをダウンロードする。
+        progress_callback(downloaded_bytes, total_bytes) はチャンク毎に呼ぶ。
+        on_verify_start() はSHA256検証開始直前に呼ぶ。
+        """
         model = next((m for m in self.models if m["name"] == model_name), None)
         if not model:
             raise ValueError(f"マニフェストに存在しないモデルです: {model_name}")
@@ -83,6 +86,8 @@ class ComfyUIModelManager:
                             progress_callback(downloaded, total)
 
             # SHA256の検証
+            if on_verify_start:
+                on_verify_start()
             if not self.verify_sha256_hash(target_path, model.get("sha256")):
                 os.remove(target_path)
                 raise ValueError(f"{model_name} のSHA256チェックサムが一致しませんでした。")

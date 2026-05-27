@@ -42,7 +42,7 @@ function fmtBytes(b) {
   return b.toFixed(i > 1 ? 1 : 0) + ' ' + u[i];
 }
 
-async function loadModels() {
+async function loadModels(progress = {}) {
   const container = document.getElementById('models-container');
   container.innerHTML = '<p>スキャン中...</p>';
   try {
@@ -50,7 +50,7 @@ async function loadModels() {
     const data = await res.json();
     if (data.status === 'ok') {
       _models = data.models;
-      renderTable(_models, {});
+      renderTable(_models, progress);
     } else {
       container.innerHTML = `<p class="error-text">エラー: ${esc(data.message)}</p>`;
     }
@@ -73,9 +73,10 @@ function renderTable(models, progress) {
     const sid = safeId(m.name);
     const prog = progress[m.name];
     const isDownloading = prog && prog.status === 'downloading';
-    const isDone = prog && prog.status === 'done';
-    const isError = prog && prog.status === 'error';
-    const effective = isDone ? 'installed' : m.status;
+    const isVerifying  = prog && prog.status === 'verifying';
+    const isDone       = prog && prog.status === 'done';
+    const isError      = prog && prog.status === 'error';
+    const effective    = isDone ? 'installed' : m.status;
 
     html += `<tr id="${sid}">`;
 
@@ -84,6 +85,8 @@ function renderTable(models, progress) {
       html += '<td><span class="badge badge-ok">導入済み</span></td>';
     } else if (isDownloading) {
       html += '<td><span class="badge badge-warn">DL中</span></td>';
+    } else if (isVerifying) {
+      html += '<td><span class="badge badge-warn">検証中</span></td>';
     } else if (isError) {
       html += '<td><span class="badge badge-ng">エラー</span></td>';
     } else {
@@ -105,6 +108,9 @@ function renderTable(models, progress) {
         : `${fmtBytes(prog.downloaded)} ダウンロード中...`;
       html += `<div class="progress-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>`;
       html += `<div class="progress-text">${esc(dlText)}</div>`;
+    } else if (isVerifying) {
+      html += `<div class="progress-wrap"><div class="progress-bar" style="width:100%;background:var(--warn)"></div></div>`;
+      html += `<div class="progress-text">SHA256 検証中...</div>`;
     } else if (isError) {
       html += `<span style="color:var(--err);font-size:12px">${esc(prog.message || 'エラー')}</span><br>`;
       if (!m.manual_download) {
@@ -133,14 +139,17 @@ async function pollProgress() {
 
     renderTable(_models, progress);
 
-    const anyActive = allRunning || Object.values(progress).some(p => p.status === 'downloading');
+    const anyActive = allRunning || Object.values(progress).some(
+      p => p.status === 'downloading' || p.status === 'verifying'
+    );
     if (!anyActive) {
       stopPolling();
-      // 完了後にモデル一覧を再スキャンして状態を更新
-      await loadModels();
+      // 完了・エラー状態を保ったままモデル一覧を再スキャン
+      await loadModels(progress);
     }
   } catch (e) {
-    stopPolling();
+    // 通信エラーはスキップしてポーリング継続
+    console.warn('progress poll error:', e);
   }
 }
 
