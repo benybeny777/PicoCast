@@ -59,7 +59,6 @@ def api_regenerate_histories(req: HistoryRegenerateRequest):
         req.history_names,
         req.image_style,
         req.background_engine,
-        req.comfyui_preset,
         req.reuse_backgrounds,
         req.long_thumbnail_ab_test,
         req.long_budget_mode,

@@ -1,7 +1,7 @@
 # Native Video Factory 🎥
 
 「ずんだもんとめたんの食べ物雑学堂」向けに、食べ物雑学の解説動画を台本から自動生成するローカルWebツールです。  
-台本を入力するだけで、**VOICEVOXによる音声合成**、**Nano Banana または Local / ComfyUI による背景画像生成**、**ffmpegによる高品質なネイティブMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができます。サムネイル生成は当面 Gemini (Nano Banana Suite) を使います。
+台本を入力するだけで、**VOICEVOXによる音声合成**、**Nano Banana / SD WebUI Forge による背景画像・サムネイル生成**、**ffmpegによる高品質なネイティブMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができます。画像生成バックエンドは `.env` の `IMAGE_BACKEND` で `gemini`（Nano Banana）または `sd_webui`（SD WebUI Forge / AUTOMATIC1111互換API）に切り替えられます。
 
 ---
 
@@ -15,8 +15,8 @@ graph TD
     B -->|修正必要/Must Fix| A
     B -->|品質クリア| C[よみがな正規化<br/>Ollama]
     C --> D[音声生成 WAV<br/>VOICEVOX]
-    C --> E[背景生成 PNG<br/>Nano Banana / Local ComfyUI]
-    C --> T[サムネ生成 PNG<br/>Gemini / Nano Banana]
+    C --> E[背景生成 PNG<br/>Gemini / SD WebUI Forge]
+    C --> T[サムネ生成 PNG<br/>Gemini / SD WebUI Forge]
     D --> F[ネイティブレンダリング<br/>ffmpeg]
     E --> F
     T --> F
@@ -69,7 +69,6 @@ graph TD
 2. **VOICEVOX** ([公式ホームページ](https://voicevox.nero.ne.jp/)からダウンロード)
 3. **ffmpeg** (パスを通しておくか、環境変数 `FFMPEG_BIN` にバイナリパスを指定してください)
 4. **Ollama** (冒頭品質レビューに利用。デフォルトモデル: `qwen3:8b`)
-5. **ComfyUI** (任意。背景生成エンジンに `Local / ComfyUI` を選ぶ場合のみ必要。デフォルトURL: `http://127.0.0.1:8188`)
 
 ---
 
@@ -137,24 +136,100 @@ OPENAI_API_KEY=your_openai_api_key
 
 ---
 
-### Step 4. Local / ComfyUI 背景生成を使う場合
+### Step 4. Stable Diffusion WebUI Forge で背景・サムネイルを生成する場合
 
-背景画像だけをローカルの ComfyUI で生成できます。Web UI の生成画面または設定画面で、背景生成エンジンを `Local / ComfyUI` に切り替えます。`Auto` モードや自動切替はありません。
+背景画像とサムネイルを **Stable Diffusion WebUI Forge**（または AUTOMATIC1111互換API）で生成できます。ComfyUI より軽量で導入しやすく、一般用途向けに推奨するローカル画像生成構成です。
 
-1. ComfyUI を起動し、API が `http://127.0.0.1:8188` で応答する状態にします。
-2. 使用する checkpoint を ComfyUI の通常のモデル配置場所（例: `ComfyUI/models/checkpoints/`）に置きます。
-3. 必要に応じて `.env` または設定画面で次を調整します。
+#### 前提
+
+- Forge / AUTOMATIC1111 を `--api` オプション付きで起動していること。
+  ```
+  webui.bat --api
+  ```
+- APIが `http://127.0.0.1:7860` で応答していること（URLは `.env` で変更可）。
+- `IMAGE_BACKEND=sd_webui` にした場合、**Gemini 画像生成APIは使用しません**。
+
+#### .env 設定例
 
 ```env
-IMAGE_BACKGROUND_ENGINE=local_comfyui
-LOCAL_COMFYUI_URL=http://127.0.0.1:8188
-LOCAL_COMFYUI_PRESET=anime_standard
-LOCAL_COMFYUI_TIMEOUT_SEC=300
+IMAGE_BACKEND=sd_webui
+SD_WEBUI_BASE_URL=http://127.0.0.1:7860
+SD_WEBUI_TIMEOUT_SEC=180
+SD_WEBUI_MODEL=
+SD_WEBUI_SAMPLER=DPM++ 2M Karras
+SD_WEBUI_STEPS=24
+SD_WEBUI_CFG_SCALE=7
+SD_WEBUI_WIDTH=1024
+SD_WEBUI_HEIGHT=576
+SD_WEBUI_NEGATIVE_PROMPT=people, human, person, face, hands, photorealistic, realistic photo, bad anatomy, blurry, low quality, watermark, signature, logo, unreadable text, garbled text
+
+# モデル管理（任意）
+SD_WEBUI_ROOT=C:\path\to\stable-diffusion-webui
+SD_MODEL_MANIFEST_PATH=assets/sd_webui/model_manifest.json
+AUTO_DOWNLOAD_SD_MODELS=0
+
+# SD WebUI 自動起動（任意）— 画像生成時に未起動なら自動で起動する
+SD_WEBUI_START_COMMAND=C:\path\to\stable-diffusion-webui\webui-user.bat --api --nowebui
+SD_WEBUI_START_WAIT_SEC=120
 ```
 
-プリセット定義は `assets/comfyui/presets.json`、workflow は `assets/comfyui/workflows/` にあります。初期プリセットは「背景（漫画風・標準）」「背景（資料風・写実）」「背景（難プロンプト用）」の3つです。モデル名はユーザーに直接選ばせず、用途別プリセットとして扱います。
+> [!IMPORTANT]
+> - `IMAGE_BACKEND=sd_webui` のとき、Forge が未起動であれば画像生成は**フォールバックせず停止**します。
+> - Gemini / Nano Banana への自動切替は一切行いません。
+> - `SD_WEBUI_MODEL` が空の場合は Forge に現在ロード中のモデルをそのまま使います。
+> - `SD_WEBUI_MODEL` を設定した場合、画像生成前にマニフェストでインストール確認 → 未インストールなら `AUTO_DOWNLOAD_SD_MODELS=1` 時は自動DL、`0` 時はエラー停止 → `set_active_model()` を実行します。
+> - Shorts（縦動画）では幅・高さが自動で入れ替わります（`SD_WEBUI_WIDTH` / `SD_WEBUI_HEIGHT` は横動画基準で設定してください）。
 
-ComfyUI未起動、モデルマニフェスト不正、必要モデル不足、workflow不正、checkpoint未配置、タイムアウト、出力画像不正の場合は、Nano Banana / Gemini や別プリセットへ自動切替せず、原因を表示して生成を中止します。失敗内容は `_meta/image_generation.json` の最新結果と `entries[]` 履歴に保存されます。
+#### SD WebUI 自動起動
+
+`.env` に `SD_WEBUI_START_COMMAND` を設定すると、**画像生成の開始時に SD WebUI が未起動であれば自動で起動**します。
+
+```env
+# Windows 例（Forge）
+SD_WEBUI_START_COMMAND=C:\path\to\stable-diffusion-webui\webui-user.bat --api --nowebui
+
+# 起動完了を待つ最大秒数（デフォルト: 120秒）
+SD_WEBUI_START_WAIT_SEC=120
+```
+
+> [!NOTE]
+> - SDモデル管理ページ（Web UI）でモデル一覧を表示するときは自動起動しません（表示を止めないため）。
+> - 自動起動が不要な場合は `SD_WEBUI_START_COMMAND` を空のままにしてください。その場合、SD WebUI を手動で先に起動してから動画生成を実行してください。
+
+#### SD WebUI モデルの手動インストール
+
+`URL未設定: 手動配置` と表示されたモデルは、以下の手順で手動インストールします。
+
+1. モデルファイルを配布ページからダウンロードします。  
+   例（SD 1.5 Base）: [https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5)
+
+2. SD WebUI のモデルフォルダに配置します。  
+   ```
+   {SD_WEBUI_ROOT}\models\Stable-diffusion\（ファイル名）
+   ```
+   例: `C:\stable-diffusion-webui\models\Stable-diffusion\v1-5-pruned-emaonly.safetensors`
+
+3. Web UI の「SDモデル」ページで **「WebUI 再スキャン」** ボタンを押すと一覧が更新されます。
+
+> `SD_WEBUI_ROOT` を `.env` に設定しておくと、配置先のフルパスが「インストール方法▼」欄に表示されます。
+
+#### SD WebUI モデル管理 Web UI
+
+Web UI の「SDモデル」ページ（`/sd-models`）からマニフェスト内モデルの状態確認・ダウンロード・モデル切り替えができます。
+
+- **マニフェスト内モデル**: `assets/sd_webui/model_manifest.json` に定義されたモデルのインストール状況と DL ボタン
+- **現在のモデル**: SD WebUI API から取得した現在ロード済みモデル名
+- **インストール済みモデル**: SD WebUI API から取得したモデル一覧と「使用」ボタン（モデル切り替え）
+- **再スキャン**: SD WebUI にモデル再スキャンを依頼する
+
+> `SD_WEBUI_ROOT` を設定するとマニフェスト内モデルのファイルパスを解決し、インストール済みかどうかを確認できます。未設定時はファイルパスを確認できません（SD WebUI API 経由のみ確認可能）。
+
+#### バックエンド切り替え一覧
+
+| `IMAGE_BACKEND` | 画像生成手段 | Gemini APIが必要か |
+|:--- |:--- |:---:|
+| `gemini`（デフォルト） | Nano Banana / Gemini 画像生成 | ✅ 必要 |
+| `sd_webui` | Stable Diffusion WebUI Forge / A1111 | ❌ 不要 |
 
 ---
 
@@ -295,5 +370,3 @@ APIキーやOAuthファイルなどの認証情報以外は、原則として `c
 *   **Longサムネイル A/B テスト:**
     Web UI の「LongサムネAB」チェックボックスをONにすると、自動的に3パターンのサムネイル画像 (Variant A, B, C) が出力されます。YouTube Studio でのテスト用にご活用ください。
 
-## ComfyUIモデルの導入
-Web UIの「ComfyUIモデル」メニューから、必要なモデルの導入状態を確認し、一部モデルは自動ダウンロードできます。

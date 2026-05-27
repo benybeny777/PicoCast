@@ -18,7 +18,6 @@ def submit_generate_job(
     script: str,
     image_style: str = "通常",
     background_engine: str = "nanobanana",
-    comfyui_preset: str = "anime_standard",
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
@@ -31,7 +30,6 @@ def submit_generate_job(
         script,
         image_style,
         background_engine,
-        comfyui_preset,
         reuse_backgrounds,
         long_thumbnail_ab_test,
         long_budget_mode,
@@ -43,7 +41,6 @@ def _submit_generate_job_prepared(
     script: str,
     image_style: str = "通常",
     background_engine: str = "nanobanana",
-    comfyui_preset: str = "anime_standard",
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
@@ -54,7 +51,7 @@ def _submit_generate_job_prepared(
     mgr = get_job_manager()
     job = mgr.create_job("generate")
     _log(job, "生成ジョブを登録しました", "info")
-    mgr.submit(job, _run_generate, script, image_style, background_engine, comfyui_preset, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render)
+    mgr.submit(job, _run_generate, script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render)
     return job.job_id
 
 
@@ -62,7 +59,6 @@ def submit_batch_generate_jobs(
     scripts: list[str],
     image_style: str = "通常",
     background_engine: str = "nanobanana",
-    comfyui_preset: str = "anime_standard",
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
@@ -72,7 +68,7 @@ def submit_batch_generate_jobs(
     """複数台本の生成ジョブを登録してjob_id一覧を返す。"""
     job_ids = []
     for script in apply_topic_request_cta_policy_to_scripts(scripts):
-        job_ids.append(_submit_generate_job_prepared(script, image_style, background_engine, comfyui_preset, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render))
+        job_ids.append(_submit_generate_job_prepared(script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render))
     return job_ids
 
 
@@ -80,7 +76,6 @@ def submit_history_regenerate_jobs(
     history_names: list[str],
     image_style: str = "通常",
     background_engine: str = "nanobanana",
-    comfyui_preset: str = "anime_standard",
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
@@ -99,7 +94,7 @@ def submit_history_regenerate_jobs(
             text = f.read().strip()
         if text:
             scripts.append(text)
-    return submit_batch_generate_jobs(scripts, image_style, background_engine, comfyui_preset, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render)
+    return submit_batch_generate_jobs(scripts, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render)
 
 
 def _run_generate(
@@ -107,7 +102,6 @@ def _run_generate(
     script: str,
     image_style: str,
     background_engine: str,
-    comfyui_preset: str,
     reuse_backgrounds: bool,
     long_thumbnail_ab_test: bool,
     long_budget_mode: bool,
@@ -134,7 +128,6 @@ def _run_generate(
             "pregenerated_script": script,
             "image_style": image_style,
             "background_engine": background_engine,
-            "comfyui_preset": comfyui_preset,
             "reuse_backgrounds": reuse_backgrounds,
             "long_thumbnail_ab_test": long_thumbnail_ab_test,
             "long_budget_mode": long_budget_mode,

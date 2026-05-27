@@ -11,8 +11,8 @@
 
 - **台本生成** → Gemini AI
 - **音声生成** → VOICEVOX (ずんだもん / 四国めたん)（よみがな正規化を Ollama で前処理）
-- **背景画像生成** → Nano Banana (Gemini画像生成) または Local / ComfyUI
-- **サムネイル生成** → Nano Banana (Gemini画像生成)
+- **背景画像生成** → Nano Banana (Gemini画像生成) / Stable Diffusion WebUI Forge（`IMAGE_BACKEND` で切替）
+- **サムネイル生成** → Nano Banana (Gemini画像生成) / Stable Diffusion WebUI Forge（`IMAGE_BACKEND` で切替）
 - **動画組立** → ffmpeg/native MP4
 - **品質レビュー** → ローカルルール + Ollama LLM + ChatGPT
 - **アップロード** → YouTube Data API v3
@@ -78,9 +78,8 @@ yukkurijidou/
 │   ├── ai_generator.py     # Gemini台本生成
 │   ├── voicevox.py         # VOICEVOX音声生成
 │   ├── reading_normalizer.py # よみがな正規化（Ollama）
-│   ├── image_generator.py  # 背景画像生成（Nano Banana / Local ComfyUI）とサムネ生成呼び出し
-│   ├── comfyui_client.py   # ComfyUI APIクライアント
-│   ├── local_prompt_adapter.py # ローカル背景生成向けプロンプト整形
+│   ├── image_generator.py  # 背景・サムネ画像生成（IMAGE_BACKEND に基づきバックエンドを選択）
+│   ├── sd_webui_generator.py  # Stable Diffusion WebUI Forge / A1111互換APIクライアント
 │   ├── parser.py           # 台本パーサー (ScriptParser)
 │   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
 │   ├── opening_quality.py  # 冒頭品質レビュー
@@ -159,7 +158,7 @@ yukkurijidou/
 9. よみがな正規化（Ollamaで全チャンクを一括変換）
    └── 変換後テキストをVOICEVOXに渡す。字幕・ファイル名は元テキストのまま
 10. VOICEVOX音声生成（セリフ1行ずつ）
-11. 背景画像生成（Nano Banana または Local / ComfyUI）
+11. 背景画像生成（Nano Banana または SD WebUI Forge）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
 12. サムネイル生成（Nano Banana）
 13. 旧タイムライン互換ヘルパーで素材タイミングを組立
@@ -189,28 +188,64 @@ for item in dialogue_items:
 - 既存の `bg_XXXX.png` がある場合は再利用
 - **台本変更により必要な背景枚数が変わった場合**: 既存の背景（サムネ除く）を全削除して再生成
 
-### 背景生成エンジン
+### IMAGE_BACKEND（画像生成バックエンド統合設定）
 
-背景生成エンジンは `IMAGE_BACKGROUND_ENGINE` で選択する。
+`IMAGE_BACKEND` 環境変数が画像生成バックエンドの主スイッチとなる。
 
-| 値 | 内容 |
-|---|---|
-| `nanobanana` | 既存の Nano Banana / Gemini で背景を生成する |
-| `local_comfyui` | ローカル ComfyUI API で背景を生成する |
+| `IMAGE_BACKEND` | 内部エンジン | 背景生成 | サムネイル生成 | Gemini APIが必要か |
+|:---|:---|:---|:---|:---:|
+| `gemini`（デフォルト） | `nanobanana` | Nano Banana / Gemini | Nano Banana / Gemini | ✅ |
+| `sd_webui` | `sd_webui` | SD WebUI Forge / A1111 | SD WebUI Forge / A1111 | ❌ |
 
-`Auto` や自動切替設定は持たない。サムネイル生成は背景エンジンに関係なく当面 Nano Banana / Gemini を使う。
+- `IMAGE_BACKEND=gemini` のとき、背景エンジンは常に `nanobanana` に固定される。
+- `background_engine` を明示的に渡したときは `IMAGE_BACKEND` より優先される（再生成画面からの個別指定用）。
+- `Auto` や自動切替設定は持たない（フォールバック禁止）。
 
-ComfyUIプリセットは `assets/comfyui/presets.json` に定義する。初期プリセット:
+### Stable Diffusion WebUI Forge 背景生成
 
-| preset | 表示名 | model_type | checkpoint | sampler | steps | cfg | サイズ |
-|---|---|---|---|---|---:|---:|---|
-| `anime_standard` | 背景（漫画風・標準） | `sdxl` | Animagine XL 3.1 | dpmpp_2m_karras | 24 | 6.5 | 832x1472 |
-| `realistic_reference` | 背景（資料風・写実） | `sdxl` | Juggernaut XL | dpmpp_2m_karras | 26 | 5.5 | 832x1472 |
-| `hard_prompt_flux` | 背景（難プロンプト用） | `flux` | FLUX.1-dev | euler | 24 | 1.0 | 832x1472 |
+- `core/sd_webui_generator.py: StableDiffusionWebUIGenerator` が担当する。
+- `GET /sdapi/v1/options` で疎通確認・モデル取得、`POST /sdapi/v1/txt2img` で画像生成。
+- Forge / AUTOMATIC1111互換APIを前提とする。
+- 日本語プロンプトはそのまま渡し、英語品質補助サフィックスを自動付加する。
+  - 背景用: `anime style background, colorful manga illustration, ...` 等
+  - サムネイル用: `bold Japanese YouTube thumbnail style, ...` 等
+- API未起動・HTTPエラー・画像なし・タイムアウトはすべて `RuntimeError` として上位に伝播する。他エンジンへの自動フォールバックは行わない。
+- 設定: `SD_WEBUI_BASE_URL`, `SD_WEBUI_TIMEOUT_SEC`, `SD_WEBUI_MODEL`, `SD_WEBUI_SAMPLER`, `SD_WEBUI_STEPS`, `SD_WEBUI_CFG_SCALE`, `SD_WEBUI_WIDTH`, `SD_WEBUI_HEIGHT`, `SD_WEBUI_NEGATIVE_PROMPT`
 
-ComfyUI背景生成では、日本語背景文をローカル向けに短縮し、人物・テキスト・ロゴ・看板文字・赤丸・矢印・注釈を禁止する。背景だけを生成し、文字や装飾は描かせない。
+### SD WebUI Forge モデル管理
 
-ComfyUI未起動、モデルマニフェスト不正、必要モデル不足、workflow不正、checkpoint未設定/未配置、タイムアウト、出力画像不正はすべて失敗として扱い、Nano Banana / Gemini、別プリセット、別モデルへ自動フォールバックしない。失敗時は `_meta/image_generation.json` に最新結果として `status=failed`、`error_message`、`fallback_used=false` を保存し、同時に `entries[]` へ履歴を追記して処理を中止する。
+- `core/sd_model_manager.py: SDWebUIModelManager` がモデルのインストール確認・ダウンロードを担当する。
+- モデルマニフェストは `assets/sd_webui/model_manifest.json`（`SD_MODEL_MANIFEST_PATH` で変更可）。
+- マニフェスト形式: `{"version": 1, "models": [{id, display_name, type, filename, target_subdir, source_url, sha256, description, recommended, requires_auth, api_match_hint}]}`
+- ダウンロードは `.part` 一時ファイルを使用し、完了後に `os.replace` でリネームする。
+- SHA256 が非空文字のときは検証を実施し、不一致の場合は RuntimeError を送出して `.part` を削除する。SHA256 が空文字のときは検証をスキップする。
+- フォールバック禁止: 指定モデルが未インストール・SHA256不一致のいずれでも処理を中止する。
+
+**`SD_WEBUI_MODEL` 設定時の事前モデル準備フロー（画像生成前に実行）:**
+1. `SD_WEBUI_MODEL` が空 → スキップ（現在 Forge にロードされているモデルを使用）
+2. `SD_WEBUI_MODEL` が設定されている場合:
+   - マニフェスト内で一致するモデルを検索（ファイル名・api_match_hint 部分一致）
+   - 見つかりかつ未インストール:
+     - `AUTO_DOWNLOAD_SD_MODELS=1` → `download_model()` → `rescan_models()`
+     - `AUTO_DOWNLOAD_SD_MODELS=0` → RuntimeError（"インストールされていません"）
+   - `StableDiffusionWebUIGenerator.set_active_model(SD_WEBUI_MODEL)` でモデル切り替え
+
+**SD WebUI モデル管理 Web UI:**
+- `/sd-models` ページ: マニフェスト内モデルのインストール状況・ダウンロード・モデル切り替えを行う
+- `/api/sd-models` (GET): マニフェスト内全モデルのステータス
+- `/api/sd-models/webui` (GET): SD WebUI API からインストール済みモデル一覧
+- `/api/sd-models/current` (GET): SD WebUI の現在ロード済みモデル名
+- `/api/sd-models/download` (POST): バックグラウンドダウンロード開始
+- `/api/sd-models/progress` (GET): ダウンロード進捗確認（ポーリング用）
+- `/api/sd-models/use` (POST): SD WebUI のアクティブモデル切り替え
+- `/api/sd-models/rescan` (POST): SD WebUI への再スキャン依頼
+
+**追加設定項目:**
+| 設定 | 説明 | デフォルト |
+|---|---|---|
+| `SD_WEBUI_ROOT` | SD WebUI インストールディレクトリ（モデルパス解決用） | `""` |
+| `SD_MODEL_MANIFEST_PATH` | SD モデルマニフェスト JSON パス | `assets/sd_webui/model_manifest.json` |
+| `AUTO_DOWNLOAD_SD_MODELS` | `1` のとき未インストールモデルを自動ダウンロード | `0` |
 
 ---
 
@@ -1182,7 +1217,8 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 |---|---|---|
 | VOICEVOX | 音声合成 | ローカル起動 |
 | Google Gemini API | 台本生成・台本チェック | `GOOGLE_API_KEY` |
-| Nano Banana (Gemini) | 背景・サムネ画像生成 | `GOOGLE_API_KEY` |
+| Nano Banana (Gemini) | 背景・サムネ画像生成（`IMAGE_BACKEND=gemini` のとき） | `GOOGLE_API_KEY` |
+| **Stable Diffusion WebUI Forge** | **背景・サムネ画像生成（`IMAGE_BACKEND=sd_webui` のとき）** | **ローカル起動（`--api` 必須）** |
 | Ollama (qwen3:8b) | 冒頭品質レビュー・リライト | ローカル起動 |
 | Ollama (qwen2.5:7b-instruct) | よみがな正規化（VOICEVOX誤読対策） | ローカル起動 |
 | OpenAI API | ChatGPT生成前レビュー | `OPENAI_API_KEY` |
@@ -1257,7 +1293,17 @@ YouTube OAuth:
 | `GEMINI_MODEL` | `.env` / `config.py` | 台本生成で使うGeminiモデル |
 | `NANOBANANA_PRO_MODEL` | `.env` / `config.py` | 高品質画像生成モデル |
 | `NANOBANANA_FLASH_MODEL` | `.env` / `config.py` | 速い画像生成モデル |
-| `IMAGE_BACKGROUND_ENGINE` | `.env` / `config.py` | 背景生成エンジン。`nanobanana` または `local_comfyui` |
+| `IMAGE_BACKEND` | `.env` / `config.py` | 画像生成バックエンド主スイッチ。`gemini`（デフォルト）または `sd_webui` |
+| `SD_WEBUI_BASE_URL` | `.env` / `config.py` | SD WebUI Forge / A1111 API URL |
+| `SD_WEBUI_TIMEOUT_SEC` | `.env` / `config.py` | SD WebUI API タイムアウト(秒) |
+| `SD_WEBUI_MODEL` | `.env` / `config.py` | SD WebUI で使うモデル名（空=起動中モデルをそのまま使用） |
+| `SD_WEBUI_SAMPLER` | `.env` / `config.py` | SD WebUI サンプラー名 |
+| `SD_WEBUI_STEPS` | `.env` / `config.py` | SD WebUI 生成ステップ数 |
+| `SD_WEBUI_CFG_SCALE` | `.env` / `config.py` | SD WebUI CFGスケール |
+| `SD_WEBUI_WIDTH` | `.env` / `config.py` | SD WebUI 出力幅(px)（横動画基準） |
+| `SD_WEBUI_HEIGHT` | `.env` / `config.py` | SD WebUI 出力高さ(px)（横動画基準） |
+| `SD_WEBUI_NEGATIVE_PROMPT` | `.env` / `config.py` | SD WebUI ネガティブプロンプト（人物・低品質抑制） |
+| `IMAGE_BACKGROUND_ENGINE` | `.env` / `config.py` | 背景生成エンジン後方互換設定。`nanobanana` または `local_comfyui`（`IMAGE_BACKEND`優先） |
 | `LOCAL_COMFYUI_URL` | `.env` / `config.py` | ComfyUI API URL |
 | `LOCAL_COMFYUI_TIMEOUT_SEC` | `.env` / `config.py` | ComfyUI背景生成タイムアウト秒 |
 | `LOCAL_COMFYUI_PRESET` | `.env` / `config.py` | ComfyUI背景生成プリセット名 |

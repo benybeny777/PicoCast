@@ -1,0 +1,157 @@
+"""
+SD WebUI Forge モデル管理 API ルート。
+
+GET  /api/sd-models            — マニフェスト内全モデルのステータス
+GET  /api/sd-models/webui      — SD WebUI API からインストール済みモデル一覧
+GET  /api/sd-models/current    — SD WebUI の現在ロード済みモデル名
+POST /api/sd-models/download   — マニフェスト内モデルをダウンロード（バックグラウンド）
+POST /api/sd-models/download/progress — ダウンロード進捗確認（ポーリング用）
+POST /api/sd-models/use        — SD WebUI のアクティブモデルを切り替える
+POST /api/sd-models/rescan     — SD WebUI に再スキャンを依頼する
+"""
+import logging
+import threading
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+
+from core.sd_model_manager import SDWebUIModelManager
+from web_app.services import sd_model_service
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/sd-models", tags=["sd_models"])
+
+# {model_id: {status, downloaded, total, percent, message}}
+# status: "downloading" | "verifying" | "done" | "error"
+_progress: dict[str, dict] = {}
+_download_lock = threading.Lock()
+
+
+class ModelIdRequest(BaseModel):
+    model_id: str
+
+
+class ModelNameRequest(BaseModel):
+    model_name: str
+
+
+def _make_progress(
+    status: str,
+    downloaded: int = 0,
+    total: int = 0,
+    message: str = "",
+) -> dict:
+    percent = int(downloaded * 100 / total) if total > 0 else (100 if status == "done" else 0)
+    return {
+        "status": status,
+        "downloaded": downloaded,
+        "total": total,
+        "percent": percent,
+        "message": message,
+    }
+
+
+def _run_download(model_id: str) -> None:
+    """バックグラウンドダウンロードスレッド。"""
+    try:
+        manager = SDWebUIModelManager()
+
+        def cb(filename: str, downloaded: int, total: int) -> None:
+            _progress[model_id] = _make_progress("downloading", downloaded, total)
+
+        _progress[model_id] = _make_progress("downloading")
+        manager.download_model(model_id, progress_callback=cb)
+        # ダウンロード成功後に SD WebUI に再スキャンを依頼（API が起動していれば）
+        try:
+            sd_model_service.rescan_models()
+        except Exception:
+            pass  # フォールバック許可: rescan は補助的操作。失敗してもダウンロード自体は完了
+        _progress[model_id] = _make_progress("done")
+    except Exception as e:
+        logger.exception("SDモデルのダウンロードに失敗しました: %s", model_id)
+        _progress[model_id] = _make_progress("error", message=str(e))
+
+
+# ─────────────────────────────────────────────
+# GET エンドポイント
+# ─────────────────────────────────────────────
+
+@router.get("")
+def list_models():
+    """マニフェスト内全モデルのステータスを返す。"""
+    try:
+        models = sd_model_service.get_model_list()
+        return {"status": "ok", "models": models}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/webui")
+def list_webui_models():
+    """SD WebUI API からインストール済みモデル一覧を返す。"""
+    try:
+        models = sd_model_service.get_installed_models_from_webui()
+        return {"status": "ok", "models": models}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/current")
+def get_current_model():
+    """SD WebUI の現在ロード済みモデル名を返す。"""
+    try:
+        model = sd_model_service.get_current_model_from_webui()
+        return {"status": "ok", "model": model}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.get("/progress")
+def get_progress():
+    """ダウンロード進捗を返す（ポーリング用）。"""
+    return {"progress": _progress}
+
+
+# ─────────────────────────────────────────────
+# POST エンドポイント
+# ─────────────────────────────────────────────
+
+@router.post("/download")
+def download_model(req: ModelIdRequest):
+    """指定モデルをバックグラウンドでダウンロード開始する。"""
+    model_id = req.model_id
+    with _download_lock:
+        if _progress.get(model_id, {}).get("status") == "downloading":
+            return {"status": "error", "message": "すでにダウンロード中です"}
+    threading.Thread(target=_run_download, args=(model_id,), daemon=True).start()
+    return {"status": "started", "model_id": model_id}
+
+
+@router.post("/use")
+def use_model(req: ModelNameRequest):
+    """SD WebUI のアクティブモデルを切り替える。"""
+    try:
+        sd_model_service.set_active_model(req.model_name)
+        return {"status": "ok", "model_name": req.model_name}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/rescan")
+def rescan():
+    """SD WebUI に再スキャンを依頼する。"""
+    try:
+        sd_model_service.rescan_models()
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/start")
+def start_webui():
+    """SD WebUI を起動（または起動確認）する。SD_WEBUI_START_COMMAND が未設定の場合はエラー。"""
+    try:
+        sd_model_service.start_webui()
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

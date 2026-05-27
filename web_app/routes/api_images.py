@@ -24,7 +24,6 @@ def api_regenerate(history_name: str, req: ImageRegenerateRequest):
     job_id = submit_regenerate_job(
         history_name, req.image_keys, req.prompts,
         background_engine=req.background_engine,
-        comfyui_preset=req.comfyui_preset,
     )
     return {"job_id": job_id, "status": "queued"}
 

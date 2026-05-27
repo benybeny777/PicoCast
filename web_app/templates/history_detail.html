@@ -53,21 +53,6 @@
         {% endfor %}
       </select>
     </div>
-    <div class="form-group">
-      <label for="background-engine">背景生成エンジン</label>
-      <select id="background-engine" onchange="syncComfyPresetVisibility()">
-        <option value="nanobanana" {% if default_background_engine == "nanobanana" %}selected{% endif %}>Nano Banana</option>
-        <option value="local_comfyui" {% if default_background_engine == "local_comfyui" %}selected{% endif %}>Local / ComfyUI</option>
-      </select>
-    </div>
-    <div class="form-group" id="comfyui-preset-group">
-      <label for="comfyui-preset">ComfyUIプリセット</label>
-      <select id="comfyui-preset">
-        {% for value, label in comfyui_preset_choices %}
-        <option value="{{ value }}" {% if value == default_comfyui_preset %}selected{% endif %}>{{ label }}</option>
-        {% endfor %}
-      </select>
-    </div>
     <div class="form-group check-group">
       <label><input type="checkbox" id="reuse-backgrounds" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
     </div>
@@ -286,8 +271,6 @@ async function renderVideo() {
 function _readPipelineParams() {
   return {
     imageStyle:      document.getElementById('image-style').value,
-    backgroundEngine: document.getElementById('background-engine').value,
-    comfyuiPreset:   document.getElementById('comfyui-preset').value,
     reuseBg:         document.getElementById('reuse-backgrounds').checked,
     longThumbnailAb: document.getElementById('long-thumbnail-ab').checked,
     longBudgetMode:  document.getElementById('long-budget-mode').checked,
@@ -295,15 +278,13 @@ function _readPipelineParams() {
   };
 }
 
-async function _submitPipelineJob({ imageStyle, backgroundEngine, comfyuiPreset, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode }) {
+async function _submitPipelineJob({ imageStyle, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode }) {
   return fetch('/api/history/regenerate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       history_names: [historyName],
       image_style: imageStyle,
-      background_engine: backgroundEngine,
-      comfyui_preset: comfyuiPreset,
       reuse_backgrounds: reuseBg,
       long_thumbnail_ab_test: longThumbnailAb,
       long_budget_mode: longBudgetMode,
@@ -373,12 +354,6 @@ function prepareLogView() {
   document.getElementById('log-container').innerHTML = '';
   document.getElementById('job-ids-info').textContent = '';
 }
-
-function syncComfyPresetVisibility() {
-  const engine = document.getElementById('background-engine').value;
-  document.getElementById('comfyui-preset-group').style.display = engine === 'local_comfyui' ? '' : 'none';
-}
-syncComfyPresetVisibility();
 
 // リロード後にログを復元
 (function restoreLogs() {

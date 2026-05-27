@@ -4,8 +4,6 @@ APIリクエスト / レスポンス用 Pydantic スキーマ。
 from pydantic import BaseModel, field_validator
 from typing import Any
 from config import (
-    IMAGE_BACKGROUND_ENGINE,
-    LOCAL_COMFYUI_PRESET,
     WEB_DEFAULT_IMAGE_STYLE,
     WEB_DEFAULT_LONG_BUDGET_MODE,
     WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
@@ -18,8 +16,7 @@ from config import (
 class GenerateRequest(BaseModel):
     script: str
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = IMAGE_BACKGROUND_ENGINE
-    comfyui_preset: str = LOCAL_COMFYUI_PRESET
+    background_engine: str = "nanobanana"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
@@ -36,8 +33,7 @@ class GenerateRequest(BaseModel):
 class BatchGenerateRequest(BaseModel):
     scripts: list[str]
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = IMAGE_BACKGROUND_ENGINE
-    comfyui_preset: str = LOCAL_COMFYUI_PRESET
+    background_engine: str = "nanobanana"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
@@ -47,8 +43,7 @@ class BatchGenerateRequest(BaseModel):
 class HistoryRegenerateRequest(BaseModel):
     history_names: list[str]
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = IMAGE_BACKGROUND_ENGINE
-    comfyui_preset: str = LOCAL_COMFYUI_PRESET
+    background_engine: str = "nanobanana"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
@@ -74,8 +69,7 @@ class ImageRegenerateRequest(BaseModel):
     history_name: str
     image_keys: list[str]          # "backgrounds/bg_NNN_001.png" / "thumbnails/..." 等
     prompts: dict[str, str] = {}   # key → テキスト（未保存のプロンプト上書き用）
-    background_engine: str = ""    # "" = configデフォルト / "local_comfyui" / "nanobanana"
-    comfyui_preset: str = ""       # "" = configデフォルト
+    background_engine: str = ""    # "" = configデフォルト / "nanobanana" / "sd_webui"
 
 
 # ── アップロード ──────────────────────────────────────

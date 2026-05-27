@@ -2,15 +2,14 @@ import json
 import os
 import time
 from google import genai
+import config
 from config import (
     GOOGLE_API_KEY,
-    IMAGE_BACKGROUND_ENGINE,
-    LOCAL_COMFYUI_PRESET,
     NANOBANANA_FLASH_MODEL,
     NANOBANANA_PRO_MODEL,
     SD_SIZE_IMAGE_SCALE,
 )
-from core.local_prompt_adapter import adapt_background_prompt_for_comfyui
+# IMAGE_BACKEND は実行時に config から直接参照する（monkeypatch対応）
 
 class ImageGenerator:
     def __init__(
@@ -21,15 +20,32 @@ class ImageGenerator:
         image_style="通常",
         sd_size_mode=False,
         background_engine=None,
-        comfyui_preset=None,
     ):
         self.width = width
         self.height = height
         self.debug = debug
         self.image_style = image_style
         self.sd_size_mode = sd_size_mode
-        self.background_engine = (background_engine or IMAGE_BACKGROUND_ENGINE).strip().lower()
-        self.comfyui_preset = (comfyui_preset or LOCAL_COMFYUI_PRESET).strip()
+
+        # バックエンド解決順:
+        #   1. 明示的に渡された background_engine 引数を最優先
+        #   2. config.IMAGE_BACKEND == "sd_webui" → sd_webui
+        #   3. config.IMAGE_BACKEND == "gemini" → nanobanana 固定
+        #   4. config.IMAGE_BACKEND が未対応値 → ValueError
+        # ※ config.IMAGE_BACKEND は実行時参照（monkeypatch / .env 再ロード対応）
+        if background_engine:
+            effective_engine = background_engine.strip().lower()
+        elif config.IMAGE_BACKEND == "sd_webui":
+            effective_engine = "sd_webui"
+        elif config.IMAGE_BACKEND == "gemini":
+            effective_engine = "nanobanana"
+        else:
+            raise ValueError(
+                f"未対応の IMAGE_BACKEND です: '{config.IMAGE_BACKEND}'。"
+                f"有効な値: 'gemini', 'sd_webui'"
+            )
+        self.background_engine = effective_engine
+
         scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
         self.request_width = max(64, int(round(self.width * scale))) if sd_size_mode else self.width
         self.request_height = max(64, int(round(self.height * scale))) if sd_size_mode else self.height
@@ -39,7 +55,7 @@ class ImageGenerator:
             try:
                 self.client = genai.Client(api_key=GOOGLE_API_KEY)
             except Exception as e:
-                print(f"  [Warning] Failed to initialize Google GenAI Client: {e}")
+                print(f"  [Warning] Google GenAI Client 初期化失敗: {e}")
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):
@@ -149,8 +165,76 @@ class ImageGenerator:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(current, f, ensure_ascii=False, indent=2)
 
-    def _generate_background_comfyui(self, description, save_dir, fname):
-        from core.comfyui_client import ComfyUIClient
+    def _prepare_sd_webui_model(self) -> None:
+        """SD_WEBUI_MODEL が設定されている場合、インストール確認・ダウンロード・モデル切り替えを行う。
+
+        SD_WEBUI_MODEL が空文字のときは何もしない（Forge の現在ロード済みモデルをそのまま使う）。
+        モデルが未インストールかつ AUTO_DOWNLOAD_SD_MODELS=False のときは RuntimeError を送出する。
+        フォールバック禁止: 指定モデルが使用不可な場合は中止する。
+        """
+        model_name = config.SD_WEBUI_MODEL.strip()
+        if not model_name:
+            return  # SD_WEBUI_MODEL 未設定: 現在ロード済みモデルをそのまま使用
+
+        from core.sd_model_manager import SDWebUIModelManager
+        from core.sd_webui_generator import StableDiffusionWebUIGenerator
+
+        manager = SDWebUIModelManager()
+
+        # マニフェストから該当モデルを探す（見つからなければスキップ）
+        matched = None
+        try:
+            statuses = manager.get_model_status()
+            for s in statuses:
+                hint = s.get("api_match_hint", "").lower()
+                fname_lower = s["filename"].lower()
+                name_lower = model_name.lower()
+                if (
+                    fname_lower == name_lower
+                    or (hint and hint in name_lower)
+                    or name_lower in fname_lower
+                ):
+                    matched = s
+                    break
+        except RuntimeError:
+            # マニフェストが利用不可の場合はインストールチェックをスキップ
+            pass
+
+        if matched is not None and not matched["installed"]:
+            if config.AUTO_DOWNLOAD_SD_MODELS:
+                def _progress(filename, downloaded, total):
+                    if total > 0:
+                        pct = downloaded * 100 // total
+                        print(
+                            f"  [SD] ダウンロード中: {filename} "
+                            f"{downloaded // 1024 // 1024}MB/{total // 1024 // 1024}MB ({pct}%)"
+                        )
+                    else:
+                        print(f"  [SD] ダウンロード中: {filename} {downloaded // 1024 // 1024}MB")
+
+                print(f"  [SD] モデルをダウンロードします: {matched['filename']}")
+                manager.download_model(matched["id"], progress_callback=_progress)
+                # ダウンロード後に SD WebUI へ再スキャンを依頼
+                StableDiffusionWebUIGenerator().rescan_models()
+            else:
+                raise RuntimeError(
+                    f"SD WebUI モデル '{matched['filename']}' がインストールされていません。\n"
+                    f"対処方法:\n"
+                    f"  1. AUTO_DOWNLOAD_SD_MODELS=1 を設定して自動ダウンロードを有効にする\n"
+                    f"  2. 手動で '{matched['target_subdir']}' に配置後 rescan を実行する"
+                )
+
+        # モデル切り替え（SD WebUI API 経由）
+        gen = StableDiffusionWebUIGenerator()
+        gen.set_active_model(model_name)
+
+    def _generate_background_sd_webui(self, description, save_dir, fname, *, is_thumbnail=False):
+        """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API で背景画像を生成する。"""
+        from core.sd_webui_generator import (
+            StableDiffusionWebUIGenerator,
+            _BG_PROMPT_SUFFIX,
+            _THUMB_PROMPT_SUFFIX,
+        )
 
         if not fname:
             existing_nums = []
@@ -163,47 +247,46 @@ class ImageGenerator:
             next_num = max(existing_nums, default=0) + 1
             fname = f"bg_{next_num:03d}_001.png"
         output_path = os.path.join(save_dir, fname)
-        prompt = adapt_background_prompt_for_comfyui(description)
-        entry = {
-            "engine": "local_comfyui",
-            "preset_name": self.comfyui_preset,
-            "prompt": prompt,
-            "status": "failed",
-            "error_message": "",
-            "fallback_used": False,
-        }
-        try:
-            from core.comfyui_model_manager import ComfyUIModelManager
 
-            manager = ComfyUIModelManager()
-            manager.check_all_models_ready()
-            client = ComfyUIClient()
-            result = client.generate_image(
-                prompt=prompt,
-                output_path=output_path,
-                preset_name=self.comfyui_preset,
+        # SD_WEBUI_MODEL 設定時: インストール確認 → 必要に応じてダウンロード → モデル切り替え
+        self._prepare_sd_webui_model()
+
+        # Shorts の場合は縦長サイズに切り替え
+        is_shorts = self.height > self.width
+        if is_shorts:
+            gen_width = self.height   # Shorts: 縦長のため幅・高さを入れ替え
+            gen_height = self.width
+        else:
+            gen_width = self.width
+            gen_height = self.height
+
+        prompt_suffix = _THUMB_PROMPT_SUFFIX if is_thumbnail else _BG_PROMPT_SUFFIX
+
+        gen = StableDiffusionWebUIGenerator(width=gen_width, height=gen_height)
+
+        if self.debug:
+            print(
+                f"  [AI] SD WebUI ({config.SD_WEBUI_BASE_URL}) "
+                f"{gen_width}x{gen_height} で生成開始: {description[:40]}..."
             )
-            entry.update(result)
-            entry["status"] = "success"
-            entry["error_message"] = ""
-            self._write_image_generation_meta(save_dir, entry)
-            if self.debug:
-                print(f"  [AI] ComfyUI 完了: {fname}")
-                self._save_prompt_log(save_dir, fname, prompt)
-            return fname
+
+        try:
+            gen.generate_image(description, output_path, prompt_suffix=prompt_suffix)
         except Exception as e:
-            entry["error_message"] = str(e)
-            self._write_image_generation_meta(save_dir, entry)
-            print("❌ ComfyUI背景生成に失敗しました。自動フォールバックは行いません。")
-            print("❌ フォールバック禁止方針により処理を中止しました。")
+            print(f"❌ SD WebUI 背景生成に失敗しました。自動フォールバックは行いません。")
+            print(f"❌ エラー詳細: {e}")
             raise
 
-    def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None):
-        if self.background_engine == "local_comfyui":
+        if self.debug:
+            print(f"  [AI] SD WebUI 完了: {fname}")
+        return fname
+
+    def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None, is_thumbnail=False):
+        if self.background_engine == "sd_webui":
             save_dir = target_dir or "output/backgrounds"
             os.makedirs(save_dir, exist_ok=True)
             # 自動フォールバック禁止。失敗時は中止する。
-            return self._generate_background_comfyui(description, save_dir, fname)
+            return self._generate_background_sd_webui(description, save_dir, fname, is_thumbnail=is_thumbnail)
         if self.background_engine != "nanobanana":
             raise RuntimeError(f"未対応の背景生成エンジンです: {self.background_engine}")
 

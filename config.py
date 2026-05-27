@@ -124,19 +124,32 @@ OLLAMA_REVIEW_MODEL          = os.environ.get("OLLAMA_REVIEW_MODEL",          "q
 OLLAMA_REWRITE_MODEL         = os.environ.get("OLLAMA_REWRITE_MODEL",         "qwen3:8b")               # 冒頭リライトモデル
 
 # ───────────────────────────────────────────────
-# Local ComfyUI
+# 画像生成バックエンド統合設定
 # ───────────────────────────────────────────────
-LOCAL_COMFYUI_URL = os.environ.get("LOCAL_COMFYUI_URL", "http://127.0.0.1:8188")  # ローカルComfyUI URL
-COMFYUI_MAX_RETRIES = int(os.environ.get("COMFYUI_MAX_RETRIES", "3"))  # ComfyUI最大リトライ回数
-COMFYUI_RETRY_INTERVAL_SEC = int(os.environ.get("COMFYUI_RETRY_INTERVAL_SEC", "5"))  # リトライ間隔(秒)
-COMFYUI_POLLING_INTERVAL_SEC = int(os.environ.get("COMFYUI_POLLING_INTERVAL_SEC", "2"))  # 状態確認(ポーリング)間隔(秒)
-COMFYUI_TIMEOUT_SEC = int(os.environ.get("COMFYUI_TIMEOUT_SEC", "300"))  # ComfyUIタイムアウト(秒)
-COMFYUI_ROOT_DIR = os.environ.get("COMFYUI_ROOT_DIR", "C:\\ComfyUI_windows_portable\\ComfyUI")  # ComfyUIインストール先
-COMFYUI_MODEL_MANIFEST_PATH = os.environ.get("COMFYUI_MODEL_MANIFEST_PATH", "assets/comfyui/model_manifest.json")  # モデルマニフェストパス
-COMFYUI_MODEL_DOWNLOAD_TIMEOUT_SEC = int(os.environ.get("COMFYUI_MODEL_DOWNLOAD_TIMEOUT_SEC", 3600))  # ダウンロードタイムアウト(秒)
-COMFYUI_MODEL_VERIFY_SHA256 = os.environ.get("COMFYUI_MODEL_VERIFY_SHA256", "1").strip().lower() in ("1", "true", "yes", "on")  # SHA256検証を有効にするか
-COMFYUI_START_COMMAND = os.environ.get("COMFYUI_START_COMMAND", "")   # 未起動時の自動起動コマンド（空=無効）
-COMFYUI_START_WAIT_SEC = int(os.environ.get("COMFYUI_START_WAIT_SEC", "90"))  # 起動待機タイムアウト(秒)
+IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "gemini").strip().lower()  # 画像生成バックエンド（gemini / sd_webui）
+SD_WEBUI_BASE_URL = os.environ.get("SD_WEBUI_BASE_URL", "http://127.0.0.1:7860")  # Stable Diffusion WebUI Forge / A1111 API URL
+SD_WEBUI_TIMEOUT_SEC = int(os.environ.get("SD_WEBUI_TIMEOUT_SEC", "180"))          # SD WebUI API タイムアウト(秒)
+SD_WEBUI_MODEL = os.environ.get("SD_WEBUI_MODEL", "")                              # SD WebUI で使用するモデル名（空=起動中モデルをそのまま使用）
+SD_WEBUI_SAMPLER = os.environ.get("SD_WEBUI_SAMPLER", "DPM++ 2M Karras")           # SD WebUI サンプラー名
+SD_WEBUI_STEPS = int(os.environ.get("SD_WEBUI_STEPS", "24"))                       # SD WebUI 生成ステップ数
+SD_WEBUI_CFG_SCALE = float(os.environ.get("SD_WEBUI_CFG_SCALE", "7"))              # SD WebUI CFGスケール
+SD_WEBUI_WIDTH = int(os.environ.get("SD_WEBUI_WIDTH", "1024"))                     # SD WebUI 出力幅(px) — 背景デフォルト
+SD_WEBUI_HEIGHT = int(os.environ.get("SD_WEBUI_HEIGHT", "576"))                    # SD WebUI 出力高さ(px) — 背景デフォルト
+SD_WEBUI_NEGATIVE_PROMPT = os.environ.get(                                         # SD WebUI ネガティブプロンプト（人物・低品質抑制）
+    "SD_WEBUI_NEGATIVE_PROMPT",
+    "people, human, person, face, hands, photorealistic, realistic photo, "
+    "bad anatomy, blurry, low quality, watermark, signature, logo, "
+    "unreadable text, garbled text",
+)
+SD_WEBUI_ROOT = os.environ.get("SD_WEBUI_ROOT", "")                                # SD WebUI / Forge 本体ルートディレクトリ（例: C:\sd.webui\webui）
+SD_MODEL_MANIFEST_PATH = os.environ.get(                                            # SD WebUI モデルマニフェストパス（空=同梱既定値を使用）
+    "SD_MODEL_MANIFEST_PATH",
+    os.path.join(os.path.dirname(__file__), "assets", "sd_webui", "model_manifest.json"),
+)
+AUTO_DOWNLOAD_SD_MODELS = os.environ.get("AUTO_DOWNLOAD_SD_MODELS", "0").strip().lower() in ("1", "true", "yes", "on")  # 未導入モデルの自動ダウンロード許可（0=停止/手動のみ, 1=自動可）
+SD_WEBUI_START_COMMAND = os.environ.get("SD_WEBUI_START_COMMAND", "")              # 未起動時の自動起動コマンド（空=無効）例: C:\00_PG\sd.webui\run.bat --api --nowebui
+SD_WEBUI_START_WAIT_SEC = int(os.environ.get("SD_WEBUI_START_WAIT_SEC", "120"))    # 自動起動後の接続確認タイムアウト(秒)
+
 
 OLLAMA_REWRITE_FALLBACK_MODEL = os.environ.get("OLLAMA_REWRITE_FALLBACK_MODEL", "gemma4:e4b")           # リライト失敗時のフォールバックモデル
 OPENING_REWRITE_MAX_FALLBACKS = int(os.environ.get("OPENING_REWRITE_MAX_FALLBACKS", "1"))               # フォールバック試行上限
@@ -170,16 +183,6 @@ NANOBANANA_PRO_MODEL  = os.environ.get("NANOBANANA_PRO_MODEL",  "gemini-3-pro-im
 NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-flash-image-preview")  # 背景・サムネ生成（高速）
 SD_SIZE_IMAGE_SCALE   = float(os.environ.get("SD_SIZE_IMAGE_SCALE", "0.5"))                     # SD 生成モード: 縮小倍率（生成後に拡大）
 
-# ───────────────────────────────────────────────
-# 背景画像生成エンジン（サムネイルは当面 Nano Banana 固定）
-# ───────────────────────────────────────────────
-IMAGE_BACKGROUND_ENGINE = os.environ.get("IMAGE_BACKGROUND_ENGINE", "nanobanana").strip().lower()  # 背景生成エンジン（nanobanana / local_comfyui）
-LOCAL_COMFYUI_URL = os.environ.get("LOCAL_COMFYUI_URL", "http://127.0.0.1:8188")  # ComfyUI API URL
-LOCAL_COMFYUI_TIMEOUT_SEC = float(os.environ.get("LOCAL_COMFYUI_TIMEOUT_SEC", "300"))  # ComfyUI 背景生成タイムアウト秒
-LOCAL_COMFYUI_PRESET = os.environ.get("LOCAL_COMFYUI_PRESET", "anime_standard").strip()  # ComfyUI 背景生成プリセット名
-LOCAL_COMFYUI_OUTPUT_WIDTH = int(os.environ.get("LOCAL_COMFYUI_OUTPUT_WIDTH", "832"))  # ComfyUI 背景生成の標準幅
-LOCAL_COMFYUI_OUTPUT_HEIGHT = int(os.environ.get("LOCAL_COMFYUI_OUTPUT_HEIGHT", "1472"))  # ComfyUI 背景生成の標準高さ
-LOCAL_COMFYUI_PRESET_FILE = os.environ.get("LOCAL_COMFYUI_PRESET_FILE", os.path.join(os.path.dirname(__file__), "assets", "comfyui", "presets.json"))  # ComfyUI プリセット定義ファイル
 
 # ───────────────────────────────────────────────
 # キャラクター定義（VOICEVOX スピーカー ID）

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "models": [
+    {
+      "id": "sd15_base",
+      "display_name": "Stable Diffusion 1.5 Base (pruned, ema-only)",
+      "type": "checkpoint",
+      "filename": "v1-5-pruned-emaonly.safetensors",
+      "target_subdir": "models/Stable-diffusion",
+      "source_url": "",
+      "sha256": "",
+      "description": "軽量な汎用ベースモデル。source_url 未設定の場合は手動配置対象。",
+      "recommended": true,
+      "requires_auth": false,
+      "api_match_hint": "v1-5-pruned-emaonly",
+      "download_page_url": "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5"
+    }
+  ]
+}

@@ -38,19 +38,25 @@ def check_ollama() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
-def check_comfyui() -> dict[str, Any]:
+def check_sd_webui() -> dict[str, Any]:
+    """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API の疎通確認とモデル情報を返す。"""
     try:
-        base = config.LOCAL_COMFYUI_URL.rstrip("/")
-        r = httpx.get(f"{base}/system_stats", timeout=config.WEB_VOICEVOX_CHECK_TIMEOUT_SEC)
-        if r.status_code == 200:
-            return {
-                "ok": True,
-                "url": config.LOCAL_COMFYUI_URL,
-                "preset": config.LOCAL_COMFYUI_PRESET,
-            }
-        return {"ok": False, "url": config.LOCAL_COMFYUI_URL, "error": f"Status code: {r.status_code}"}
+        from core.sd_webui_generator import StableDiffusionWebUIGenerator
+        gen = StableDiffusionWebUIGenerator()
+        result = gen.check_health()
+        # マニフェスト内モデルの導入状況を追加（SD_WEBUI_ROOT 設定時のみ）
+        if config.SD_WEBUI_ROOT:
+            try:
+                from core.sd_model_manager import SDWebUIModelManager
+                manager = SDWebUIModelManager()
+                statuses = manager.get_model_status()
+                result["manifest_total"] = len(statuses)
+                result["manifest_installed"] = sum(1 for s in statuses if s["installed"])
+            except Exception:
+                pass  # フォールバック許可: マニフェスト情報は補助的。取得失敗しても疎通確認結果は返す
+        return result
     except Exception as e:
-        return {"ok": False, "url": config.LOCAL_COMFYUI_URL, "error": str(e)}
+        return {"ok": False, "url": config.SD_WEBUI_BASE_URL, "error": str(e)}
 
 
 def check_ffmpeg() -> dict[str, Any]:
@@ -122,17 +128,18 @@ def get_settings_status() -> dict[str, Any]:
         f_vv     = ex.submit(check_voicevox)
         f_ffmpeg = ex.submit(check_ffmpeg)
         f_ollama = ex.submit(check_ollama)
-        f_comfyui= ex.submit(check_comfyui)
-        voicevox_result  = f_vv.result()
-        ffmpeg_result    = f_ffmpeg.result()
-        ollama_result    = f_ollama.result()
-        comfyui_result   = f_comfyui.result()
+        f_sd     = ex.submit(check_sd_webui)
+        voicevox_result = f_vv.result()
+        ffmpeg_result   = f_ffmpeg.result()
+        ollama_result   = f_ollama.result()
+        sd_webui_result = f_sd.result()
 
     return {
         "voicevox": voicevox_result,
         "ffmpeg": ffmpeg_result,
         "ollama": ollama_result,
-        "comfyui": comfyui_result,
+        "sd_webui": sd_webui_result,
+        "image_backend": config.IMAGE_BACKEND,          # 現在のバックエンド種別
         "google_api_key": bool(config.GOOGLE_API_KEY),
         "openai_api_key": bool(config.OPENAI_API_KEY),
         "client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),

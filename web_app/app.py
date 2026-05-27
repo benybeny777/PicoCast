@@ -65,7 +65,7 @@ from web_app.routes.api_upload import router as upload_router
 from web_app.routes.api_fixed_comment import router as fixed_comment_router
 from web_app.routes.api_settings import router as settings_router
 from web_app.routes.api_prompt import router as prompt_router
-from web_app.routes.api_comfyui import router as comfyui_router
+from web_app.routes.api_sd_models import router as sd_models_router
 
 app.include_router(pages_router)
 app.include_router(status_router)
@@ -80,7 +80,7 @@ app.include_router(upload_router)
 app.include_router(fixed_comment_router)
 app.include_router(settings_router)
 app.include_router(prompt_router)
-app.include_router(comfyui_router)
+app.include_router(sd_models_router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
