@@ -135,6 +135,7 @@ def page_images(request: Request, history: str = ""):
         "selected_history": history,
         "image_data": selected,
         "image_backend": _cfg.IMAGE_BACKEND,
+        "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
     })
 
 
