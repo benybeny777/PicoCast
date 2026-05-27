@@ -61,7 +61,7 @@
         </td>
       </tr>
       <tr>
-        <td>Stable Diffusion WebUI Forge</td>
+        <td>Forge WebUI</td>
         <td>
           {% if status.image_backend == 'sd_webui' %}
             {% if status.sd_webui.ok %}
@@ -71,7 +71,7 @@
             <span class="badge badge-ng">未接続</span>
             {% endif %}
           {% else %}
-          <span class="badge" style="background:var(--text-muted)">非アクティブ</span>
+          <span class="badge badge-warn">非アクティブ</span>
           {% endif %}
         </td>
       </tr>
