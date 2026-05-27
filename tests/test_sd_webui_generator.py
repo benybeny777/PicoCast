@@ -236,8 +236,6 @@ class TestImageGeneratorBackendDispatch:
         """IMAGE_BACKEND=sd_webui のとき sd_webui エンジンが選ばれる。"""
         import config
         monkeypatch.setattr(config, "IMAGE_BACKEND", "sd_webui")
-        # IMAGE_BACKGROUND_ENGINEが何でもsd_webuiが優先される
-        monkeypatch.setattr(config, "IMAGE_BACKGROUND_ENGINE", "nanobanana")
 
         from core.image_generator import ImageGenerator
 
@@ -249,10 +247,9 @@ class TestImageGeneratorBackendDispatch:
             gen.close()
 
     def test_image_backend_env_gemini(self, monkeypatch):
-        """IMAGE_BACKEND=gemini のとき IMAGE_BACKGROUND_ENGINE=nanobanana → nanobanana が選ばれる。"""
+        """IMAGE_BACKEND=gemini のとき nanobanana が選ばれる。"""
         import config
         monkeypatch.setattr(config, "IMAGE_BACKEND", "gemini")
-        monkeypatch.setattr(config, "IMAGE_BACKGROUND_ENGINE", "nanobanana")
 
         from core.image_generator import ImageGenerator
 

@@ -116,7 +116,7 @@ class StableDiffusionWebUIGenerator:
         """txt2img で画像を生成して PNG として保存する。保存パスを返す。
 
         Args:
-            prompt: 生成プロンプト（日本語可。SD向け英語補助はprompt_suffixで付与する）
+            prompt: 生成プロンプト（英語を想定。呼び出し側で Ollama による日→英翻訳済みを渡すこと）
             output_path: 保存先ファイルパス（.png）
             negative_prompt: ネガティブプロンプト（None=設定値を使用）
             width / height: 出力解像度（None=設定値）

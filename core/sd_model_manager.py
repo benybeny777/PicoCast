@@ -212,6 +212,12 @@ class SDWebUIModelManager:
                 f"手動で '{entry['filename']}' を '{entry['target_subdir']}' に配置してください。"
             )
 
+        if entry.get("requires_auth"):
+            raise RuntimeError(
+                f"モデル '{entry['display_name']}' は認証が必要なため自動ダウンロードできません。"
+                f"手動で '{entry['filename']}' を '{entry['target_subdir']}' に配置してください。"
+            )
+
         dest_path = self._resolve_model_path(entry)
         part_path = dest_path + ".part"
         dest_dir = os.path.dirname(dest_path)

@@ -13,7 +13,7 @@
 graph TD
     A[台本入力・一括処理] --> B[品質レビュー・チェック<br/>ローカル & Ollama & ChatGPT]
     B -->|修正必要/Must Fix| A
-    B -->|品質クリア| C[よみがな正規化<br/>Ollama]
+    B -->|品質クリア| C[よみがな正規化<br/>SudachiPy + 自前辞書]
     C --> D[音声生成 WAV<br/>VOICEVOX]
     C --> E[背景生成 PNG<br/>Gemini / SD WebUI Forge]
     C --> T[サムネ生成 PNG<br/>Gemini / SD WebUI Forge]
@@ -138,7 +138,7 @@ OPENAI_API_KEY=your_openai_api_key
 
 ### Step 4. Stable Diffusion WebUI Forge で背景・サムネイルを生成する場合
 
-背景画像とサムネイルを **Stable Diffusion WebUI Forge**（または AUTOMATIC1111互換API）で生成できます。ComfyUI より軽量で導入しやすく、一般用途向けに推奨するローカル画像生成構成です。
+背景画像とサムネイルを **Stable Diffusion WebUI Forge**（または AUTOMATIC1111互換API）で生成できます。Gemini / Nano Banana の代替として、APIキーなしでローカルに画像生成したい場合に使用します。
 
 #### 前提
 
@@ -190,13 +190,13 @@ AUTO_DOWNLOAD_SD_MODELS=0
    ```
    例: `C:\stable-diffusion-webui\models\Stable-diffusion\v1-5-pruned-emaonly.safetensors`
 
-3. Web UI の「SDモデル」ページで **「WebUI 再スキャン」** ボタンを押すと一覧が更新されます。
+3. Web UI の「Stable Diffusionモデル」ページで **「WebUI 再スキャン」** ボタンを押すと一覧が更新されます。
 
 > `SD_WEBUI_ROOT` を `.env` に設定しておくと、配置先のフルパスが「インストール方法▼」欄に表示されます。
 
 #### SD WebUI モデル管理 Web UI
 
-Web UI の「SDモデル」ページ（`/sd-models`）からマニフェスト内モデルの状態確認・ダウンロード・モデル切り替えができます。
+Web UI の「Stable Diffusionモデル」ページ（`/sd-models`）からマニフェスト内モデルの状態確認・ダウンロード・モデル切り替えができます。
 
 - **マニフェスト内モデル**: `assets/sd_webui/model_manifest.json` に定義されたモデルのインストール状況と DL ボタン
 - **現在のモデル**: SD WebUI API から取得した現在ロード済みモデル名

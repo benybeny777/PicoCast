@@ -390,7 +390,7 @@ def _estimate_script_duration(items, is_shorts: bool):
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
                        script_content=None, debug_mode=False, long_thumbnail_ab_test=None):
-    """台本内容をもとにNano Bananaでサムネイル画像を生成する。"""
+    """台本内容をもとにサムネイル画像を生成する（IMAGE_BACKEND に従い Nano Banana または Stable Diffusion WebUI Forge を使用）。"""
     def _log(msg):
         if update_status: update_status(msg)
         else: print(msg, flush=True)
@@ -1296,7 +1296,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             return cancel_result()
 
     if thumb_path is None:
-        raise Exception("サムネイル画像を生成できませんでした。\nNano Bananaの接続・残高を確認してください。")
+        raise Exception(
+            "サムネイル画像を生成できませんでした。\n"
+            "IMAGE_BACKEND=gemini の場合: Nano Banana の接続・残高を確認してください。\n"
+            "IMAGE_BACKEND=sd_webui の場合: Stable Diffusion WebUI の起動状態を確認してください。"
+        )
 
     if is_shorts:
         update_status("  📌 サムネイルをショート先頭に挿入予定(native)")

@@ -225,44 +225,48 @@ class ImageGenerator:
 
         manager = SDWebUIModelManager()
 
-        # マニフェストから該当モデルを探す（見つからなければスキップ）
+        # マニフェストから該当モデルを探す
+        # マニフェスト読み込み失敗は処理を中止する（サイレントスキップ禁止）
         matched = None
-        try:
-            statuses = manager.get_model_status()
-            for s in statuses:
-                hint = s.get("api_match_hint", "").lower()
-                fname_lower = s["filename"].lower()
-                name_lower = model_name.lower()
-                if (
-                    fname_lower == name_lower
-                    or (hint and hint in name_lower)
-                    or name_lower in fname_lower
-                ):
-                    matched = s
-                    break
-        except RuntimeError:
-            # マニフェストが利用不可の場合はインストールチェックをスキップ
-            pass
+        statuses = manager.get_model_status()
+        for s in statuses:
+            hint = s.get("api_match_hint", "").lower()
+            fname_lower = s["filename"].lower()
+            name_lower = model_name.lower()
+            if (
+                fname_lower == name_lower
+                or (hint and hint in name_lower)
+                or name_lower in fname_lower
+            ):
+                matched = s
+                break
 
         if matched is not None and not matched["installed"]:
+            # requires_auth=true のモデルは自動ダウンロード不可
+            if matched.get("requires_auth"):
+                raise RuntimeError(
+                    f"Stable Diffusion WebUI モデル '{matched['filename']}' は認証が必要なため"
+                    f"自動ダウンロードできません。\n"
+                    f"手動で '{matched['target_subdir']}' に配置後 rescan を実行してください。"
+                )
             if config.AUTO_DOWNLOAD_SD_MODELS:
                 def _progress(filename, downloaded, total):
                     if total > 0:
                         pct = downloaded * 100 // total
                         print(
-                            f"  [SD] ダウンロード中: {filename} "
+                            f"  [Stable Diffusion] ダウンロード中: {filename} "
                             f"{downloaded // 1024 // 1024}MB/{total // 1024 // 1024}MB ({pct}%)"
                         )
                     else:
-                        print(f"  [SD] ダウンロード中: {filename} {downloaded // 1024 // 1024}MB")
+                        print(f"  [Stable Diffusion] ダウンロード中: {filename} {downloaded // 1024 // 1024}MB")
 
-                print(f"  [SD] モデルをダウンロードします: {matched['filename']}")
+                print(f"  [Stable Diffusion] モデルをダウンロードします: {matched['filename']}")
                 manager.download_model(matched["id"], progress_callback=_progress)
-                # ダウンロード後に SD WebUI へ再スキャンを依頼
+                # ダウンロード後に Stable Diffusion WebUI へ再スキャンを依頼
                 StableDiffusionWebUIGenerator().rescan_models()
             else:
                 raise RuntimeError(
-                    f"SD WebUI モデル '{matched['filename']}' がインストールされていません。\n"
+                    f"Stable Diffusion WebUI モデル '{matched['filename']}' がインストールされていません。\n"
                     f"対処方法:\n"
                     f"  1. AUTO_DOWNLOAD_SD_MODELS=1 を設定して自動ダウンロードを有効にする\n"
                     f"  2. 手動で '{matched['target_subdir']}' に配置後 rescan を実行する"

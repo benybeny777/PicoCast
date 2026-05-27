@@ -10,7 +10,7 @@
 食べ物雑学ゆっくり解説動画（Shorts / Long）を自動生成してYouTubeにアップロードするシステム。
 
 - **台本生成** → Gemini AI
-- **音声生成** → VOICEVOX (ずんだもん / 四国めたん)（よみがな正規化を Ollama で前処理）
+- **音声生成** → VOICEVOX (ずんだもん / 四国めたん)（よみがな正規化を SudachiPy + 自前辞書で前処理）
 - **背景画像生成** → Nano Banana (Gemini画像生成) / Stable Diffusion WebUI Forge（`IMAGE_BACKEND` で切替）
 - **サムネイル生成** → Nano Banana (Gemini画像生成) / Stable Diffusion WebUI Forge（`IMAGE_BACKEND` で切替）
 - **動画組立** → ffmpeg/native MP4
@@ -53,7 +53,8 @@ yukkurijidou/
 │   │   ├── schedule_service.py     # スケジュール管理
 │   │   ├── upload_service.py       # YouTubeアップロード
 │   │   ├── fixed_comment_service.py # 固定コメント投稿
-│   │   └── auto_fixed_comment_service.py # スロット時刻到達時の固定コメント自動投稿デーモン
+│   │   ├── auto_fixed_comment_service.py # スロット時刻到達時の固定コメント自動投稿デーモン
+│   │   └── sd_model_service.py    # Stable Diffusion WebUI モデル管理 Web UIサービス
 │   ├── routes/             # APIルート層
 │   │   ├── pages.py        # Jinja2ページルート
 │   │   ├── api_status.py   # GET /api/health, /api/status, /api/dashboard
@@ -67,8 +68,9 @@ yukkurijidou/
 │   │   ├── api_upload.py    # GET/POST /api/upload
 │   │   ├── api_fixed_comment.py # GET/POST /api/fixed-comment
 │   │   ├── api_prompt.py   # GET /api/prompt
-│   │   └── api_settings.py # GET/POST /api/settings
-│   ├── templates/          # Jinja2 HTMLテンプレート (12画面)
+│   │   ├── api_settings.py # GET/POST /api/settings
+│   │   └── api_sd_models.py # GET/POST /api/sd-models
+│   ├── templates/          # Jinja2 HTMLテンプレート
 │   └── static/             # CSS/JS (app.css, app.js)
 ├── main.py                 # 動画生成パイプライン
 ├── worker_pipeline.py      # パイプライン subprocess ワーカー（1本生成完了でプロセス終了）
@@ -80,6 +82,7 @@ yukkurijidou/
 │   ├── reading_normalizer.py # よみがな正規化（Ollama）
 │   ├── image_generator.py  # 背景・サムネ画像生成（IMAGE_BACKEND に基づきバックエンドを選択）
 │   ├── sd_webui_generator.py  # Stable Diffusion WebUI Forge / A1111互換APIクライアント
+│   ├── sd_model_manager.py    # Stable Diffusion WebUI モデルのインストール確認・ダウンロード
 │   ├── parser.py           # 台本パーサー (ScriptParser)
 │   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
 │   ├── opening_quality.py  # 冒頭品質レビュー
@@ -155,12 +158,12 @@ yukkurijidou/
 7. 生成前の尺推定 + 尺レビュー
 8. ChatGPT生成前レビュー（評価のみ、修正なし）
    └── `must_fix` あり、または重大エラー基準未満なら処理中止
-9. よみがな正規化（Ollamaで全チャンクを一括変換）
+9. よみがな正規化（SudachiPy + 自前辞書で補正）
    └── 変換後テキストをVOICEVOXに渡す。字幕・ファイル名は元テキストのまま
 10. VOICEVOX音声生成（セリフ1行ずつ）
 11. 背景画像生成（Nano Banana または SD WebUI Forge）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
-12. サムネイル生成（Nano Banana）
+12. サムネイル生成（Nano Banana または Stable Diffusion WebUI Forge）
 13. 旧タイムライン互換ヘルパーで素材タイミングを組立
 14. BGM追加
 15. native MP4出力
@@ -1310,13 +1313,6 @@ YouTube OAuth:
 | `SD_WEBUI_WIDTH` | `.env` / `config.py` | SD WebUI 出力幅(px)（横動画基準） |
 | `SD_WEBUI_HEIGHT` | `.env` / `config.py` | SD WebUI 出力高さ(px)（横動画基準） |
 | `SD_WEBUI_NEGATIVE_PROMPT` | `.env` / `config.py` | SD WebUI ネガティブプロンプト（人物・低品質抑制） |
-| `IMAGE_BACKGROUND_ENGINE` | `.env` / `config.py` | 背景生成エンジン後方互換設定。`nanobanana` または `local_comfyui`（`IMAGE_BACKEND`優先） |
-| `LOCAL_COMFYUI_URL` | `.env` / `config.py` | ComfyUI API URL |
-| `LOCAL_COMFYUI_TIMEOUT_SEC` | `.env` / `config.py` | ComfyUI背景生成タイムアウト秒 |
-| `LOCAL_COMFYUI_PRESET` | `.env` / `config.py` | ComfyUI背景生成プリセット名 |
-| `LOCAL_COMFYUI_OUTPUT_WIDTH` | `.env` / `config.py` | ComfyUI背景生成の標準幅 |
-| `LOCAL_COMFYUI_OUTPUT_HEIGHT` | `.env` / `config.py` | ComfyUI背景生成の標準高さ |
-| `LOCAL_COMFYUI_PRESET_FILE` | `.env` / `config.py` | ComfyUIプリセット定義ファイル |
 | `CHARACTERS` | `config.py` | VOICEVOX話者ID・スタイルID |
 | `CHARACTER_PNGS` | `config.py` | native合成用キャラ立ち絵 |
 | `CHARACTER_EXPRESSION_PNGS` | `config.py` | native表情指定用PNG。素材未配置時は既定立ち絵へフォールバック |
@@ -1340,7 +1336,7 @@ YouTube OAuth:
 | `WEB_DEFAULT_REUSE_BACKGROUNDS` | `.env` / `config.py` | Web UI生成画面の背景再利用既定値 |
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `.env` / `config.py` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `.env` / `config.py` | Web UI生成画面のLong節約既定値 |
-| `WEB_DEFAULT_SD_SIZE_MODE` | `.env` / `config.py` | Web UI生成画面のSD生成既定値 |
+| `WEB_DEFAULT_SD_SIZE_MODE` | `.env` / `config.py` | Web UI生成画面の縮小生成既定値 |
 | `WEB_JOB_POLL_INTERVAL_MS` | `.env` / `config.py` | Web UIのジョブ状態更新間隔(ms) |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | `.env` / `config.py` | Web UIのジョブ成功後再読み込み待ち時間(ms) |
 | `WEB_TOAST_VISIBLE_MS` | `.env` / `config.py` | Web UIのトースト表示時間(ms) |
@@ -1382,6 +1378,6 @@ TOPIC_REQUEST_CTA_EVERY_N=5
 - Longでは関連動画誘導・vidIQタイトル調整・説明欄YouTubeチャプター追加を許可する。アップロード時に `チャプター:` 行または既定章立てから `【目次】` を説明欄末尾へ追加する。
 - CTA方針は `_meta/cta_policy.json`、アップロード時のYouTubeメタ方針は `_meta/youtube_metadata.json` に保存する。YouTube Analytics取得時は `ネタ募集CTA` / `ネタ募集CTA理由` を取り込み、Analytics画面とTSVで確認できるようにする。
 
-## ComfyUIモデル管理
-- ssets/comfyui/model_manifest.json に必要なモデルを定義。
-- Web UIから半自動ダウンロードおよび充足チェックが可能。不足時は自動フォールバックせずに停止する。
+## ComfyUI（廃止済み）
+> ~~- ssets/comfyui/model_manifest.json に必要なモデルを定義。~~
+> ~~- Web UIから半自動ダウンロードおよび充足チェックが可能。不足時は自動フォールバックせずに停止する。~~
