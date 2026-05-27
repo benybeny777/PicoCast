@@ -147,8 +147,8 @@ def _save_variant(
     finally:
         try:
             del image
-        except Exception as _e:
-            raise RuntimeError(f"Error: {_e}") from _e
+        except Exception:
+            pass
         close = getattr(psd, "close", None)
         if callable(close):
             close()
@@ -193,8 +193,8 @@ def _save_difference_overlay(base_path: str, variant_path: str, out_path: str, p
     finally:
         try:
             del base, variant, diff, cropped_variant, cropped_diff, mask, original_alpha, overlay
-        except Exception as _e:
-            raise RuntimeError(f"Error: {_e}") from _e
+        except Exception:
+            pass
         gc.collect()
 
 
@@ -237,8 +237,8 @@ def _save_manual_blink_overlay(name: str, base_path: str, out_path: str) -> str 
     finally:
         try:
             del base, overlay, draw
-        except Exception as _e:
-            raise RuntimeError(f"Error: {_e}") from _e
+        except Exception:
+            pass
         gc.collect()
 
 
