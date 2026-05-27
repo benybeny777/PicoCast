@@ -112,7 +112,15 @@ class ReadingNormalizer:
             return res
 
         # safe_auto
-        tokens = self.tokenizer_obj.tokenize(text)
+        # base_dictをトークン化前に前処理置換（長い順に優先）。
+        # 「黒い」のような活用形も「黒」→「くろ」に展開できる。
+        pre_text = text
+        for k in sorted(self.base_dict.keys(), key=len, reverse=True):
+            if k in pre_text:
+                pre_text = pre_text.replace(k, self.base_dict[k])
+                self.applied_base.add(k)
+
+        tokens = self.tokenizer_obj.tokenize(pre_text)
             
         res_text = []
         has_kanji = re.compile(r'[\u4E00-\u9FFF]')
@@ -120,12 +128,7 @@ class ReadingNormalizer:
         for t in tokens:
             surface = t.surface()
             
-            # 手動/同梱辞書を最優先
-            if surface in self.base_dict:
-                res_text.append(self.base_dict[surface])
-                self.applied_base.add(surface)
-                continue
-            # ユーザー辞書
+            # ユーザー辞書（base_dictは前処理済み）
             if surface in self.user_dict:
                 res_text.append(self.user_dict[surface])
                 self.applied_user.add(surface)
