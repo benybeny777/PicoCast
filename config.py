@@ -147,6 +147,8 @@ SD_MODEL_MANIFEST_PATH = os.environ.get(                                        
     os.path.join(os.path.dirname(__file__), "assets", "sd_webui", "model_manifest.json"),
 )
 AUTO_DOWNLOAD_SD_MODELS = os.environ.get("AUTO_DOWNLOAD_SD_MODELS", "0").strip().lower() in ("1", "true", "yes", "on")  # 未導入モデルの自動ダウンロード許可（0=停止/手動のみ, 1=自動可）
+SD_WEBUI_START_COMMAND = os.environ.get("SD_WEBUI_START_COMMAND", "")              # 未起動時の自動起動コマンド（空=無効）例: C:\00_PG\sd.webui\run.bat --api --nowebui
+SD_WEBUI_START_WAIT_SEC = int(os.environ.get("SD_WEBUI_START_WAIT_SEC", "120"))    # 自動起動後の接続確認タイムアウト(秒)
 
 # ───────────────────────────────────────────────
 # Local ComfyUI

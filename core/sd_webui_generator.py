@@ -61,6 +61,52 @@ class StableDiffusionWebUIGenerator:
     # 公開API
     # ─────────────────────────────────────────
 
+    def _check_connection(self) -> bool:
+        """疎通確認のみ。成功時 True、失敗時 False を返す（例外を外に出さない）。"""
+        try:
+            r = httpx.get(f"{self.base_url}/sdapi/v1/options", timeout=5)
+            return r.status_code == 200
+        except Exception:
+            return False
+
+    def ensure_running(self) -> None:
+        """SD WebUI API が起動していなければ SD_WEBUI_START_COMMAND で自動起動し、
+        接続が確認できるまで最大 SD_WEBUI_START_WAIT_SEC 秒待機する。
+
+        SD_WEBUI_START_COMMAND が空の場合は自動起動しない（エラーを送出する）。
+
+        Raises:
+            RuntimeError: 未起動かつコマンド未設定、またはタイムアウトした場合。
+        """
+        import subprocess
+
+        if self._check_connection():
+            return  # すでに起動中
+
+        start_cmd = config.SD_WEBUI_START_COMMAND.strip()
+        if not start_cmd:
+            raise RuntimeError(
+                f"SD WebUI API に接続できません ({self.base_url})。"
+                " Forge/AUTOMATIC1111 を --api オプション付きで起動してください。"
+                " 自動起動するには SD_WEBUI_START_COMMAND を .env に設定してください。"
+            )
+
+        logger.info("SD WebUI 自動起動: %s", start_cmd)
+        subprocess.Popen(start_cmd, shell=True)
+
+        wait_sec = config.SD_WEBUI_START_WAIT_SEC
+        for elapsed in range(2, wait_sec + 1, 2):
+            import time as _time
+            _time.sleep(2)
+            if self._check_connection():
+                logger.info("SD WebUI 起動確認 (%d秒)", elapsed)
+                return
+
+        raise RuntimeError(
+            f"SD WebUI の起動を {wait_sec} 秒待ちましたが、接続できませんでした ({self.base_url})。"
+            " SD_WEBUI_START_WAIT_SEC を増やすか、起動コマンドを確認してください。"
+        )
+
     def check_health(self) -> dict:
         """SD WebUI APIの疎通確認と現在ロード中のモデル名を返す。
 
@@ -122,6 +168,9 @@ class StableDiffusionWebUIGenerator:
         Raises:
             RuntimeError: API未起動・HTTPエラー・レスポンス異常のいずれか。
         """
+        # 未起動なら SD_WEBUI_START_COMMAND で自動起動し、準備完了まで待機する
+        self.ensure_running()
+
         effective_neg = negative_prompt if negative_prompt is not None else self.negative_prompt
         effective_width = width if width is not None else self.width
         effective_height = height if height is not None else self.height
@@ -213,7 +262,7 @@ class StableDiffusionWebUIGenerator:
     # ─────────────────────────────────────────
 
     def get_options(self) -> dict:
-        """SD WebUI の現在の全オプション設定を返す。
+        """SD WebUI の現在の全オプション設定を返す。未起動なら自動起動を試みる。
 
         Returns:
             SD WebUI /sdapi/v1/options のレスポンスそのまま。
@@ -221,6 +270,7 @@ class StableDiffusionWebUIGenerator:
         Raises:
             RuntimeError: API未接続・HTTPエラー。
         """
+        self.ensure_running()
         url = f"{self.base_url}/sdapi/v1/options"
         try:
             r = httpx.get(url, timeout=10)
@@ -256,6 +306,7 @@ class StableDiffusionWebUIGenerator:
         Raises:
             RuntimeError: API未接続・HTTPエラー。
         """
+        self.ensure_running()
         url = f"{self.base_url}/sdapi/v1/sd-models"
         try:
             r = httpx.get(url, timeout=30)

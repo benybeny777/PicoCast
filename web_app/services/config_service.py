@@ -48,6 +48,8 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "SD_WEBUI_ROOT",                  "type": "str",    "label": "SD WebUI インストールディレクトリ", "default": str(cfg.SD_WEBUI_ROOT), "allow_empty": True},
     {"key": "SD_MODEL_MANIFEST_PATH",         "type": "str",    "label": "SD モデルマニフェストパス",     "default": str(cfg.SD_MODEL_MANIFEST_PATH)},
     {"key": "AUTO_DOWNLOAD_SD_MODELS",        "type": "bool",   "label": "SD モデル自動ダウンロード",     "default": "1" if cfg.AUTO_DOWNLOAD_SD_MODELS else "0"},
+    {"key": "SD_WEBUI_START_COMMAND",         "type": "str",    "label": "SD WebUI 自動起動コマンド（空=無効）", "default": str(cfg.SD_WEBUI_START_COMMAND), "allow_empty": True},
+    {"key": "SD_WEBUI_START_WAIT_SEC",        "type": "int",    "label": "SD WebUI 起動待機タイムアウト(秒)", "default": str(cfg.SD_WEBUI_START_WAIT_SEC), "min": 10, "max": 600},
     {"key": "LOCAL_COMFYUI_URL",                "type": "str",    "label": "ComfyUI URL",                "default": str(cfg.LOCAL_COMFYUI_URL)},
     {"key": "LOCAL_COMFYUI_TIMEOUT_SEC",        "type": "float",  "label": "ComfyUIタイムアウト(秒)",     "default": str(cfg.LOCAL_COMFYUI_TIMEOUT_SEC), "min": 10, "max": 3600},
     {"key": "LOCAL_COMFYUI_PRESET",             "type": "select", "label": "ComfyUI既定プリセット",       "default": str(cfg.LOCAL_COMFYUI_PRESET), "choices": [("anime_standard", "背景（漫画風・標準）"), ("realistic_reference", "背景（資料風・写実）"), ("hard_prompt_flux", "背景（難プロンプト用）")]},
