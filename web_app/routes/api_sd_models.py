@@ -145,3 +145,13 @@ def rescan():
         return {"status": "ok"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@router.post("/start")
+def start_webui():
+    """SD WebUI を起動（または起動確認）する。SD_WEBUI_START_COMMAND が未設定の場合はエラー。"""
+    try:
+        sd_model_service.start_webui()
+        return {"status": "ok"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}

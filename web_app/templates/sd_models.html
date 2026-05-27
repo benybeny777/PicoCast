@@ -49,7 +49,7 @@
 
 <div class="card">
   <h3>SD WebUI 現在のモデル</h3>
-  <div id="current-model-container"><p>確認中...</p></div>
+  <div id="current-model-container"><p style="color:var(--text-dim)">SD WebUI を起動中... しばらくお待ちください。</p></div>
 </div>
 
 <div class="card">
@@ -64,7 +64,7 @@
 <div class="card">
   <h3>SD WebUI インストール済みモデル</h3>
   <p class="hint" style="margin-bottom: 0.5rem;">SD WebUI API から取得したインストール済みモデルの一覧です（SD WebUI 起動時のみ）。</p>
-  <div id="webui-models-container"><p>確認中...</p></div>
+  <div id="webui-models-container"><p style="color:var(--text-dim)">SD WebUI を起動中... しばらくお待ちください。</p></div>
 </div>
 
 
@@ -99,6 +99,7 @@ function esc(s) {
 /* ─── 現在のモデル ─── */
 async function loadCurrentModel() {
   const el = document.getElementById('current-model-container');
+  el.innerHTML = '<p style="color:var(--text-dim)">SD WebUI を起動中... しばらくお待ちください。</p>';
   try {
     const res = await fetch('/api/sd-models/current');
     const data = await res.json();
@@ -107,7 +108,8 @@ async function loadCurrentModel() {
         ? `<p style="font-family:monospace;font-size:0.95em">${esc(data.model)}</p>`
         : '<p style="color:var(--text-dim)">SD WebUI が起動していないか、モデル情報を取得できませんでした。</p>';
     } else {
-      el.innerHTML = `<p style="color:var(--text-dim)">SD WebUI 未起動: ${esc(data.message)}</p>`;
+      el.innerHTML = `<p style="color:var(--text-dim)">SD WebUI 未起動: ${esc(data.message)}</p>
+        <p style="font-size:12px;color:var(--text-dim)">自動起動するには <a href="/settings">設定ページ</a> で <code>SD_WEBUI_START_COMMAND</code> を設定してください。</p>`;
     }
   } catch (e) {
     el.innerHTML = '<p style="color:var(--text-dim)">通信エラー。SD WebUI が起動していない可能性があります。</p>';
@@ -289,6 +291,7 @@ function renderTable(models, progress) {
 /* ─── SD WebUI インストール済みモデル ─── */
 async function loadWebuiModels() {
   const container = document.getElementById('webui-models-container');
+  container.innerHTML = '<p style="color:var(--text-dim)">SD WebUI を起動中... しばらくお待ちください。</p>';
   try {
     const res = await fetch('/api/sd-models/webui');
     const data = await res.json();
@@ -309,8 +312,7 @@ async function loadWebuiModels() {
       container.innerHTML = html;
     } else {
       container.innerHTML = `<p style="color:var(--text-dim)">SD WebUI 未起動: ${esc(data.message)}</p>
-        <p style="font-size:12px;color:var(--text-dim)">セットアップ手順は README の「SD WebUI 自動起動」セクションを参照してください。<br>
-        画像生成時に自動起動させるには <code>SD_WEBUI_START_COMMAND</code> を <a href="/settings">設定ページ</a> で設定してください。</p>`;
+        <p style="font-size:12px;color:var(--text-dim)">自動起動するには <a href="/settings">設定ページ</a> で <code>SD_WEBUI_START_COMMAND</code> を設定してください。</p>`;
     }
   } catch (e) {
     container.innerHTML = '<p style="color:var(--text-dim)">通信エラー。SD WebUI が起動していない可能性があります。</p>';
