@@ -14,9 +14,9 @@
 
 ## 2026-05-28
 
-### 機能追加: 設定ページに SDモデル管理タブを統合・デバッグログを表示
+### 機能追加: 設定ページに Stable Diffusion WebUI モデル管理タブを統合・デバッグログを表示
 
-- `web_app/templates/settings.html`: SDモデル管理を「SDモデル」タブとして設定ページに統合。タブ切り替え時に遅延ロード。設定値・HF_TOKEN 状態・モデル一覧・Forge 認識済みモデルを Ajax で取得。「設定から飛べるリンクボタン」も同時に削除。
+- `web_app/templates/settings.html`: Stable Diffusion WebUI モデル管理を「Stable Diffusionモデル」タブとして設定ページに統合。タブ切り替え時に遅延ロード。設定値・HF_TOKEN 状態・モデル一覧・Stable Diffusion WebUI 認識済みモデルを Ajax で取得。「設定から飛べるリンクボタン」も同時に削除。
 - `web_app/templates/logs.html` / `web_app/routes/api_settings.py`: デバッグログ（`app_debug.log`）をログページに表示するセクションを追加。`GET /api/settings/debug-log` エンドポイントを新設。`debug_log_service.py` は存在していたが UI 接続がなく未機能だった。
 
 ### Revert: NANOBANANA_TIMEOUT 機能を削除
@@ -50,27 +50,27 @@
 
 #### Ollama 起動試行フラグのスレッド安全性修正
 
-- `core/opening_quality.py`: `_OLLAMA_START_ATTEMPTED` グローバル boolean フラグを廃止し、`_OLLAMA_LAST_START_TIME` + `_OLLAMA_START_LOCK` + `_OLLAMA_START_COOLDOWN_SEC (60秒)` のクールダウン方式に変更。1 回目の起動試行後 60 秒経過すれば再試行可能となり、SD WebUI 画像再生成ジョブを複数回実行した際も Ollama が応答しない状態が固定しない。
+- `core/opening_quality.py`: `_OLLAMA_START_ATTEMPTED` グローバル boolean フラグを廃止し、`_OLLAMA_LAST_START_TIME` + `_OLLAMA_START_LOCK` + `_OLLAMA_START_COOLDOWN_SEC (60秒)` のクールダウン方式に変更。1 回目の起動試行後 60 秒経過すれば再試行可能となり、Stable Diffusion WebUI 画像再生成ジョブを複数回実行した際も Ollama が応答しない状態が固定しない。
 
 #### サイレントフォールバック警告ログ化
 
 - `web_app/services/image_service.py`: `_detect_is_shorts_from_dir()` の `except Exception: return True` を警告ログ付きフォールバックに変更（`logging.warning` でパス・エラー内容を記録してから `return True`）。
 
-- `/sd-models` ページ最上部に「🎨 次の生成で使われるモデル」バナーを追加。`SD_WEBUI_MODEL` 設定値がある場合はそれを、未設定の場合は Forge 現在ロード中モデルを表示する。どちらも未取得の場合は警告を表示。
-- 「このモデルを使う」は Forge への即時切り替えに加えて `SD_WEBUI_MODEL` を `.env` に保存するよう変更。次回起動後も設定が維持される。
+- `/sd-models` ページ最上部に「🎨 次の生成で使われるモデル」バナーを追加。`SD_WEBUI_MODEL` 設定値がある場合はそれを、未設定の場合は Stable Diffusion WebUI 現在ロード中モデルを表示する。どちらも未取得の場合は警告を表示。
+- 「このモデルを使う」は Stable Diffusion WebUI への即時切り替えに加えて `SD_WEBUI_MODEL` を `.env` に保存するよう変更。次回起動後も設定が維持される。
 - モデル情報テーブルを 4 列から 3 列（状態 / モデル情報 / アクション）に変更。`table-layout:fixed` + `<colgroup>` でカラム幅を固定し、レイアウトの不均衡を解消。ファイル名を「モデル情報」列に統合。
 - ナビゲーションバーの「設定」リンクを常に最右端に固定（`margin-left: auto`）。
 
-### SD WebUI モデル導入をアプリ内ワンクリック方式に整理
+### Stable Diffusion WebUI モデル導入をアプリ内ワンクリック方式に整理
 
-- SD WebUI Forge 用 checkpoint モデルは原則として手動配置させず、`/sd-models` 画面からダウンロード・SHA256 検証・配置・Forge 再スキャン・使用モデル切替まで行う方針に変更。
+- Stable Diffusion WebUI 用 checkpoint モデルは原則として手動配置させず、`/sd-models` 画面からダウンロード・SHA256 検証・配置・再スキャン・使用モデル切替まで行う方針に変更。
 - 認証が必要なモデル向けに `HF_TOKEN` 設定を追加。Hugging Face 認証付きダウンロードに対応（`Authorization: Bearer {HF_TOKEN}` ヘッダー）。
 - `requires_auth=true` のモデルは HF_TOKEN 未設定またはライセンス未同意時に明示エラー。別モデルへフォールバックしない。
 - 既存ファイルが SHA256 一致なら再ダウンロードしない。SHA256 不一致は自動上書きせずエラーを表示。
-- 破損ファイルや SHA256 不一致時に Web UI から「削除して再ダウンロード」できる導線を追加（`confirmed=true` 必須、SD_WEBUI_ROOT 配下のみ削除可）。
+- 破損ファイルや SHA256 不一致時に Web UI から「削除して再ダウンロード」できる導線を追加（`confirmed=true` 必須、`SD_WEBUI_ROOT` 配下のみ削除可）。
 - `model_manifest.json` に推奨モデル 4 件（Counterfeit-V3.0・DreamShaper 8・Anything V5・SD 1.5）を追加。手動配置前提の空 URL エントリを廃止。
 - `/settings` の「APIキー設定」タブに `HF_TOKEN` フィールドを追加。値はレスポンス・ログに含めない。
-- エラーメッセージから「手動配置」の案内を削除し、「SDモデル管理画面 (/sd-models) からダウンロードしてください」に統一。
+- エラーメッセージから「手動配置」の案内を削除し、「Stable Diffusion WebUI モデル管理画面 (/sd-models) からダウンロードしてください」に統一。
 - `test_sd_model_manager.py` に認証・既存ファイル・削除系テスト計 10 件を追加（88 件全パス）。
 
 ### Stable Diffusion WebUI プロンプトを Ollama で日→英翻訳
@@ -81,7 +81,7 @@
 
 ### 生成・再生成画面に画像エンジン選択を追加
 
-- `/generate`・`/history/{name}` の再生成フォームに **画像エンジン**（Google AI / Stable Diffusion WebUI Forge）セレクタを追加。
+- `/generate`・`/history/{name}` の再生成フォームに **画像エンジン**（Google AI / Stable Diffusion WebUI）セレクタを追加。
 - `/images` 画像再生成にも同エンジン選択と **縮小生成** チェックボックスを追加。
 - スキーマ `ImageRegenerateRequest` に `sd_size_mode` フィールドを追加し、`image_service._run_regenerate` が `ImageGenerator` へ渡すよう対応。
 
@@ -99,7 +99,7 @@
 
 ### UI 表示から Stable Diffusion の略称「SD」を除去
 
-- テンプレート・設定ラベル・コメント内の「SD WebUI Forge」→「Stable Diffusion WebUI Forge」、「SD生成」→「縮小生成」に統一。変数名・ファイル名は変更なし。
+- テンプレート・設定ラベル・コメント内の略称を「Stable Diffusion WebUI」に統一。変数名・ファイル名は変更なし。
 
 ---
 
@@ -112,29 +112,29 @@
 - README / SPEC にWindowsとmacOSのセットアップ・起動手順を併記
 - Web UIのナビゲーションに `画像` を追加し、画像確認・再生成画面へ直接移動できるよう修正
 
-### SD WebUI Forge 用モデル管理機能を追加
+### Stable Diffusion WebUI 用モデル管理機能を追加
 
 - `core/sd_model_manager.py: SDWebUIModelManager` を新規追加。`assets/sd_webui/model_manifest.json` に基づきモデルのインストール確認・ダウンロード・SHA256検証を行う。
 - `SD_WEBUI_MODEL` 設定時に画像生成前にモデルの準備（インストール確認 → 必要なら自動ダウンロード → `set_active_model()`）を実行するよう `core/image_generator.py` に `_prepare_sd_webui_model()` を追加した。`SD_WEBUI_MODEL` 未設定時はスキップ（現在のロード済みモデルを使う）。
-- `StableDiffusionWebUIGenerator` に `get_models()`, `get_current_model()`, `set_active_model()`, `rescan_models()` を追加。SD WebUI API 経由でモデル情報取得・切り替えを実行する。
+- `StableDiffusionWebUIGenerator` に `get_models()`, `get_current_model()`, `set_active_model()`, `rescan_models()` を追加。Stable Diffusion WebUI API 経由でモデル情報取得・切り替えを実行する。
 - `/sd-models` Web UI ページを追加。マニフェスト内モデルの状態・ダウンロード・使用切り替え・再スキャンを行える。
 - `web_app/routes/api_sd_models.py` に REST API を追加。ダウンロードはバックグラウンドスレッドで実行しポーリング形式で進捗を確認する。
 - 設定に `SD_WEBUI_ROOT`, `SD_MODEL_MANIFEST_PATH`, `AUTO_DOWNLOAD_SD_MODELS` を追加。設定画面から変更可能。
-- 設定画面の SD WebUI ステータスにマニフェスト導入済み数を追加（SD_WEBUI_ROOT 設定時のみ）。
+- 設定画面の Stable Diffusion WebUI ステータスにマニフェスト導入済み数を追加（`SD_WEBUI_ROOT` 設定時のみ）。
 - 設定画面から `/sd-models` ページへのリンクを追加。
 - `tests/test_sd_model_manager.py`, `tests/test_sd_model_service.py` を追加（合計 29 テスト）。
 
-### 画像生成バックエンドに Stable Diffusion WebUI Forge を追加
+### 画像生成バックエンドに Stable Diffusion WebUI を追加
 
-- `IMAGE_BACKEND=sd_webui` を設定することで、Forge / AUTOMATIC1111互換APIから背景・サムネイルを生成できるようにした。
+- `IMAGE_BACKEND=sd_webui` を設定することで、Stable Diffusion WebUI (AUTOMATIC1111互換API)から背景・サムネイルを生成できるようにした。
 - `IMAGE_BACKEND=gemini`（デフォルト）のときは従来どおり Nano Banana / Gemini 画像生成を使う。
 - 画像生成失敗時は別エンジンへ自動フォールバックせず、明示エラーで停止する（設計方針不変）。
 - `core/sd_webui_generator.py: StableDiffusionWebUIGenerator` を新規追加。`POST /sdapi/v1/txt2img` で生成し、base64 PNG をファイル保存する。
 - サムネイル生成も `IMAGE_BACKEND` に従うよう変更。背景と同じエンジンでサムネを生成する。
-- GUIの「設定」画面のサービス確認に「SD WebUI Forge」ステータスを追加。`IMAGE_BACKEND=sd_webui` のとき接続OK/NG とロード中モデル名を表示する。
+- GUIの「設定」画面のサービス確認に「Stable Diffusion WebUI」ステータスを追加。`IMAGE_BACKEND=sd_webui` のとき接続OK/NG とロード中モデル名を表示する。
 - 設定画面から `IMAGE_BACKEND` / `SD_WEBUI_*` を変更できるよう `config_service.py` に追加。
 - `tests/test_sd_webui_generator.py` を追加（httpx monkeypatch によるモックテスト）。
-- README / SPEC を更新し、Forge セットアップ手順・設定一覧・バックエンド切り替え表を追記した。
+- README / SPEC を更新し、Stable Diffusion WebUI セットアップ手順・設定一覧・バックエンド切り替え表を追記した。
 
 ### Web UI画像スタイル選択肢の引用符表示を修正
 
