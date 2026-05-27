@@ -14,7 +14,7 @@
   <button class="tab-btn" onclick="switchTab('apikey', this)">APIキー</button>
   <button class="tab-btn" onclick="switchTab('dict-base', this)">よみがな辞書</button>
   <button class="tab-btn" onclick="switchTab('dict-user', this)">自動学習辞書</button>
-  <button class="tab-btn" onclick="switchTab('sd-models', this)">Forgeモデル</button>
+  <button class="tab-btn" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
 </div>
 
 <!-- ── タブ: 設定変更 ── -->
@@ -72,7 +72,7 @@
   </div>
 </div>
 
-<!-- ── タブ: Forgeモデル ── -->
+<!-- ── タブ: Stable Diffusionモデル ── -->
 <div id="tab-sd-models" class="tab-panel">
   <div class="card" style="border-left:4px solid var(--accent2)">
     <h3 style="margin-top:0">次の生成で使われるモデル</h3>
@@ -97,8 +97,8 @@
     <div id="sd-models-container"><p style="color:var(--text-muted)">読み込み中...</p></div>
   </div>
   <div class="card">
-    <h3>Forge 認識済みモデル</h3>
-    <p class="hint" style="margin-bottom:0.5rem">SD WebUI API から取得した認識済みモデル一覧です（Forge 起動時のみ）。</p>
+    <h3>Stable Diffusion WebUI 認識済みモデル</h3>
+    <p class="hint" style="margin-bottom:0.5rem">Stable Diffusion WebUI API から取得した認識済みモデル一覧です（起動時のみ）。</p>
     <div id="sd-webui-models-container"><p style="color:var(--text-muted)">読み込み中...</p></div>
   </div>
   <style>
@@ -422,9 +422,9 @@ function sdRenderActiveBanner(forgeModel) {
       + `<span style="color:var(--text-muted);font-size:0.85em;margin-left:8px">（SD_WEBUI_MODEL で指定）</span>`;
   } else if (forgeModel) {
     el.innerHTML = `<span style="font-family:monospace;font-weight:700">${esc(forgeModel)}</span>`
-      + `<span style="color:var(--text-muted);font-size:0.85em;margin-left:8px">（Forge 現在ロード中のモデル）</span>`;
+      + `<span style="color:var(--text-muted);font-size:0.85em;margin-left:8px">（Stable Diffusion WebUI 現在ロード中のモデル）</span>`;
   } else {
-    el.innerHTML = `<span style="color:var(--error,#c0392b)">⚠ Forge 未起動 / SD_WEBUI_MODEL 未設定</span>`;
+    el.innerHTML = `<span style="color:var(--error,#c0392b)">⚠ Stable Diffusion WebUI 未起動 / SD_WEBUI_MODEL 未設定</span>`;
   }
 }
 
@@ -551,7 +551,7 @@ async function sdLoadWebuiModels() {
     const data = await res.json();
     if (data.status === 'ok') {
       const models = data.models || [];
-      if (models.length === 0) { container.innerHTML = '<p style="color:var(--text-muted)">Forge にモデルが見つかりません。ダウンロード後に「WebUI 再スキャン」してください。</p>'; return; }
+      if (models.length === 0) { container.innerHTML = '<p style="color:var(--text-muted)">Stable Diffusion WebUI にモデルが見つかりません。ダウンロード後に「WebUI 再スキャン」してください。</p>'; return; }
       let html = '<table class="status-table" style="width:100%;table-layout:fixed"><colgroup><col><col style="width:12em"></colgroup>'
         + '<thead><tr><th>モデル（タイトル / ファイル名）</th><th>アクション</th></tr></thead><tbody>';
       for (const m of models) {
@@ -564,9 +564,9 @@ async function sdLoadWebuiModels() {
       html += '</tbody></table>';
       container.innerHTML = html;
     } else {
-      container.innerHTML = `<p style="color:var(--text-muted)">Forge 未起動: ${esc(data.message)}</p>`;
+      container.innerHTML = `<p style="color:var(--text-muted)">Stable Diffusion WebUI 未起動: ${esc(data.message)}</p>`;
     }
-  } catch(e) { container.innerHTML = '<p style="color:var(--text-muted)">通信エラー。Forge が起動していない可能性があります。</p>'; }
+  } catch(e) { container.innerHTML = '<p style="color:var(--text-muted)">通信エラー。Stable Diffusion WebUI が起動していない可能性があります。</p>'; }
 }
 
 async function sdPollProgress() {
@@ -606,7 +606,7 @@ async function sdDeleteRedownload(modelId, displayName) {
 }
 
 async function sdUseModel(modelName) {
-  if (!confirm(`「${modelName}」を生成モデルとして設定します。\nForge のモデルを切り替え、SD_WEBUI_MODEL 設定を保存します。\n（Forge が起動している必要があります）`)) return;
+  if (!confirm(`「${modelName}」を生成モデルとして設定します。\nStable Diffusion WebUI のモデルを切り替え、SD_WEBUI_MODEL 設定を保存します。\n（Stable Diffusion WebUI が起動している必要があります）`)) return;
   try {
     const res = await fetch('/api/sd-models/use', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({model_name:modelName}) });
     const data = await res.json();
