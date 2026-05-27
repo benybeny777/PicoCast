@@ -47,8 +47,6 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "SD_WEBUI_ROOT",                  "type": "str",    "label": "SD WebUI インストールディレクトリ", "default": str(cfg.SD_WEBUI_ROOT), "allow_empty": True},
     {"key": "SD_MODEL_MANIFEST_PATH",         "type": "str",    "label": "SD モデルマニフェストパス",     "default": str(cfg.SD_MODEL_MANIFEST_PATH)},
     {"key": "AUTO_DOWNLOAD_SD_MODELS",        "type": "bool",   "label": "SD モデル自動ダウンロード",     "default": "1" if cfg.AUTO_DOWNLOAD_SD_MODELS else "0"},
-    {"key": "SD_WEBUI_START_COMMAND",         "type": "str",    "label": "SD WebUI 自動起動コマンド（空=無効）", "default": str(cfg.SD_WEBUI_START_COMMAND), "allow_empty": True},
-    {"key": "SD_WEBUI_START_WAIT_SEC",        "type": "int",    "label": "SD WebUI 起動待機タイムアウト(秒)", "default": str(cfg.SD_WEBUI_START_WAIT_SEC), "min": 10, "max": 600},
     {"key": "OPENING_REVIEW_USE_LLM",          "type": "bool",         "label": "Ollama レビュー有効",           "default": "1" if cfg.OPENING_REVIEW_USE_LLM else "0"},
     {"key": "OLLAMA_REVIEW_MODEL",             "type": "ollama_model", "label": "Ollama レビューモデル",         "default": str(cfg.OLLAMA_REVIEW_MODEL)},
     {"key": "OLLAMA_REWRITE_MODEL",            "type": "ollama_model", "label": "Ollama リライトモデル",         "default": str(cfg.OLLAMA_REWRITE_MODEL)},
