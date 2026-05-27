@@ -14,6 +14,11 @@
 
 ## 2026-05-28
 
+### バグ修正: generation_service デフォルト値・_find_locking_process 例外安全性
+
+- `web_app/services/generation_service.py`: `submit_generate_job` / `_submit_generate_job_prepared` / `submit_batch_generate_jobs` / `submit_history_regenerate_jobs` の `background_engine` デフォルトが `"nanobanana"` のままで、schemas.py の修正（空文字デフォルト）と不整合だった。`""` に統一。直接呼び出し時も `IMAGE_BACKEND` 設定に従う。
+- `main.py`: `_find_locking_process()` の外側 `except Exception: raise` がパイプラインを異常終了させる可能性があった。この関数はバックアップ失敗時のロックプロセス表示用の補助診断であり、失敗しても生成継続すべき。`return None` に戻し `# フォールバック許可` コメントを付与。
+
 ### バグ修正: 画像エンジン選択・ハングアップ・Ollama 起動フラグ
 
 #### 画像エンジン選択が反映されない問題 (重大)
