@@ -709,7 +709,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `VOICE_READING_NORMALIZE_MODEL` | `qwen2.5:7b-instruct` | よみがな正規化に使うOllamaモデル |
 | `VOICE_READING_NORMALIZE_OLLAMA_URL` | `http://localhost:11434` | よみがな正規化用Ollama URL |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
-| `NANOBANANA_TIMEOUT` | 120 | Nano Banana API のタイムアウト秒数。0 で無制限。 |
+| `NANOBANANA_TIMEOUT` | 300 | Nano Banana API のタイムアウト秒数。0 で無制限。画像生成は 60〜180 秒かかることがあるため 300 秒推奨。 |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
 | `OLLAMA_TRANSLATE_MODEL` | `qwen3:8b` | Stable Diffusion WebUI プロンプト日→英翻訳モデル |

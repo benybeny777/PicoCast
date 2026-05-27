@@ -181,7 +181,7 @@ VOICE_READING_CANDIDATES_PATH = os.environ.get("VOICE_READING_CANDIDATES_PATH", 
 GEMINI_MODEL          = os.environ.get("GEMINI_MODEL",          "gemini-3.1-pro-preview")       # 台本生成モデル
 NANOBANANA_PRO_MODEL  = os.environ.get("NANOBANANA_PRO_MODEL",  "gemini-3-pro-image-preview")   # 背景・サムネ生成（高品質）
 NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-flash-image-preview")  # 背景・サムネ生成（高速）
-NANOBANANA_TIMEOUT    = int(os.environ.get("NANOBANANA_TIMEOUT", "120"))                         # Nano Banana API タイムアウト秒（0 = タイムアウトなし）
+NANOBANANA_TIMEOUT    = int(os.environ.get("NANOBANANA_TIMEOUT", "300"))                         # Nano Banana API タイムアウト秒（0 = タイムアウトなし）
 SD_SIZE_IMAGE_SCALE   = float(os.environ.get("SD_SIZE_IMAGE_SCALE", "0.5"))                     # SD 生成モード: 縮小倍率（生成後に拡大）
 
 

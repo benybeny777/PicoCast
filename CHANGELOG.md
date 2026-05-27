@@ -14,6 +14,12 @@
 
 ## 2026-05-28
 
+### バグ修正: NANOBANANA_TIMEOUT デフォルト値を 300 秒に引き上げ
+
+- `config.py`: `NANOBANANA_TIMEOUT` デフォルトを 120 → 300 秒に変更。Gemini 画像生成は 60〜180 秒かかることがあり、120 秒では "read operation timed out" で失敗していた。
+- `web_app/services/config_service.py`: 設定画面の `NANOBANANA_TIMEOUT` 上限を 600 → 1200 秒に拡張。
+- `SPEC.md`: テーブルのデフォルト値と説明を更新。
+
 ### バグ修正: generation_service デフォルト値・_find_locking_process 例外安全性
 
 - `web_app/services/generation_service.py`: `submit_generate_job` / `_submit_generate_job_prepared` / `submit_batch_generate_jobs` / `submit_history_regenerate_jobs` の `background_engine` デフォルトが `"nanobanana"` のままで、schemas.py の修正（空文字デフォルト）と不整合だった。`""` に統一。直接呼び出し時も `IMAGE_BACKEND` 設定に従う。
