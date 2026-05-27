@@ -51,11 +51,13 @@ class ImageGenerator:
         self.request_height = max(64, int(round(self.height * scale))) if sd_size_mode else self.height
 
         self.client = None
-        if self.background_engine == "nanobanana" and GOOGLE_API_KEY:
-            try:
-                self.client = genai.Client(api_key=GOOGLE_API_KEY)
-            except Exception as e:
-                print(f"  [Warning] Google GenAI Client 初期化失敗: {e}")
+        if self.background_engine == "nanobanana":
+            if not GOOGLE_API_KEY:
+                raise RuntimeError(
+                    "Google API キー (GOOGLE_API_KEY) が未設定です。"
+                    " .env に GOOGLE_API_KEY を設定してください。"
+                )
+            self.client = genai.Client(api_key=GOOGLE_API_KEY)
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):
@@ -291,8 +293,10 @@ class ImageGenerator:
             raise RuntimeError(f"未対応の背景生成エンジンです: {self.background_engine}")
 
         if not self.client:
-            print("  [Error] Google API キーが未設定です")
-            return None
+            raise RuntimeError(
+                "Google API クライアントが初期化されていません。"
+                " GOOGLE_API_KEY が未設定の可能性があります。"
+            )
 
         save_dir = target_dir or "output/backgrounds"
         os.makedirs(save_dir, exist_ok=True)
