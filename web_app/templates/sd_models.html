@@ -77,6 +77,8 @@
 
 {% block scripts %}
 <script>
+const SD_WEBUI_ROOT = {{ sd_webui_root | tojson }};
+
 let _models = [];
 let _pollTimer = null;
 
@@ -133,10 +135,29 @@ async function loadModels(progress = {}) {
 /* ─── インストール方法トグル ─── */
 function renderInstallGuide(m) {
   const guideId = 'guide-' + safeId(m.id);
-  // 配置先パス
-  const placePath = m.path
-    ? esc(m.path)
-    : `<em style="color:var(--text-dim)">{SD_WEBUI_ROOT}/</em>${esc(m.target_subdir)}/${esc(m.filename)}`;
+
+  // 配置先フルパスを組み立て（SD_WEBUI_ROOT があれば実パス、なければ変数表示）
+  let fullPath, fullPathDisplay;
+  if (m.path) {
+    // サーバー側でパス解決済み（SD_WEBUI_ROOT 設定済み）
+    fullPath = m.path;
+    fullPathDisplay = esc(m.path);
+  } else if (SD_WEBUI_ROOT) {
+    // JS 側で組み立て（パス区切りは \ で統一）
+    const sep = SD_WEBUI_ROOT.includes('\\') ? '\\' : '/';
+    const subdir = m.target_subdir.replace(/\//g, sep);
+    fullPath = SD_WEBUI_ROOT.replace(/[/\\]+$/, '') + sep + subdir + sep + m.filename;
+    fullPathDisplay = esc(fullPath);
+  } else {
+    fullPath = null;
+    fullPathDisplay = `<em style="color:var(--text-dim)">{SD_WEBUI_ROOT}</em>\\${esc(m.target_subdir.replace(/\//g,'\\'))}\\${esc(m.filename)}`;
+  }
+
+  const copyBtn = fullPath
+    ? ` <button onclick="copyText(this,'${esc(fullPath).replace(/\\/g,'\\\\').replace(/'/g,'\\\'')}');return false"
+           style="font-size:10px;padding:1px 6px;cursor:pointer;vertical-align:middle"
+           class="btn btn-secondary">コピー</button>`
+    : '';
 
   let guideHtml = `
     <div style="margin-top:6px">
@@ -161,13 +182,23 @@ function renderInstallGuide(m) {
           <code>${esc(m.filename)}</code>
         </li>
         <li>SD WebUI のフォルダに配置します。<br>
-          配置先: <code>${placePath}</code>
+          配置先: <code style="word-break:break-all">${fullPathDisplay}</code>${copyBtn}
+          ${!fullPath ? '<br><small style="color:var(--text-dim)">※ SD_WEBUI_ROOT を設定するとフルパスが表示されます</small>' : ''}
         </li>
         <li>SD WebUI を再起動するか、ページ上部の <strong>「WebUI 再スキャン」</strong> ボタンを押してください。</li>
       </ol>
     </div>`;
 
   return guideHtml;
+}
+
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'コピー済！';
+    setTimeout(() => { btn.textContent = 'コピー'; }, 1500);
+  }).catch(() => {
+    prompt('パスをコピーしてください:', text);
+  });
 }
 
 function toggleGuide(id) {
