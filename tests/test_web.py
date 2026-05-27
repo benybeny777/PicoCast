@@ -55,11 +55,9 @@ def test_generate_page(client):
     assert "LongサムネAB" in res.text
     assert "Long節約" in res.text
     assert "SD生成" in res.text
-    assert "背景生成エンジン" in res.text
-    assert "Local / ComfyUI" in res.text
     assert ">通常</option>" in res.text
     assert ">’通常’</option>" not in res.text
-    assert ">'通常'</option>" not in res.text
+    assert ">’通常’</option>" not in res.text
 
 
 # 5. /history ページが 200 を返す

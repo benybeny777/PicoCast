@@ -611,7 +611,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
                  long_budget_mode=None, sd_size_mode=False,
-                 background_engine=None, comfyui_preset=None):
+                 background_engine=None):
     report = GenerationReport()
     pipeline_start = time.time()
     img_gen = None
@@ -1278,16 +1278,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         image_style=image_style,
         sd_size_mode=sd_size_mode,
         background_engine=background_engine,
-        comfyui_preset=comfyui_preset,
     )
-    if img_gen.background_engine == "local_comfyui":
-        use_batch_api = False
-        _preset_label = {
-            "anime_standard": "背景（漫画風・標準）",
-            "realistic_reference": "背景（資料風・写実）",
-            "hard_prompt_flux": "背景（難プロンプト用）",
-        }.get(img_gen.comfyui_preset, img_gen.comfyui_preset)
-        update_status(f"🖼 背景生成: Local / ComfyUI [{_preset_label}]")
 
     thumbnail_title = meta.get("video_title", topic)
     if _has_saved_bgs:
@@ -1429,10 +1420,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     return cancel_result()
             except Exception as e:
                 update_status(f"  ❌ 背景生成失敗: {e}", "error")
-                if img_gen.background_engine == "local_comfyui":
-                    update_status("❌ ComfyUI背景生成に失敗しました。自動フォールバックは行いません。", "error")
-                    update_status("❌ フォールバック禁止方針により処理を中止しました。", "error")
-                    raise
                 generated_file = None
             if generated_file:
                 report.backgrounds_generated += 1

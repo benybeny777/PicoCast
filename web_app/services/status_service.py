@@ -38,21 +38,6 @@ def check_ollama() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
-def check_comfyui() -> dict[str, Any]:
-    try:
-        base = config.LOCAL_COMFYUI_URL.rstrip("/")
-        r = httpx.get(f"{base}/system_stats", timeout=config.WEB_VOICEVOX_CHECK_TIMEOUT_SEC)
-        if r.status_code == 200:
-            return {
-                "ok": True,
-                "url": config.LOCAL_COMFYUI_URL,
-                "preset": config.LOCAL_COMFYUI_PRESET,
-            }
-        return {"ok": False, "url": config.LOCAL_COMFYUI_URL, "error": f"Status code: {r.status_code}"}
-    except Exception as e:
-        return {"ok": False, "url": config.LOCAL_COMFYUI_URL, "error": str(e)}
-
-
 def check_sd_webui() -> dict[str, Any]:
     """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API の疎通確認とモデル情報を返す。"""
     try:
@@ -139,23 +124,20 @@ def get_settings_status() -> dict[str, Any]:
     root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=5) as ex:
-        f_vv      = ex.submit(check_voicevox)
-        f_ffmpeg  = ex.submit(check_ffmpeg)
-        f_ollama  = ex.submit(check_ollama)
-        f_comfyui = ex.submit(check_comfyui)
-        f_sd      = ex.submit(check_sd_webui)
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        f_vv     = ex.submit(check_voicevox)
+        f_ffmpeg = ex.submit(check_ffmpeg)
+        f_ollama = ex.submit(check_ollama)
+        f_sd     = ex.submit(check_sd_webui)
         voicevox_result = f_vv.result()
         ffmpeg_result   = f_ffmpeg.result()
         ollama_result   = f_ollama.result()
-        comfyui_result  = f_comfyui.result()
         sd_webui_result = f_sd.result()
 
     return {
         "voicevox": voicevox_result,
         "ffmpeg": ffmpeg_result,
         "ollama": ollama_result,
-        "comfyui": comfyui_result,
         "sd_webui": sd_webui_result,
         "image_backend": config.IMAGE_BACKEND,          # 現在のバックエンド種別
         "google_api_key": bool(config.GOOGLE_API_KEY),

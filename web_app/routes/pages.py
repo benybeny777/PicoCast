@@ -9,8 +9,6 @@ from fastapi.templating import Jinja2Templates
 import os
 
 from config import (
-    IMAGE_BACKGROUND_ENGINE,
-    LOCAL_COMFYUI_PRESET,
     WEB_APP_NAME,
     WEB_DEFAULT_IMAGE_STYLE,
     WEB_DEFAULT_LONG_BUDGET_MODE,
@@ -22,12 +20,6 @@ from config import (
     WEB_SUCCESS_RELOAD_DELAY_MS,
     WEB_TOAST_HIDE_DELAY_MS,
     WEB_TOAST_VISIBLE_MS,
-)
-
-COMFYUI_PRESET_CHOICES = (
-    ("anime_standard", "背景（漫画風・標準）"),
-    ("realistic_reference", "背景（資料風・写実）"),
-    ("hard_prompt_flux", "背景（難プロンプト用）"),
 )
 from web_app.services import (
     status_service,
@@ -91,9 +83,6 @@ def page_generate(request: Request):
         "recent_jobs": gen_jobs,
         "image_style_choices": WEB_IMAGE_STYLE_CHOICES,
         "default_image_style": WEB_DEFAULT_IMAGE_STYLE,
-        "default_background_engine": IMAGE_BACKGROUND_ENGINE,
-        "default_comfyui_preset": LOCAL_COMFYUI_PRESET,
-        "comfyui_preset_choices": COMFYUI_PRESET_CHOICES,
         "default_reuse_backgrounds": WEB_DEFAULT_REUSE_BACKGROUNDS,
         "default_long_thumbnail_ab_test": WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
         "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
@@ -123,9 +112,6 @@ def page_history_detail(request: Request, history_name: str):
         "detail": detail,
         "image_style_choices": WEB_IMAGE_STYLE_CHOICES,
         "default_image_style": WEB_DEFAULT_IMAGE_STYLE,
-        "default_background_engine": IMAGE_BACKGROUND_ENGINE,
-        "default_comfyui_preset": LOCAL_COMFYUI_PRESET,
-        "comfyui_preset_choices": COMFYUI_PRESET_CHOICES,
         "default_reuse_backgrounds": WEB_DEFAULT_REUSE_BACKGROUNDS,
         "default_long_thumbnail_ab_test": WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
         "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
@@ -187,11 +173,6 @@ def page_settings(request: Request):
 def page_logs(request: Request):
     jobs = get_job_manager().list_jobs()
     return _render(request, "logs.html", {"jobs": jobs})
-
-
-@router.get("/comfyui-models", response_class=HTMLResponse)
-def page_comfyui_models(request: Request):
-    return _render(request, "comfyui_models.html", {})
 
 
 @router.get("/sd-models", response_class=HTMLResponse)

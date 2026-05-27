@@ -150,20 +150,6 @@ AUTO_DOWNLOAD_SD_MODELS = os.environ.get("AUTO_DOWNLOAD_SD_MODELS", "0").strip()
 SD_WEBUI_START_COMMAND = os.environ.get("SD_WEBUI_START_COMMAND", "")              # 未起動時の自動起動コマンド（空=無効）例: C:\00_PG\sd.webui\run.bat --api --nowebui
 SD_WEBUI_START_WAIT_SEC = int(os.environ.get("SD_WEBUI_START_WAIT_SEC", "120"))    # 自動起動後の接続確認タイムアウト(秒)
 
-# ───────────────────────────────────────────────
-# Local ComfyUI
-# ───────────────────────────────────────────────
-LOCAL_COMFYUI_URL = os.environ.get("LOCAL_COMFYUI_URL", "http://127.0.0.1:8188")  # ローカルComfyUI URL
-COMFYUI_MAX_RETRIES = int(os.environ.get("COMFYUI_MAX_RETRIES", "3"))  # ComfyUI最大リトライ回数
-COMFYUI_RETRY_INTERVAL_SEC = int(os.environ.get("COMFYUI_RETRY_INTERVAL_SEC", "5"))  # リトライ間隔(秒)
-COMFYUI_POLLING_INTERVAL_SEC = int(os.environ.get("COMFYUI_POLLING_INTERVAL_SEC", "2"))  # 状態確認(ポーリング)間隔(秒)
-COMFYUI_TIMEOUT_SEC = int(os.environ.get("COMFYUI_TIMEOUT_SEC", "300"))  # ComfyUIタイムアウト(秒)
-COMFYUI_ROOT_DIR = os.environ.get("COMFYUI_ROOT_DIR", "C:\\ComfyUI_windows_portable\\ComfyUI")  # ComfyUIインストール先
-COMFYUI_MODEL_MANIFEST_PATH = os.environ.get("COMFYUI_MODEL_MANIFEST_PATH", "assets/comfyui/model_manifest.json")  # モデルマニフェストパス
-COMFYUI_MODEL_DOWNLOAD_TIMEOUT_SEC = int(os.environ.get("COMFYUI_MODEL_DOWNLOAD_TIMEOUT_SEC", 3600))  # ダウンロードタイムアウト(秒)
-COMFYUI_MODEL_VERIFY_SHA256 = os.environ.get("COMFYUI_MODEL_VERIFY_SHA256", "1").strip().lower() in ("1", "true", "yes", "on")  # SHA256検証を有効にするか
-COMFYUI_START_COMMAND = os.environ.get("COMFYUI_START_COMMAND", "")   # 未起動時の自動起動コマンド（空=無効）
-COMFYUI_START_WAIT_SEC = int(os.environ.get("COMFYUI_START_WAIT_SEC", "90"))  # 起動待機タイムアウト(秒)
 
 OLLAMA_REWRITE_FALLBACK_MODEL = os.environ.get("OLLAMA_REWRITE_FALLBACK_MODEL", "gemma4:e4b")           # リライト失敗時のフォールバックモデル
 OPENING_REWRITE_MAX_FALLBACKS = int(os.environ.get("OPENING_REWRITE_MAX_FALLBACKS", "1"))               # フォールバック試行上限
@@ -197,20 +183,6 @@ NANOBANANA_PRO_MODEL  = os.environ.get("NANOBANANA_PRO_MODEL",  "gemini-3-pro-im
 NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-flash-image-preview")  # 背景・サムネ生成（高速）
 SD_SIZE_IMAGE_SCALE   = float(os.environ.get("SD_SIZE_IMAGE_SCALE", "0.5"))                     # SD 生成モード: 縮小倍率（生成後に拡大）
 
-# ───────────────────────────────────────────────
-# 背景画像生成エンジン（サムネイルは当面 Nano Banana 固定）
-# ───────────────────────────────────────────────
-IMAGE_BACKGROUND_ENGINE = os.environ.get("IMAGE_BACKGROUND_ENGINE", "nanobanana").strip().lower()  # 背景生成エンジン（nanobanana / local_comfyui）
-LOCAL_COMFYUI_URL = os.environ.get("LOCAL_COMFYUI_URL", "http://127.0.0.1:8188")  # ComfyUI API URL
-LOCAL_COMFYUI_TIMEOUT_SEC = float(os.environ.get("LOCAL_COMFYUI_TIMEOUT_SEC", "300"))  # ComfyUI 背景生成タイムアウト秒
-LOCAL_COMFYUI_PRESET = os.environ.get("LOCAL_COMFYUI_PRESET", "anime_standard").strip()  # ComfyUI 背景生成プリセット名
-LOCAL_COMFYUI_OUTPUT_WIDTH = int(os.environ.get("LOCAL_COMFYUI_OUTPUT_WIDTH", "832"))  # ComfyUI 背景生成の標準幅
-LOCAL_COMFYUI_OUTPUT_HEIGHT = int(os.environ.get("LOCAL_COMFYUI_OUTPUT_HEIGHT", "1472"))  # ComfyUI 背景生成の標準高さ
-LOCAL_COMFYUI_PRESET_FILE = os.environ.get("LOCAL_COMFYUI_PRESET_FILE", os.path.join(os.path.dirname(__file__), "assets", "comfyui", "presets.json"))  # ComfyUI プリセット定義ファイル
-COMFYUI_PROMPT_TRANSLATE_ENABLED     = os.environ.get("COMFYUI_PROMPT_TRANSLATE_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")  # ComfyUI背景プロンプトをLLMで英語変換するか（0で無効・日本語プロンプトをそのまま使用）
-COMFYUI_PROMPT_TRANSLATE_MODEL       = os.environ.get("COMFYUI_PROMPT_TRANSLATE_MODEL", "qwen2.5:7b-instruct")  # プロンプト変換に使うOllamaモデル
-COMFYUI_PROMPT_TRANSLATE_OLLAMA_URL  = os.environ.get("COMFYUI_PROMPT_TRANSLATE_OLLAMA_URL", "http://localhost:11434")  # プロンプト変換用OllamaエンドポイントURL
-COMFYUI_PROMPT_TRANSLATE_TIMEOUT_SEC = float(os.environ.get("COMFYUI_PROMPT_TRANSLATE_TIMEOUT_SEC", "60.0"))  # プロンプト変換LLMタイムアウト（秒）
 
 # ───────────────────────────────────────────────
 # キャラクター定義（VOICEVOX スピーカー ID）

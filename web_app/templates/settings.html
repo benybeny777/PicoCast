@@ -74,16 +74,6 @@
           </td>
         </tr>
         <tr>
-          <td>ComfyUI</td>
-          <td>
-            {% if status.comfyui.ok %}
-            <span class="badge badge-ok">接続OK</span>
-            {% else %}
-            <span class="badge badge-ng">未接続</span>
-            {% endif %}
-          </td>
-        </tr>
-        <tr>
           <td>SD WebUI Forge<br><small style="color:var(--text-muted)">IMAGE_BACKEND={{ status.image_backend }}</small></td>
           <td>
             {% if status.image_backend == 'sd_webui' %}

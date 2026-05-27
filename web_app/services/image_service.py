@@ -103,13 +103,12 @@ def submit_regenerate_job(
     image_keys: list[str],
     prompts: dict[str, str] | None = None,
     background_engine: str = "",
-    comfyui_preset: str = "",
 ) -> str:
     _validate_name(history_name)
     mgr = get_job_manager()
     job = mgr.create_job("image_regenerate")
     _log(job, f"画像再生成ジョブを登録: {len(image_keys)}枚", "info")
-    mgr.submit(job, _run_regenerate, history_name, image_keys, prompts or {}, background_engine, comfyui_preset)
+    mgr.submit(job, _run_regenerate, history_name, image_keys, prompts or {}, background_engine)
     return job.job_id
 
 
@@ -119,7 +118,6 @@ def _run_regenerate(
     image_keys: list[str],
     prompts: dict[str, str],
     background_engine: str = "",
-    comfyui_preset: str = "",
 ) -> dict[str, Any]:
     """
     背景画像: prompts に上書きがあればそれを使用、なければ prompt_bg_XXXX.txt を読む。
@@ -136,7 +134,6 @@ def _run_regenerate(
     height = 1920 if is_shorts else 1080
 
     engine = background_engine.strip() or None
-    preset = comfyui_preset.strip() or None
 
     _log(job, f"画像再生成開始: {len(image_keys)}枚 ({'Shorts' if is_shorts else 'Long'})", "info")
 
@@ -168,7 +165,7 @@ def _run_regenerate(
                         prompt = pf.read()
 
                 _log(job, f"背景再生成中: {fname}", "info")
-                with ImageGenerator(width=width, height=height, background_engine=engine, comfyui_preset=preset) as img_gen:
+                with ImageGenerator(width=width, height=height, background_engine=engine) as img_gen:
                     img_gen.generate_background(prompt, target_dir=bg_dir, fname=fname)
                 _log(job, f"背景再生成完了: {fname}", "success")
                 regenerated.append(key)

@@ -11,7 +11,7 @@
 
 - **台本生成** → Gemini AI
 - **音声生成** → VOICEVOX (ずんだもん / 四国めたん)（よみがな正規化を Ollama で前処理）
-- **背景画像生成** → Nano Banana (Gemini画像生成) / Stable Diffusion WebUI Forge / Local / ComfyUI（`IMAGE_BACKEND` で切替）
+- **背景画像生成** → Nano Banana (Gemini画像生成) / Stable Diffusion WebUI Forge（`IMAGE_BACKEND` で切替）
 - **サムネイル生成** → Nano Banana (Gemini画像生成) / Stable Diffusion WebUI Forge（`IMAGE_BACKEND` で切替）
 - **動画組立** → ffmpeg/native MP4
 - **品質レビュー** → ローカルルール + Ollama LLM + ChatGPT
@@ -80,8 +80,6 @@ yukkurijidou/
 │   ├── reading_normalizer.py # よみがな正規化（Ollama）
 │   ├── image_generator.py  # 背景・サムネ画像生成（IMAGE_BACKEND に基づきバックエンドを選択）
 │   ├── sd_webui_generator.py  # Stable Diffusion WebUI Forge / A1111互換APIクライアント
-│   ├── comfyui_client.py   # ComfyUI APIクライアント
-│   ├── local_prompt_adapter.py # ローカル背景生成向けプロンプト整形
 │   ├── parser.py           # 台本パーサー (ScriptParser)
 │   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
 │   ├── opening_quality.py  # 冒頭品質レビュー
@@ -160,7 +158,7 @@ yukkurijidou/
 9. よみがな正規化（Ollamaで全チャンクを一括変換）
    └── 変換後テキストをVOICEVOXに渡す。字幕・ファイル名は元テキストのまま
 10. VOICEVOX音声生成（セリフ1行ずつ）
-11. 背景画像生成（Nano Banana または Local / ComfyUI）
+11. 背景画像生成（Nano Banana または SD WebUI Forge）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
 12. サムネイル生成（Nano Banana）
 13. 旧タイムライン互換ヘルパーで素材タイミングを組立
@@ -190,18 +188,6 @@ for item in dialogue_items:
 - 既存の `bg_XXXX.png` がある場合は再利用
 - **台本変更により必要な背景枚数が変わった場合**: 既存の背景（サムネ除く）を全削除して再生成
 
-### 背景生成エンジン
-
-背景生成エンジンは `IMAGE_BACKGROUND_ENGINE` で選択する。
-
-| 値 | 内容 |
-|---|---|
-| `nanobanana` | 既存の Nano Banana / Gemini で背景を生成する（IMAGE_BACKGROUND_ENGINE 後方互換） |
-| `local_comfyui` | ローカル ComfyUI API で背景を生成する（IMAGE_BACKGROUND_ENGINE 後方互換） |
-| `sd_webui` | Stable Diffusion WebUI Forge / AUTOMATIC1111互換API で背景・サムネを生成する |
-
-`Auto` や自動切替設定は持たない（フォールバック禁止）。バックエンドの上位スイッチは `IMAGE_BACKEND` で設定する。
-
 ### IMAGE_BACKEND（画像生成バックエンド統合設定）
 
 `IMAGE_BACKEND` 環境変数が画像生成バックエンドの主スイッチとなる。
@@ -211,9 +197,9 @@ for item in dialogue_items:
 | `gemini`（デフォルト） | `nanobanana` | Nano Banana / Gemini | Nano Banana / Gemini | ✅ |
 | `sd_webui` | `sd_webui` | SD WebUI Forge / A1111 | SD WebUI Forge / A1111 | ❌ |
 
-- `IMAGE_BACKEND` が `sd_webui` のとき、`IMAGE_BACKGROUND_ENGINE` の値は無視される。
-- `IMAGE_BACKEND` が `gemini` のとき、従来どおり `IMAGE_BACKGROUND_ENGINE=nanobanana` として動作する。
+- `IMAGE_BACKEND=gemini` のとき、背景エンジンは常に `nanobanana` に固定される。
 - `background_engine` を明示的に渡したときは `IMAGE_BACKEND` より優先される（再生成画面からの個別指定用）。
+- `Auto` や自動切替設定は持たない（フォールバック禁止）。
 
 ### Stable Diffusion WebUI Forge 背景生成
 
@@ -260,18 +246,6 @@ for item in dialogue_items:
 | `SD_WEBUI_ROOT` | SD WebUI インストールディレクトリ（モデルパス解決用） | `""` |
 | `SD_MODEL_MANIFEST_PATH` | SD モデルマニフェスト JSON パス | `assets/sd_webui/model_manifest.json` |
 | `AUTO_DOWNLOAD_SD_MODELS` | `1` のとき未インストールモデルを自動ダウンロード | `0` |
-
-ComfyUIプリセットは `assets/comfyui/presets.json` に定義する。初期プリセット:
-
-| preset | 表示名 | model_type | checkpoint | sampler | steps | cfg | サイズ |
-|---|---|---|---|---|---:|---:|---|
-| `anime_standard` | 背景（漫画風・標準） | `sdxl` | Animagine XL 3.1 | dpmpp_2m_karras | 24 | 6.5 | 832x1472 |
-| `realistic_reference` | 背景（資料風・写実） | `sdxl` | Juggernaut XL | dpmpp_2m_karras | 26 | 5.5 | 832x1472 |
-| `hard_prompt_flux` | 背景（難プロンプト用） | `flux` | FLUX.1-dev | euler | 24 | 1.0 | 832x1472 |
-
-ComfyUI背景生成では、日本語背景文をローカル向けに短縮し、人物・テキスト・ロゴ・看板文字・赤丸・矢印・注釈を禁止する。背景だけを生成し、文字や装飾は描かせない。
-
-ComfyUI未起動、モデルマニフェスト不正、必要モデル不足、workflow不正、checkpoint未設定/未配置、タイムアウト、出力画像不正はすべて失敗として扱い、Nano Banana / Gemini、別プリセット、別モデルへ自動フォールバックしない。失敗時は `_meta/image_generation.json` に最新結果として `status=failed`、`error_message`、`fallback_used=false` を保存し、同時に `entries[]` へ履歴を追記して処理を中止する。
 
 ---
 

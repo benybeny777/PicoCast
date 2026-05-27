@@ -30,17 +30,9 @@
     <button class="btn btn-secondary" onclick="selectAll(false)">全解除</button>
     <label style="font-size:13px; display:flex; align-items:center; gap:4px">
       エンジン:
-      <select id="regen-engine" class="form-input" style="width:auto" onchange="updatePresetVisibility()">
-        <option value="local_comfyui">ComfyUI (ローカル)</option>
+      <select id="regen-engine" class="form-input" style="width:auto">
         <option value="nanobanana">Google AI</option>
-      </select>
-    </label>
-    <label id="regen-preset-label" style="font-size:13px; display:flex; align-items:center; gap:4px">
-      プリセット:
-      <select id="regen-preset" class="form-input" style="width:auto">
-        <option value="anime_standard">背景（漫画風・標準）</option>
-        <option value="realistic_reference">背景（資料風・写実）</option>
-        <option value="hard_prompt_flux">背景（難プロンプト用）</option>
+        <option value="sd_webui">SD WebUI Forge</option>
       </select>
     </label>
   </div>
@@ -130,17 +122,10 @@ function getCurrentPrompts() {
   return prompts;
 }
 
-function updatePresetVisibility() {
-  const engine = document.getElementById('regen-engine')?.value;
-  const label = document.getElementById('regen-preset-label');
-  if (label) label.style.display = engine === 'local_comfyui' ? 'flex' : 'none';
-}
-
 async function regenerateSelected() {
   const keys = Array.from(document.querySelectorAll('.img-check:checked')).map(c => c.value);
   if (!keys.length) { alert('画像を選択してください'); return; }
-  const engine = document.getElementById('regen-engine')?.value || 'local_comfyui';
-  const preset = document.getElementById('regen-preset')?.value || '';
+  const engine = document.getElementById('regen-engine')?.value || 'nanobanana';
   const msg = engine === 'nanobanana' ? `選択した ${keys.length} 枚を再生成しますか？\nGoogle AI費用が発生します。` : `選択した ${keys.length} 枚を再生成しますか？`;
   if (!confirm(msg)) return;
 
@@ -155,7 +140,7 @@ async function regenerateSelected() {
     const res = await fetch(`/api/images/${historyName}/regenerate`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({history_name: historyName, image_keys: keys, prompts, background_engine: engine, comfyui_preset: preset}),
+      body: JSON.stringify({history_name: historyName, image_keys: keys, prompts, background_engine: engine}),
     });
     const data = await res.json();
     if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || ''); return; }
