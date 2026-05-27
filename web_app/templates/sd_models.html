@@ -49,7 +49,7 @@
 
 <div class="card">
   <h3>SD WebUI 現在のモデル</h3>
-  <div id="current-model-container"><p>読み込み中...</p></div>
+  <div id="current-model-container"><p>確認中...</p></div>
 </div>
 
 <div class="card">
@@ -64,7 +64,33 @@
 <div class="card">
   <h3>SD WebUI インストール済みモデル</h3>
   <p class="hint" style="margin-bottom: 0.5rem;">SD WebUI API から取得したインストール済みモデルの一覧です（SD WebUI 起動時のみ）。</p>
-  <div id="webui-models-container"><p>読み込み中...</p></div>
+  <div id="webui-models-container"><p>確認中...</p></div>
+</div>
+
+<div class="card" id="setup-guide" style="display:none">
+  <h3>SD WebUI セットアップ手順</h3>
+  <p style="margin-bottom:0.75rem">SD WebUI（Forge / AUTOMATIC1111）が起動していません。以下の手順で起動してください。</p>
+  <ol style="line-height:2">
+    <li><strong>SD WebUI Forge をインストール</strong>してください。<br>
+      <a href="https://github.com/lllyasviel/stable-diffusion-webui-forge" target="_blank" rel="noopener">
+        https://github.com/lllyasviel/stable-diffusion-webui-forge
+      </a>
+    </li>
+    <li>SD WebUI を <strong><code>--api</code> オプション付き</strong>で起動します。<br>
+      <code>webui-user.bat</code>（Windows）を編集して <code>COMMANDLINE_ARGS=--api</code> を追記するか、<br>
+      コマンドラインから直接 <code>python launch.py --api</code> で起動してください。
+    </li>
+    <li>起動後は <code>http://localhost:7860</code>（デフォルト）で動作確認し、ページをリロードしてください。</li>
+    <li>ポートが異なる場合は <strong>.env の <code>SD_WEBUI_BASE_URL</code></strong> を変更してください。<br>
+      例: <code>SD_WEBUI_BASE_URL=http://localhost:7860</code>
+    </li>
+    <li>SD WebUI が自動起動するよう設定したい場合は <strong>.env の <code>SD_WEBUI_START_COMMAND</code></strong> を設定してください。<br>
+      例: <code>SD_WEBUI_START_COMMAND=C:\sd.webui\run.bat --api --nowebui</code>
+    </li>
+  </ol>
+  <p style="margin-top:0.75rem;color:var(--text-dim);font-size:0.85em">
+    設定は <a href="/settings">設定ページ</a> から変更できます。
+  </p>
 </div>
 
 <style>
@@ -206,10 +232,12 @@ function renderTable(models, progress) {
 /* ─── SD WebUI インストール済みモデル ─── */
 async function loadWebuiModels() {
   const container = document.getElementById('webui-models-container');
+  const guide = document.getElementById('setup-guide');
   try {
     const res = await fetch('/api/sd-models/webui');
     const data = await res.json();
     if (data.status === 'ok') {
+      if (guide) guide.style.display = 'none';
       const models = data.models || [];
       if (models.length === 0) {
         container.innerHTML = '<p style="color:var(--text-dim)">SD WebUI にモデルが見つかりません。</p>';
@@ -226,9 +254,11 @@ async function loadWebuiModels() {
       container.innerHTML = html;
     } else {
       container.innerHTML = `<p style="color:var(--text-dim)">SD WebUI 未起動: ${esc(data.message)}</p>`;
+      if (guide) guide.style.display = '';
     }
   } catch (e) {
     container.innerHTML = '<p style="color:var(--text-dim)">通信エラー。SD WebUI が起動していない可能性があります。</p>';
+    if (guide) guide.style.display = '';
   }
 }
 

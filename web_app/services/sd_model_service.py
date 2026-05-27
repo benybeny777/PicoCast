@@ -22,25 +22,25 @@ def get_model_list() -> list[dict[str, Any]]:
 
 
 def get_installed_models_from_webui() -> list[dict]:
-    """SD WebUI API からインストール済みモデル一覧を取得する。
+    """SD WebUI API からインストール済みモデル一覧を取得する（UI表示用: 未起動なら即エラー）。
 
     Raises:
         RuntimeError: API 未起動・HTTPエラー。
     """
     from core.sd_webui_generator import StableDiffusionWebUIGenerator
     gen = StableDiffusionWebUIGenerator()
-    return gen.get_models()
+    return gen.get_models(auto_start=False)
 
 
 def get_current_model_from_webui() -> str:
-    """SD WebUI API から現在ロード中のモデル名を取得する。
+    """SD WebUI API から現在ロード中のモデル名を取得する（UI表示用: 未起動なら即エラー）。
 
     Raises:
         RuntimeError: API 未起動・HTTPエラー。
     """
     from core.sd_webui_generator import StableDiffusionWebUIGenerator
     gen = StableDiffusionWebUIGenerator()
-    return gen.get_current_model()
+    return gen.get_current_model(auto_start=False)
 
 
 def set_active_model(model_name: str) -> None:
