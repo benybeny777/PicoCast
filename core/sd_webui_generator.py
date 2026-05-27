@@ -69,59 +69,6 @@ class StableDiffusionWebUIGenerator:
         except Exception:
             return False
 
-    def ensure_running(self) -> None:
-        """SD WebUI API が起動していなければ SD_WEBUI_START_COMMAND で自動起動し、
-        接続が確認できるまで最大 SD_WEBUI_START_WAIT_SEC 秒待機する。
-
-        SD_WEBUI_START_COMMAND が空の場合は自動起動しない（エラーを送出する）。
-
-        Raises:
-            RuntimeError: 未起動かつコマンド未設定、またはタイムアウトした場合。
-        """
-        import subprocess
-
-        if self._check_connection():
-            return  # すでに起動中
-
-        start_cmd = config.SD_WEBUI_START_COMMAND.strip()
-        if not start_cmd:
-            raise RuntimeError(
-                f"SD WebUI API に接続できません ({self.base_url})。"
-                " Forge/AUTOMATIC1111 を --api オプション付きで起動してください。"
-                " 自動起動するには SD_WEBUI_START_COMMAND を .env に設定してください。"
-            )
-
-        import os as _os
-
-        # run.bat が "call environment.bat" のように相対パスで別ファイルを呼ぶため
-        # cwd をバッチファイルのディレクトリに設定する
-        start_cmd_path = start_cmd.strip('"').strip("'")
-        cwd = _os.path.dirname(_os.path.abspath(start_cmd_path)) if _os.path.isfile(start_cmd_path) else None
-        logger.info("SD WebUI 自動起動: %s (cwd=%s)", start_cmd, cwd)
-
-        # CREATE_NEW_PROCESS_GROUP: Ctrl+C シグナルが親プロセスから子バッチへ伝搬しないようにする
-        # stdin=DEVNULL: "Terminate batch job (Y/N)?" プロンプトに応答しないようにする
-        subprocess.Popen(
-            start_cmd,
-            shell=True,
-            cwd=cwd,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
-            stdin=subprocess.DEVNULL,
-        )
-
-        wait_sec = config.SD_WEBUI_START_WAIT_SEC
-        for elapsed in range(2, wait_sec + 1, 2):
-            import time as _time
-            _time.sleep(2)
-            if self._check_connection():
-                logger.info("SD WebUI 起動確認 (%d秒)", elapsed)
-                return
-
-        raise RuntimeError(
-            f"SD WebUI の起動を {wait_sec} 秒待ちましたが、接続できませんでした ({self.base_url})。"
-            " SD_WEBUI_START_WAIT_SEC を増やすか、起動コマンドを確認してください。"
-        )
-
     def check_health(self) -> dict:
         """SD WebUI APIの疎通確認と現在ロード中のモデル名を返す。
 
@@ -183,9 +130,6 @@ class StableDiffusionWebUIGenerator:
         Raises:
             RuntimeError: API未起動・HTTPエラー・レスポンス異常のいずれか。
         """
-        # 未起動なら SD_WEBUI_START_COMMAND で自動起動し、準備完了まで待機する
-        self.ensure_running()
-
         effective_neg = negative_prompt if negative_prompt is not None else self.negative_prompt
         effective_width = width if width is not None else self.width
         effective_height = height if height is not None else self.height
@@ -276,12 +220,8 @@ class StableDiffusionWebUIGenerator:
     # モデル管理API
     # ─────────────────────────────────────────
 
-    def get_options(self, auto_start: bool = True) -> dict:
+    def get_options(self) -> dict:
         """SD WebUI の現在の全オプション設定を返す。
-
-        Args:
-            auto_start: True（デフォルト）なら未起動時に自動起動を試みる。
-                        False なら未起動時は即座に RuntimeError を送出する。
 
         Returns:
             SD WebUI /sdapi/v1/options のレスポンスそのまま。
@@ -289,13 +229,6 @@ class StableDiffusionWebUIGenerator:
         Raises:
             RuntimeError: API未接続・HTTPエラー。
         """
-        if auto_start:
-            self.ensure_running()
-        elif not self._check_connection():
-            raise RuntimeError(
-                f"SD WebUI API が起動していません ({self.base_url})。"
-                " Forge/AUTOMATIC1111 を --api オプション付きで起動してください。"
-            )
         url = f"{self.base_url}/sdapi/v1/options"
         try:
             r = httpx.get(url, timeout=10)
@@ -310,12 +243,8 @@ class StableDiffusionWebUIGenerator:
             )
         return r.json()
 
-    def get_current_model(self, auto_start: bool = True) -> str:
+    def get_current_model(self) -> str:
         """現在ロードされているチェックポイントモデル名を返す。
-
-        Args:
-            auto_start: True（デフォルト）なら未起動時に自動起動を試みる。
-                        False なら未起動時は即座に RuntimeError を送出する。
 
         Returns:
             sd_model_checkpoint の文字列（例: "v1-5-pruned-emaonly.safetensors [...]"）
@@ -323,15 +252,11 @@ class StableDiffusionWebUIGenerator:
         Raises:
             RuntimeError: API未接続・HTTPエラー。
         """
-        opts = self.get_options(auto_start=auto_start)
+        opts = self.get_options()
         return opts.get("sd_model_checkpoint", "")
 
-    def get_models(self, auto_start: bool = True) -> list[dict]:
+    def get_models(self) -> list[dict]:
         """SD WebUI にインストールされているモデルの一覧を返す。
-
-        Args:
-            auto_start: True（デフォルト）なら未起動時に自動起動を試みる。
-                        False なら未起動時は即座に RuntimeError を送出する。
 
         Returns:
             /sdapi/v1/sd-models のリスト（各要素は title, model_name, hash, sha256, filename など）
@@ -339,13 +264,6 @@ class StableDiffusionWebUIGenerator:
         Raises:
             RuntimeError: API未接続・HTTPエラー。
         """
-        if auto_start:
-            self.ensure_running()
-        elif not self._check_connection():
-            raise RuntimeError(
-                f"SD WebUI API が起動していません ({self.base_url})。"
-                " Forge/AUTOMATIC1111 を --api オプション付きで起動してください。"
-            )
         url = f"{self.base_url}/sdapi/v1/sd-models"
         try:
             r = httpx.get(url, timeout=30)

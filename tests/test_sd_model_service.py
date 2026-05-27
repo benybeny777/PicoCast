@@ -129,11 +129,8 @@ class TestStableDiffusionWebUIGeneratorModelMethods:
 
     def test_connect_error_on_get_models_raises_runtime(self, monkeypatch):
         import httpx
-        import config as _cfg
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
-        # SD_WEBUI_START_COMMAND を空にして ensure_running が即座にエラーを返すようにする
-        monkeypatch.setattr(_cfg, "SD_WEBUI_START_COMMAND", "")
         monkeypatch.setattr(httpx, "get", lambda url, **kw: (_ for _ in ()).throw(httpx.ConnectError("refused")))
         gen = StableDiffusionWebUIGenerator()
         with pytest.raises(RuntimeError, match="接続できません"):

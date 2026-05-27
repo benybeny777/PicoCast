@@ -83,84 +83,8 @@ class TestCheckHealth:
 
 
 def _fake_get_ok(url, **kwargs):
-    """httpx.get のスタブ — SD WebUI が起動済みの状態をシミュレートする（ensure_running をパス）。"""
+    """httpx.get のスタブ — SD WebUI が起動済みの状態をシミュレートする。"""
     return _make_fake_response(200, {"sd_model_checkpoint": "mock.safetensors"})
-
-
-class TestEnsureRunning:
-    def test_already_running_no_start_command_needed(self, monkeypatch):
-        """接続できる状態なら START_COMMAND を実行しない。"""
-        import subprocess
-        from core.sd_webui_generator import StableDiffusionWebUIGenerator
-
-        started = []
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: started.append(a))
-        with patch("httpx.get", side_effect=_fake_get_ok):
-            gen = StableDiffusionWebUIGenerator()
-            gen.ensure_running()
-        assert started == [], "すでに起動中なのに Popen が呼ばれました"
-
-    def test_not_running_no_command_raises(self):
-        """未起動 + SD_WEBUI_START_COMMAND 未設定 → RuntimeError。"""
-        import httpx
-        import config as _cfg
-        from core.sd_webui_generator import StableDiffusionWebUIGenerator
-
-        with patch("httpx.get", side_effect=httpx.ConnectError("refused")):
-            gen = StableDiffusionWebUIGenerator()
-            orig = _cfg.SD_WEBUI_START_COMMAND
-            try:
-                _cfg.SD_WEBUI_START_COMMAND = ""
-                with pytest.raises(RuntimeError, match="SD_WEBUI_START_COMMAND"):
-                    gen.ensure_running()
-            finally:
-                _cfg.SD_WEBUI_START_COMMAND = orig
-
-    def test_not_running_with_command_starts_process(self, monkeypatch):
-        """未起動 + SD_WEBUI_START_COMMAND 設定済み → Popen が呼ばれ、起動後に接続成功。"""
-        import subprocess
-        import config as _cfg
-        import httpx
-        from core.sd_webui_generator import StableDiffusionWebUIGenerator
-
-        started = []
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: started.append(a) or MagicMock())
-
-        call_count = [0]
-        def get_side_effect(url, **kwargs):
-            call_count[0] += 1
-            if call_count[0] == 1:
-                raise httpx.ConnectError("refused")  # 最初の _check_connection
-            return _make_fake_response(200, {"sd_model_checkpoint": "mock"})  # 起動後
-
-        import time as _time
-        monkeypatch.setattr(_time, "sleep", lambda s: None)
-        monkeypatch.setattr(_cfg, "SD_WEBUI_START_COMMAND", "echo mock_start")
-        monkeypatch.setattr(_cfg, "SD_WEBUI_START_WAIT_SEC", 10)
-
-        with patch("httpx.get", side_effect=get_side_effect):
-            gen = StableDiffusionWebUIGenerator()
-            gen.ensure_running()
-
-        assert len(started) == 1, "Popen が1回呼ばれるはず"
-
-    def test_startup_timeout_raises(self, monkeypatch):
-        """起動コマンドを実行してもタイムアウトまで接続できなければ RuntimeError。"""
-        import subprocess
-        import config as _cfg
-        import httpx
-        from core.sd_webui_generator import StableDiffusionWebUIGenerator
-        import time as _time
-
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **kw: MagicMock())
-        monkeypatch.setattr(_time, "sleep", lambda s: None)
-        monkeypatch.setattr(_cfg, "SD_WEBUI_START_COMMAND", "echo mock_start")
-        monkeypatch.setattr(_cfg, "SD_WEBUI_START_WAIT_SEC", 4)
-
-        with patch("httpx.get", side_effect=httpx.ConnectError("always refused")):
-            gen = StableDiffusionWebUIGenerator()
-            with pytest.raises(RuntimeError, match="接続できませんでした"):
-                gen.ensure_running()
 
 
 class TestGenerateImage:
