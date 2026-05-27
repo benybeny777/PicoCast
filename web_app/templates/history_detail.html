@@ -46,14 +46,6 @@
 
   <div class="form-row">
     <div class="form-group">
-      <label for="image-style">画像スタイル</label>
-      <select id="image-style">
-        {% for style in image_style_choices %}
-        <option value="{{ style }}" {% if style == default_image_style %}selected{% endif %}>{{ style }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="form-group">
       <label for="background-engine">画像エンジン</label>
       <select id="background-engine">
         <option value="nanobanana" {% if image_backend != 'sd_webui' %}selected{% endif %}>Gemini AI</option>
@@ -277,7 +269,7 @@ async function renderVideo() {
 
 function _readPipelineParams() {
   return {
-    imageStyle:       document.getElementById('image-style').value,
+    imageStyle:       {{ default_image_style | tojson }},
     backgroundEngine: document.getElementById('background-engine').value,
     reuseBg:          document.getElementById('reuse-backgrounds').checked,
     longThumbnailAb:  document.getElementById('long-thumbnail-ab').checked,
