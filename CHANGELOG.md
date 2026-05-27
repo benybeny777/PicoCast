@@ -14,11 +14,14 @@
 
 ## 2026-05-28
 
-### バグ修正: NANOBANANA_TIMEOUT デフォルト値を 300 秒に引き上げ
+### Revert: NANOBANANA_TIMEOUT 機能を削除
 
-- `config.py`: `NANOBANANA_TIMEOUT` デフォルトを 120 → 300 秒に変更。Gemini 画像生成は 60〜180 秒かかることがあり、120 秒では "read operation timed out" で失敗していた。
-- `web_app/services/config_service.py`: 設定画面の `NANOBANANA_TIMEOUT` 上限を 600 → 1200 秒に拡張。
-- `SPEC.md`: テーブルのデフォルト値と説明を更新。
+タイムアウト設定の導入後に設定値の混乱でバグが頻発したため、`NANOBANANA_TIMEOUT` 関連をすべて撤去し元の状態に戻した。
+
+- `config.py`: `NANOBANANA_TIMEOUT` 削除
+- `core/image_generator.py`: `HttpOptions` タイムアウト設定を削除。`genai.Client(api_key=...)` のみのシンプルな初期化に戻す
+- `web_app/services/config_service.py`: `EDITABLE_CONFIG` から `NANOBANANA_TIMEOUT` エントリを削除
+- `SPEC.md`: 対応する行を削除
 
 ### バグ修正: generation_service デフォルト値・_find_locking_process 例外安全性
 
