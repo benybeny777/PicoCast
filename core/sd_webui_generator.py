@@ -92,7 +92,14 @@ class StableDiffusionWebUIGenerator:
             )
 
         logger.info("SD WebUI 自動起動: %s", start_cmd)
-        subprocess.Popen(start_cmd, shell=True)
+        # CREATE_NEW_PROCESS_GROUP: Ctrl+C シグナルが親プロセスから子バッチへ伝搬しないようにする
+        # stdin=DEVNULL: "Terminate batch job (Y/N)?" プロンプトに応答しないようにする
+        subprocess.Popen(
+            start_cmd,
+            shell=True,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            stdin=subprocess.DEVNULL,
+        )
 
         wait_sec = config.SD_WEBUI_START_WAIT_SEC
         for elapsed in range(2, wait_sec + 1, 2):
