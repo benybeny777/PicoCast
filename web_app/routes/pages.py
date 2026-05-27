@@ -67,10 +67,12 @@ def _static_asset_version() -> int:
 @router.get("/", response_class=HTMLResponse)
 def page_dashboard(request: Request):
     summary = status_service.get_dashboard_summary()
+    status = status_service.get_cached_settings_status()
     histories = history_service.list_histories()[:10]
     jobs = get_job_manager().list_jobs()[:5]
     return _render(request, "dashboard.html", {
         "summary": summary,
+        "status": status,
         "histories": histories,
         "recent_jobs": jobs,
     })
