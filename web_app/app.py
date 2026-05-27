@@ -178,6 +178,12 @@ def main():
             webbrowser.open(url)
         threading.Thread(target=_open, daemon=True).start()
 
+    # Windows (Python 3.11) では ProactorEventLoop が I/O 待機中に Ctrl+C を
+    # 受け取れないため、SelectorEventLoop に切り替える
+    if sys.platform == "win32":
+        import asyncio
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
     uvicorn.run(
         "web_app.app:app",
         host=host,

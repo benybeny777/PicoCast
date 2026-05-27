@@ -91,29 +91,22 @@ class StableDiffusionWebUIGenerator:
                 " 自動起動するには SD_WEBUI_START_COMMAND を .env に設定してください。"
             )
 
-        logger.info("SD WebUI 自動起動: %s", start_cmd)
-
-        # 現在の venv 環境変数を SD WebUI に引き継がせない
-        # VIRTUAL_ENV / PYTHONPATH などが残ると SD WebUI 側の venv セットアップが壊れる
         import os as _os
-        env = _os.environ.copy()
-        for _key in ("VIRTUAL_ENV", "PYTHONPATH", "PYTHONHOME", "PYTHONSTARTUP"):
-            env.pop(_key, None)
-        venv_dir = _os.environ.get("VIRTUAL_ENV", "")
-        if venv_dir:
-            path_parts = env.get("PATH", "").split(_os.pathsep)
-            env["PATH"] = _os.pathsep.join(
-                p for p in path_parts if not p.lower().startswith(venv_dir.lower())
-            )
+
+        # run.bat が "call environment.bat" のように相対パスで別ファイルを呼ぶため
+        # cwd をバッチファイルのディレクトリに設定する
+        start_cmd_path = start_cmd.strip('"').strip("'")
+        cwd = _os.path.dirname(_os.path.abspath(start_cmd_path)) if _os.path.isfile(start_cmd_path) else None
+        logger.info("SD WebUI 自動起動: %s (cwd=%s)", start_cmd, cwd)
 
         # CREATE_NEW_PROCESS_GROUP: Ctrl+C シグナルが親プロセスから子バッチへ伝搬しないようにする
         # stdin=DEVNULL: "Terminate batch job (Y/N)?" プロンプトに応答しないようにする
         subprocess.Popen(
             start_cmd,
             shell=True,
+            cwd=cwd,
             creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
             stdin=subprocess.DEVNULL,
-            env=env,
         )
 
         wait_sec = config.SD_WEBUI_START_WAIT_SEC
