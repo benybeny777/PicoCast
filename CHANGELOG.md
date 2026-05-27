@@ -14,6 +14,11 @@
 
 ## 2026-05-28
 
+### 機能追加: 設定ページに SDモデル管理タブを統合・デバッグログを表示
+
+- `web_app/templates/settings.html`: SDモデル管理を「SDモデル」タブとして設定ページに統合。タブ切り替え時に遅延ロード。設定値・HF_TOKEN 状態・モデル一覧・Forge 認識済みモデルを Ajax で取得。「設定から飛べるリンクボタン」も同時に削除。
+- `web_app/templates/logs.html` / `web_app/routes/api_settings.py`: デバッグログ（`app_debug.log`）をログページに表示するセクションを追加。`GET /api/settings/debug-log` エンドポイントを新設。`debug_log_service.py` は存在していたが UI 接続がなく未機能だった。
+
 ### Revert: NANOBANANA_TIMEOUT 機能を削除
 
 タイムアウト設定の導入後に設定値の混乱でバグが頻発したため、`NANOBANANA_TIMEOUT` 関連をすべて撤去し元の状態に戻した。
