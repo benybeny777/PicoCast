@@ -122,6 +122,7 @@ OPENING_REVIEW_MAX_LLM_RETRIES     = int(os.environ.get("OPENING_REVIEW_MAX_LLM_
 OLLAMA_BASE_URL              = os.environ.get("OLLAMA_BASE_URL",              "http://localhost:11434")  # Ollama API エンドポイント
 OLLAMA_REVIEW_MODEL          = os.environ.get("OLLAMA_REVIEW_MODEL",          "qwen3:8b")               # 冒頭レビューモデル
 OLLAMA_REWRITE_MODEL         = os.environ.get("OLLAMA_REWRITE_MODEL",         "qwen3:8b")               # 冒頭リライトモデル
+OLLAMA_TRANSLATE_MODEL       = os.environ.get("OLLAMA_TRANSLATE_MODEL",       "qwen3:8b")               # SD プロンプト日→英翻訳モデル
 
 # ───────────────────────────────────────────────
 # 画像生成バックエンド統合設定

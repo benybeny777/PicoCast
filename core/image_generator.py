@@ -11,6 +11,48 @@ from config import (
 )
 # IMAGE_BACKEND は実行時に config から直接参照する（monkeypatch対応）
 
+
+def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
+    """Ollama を使って日本語の背景描写を SD 向け英語プロンプトに翻訳する。
+
+    失敗時は例外をそのまま伝播させる（サイレントフォールバック禁止）。
+    """
+    import requests
+
+    ollama_base = config.OLLAMA_BASE_URL.rstrip("/")
+    model = config.OLLAMA_TRANSLATE_MODEL
+
+    # Ollama 疎通確認（起動済みでなければ opening_quality.ensure_ollama_server に倣い起動）
+    from core.opening_quality import ensure_ollama_server
+    ensure_ollama_server()
+
+    system_instruction = (
+        "You are an expert Stable Diffusion prompt engineer. "
+        "Translate the following Japanese background scene description into a concise English Stable Diffusion prompt. "
+        "Output ONLY the translated prompt — no explanations, no labels, no markdown. "
+        "Use comma-separated descriptive keywords and short phrases optimized for Stable Diffusion. "
+        "Do NOT include character names or dialogue."
+    )
+    prompt = f"{system_instruction}\n\nJapanese description:\n{description}\n\nEnglish SD prompt:"
+
+    body = {
+        "model": model,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0.2},
+    }
+    with requests.post(f"{ollama_base}/api/generate", json=body, timeout=60) as resp:
+        resp.raise_for_status()
+        translated = str(resp.json().get("response", "")).strip()
+
+    if not translated:
+        raise RuntimeError("Ollama からの翻訳結果が空でした")
+
+    if debug:
+        print(f"  [SD翻訳] {description[:40]!r} → {translated[:80]!r}")
+
+    return translated
+
 class ImageGenerator:
     def __init__(
         self,
@@ -266,14 +308,17 @@ class ImageGenerator:
 
         gen = StableDiffusionWebUIGenerator(width=gen_width, height=gen_height)
 
+        # 日本語プロンプトを Ollama で英語に翻訳してから SD WebUI に渡す
+        en_prompt = _translate_to_english_for_sd(description, debug=self.debug)
+
         if self.debug:
             print(
                 f"  [AI] SD WebUI ({config.SD_WEBUI_BASE_URL}) "
-                f"{gen_width}x{gen_height} で生成開始: {description[:40]}..."
+                f"{gen_width}x{gen_height} で生成開始: {en_prompt[:60]}..."
             )
 
         try:
-            gen.generate_image(description, output_path, prompt_suffix=prompt_suffix)
+            gen.generate_image(en_prompt, output_path, prompt_suffix=prompt_suffix)
         except Exception as e:
             print(f"❌ SD WebUI 背景生成に失敗しました。自動フォールバックは行いません。")
             print(f"❌ エラー詳細: {e}")
