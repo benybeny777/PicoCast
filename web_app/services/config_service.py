@@ -11,6 +11,7 @@ _ENV_PATH = os.path.join(_ROOT, ".env")
 
 # 編集可能な設定項目の定義（秘密値は含めない）
 EDITABLE_CONFIG: list[dict[str, Any]] = [
+    {"key": "VOICEVOX_PATH",                   "type": "str",   "label": "VOICEVOX 実行ファイルパス (空=手動起動)", "default": str(cfg.VOICEVOX_PATH), "allow_empty": True},
     {"key": "WEB_APP_NAME",                    "type": "str",   "label": "Web UI 表示名",             "default": str(cfg.WEB_APP_NAME)},
     {"key": "NATIVE_SHORTS_BODY_VOICE_SPEED",  "type": "float", "label": "Shorts 本編音声速度",       "default": str(cfg.NATIVE_SHORTS_BODY_VOICE_SPEED), "min": 0.5, "max": 3.0},
     {"key": "NATIVE_SHORTS_INTRO_VOICE_SPEED", "type": "float", "label": "Shorts 冒頭音声速度",       "default": str(cfg.NATIVE_SHORTS_INTRO_VOICE_SPEED), "min": 0.5, "max": 3.0},
