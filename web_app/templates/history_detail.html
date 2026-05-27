@@ -53,6 +53,13 @@
         {% endfor %}
       </select>
     </div>
+    <div class="form-group">
+      <label for="background-engine">画像エンジン</label>
+      <select id="background-engine">
+        <option value="nanobanana" {% if image_backend == 'gemini' %}selected{% endif %}>Gemini AI</option>
+        <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>SD WebUI Forge</option>
+      </select>
+    </div>
     <div class="form-group check-group">
       <label><input type="checkbox" id="reuse-backgrounds" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
     </div>
@@ -270,21 +277,23 @@ async function renderVideo() {
 
 function _readPipelineParams() {
   return {
-    imageStyle:      document.getElementById('image-style').value,
-    reuseBg:         document.getElementById('reuse-backgrounds').checked,
-    longThumbnailAb: document.getElementById('long-thumbnail-ab').checked,
-    longBudgetMode:  document.getElementById('long-budget-mode').checked,
-    sdSizeMode:      document.getElementById('sd-size-mode').checked,
+    imageStyle:       document.getElementById('image-style').value,
+    backgroundEngine: document.getElementById('background-engine').value,
+    reuseBg:          document.getElementById('reuse-backgrounds').checked,
+    longThumbnailAb:  document.getElementById('long-thumbnail-ab').checked,
+    longBudgetMode:   document.getElementById('long-budget-mode').checked,
+    sdSizeMode:       document.getElementById('sd-size-mode').checked,
   };
 }
 
-async function _submitPipelineJob({ imageStyle, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode }) {
+async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode }) {
   return fetch('/api/history/regenerate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
       history_names: [historyName],
       image_style: imageStyle,
+      background_engine: backgroundEngine,
       reuse_backgrounds: reuseBg,
       long_thumbnail_ab_test: longThumbnailAb,
       long_budget_mode: longBudgetMode,

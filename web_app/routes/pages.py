@@ -90,6 +90,7 @@ def page_generate(request: Request):
         "default_long_thumbnail_ab_test": WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
         "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
         "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
+        "image_backend": _cfg.IMAGE_BACKEND,
     })
 
 
@@ -119,6 +120,7 @@ def page_history_detail(request: Request, history_name: str):
         "default_long_thumbnail_ab_test": WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
         "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
         "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
+        "image_backend": _cfg.IMAGE_BACKEND,
     })
 
 

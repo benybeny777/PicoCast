@@ -51,6 +51,13 @@
         {% endfor %}
       </select>
     </div>
+    <div class="form-group">
+      <label for="background-engine">画像エンジン</label>
+      <select id="background-engine">
+        <option value="nanobanana" {% if image_backend == 'gemini' %}selected{% endif %}>Gemini AI</option>
+        <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>SD WebUI Forge</option>
+      </select>
+    </div>
     <div class="form-group check-group">
       <label><input type="checkbox" id="reuse-backgrounds" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
     </div>
@@ -176,6 +183,7 @@ async function startGenerate() {
   if (!script) { alert('台本を入力してください'); return; }
 
   const imageStyle = document.getElementById('image-style').value;
+  const backgroundEngine = document.getElementById('background-engine').value;
   const reuseBg = document.getElementById('reuse-backgrounds').checked;
   const longThumbnailAb = document.getElementById('long-thumbnail-ab').checked;
   const longBudgetMode = document.getElementById('long-budget-mode').checked;
@@ -195,6 +203,7 @@ async function startGenerate() {
       body: JSON.stringify({
         script,
         image_style: imageStyle,
+        background_engine: backgroundEngine,
         reuse_backgrounds: reuseBg,
         long_thumbnail_ab_test: longThumbnailAb,
         long_budget_mode: longBudgetMode,
