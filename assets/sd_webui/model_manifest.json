@@ -33,18 +33,18 @@
     },
     {
       "id": "anything_v5",
-      "display_name": "Anything V5 / Ink ★アニメ特化",
+      "display_name": "Anything V5 / Prt RE ★アニメ特化",
       "type": "checkpoint",
-      "filename": "AnythingV5Ink_ink.safetensors",
+      "filename": "AnythingV5_PrtRE.safetensors",
       "target_subdir": "models/Stable-diffusion",
-      "source_url": "https://huggingface.co/stablediffusionapi/anything-v5/resolve/main/AnythingV5Ink_ink.safetensors",
+      "source_url": "",
       "sha256": "",
-      "description": "Anything シリーズのアニメ特化版。鮮やかな色彩と漫画風タッチ。",
+      "description": "Anything シリーズのアニメ特化版。鮮やかな色彩と漫画風タッチ。配布元から手動で導入してください。",
       "recommended": true,
       "requires_auth": false,
       "license_note": "CreativeML OpenRAIL-M ライセンス。商用利用可否は配布元ページをご確認ください。",
-      "source_page_url": "https://huggingface.co/stablediffusionapi/anything-v5",
-      "api_match_hint": "AnythingV5Ink"
+      "source_page_url": "https://civitai.com/models/9409/anything-v5-and-prt-re",
+      "api_match_hint": "AnythingV5"
     },
     {
       "id": "sd15_pruned_ema",

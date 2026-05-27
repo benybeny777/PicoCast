@@ -183,9 +183,12 @@ def delete_and_redownload(req: ModelIdConfirmedRequest):
 
 @router.post("/use")
 def use_model(req: ModelNameRequest):
-    """SD WebUI のアクティブモデルを切り替える。"""
+    """SD WebUI のアクティブモデルを切り替え、SD_WEBUI_MODEL 設定にも保存する。"""
     try:
         sd_model_service.set_active_model(req.model_name)
+        # SD_WEBUI_MODEL を .env に保存して次回生成から確実に使われるようにする
+        from web_app.services.config_service import save_config
+        save_config({"SD_WEBUI_MODEL": req.model_name})
         return {"status": "ok", "model_name": req.model_name}
     except Exception as e:
         return {"status": "error", "message": str(e)}

@@ -11,21 +11,26 @@
   </div>
 </div>
 
-<!-- 現在の設定 -->
+<!-- ★ 生成に使われるモデル（最重要情報）-->
+<div class="card" style="border-left:4px solid var(--accent2)">
+  <h3 style="margin-top:0">🎨 次の生成で使われるモデル</h3>
+  <div id="active-model-banner" style="font-size:1.05em;margin-bottom:0.5rem">
+    <span style="color:var(--text-dim)">読み込み中...</span>
+  </div>
+  <p style="margin:0;font-size:0.85em;color:var(--text-dim)">
+    モデルを変更するには、下の一覧の「<strong>このモデルを使う</strong>」を押してください。
+  </p>
+</div>
+
+<!-- 設定情報 -->
 <div class="card">
-  <h3>現在の設定</h3>
+  <h3>設定</h3>
   <table class="status-table" style="width:100%">
     <tr><th style="width:14em">項目</th><th>値</th></tr>
     <tr>
       <td>SD_WEBUI_ROOT</td>
       <td style="font-family:monospace">
         {% if sd_webui_root %}{{ sd_webui_root }}{% else %}<span style="color:var(--text-dim)">（未設定）<a href="/settings" style="margin-left:8px">設定ページ →</a></span>{% endif %}
-      </td>
-    </tr>
-    <tr>
-      <td>SD_WEBUI_MODEL</td>
-      <td style="font-family:monospace">
-        {% if sd_webui_model %}{{ sd_webui_model }}{% else %}<span style="color:var(--text-dim)">（未設定: Forge の現在ロード済みモデルを使用）</span>{% endif %}
       </td>
     </tr>
     <tr>
@@ -44,28 +49,10 @@
       </td>
     </tr>
     <tr>
-      <td>AUTO_DOWNLOAD_SD_MODELS</td>
-      <td>
-        {% if auto_download_sd_models %}
-          <span class="badge badge-ok">有効</span>
-          <small style="color:var(--text-dim); margin-left:8px">生成前に未導入モデルを自動ダウンロードします</small>
-        {% else %}
-          <span class="badge badge-warn">無効（推奨）</span>
-          <small style="color:var(--text-dim); margin-left:8px">このページから手動でダウンロードします</small>
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
       <td>SD_WEBUI_BASE_URL</td>
       <td style="font-family:monospace">{{ sd_webui_base_url }}</td>
     </tr>
   </table>
-</div>
-
-<!-- 現在ロード中モデル -->
-<div class="card">
-  <h3>Forge 現在ロード中のモデル</h3>
-  <div id="current-model-container"><p style="color:var(--text-dim)">読み込み中...</p></div>
 </div>
 
 <!-- マニフェストモデル一覧 -->
@@ -97,6 +84,8 @@
 {% block scripts %}
 <script>
 const HF_TOKEN_SET = {{ hf_token_set | tojson }};
+// サーバー側の SD_WEBUI_MODEL 設定値（空=未設定）
+let _sdModelSetting = {{ sd_webui_model | tojson }};
 
 let _models = [];
 let _pollTimer = null;
@@ -115,22 +104,35 @@ function esc(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-/* ─── 現在のモデル ─── */
+/* ─── 生成に使われるモデルバナー ─── */
+function renderActiveBanner(forgeModel) {
+  const banner = document.getElementById('active-model-banner');
+  if (!banner) return;
+  if (_sdModelSetting) {
+    // SD_WEBUI_MODEL が設定されている
+    banner.innerHTML =
+      `<span style="font-family:monospace;font-weight:700;font-size:1.05em">${esc(_sdModelSetting)}</span>` +
+      `<span style="color:var(--text-dim);font-size:0.85em;margin-left:8px">（SD_WEBUI_MODEL で指定 — 生成時に自動ロード）</span>`;
+  } else if (forgeModel) {
+    // SD_WEBUI_MODEL 未設定 → Forge 現在ロード中のものを使う
+    banner.innerHTML =
+      `<span style="font-family:monospace;font-weight:700;font-size:1.05em">${esc(forgeModel)}</span>` +
+      `<span style="color:var(--text-dim);font-size:0.85em;margin-left:8px">（SD_WEBUI_MODEL 未設定のため Forge 現在ロード中のモデルを使用）</span>`;
+  } else {
+    banner.innerHTML =
+      `<span style="color:var(--warn,#c7a600)">⚠️ Forge 未起動 / SD_WEBUI_MODEL 未設定</span>` +
+      `<span style="color:var(--text-dim);font-size:0.85em;margin-left:8px">Forge を起動するか、下の一覧から「このモデルを使う」を押してください。</span>`;
+  }
+}
+
 async function loadCurrentModel() {
-  const el = document.getElementById('current-model-container');
-  el.innerHTML = '<p style="color:var(--text-dim)">読み込み中...</p>';
   try {
     const res = await fetch('/api/sd-models/current');
     const data = await res.json();
-    if (data.status === 'ok') {
-      el.innerHTML = data.model
-        ? `<p style="font-family:monospace;font-size:0.95em;margin:0">${esc(data.model)}</p>`
-        : '<p style="color:var(--text-dim);margin:0">SD WebUI が起動していないか、モデル情報を取得できませんでした。</p>';
-    } else {
-      el.innerHTML = `<p style="color:var(--text-dim);margin:0">Forge 未起動: ${esc(data.message)}</p>`;
-    }
+    const forgeModel = (data.status === 'ok') ? (data.model || '') : '';
+    renderActiveBanner(forgeModel);
   } catch (e) {
-    el.innerHTML = '<p style="color:var(--text-dim);margin:0">通信エラー。Forge が起動していない可能性があります。</p>';
+    renderActiveBanner('');
   }
 }
 
@@ -364,7 +366,12 @@ async function deleteRedownload(modelId, displayName) {
 }
 
 async function useModel(modelName) {
-  if (!confirm(`SD WebUI のアクティブモデルを「${modelName}」に切り替えます。\n（SD WebUI が起動している必要があります）`)) return;
+  if (!confirm(
+    `「${modelName}」を生成モデルとして設定します。\n\n` +
+    `・Forge のロード済みモデルを切り替えます\n` +
+    `・SD_WEBUI_MODEL 設定を保存（次回起動後も有効）\n\n` +
+    `（Forge が起動している必要があります）`
+  )) return;
   try {
     const res = await fetch('/api/sd-models/use', {
       method: 'POST',
@@ -373,8 +380,9 @@ async function useModel(modelName) {
     });
     const data = await res.json();
     if (data.status === 'ok') {
+      // JS側の設定値も更新してバナーを再描画
+      _sdModelSetting = data.model_name;
       await loadCurrentModel();
-      alert('モデルを切り替えました: ' + modelName);
     } else {
       alert('エラー: ' + data.message);
     }
