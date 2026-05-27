@@ -218,11 +218,14 @@ for item in dialogue_items:
 
 ### SD WebUI Forge モデル管理
 
-- `core/sd_model_manager.py: SDWebUIModelManager` がモデルのインストール確認・ダウンロードを担当する。
+- `core/sd_model_manager.py: SDWebUIModelManager` がモデルのインストール確認・ダウンロード・削除を担当する。
 - モデルマニフェストは `assets/sd_webui/model_manifest.json`（`SD_MODEL_MANIFEST_PATH` で変更可）。
-- マニフェスト形式: `{"version": 1, "models": [{id, display_name, type, filename, target_subdir, source_url, sha256, description, recommended, requires_auth, api_match_hint}]}`
+- マニフェスト形式: `{"version": 1, "models": [{id, display_name, type, filename, target_subdir, source_url, sha256, description, recommended, requires_auth, license_note, source_page_url, api_match_hint}]}`
 - ダウンロードは `.part` 一時ファイルを使用し、完了後に `os.replace` でリネームする。
 - SHA256 が非空文字のときは検証を実施し、不一致の場合は RuntimeError を送出して `.part` を削除する。SHA256 が空文字のときは検証をスキップする。
+- **既存ファイルの扱い**: ダウンロード前に既存ファイルを確認し、SHA256 一致なら再ダウンロードをスキップして返す。SHA256 不一致なら自動上書きせず RuntimeError を送出する（「削除して再ダウンロード」案内を含む）。SHA256 未設定の場合は既存ファイルをそのまま返す。
+- **認証付きダウンロード**: `requires_auth=true` のモデルは `HF_TOKEN` が設定されていない場合に RuntimeError を送出する。`HF_TOKEN` が設定されている場合は `Authorization: Bearer {HF_TOKEN}` ヘッダーを付与してダウンロードする。401/403 応答の場合はライセンス同意が必要な旨のエラーを送出する。
+- **モデル削除** (`delete_model(model_id, *, confirmed=False)`): `confirmed=True` 必須。`SD_WEBUI_ROOT` 配下のファイルのみ削除可（`os.path.realpath` でパストラバーサルを検査）。ファイルが存在しない場合も RuntimeError。
 - フォールバック禁止: 指定モデルが未インストール・SHA256不一致のいずれでも処理を中止する。
 
 **`SD_WEBUI_MODEL` 設定時の事前モデル準備フロー（画像生成前に実行）:**
@@ -231,25 +234,34 @@ for item in dialogue_items:
    - マニフェスト内で一致するモデルを検索（ファイル名・api_match_hint 部分一致）
    - 見つかりかつ未インストール:
      - `AUTO_DOWNLOAD_SD_MODELS=1` → `download_model()` → `rescan_models()`
-     - `AUTO_DOWNLOAD_SD_MODELS=0` → RuntimeError（"インストールされていません"）
+     - `AUTO_DOWNLOAD_SD_MODELS=0` → RuntimeError（"SDモデル管理画面からダウンロードしてください"）
    - `StableDiffusionWebUIGenerator.set_active_model(SD_WEBUI_MODEL)` でモデル切り替え
 
-**SD WebUI モデル管理 Web UI:**
-- `/sd-models` ページ: マニフェスト内モデルのインストール状況・ダウンロード・モデル切り替えを行う
+**SD WebUI モデル管理 Web UI (`/sd-models`):**
+- マニフェスト内モデルのインストール状況確認・アプリ内ワンクリックダウンロード・使用モデル切り替えを行う
+- 「🎨 次の生成で使われるモデル」バナーを最上部に表示し、`SD_WEBUI_MODEL` 設定値または Forge 現在ロード中モデルを示す
+- `HF_TOKEN` 未設定時は `requires_auth=true` モデルのダウンロードボタンを非表示にし、設定へ誘導する
+- 「このモデルを使う」は Forge への即時切り替え + `SD_WEBUI_MODEL` を `.env` へ保存（次回起動以降も維持）
+- 「削除して再DL」は `confirmed=true` 必須のバックグラウンド操作（破損ファイル・SHA256不一致時に使用）
+
+**API エンドポイント:**
 - `/api/sd-models` (GET): マニフェスト内全モデルのステータス
 - `/api/sd-models/webui` (GET): SD WebUI API からインストール済みモデル一覧
 - `/api/sd-models/current` (GET): SD WebUI の現在ロード済みモデル名
 - `/api/sd-models/download` (POST): バックグラウンドダウンロード開始
 - `/api/sd-models/progress` (GET): ダウンロード進捗確認（ポーリング用）
-- `/api/sd-models/use` (POST): SD WebUI のアクティブモデル切り替え
+- `/api/sd-models/delete` (POST): モデルファイル削除（`confirmed=true` 必須）
+- `/api/sd-models/delete-redownload` (POST): 削除して再ダウンロード（`confirmed=true` 必須、バックグラウンド）
+- `/api/sd-models/use` (POST): Forge アクティブモデル切り替え + `SD_WEBUI_MODEL` を config に保存
 - `/api/sd-models/rescan` (POST): SD WebUI への再スキャン依頼
 
 **追加設定項目:**
 | 設定 | 説明 | デフォルト |
 |---|---|---|
-| `SD_WEBUI_ROOT` | SD WebUI インストールディレクトリ（モデルパス解決用） | `""` |
+| `SD_WEBUI_ROOT` | SD WebUI インストールディレクトリ（モデルパス解決・削除安全確認用） | `""` |
 | `SD_MODEL_MANIFEST_PATH` | SD モデルマニフェスト JSON パス | `assets/sd_webui/model_manifest.json` |
 | `AUTO_DOWNLOAD_SD_MODELS` | `1` のとき未インストールモデルを自動ダウンロード | `0` |
+| `HF_TOKEN` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。値はレスポンス・ログに含めない） | `""` |
 
 ---
 
@@ -481,6 +493,16 @@ GET  /api/settings/config
 POST /api/settings/config
 POST /api/settings/secrets
 GET  /api/settings/ollama-models
+
+GET  /api/sd-models
+GET  /api/sd-models/webui
+GET  /api/sd-models/current
+GET  /api/sd-models/progress
+POST /api/sd-models/download
+POST /api/sd-models/delete          # confirmed=true 必須
+POST /api/sd-models/delete-redownload  # confirmed=true 必須、バックグラウンド
+POST /api/sd-models/use
+POST /api/sd-models/rescan
 ```
 
 ### セキュリティ方針
@@ -488,11 +510,11 @@ GET  /api/settings/ollama-models
 - `127.0.0.1` のみバインド
 - output/ 配下のみファイルアクセス可（`security.py` で検証）
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の内容は返さない
-- APIキー設定は有無（bool）のみ返す
+- APIキー設定（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）は有無（bool）のみ返す。値をレスポンス・ログに含めない
 - `.env` 書き込みAPIは許可キーだけを受け付け、値に改行を含む場合は拒否する
-- パストラバーサル拒否
-- 破壊的操作（アップロード・固定コメント投稿）は `confirmed=true` が必須
-- 例外時に秘密値をログへ出さない
+- パストラバーサル拒否（`output/` 配下 / `SD_WEBUI_ROOT` 配下の実パス検査を実施）
+- 破壊的操作（アップロード・固定コメント投稿・モデル削除）は `confirmed=true` が必須
+- 例外時に秘密値をログへ出さない（HF_TOKEN 付き URL はログに含めない）
 
 ### Web一本化方針
 
@@ -519,7 +541,9 @@ GET  /api/settings/ollama-models
 
 `/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI Forge）と **縮小生成**（`sd_size_mode`）の選択が含まれる。`/images` 再生成にも同様のエンジン選択と縮小生成チェックボックスがある。
 
-`/settings` のAPIキー状態表示とAPIキー変更欄は常に画面最下部に置く。通常の設定変更欄には秘密値を含めない。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
+`/settings` のAPIキー設定タブ（「APIキー設定」）は画面最下部に置く。通常の設定変更欄には秘密値を含めない。APIキー設定欄には `GOOGLE_API_KEY`・`OPENAI_API_KEY`・`HF_TOKEN`（Hugging Face アクセストークン）が含まれ、いずれも有無（bool）のみ画面に表示する。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
+
+ナビゲーションバーの「設定」リンクは常にナビゲーション最右端に固定する（CSS `margin-left: auto`）。
 
 画像確認・再生成（`/images`）は `/history/{name}` 詳細画面の「画像確認・再生成」リンクからも遷移できる。ナビゲーションには独立リンクを設けない。
 
@@ -712,6 +736,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_FFPROBE_TIMEOUT_SEC` | 30 | nativeレンダーのffprobe 最大実行秒数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
+| `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
 
 ---
 

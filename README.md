@@ -167,6 +167,8 @@ SD_WEBUI_NEGATIVE_PROMPT=people, human, person, face, hands, photorealistic, rea
 SD_WEBUI_ROOT=C:\path\to\stable-diffusion-webui
 SD_MODEL_MANIFEST_PATH=assets/sd_webui/model_manifest.json
 AUTO_DOWNLOAD_SD_MODELS=0
+# Hugging Face 認証が必要なモデルのダウンロードに使用（requires_auth=true のモデル）
+HF_TOKEN=
 ```
 
 > [!IMPORTANT]
@@ -177,33 +179,29 @@ AUTO_DOWNLOAD_SD_MODELS=0
 > - Shorts（縦動画）では幅・高さが自動で入れ替わります（`SD_WEBUI_WIDTH` / `SD_WEBUI_HEIGHT` は横動画基準で設定してください）。
 > - 画像生成前に SD WebUI を手動で起動しておいてください（`--api` オプション必須）。
 
-#### SD WebUI モデルの手動インストール
-
-`URL未設定: 手動配置` と表示されたモデルは、以下の手順で手動インストールします。
-
-1. モデルファイルを配布ページからダウンロードします。  
-   例（SD 1.5 Base）: [https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5](https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5)
-
-2. SD WebUI のモデルフォルダに配置します。  
-   ```
-   {SD_WEBUI_ROOT}\models\Stable-diffusion\（ファイル名）
-   ```
-   例: `C:\stable-diffusion-webui\models\Stable-diffusion\v1-5-pruned-emaonly.safetensors`
-
-3. Web UI の「Stable Diffusionモデル」ページで **「WebUI 再スキャン」** ボタンを押すと一覧が更新されます。
-
-> `SD_WEBUI_ROOT` を `.env` に設定しておくと、配置先のフルパスが「インストール方法▼」欄に表示されます。
-
 #### SD WebUI モデル管理 Web UI
 
-Web UI の「Stable Diffusionモデル」ページ（`/sd-models`）からマニフェスト内モデルの状態確認・ダウンロード・モデル切り替えができます。
+Web UI の「Stable Diffusionモデル」ページ（`/sd-models`）から、モデルのダウンロード・インストール・切り替えをアプリ内で完結できます。
 
-- **マニフェスト内モデル**: `assets/sd_webui/model_manifest.json` に定義されたモデルのインストール状況と DL ボタン
-- **現在のモデル**: SD WebUI API から取得した現在ロード済みモデル名
-- **インストール済みモデル**: SD WebUI API から取得したモデル一覧と「使用」ボタン（モデル切り替え）
-- **再スキャン**: SD WebUI にモデル再スキャンを依頼する
+- **「次の生成で使われるモデル」バナー**: `SD_WEBUI_MODEL` 設定値または Forge 現在ロード中モデルを最上部に表示
+- **ダウンロード**: `source_url` が設定されたモデルはワンクリックでダウンロード・SHA256検証・配置・Forge 再スキャンまで自動実行
+- **「このモデルを使う」**: Forge への即時切り替え + `SD_WEBUI_MODEL` を `.env` へ保存（次回起動後も維持）
+- **「削除して再DL」**: 破損・SHA256不一致時に既存ファイルを削除して再ダウンロード（確認ダイアログあり）
 
-> `SD_WEBUI_ROOT` を設定するとマニフェスト内モデルのファイルパスを解決し、インストール済みかどうかを確認できます。未設定時はファイルパスを確認できません（SD WebUI API 経由のみ確認可能）。
+> `source_url` が空のモデル（Anything V5 など CivitAI 配布のもの）は手動ダウンロードが必要です。モデル情報欄の配布ページ URL からダウンロードして `{SD_WEBUI_ROOT}\models\Stable-diffusion\` に配置し、「WebUI 再スキャン」ボタンを押してください。
+
+#### Hugging Face 認証が必要なモデル（`requires_auth=true`）
+
+SD 1.5 などライセンス同意が必要なモデルは `HF_TOKEN` の設定が必要です。
+
+1. [Hugging Face](https://huggingface.co/settings/tokens) でアクセストークンを取得
+2. モデルのページでライセンスに同意しておく
+3. Web UI の `設定 > APIキー設定` で `HF_TOKEN` に貼り付けて保存
+
+```env
+# .env に直接書く場合
+HF_TOKEN=hf_xxxxxxxxxxxxxxxxxxxxxxxx
+```
 
 #### バックエンド切り替え一覧
 
