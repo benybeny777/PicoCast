@@ -570,7 +570,7 @@ def normalize_background_order(items):
     return normalized
 
 
-def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None, sd_size_mode=False, long_thumbnail_ab_test=None):
+def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None, sd_size_mode=False, long_thumbnail_ab_test=None, background_engine=None):
     """既存の出力フォルダのサムネイルのみ再生成する。"""
     def update_status(msg, tag="info"):
         if progress_callback:
@@ -594,7 +594,7 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     os.makedirs(theme_bg_dir, exist_ok=True)
 
     # background_engine=None → IMAGE_BACKEND の設定に従う
-    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode)
+    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode, background_engine=background_engine)
     try:
         thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
                                         update_status, script_content=script_content, debug_mode=debug,

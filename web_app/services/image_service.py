@@ -12,14 +12,17 @@ from web_app.security import safe_output_path
 
 
 def _detect_is_shorts_from_dir(theme_dir: str) -> bool:
-    """script.txt の動画形式行から Shorts か判定する。読めなければ True を返す。"""
+    """script.txt の動画形式行から Shorts か判定する。読めなければ Shorts として扱う。"""
+    import logging
     script_path = os.path.join(theme_dir, "script.txt")
     try:
         with open(script_path, "r", encoding="utf-8") as f:
             content = f.read()
         from main import _detect_is_shorts
         return _detect_is_shorts(content)
-    except Exception:
+    except Exception as e:
+        # フォールバック許可: script.txt が読めない場合は画像再生成を止めず Shorts として扱う
+        logging.warning("_detect_is_shorts_from_dir: script.txt 読み取り失敗 (%s) - Shorts として処理します: %s", theme_dir, e)
         return True
 
 
@@ -177,6 +180,7 @@ def _run_regenerate(
                 thumb_path = regenerate_thumbnail_only(
                     theme_dir,
                     progress_callback=lambda msg, tag="info": _log(job, msg, tag),
+                    background_engine=engine,
                 )
                 _log(job, f"サムネイル再生成完了: {os.path.basename(thumb_path)}", "success")
                 regenerated.append(key)

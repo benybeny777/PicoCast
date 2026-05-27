@@ -16,7 +16,7 @@ from config import (
 class GenerateRequest(BaseModel):
     script: str
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = "nanobanana"
+    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
@@ -33,7 +33,7 @@ class GenerateRequest(BaseModel):
 class BatchGenerateRequest(BaseModel):
     scripts: list[str]
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = "nanobanana"
+    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
@@ -43,7 +43,7 @@ class BatchGenerateRequest(BaseModel):
 class HistoryRegenerateRequest(BaseModel):
     history_names: list[str]
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = "nanobanana"
+    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE

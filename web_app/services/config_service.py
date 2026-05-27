@@ -34,6 +34,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "GEMINI_MODEL",                    "type": "str",   "label": "Gemini 台本生成モデル",       "default": str(cfg.GEMINI_MODEL)},
     {"key": "NANOBANANA_PRO_MODEL",            "type": "str",   "label": "画像生成モデル(高品質)",      "default": str(cfg.NANOBANANA_PRO_MODEL)},
     {"key": "NANOBANANA_FLASH_MODEL",          "type": "str",   "label": "画像生成モデル(高速)",        "default": str(cfg.NANOBANANA_FLASH_MODEL)},
+    {"key": "NANOBANANA_TIMEOUT",              "type": "int",   "label": "Nano Banana API タイムアウト(秒, 0=無制限)", "default": str(cfg.NANOBANANA_TIMEOUT), "min": 0, "max": 600},
     {"key": "IMAGE_BACKEND",                   "type": "select", "label": "画像生成バックエンド",          "default": str(cfg.IMAGE_BACKEND), "choices": [("gemini", "Gemini / Nano Banana"), ("sd_webui", "Stable Diffusion WebUI Forge / A1111")]},
     {"key": "SD_WEBUI_BASE_URL",               "type": "str",    "label": "Stable Diffusion WebUI API URL",             "default": str(cfg.SD_WEBUI_BASE_URL)},
     {"key": "SD_WEBUI_TIMEOUT_SEC",            "type": "int",    "label": "Stable Diffusion WebUI タイムアウト(秒)",    "default": str(cfg.SD_WEBUI_TIMEOUT_SEC), "min": 10, "max": 3600},

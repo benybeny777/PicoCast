@@ -39,7 +39,6 @@ FOOD_HINT_WORDS = (
     "カシューナッツ", "紅茶", "アイス", "バナナ",
 )
 
-_OLLAMA_START_ATTEMPTED = False
 
 
 def _truthy_env(value: str) -> bool:
@@ -274,30 +273,39 @@ def _ollama_is_ready(timeout=1.5) -> bool:
         return False
 
 
+_OLLAMA_START_LOCK = __import__("threading").Lock()
+_OLLAMA_LAST_START_TIME: float = 0.0
+_OLLAMA_START_COOLDOWN_SEC = 60.0  # 起動試行後この秒数は再試行しない
+
+
 def ensure_ollama_server(wait_seconds=10) -> None:
-    global _OLLAMA_START_ATTEMPTED
+    global _OLLAMA_LAST_START_TIME
     if _ollama_is_ready():
         return
 
-    if not _OLLAMA_START_ATTEMPTED:
-        _OLLAMA_START_ATTEMPTED = True
-        creationflags = 0
-        startupinfo = None
-        if os.name == "nt":
-            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        try:
-            subprocess.Popen(
-                ["ollama", "serve"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                stdin=subprocess.DEVNULL,
-                creationflags=creationflags,
-                startupinfo=startupinfo,
-            )
-        except Exception as exc:
-            raise RuntimeError(f"Ollama自動起動に失敗しました: {exc}") from exc
+    with _OLLAMA_START_LOCK:
+        # クールダウン中は起動を試みない（別スレッドが既に起動中の可能性）
+        if time.time() - _OLLAMA_LAST_START_TIME < _OLLAMA_START_COOLDOWN_SEC:
+            pass  # ロック外でポーリングを行う
+        else:
+            _OLLAMA_LAST_START_TIME = time.time()
+            creationflags = 0
+            startupinfo = None
+            if os.name == "nt":
+                creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            try:
+                subprocess.Popen(
+                    ["ollama", "serve"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    creationflags=creationflags,
+                    startupinfo=startupinfo,
+                )
+            except Exception as exc:
+                raise RuntimeError(f"Ollama自動起動に失敗しました: {exc}") from exc
 
     deadline = time.time() + max(1, wait_seconds)
     while time.time() < deadline:

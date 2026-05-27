@@ -14,7 +14,28 @@
 
 ## 2026-05-28
 
-### /sd-models UI 改善
+### バグ修正: 画像エンジン選択・ハングアップ・Ollama 起動フラグ
+
+#### 画像エンジン選択が反映されない問題 (重大)
+
+- `web_app/schemas.py`: `GenerateRequest` / `BatchGenerateRequest` / `HistoryRegenerateRequest` の `background_engine` デフォルトが `"nanobanana"` ハードコードされており `IMAGE_BACKEND` 設定を無視していた。`""` (空文字) に変更し、`ImageGenerator` が `IMAGE_BACKEND` 設定に従うよう修正。
+- `core/image_generator.py`: `background_engine` 引数が空文字の場合も `IMAGE_BACKEND` へ fallback するよう判定条件を `if background_engine and background_engine.strip():` に明示化。
+- HTML テンプレート 3 枚 (`generate.html` / `history_detail.html` / `images.html`): エンジン選択 `<option>` の `selected` 判定を `image_backend == 'gemini'` から `image_backend != 'sd_webui'` に変更。`IMAGE_BACKEND` が未設定や想定外の値でも Gemini AI がデフォルト選択される。
+
+#### Nano Banana API タイムアウト未設定によるハングアップ修正
+
+- `config.py`: `NANOBANANA_TIMEOUT = 120`（秒）を追加。`.env` の `NANOBANANA_TIMEOUT` で変更可能。
+- `core/image_generator.py`: `genai.Client` の初期化時に `HttpOptions(timeout=NANOBANANA_TIMEOUT)` を渡すよう変更。タイムアウトなし（無制限ブロック）から 120 秒後にタイムアウト例外を発生させる。
+- `main.py` / `web_app/services/image_service.py`: サムネイル再生成時に `background_engine` パラメータが渡されていなかったバグを修正（前セッションの修正）。
+- `web_app/services/config_service.py`: 設定画面から `NANOBANANA_TIMEOUT` を変更できるよう `EDITABLE_CONFIG` に追加（min:0, max:600）。
+
+#### Ollama 起動試行フラグのスレッド安全性修正
+
+- `core/opening_quality.py`: `_OLLAMA_START_ATTEMPTED` グローバル boolean フラグを廃止し、`_OLLAMA_LAST_START_TIME` + `_OLLAMA_START_LOCK` + `_OLLAMA_START_COOLDOWN_SEC (60秒)` のクールダウン方式に変更。1 回目の起動試行後 60 秒経過すれば再試行可能となり、SD WebUI 画像再生成ジョブを複数回実行した際も Ollama が応答しない状態が固定しない。
+
+#### サイレントフォールバック警告ログ化
+
+- `web_app/services/image_service.py`: `_detect_is_shorts_from_dir()` の `except Exception: return True` を警告ログ付きフォールバックに変更（`logging.warning` でパス・エラー内容を記録してから `return True`）。
 
 - `/sd-models` ページ最上部に「🎨 次の生成で使われるモデル」バナーを追加。`SD_WEBUI_MODEL` 設定値がある場合はそれを、未設定の場合は Forge 現在ロード中モデルを表示する。どちらも未取得の場合は警告を表示。
 - 「このモデルを使う」は Forge への即時切り替えに加えて `SD_WEBUI_MODEL` を `.env` に保存するよう変更。次回起動後も設定が維持される。

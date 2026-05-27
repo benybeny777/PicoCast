@@ -7,6 +7,7 @@ from config import (
     GOOGLE_API_KEY,
     NANOBANANA_FLASH_MODEL,
     NANOBANANA_PRO_MODEL,
+    NANOBANANA_TIMEOUT,
     SD_SIZE_IMAGE_SCALE,
 )
 # IMAGE_BACKEND は実行時に config から直接参照する（monkeypatch対応）
@@ -75,7 +76,7 @@ class ImageGenerator:
         #   3. config.IMAGE_BACKEND == "gemini" → nanobanana 固定
         #   4. config.IMAGE_BACKEND が未対応値 → ValueError
         # ※ config.IMAGE_BACKEND は実行時参照（monkeypatch / .env 再ロード対応）
-        if background_engine:
+        if background_engine and background_engine.strip():
             effective_engine = background_engine.strip().lower()
         elif config.IMAGE_BACKEND == "sd_webui":
             effective_engine = "sd_webui"
@@ -99,7 +100,9 @@ class ImageGenerator:
                     "Google API キー (GOOGLE_API_KEY) が未設定です。"
                     " .env に GOOGLE_API_KEY を設定してください。"
                 )
-            self.client = genai.Client(api_key=GOOGLE_API_KEY)
+            from google.genai.types import HttpOptions as _HttpOptions
+            _http_opts = _HttpOptions(timeout=NANOBANANA_TIMEOUT) if NANOBANANA_TIMEOUT > 0 else None
+            self.client = genai.Client(api_key=GOOGLE_API_KEY, http_options=_http_opts)
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):
