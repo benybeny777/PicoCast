@@ -1,176 +1,199 @@
 {% extends "base.html" %}
-{% block title %}設定 / サービス確認{% endblock %}
+{% block title %}設定{% endblock %}
 {% block content %}
-<h1>設定 / サービス確認</h1>
+<h1>設定</h1>
 
-<div class="card-grid">
-  <!-- 連携サービス状態 -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('status', this)">サービス状態</button>
+  <button class="tab-btn" onclick="switchTab('config', this)">設定変更</button>
+  <button class="tab-btn" onclick="switchTab('apikey', this)">APIキー</button>
+  <button class="tab-btn" onclick="switchTab('dict', this)">よみがな辞書</button>
+</div>
+
+<!-- ── タブ: サービス状態 ── -->
+<div id="tab-status" class="tab-panel active">
+  <div class="action-row" style="margin-bottom:12px">
+    <button class="btn btn-secondary" id="btn-refresh-status" onclick="refreshStatus()">再確認</button>
+    <span id="refresh-status-msg" style="margin-left:10px;font-size:13px;color:var(--text-muted)"></span>
+  </div>
+  <div class="card-grid">
+    <div class="card">
+      <h2>連携アプリ</h2>
+      <table class="status-table">
+        <tr>
+          <td>Google AI</td>
+          <td>{% if status.google_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
+        </tr>
+        <tr>
+          <td>OpenAI</td>
+          <td>{% if status.openai_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
+        </tr>
+        <tr>
+          <td>YouTubeアップロード</td>
+          <td>
+            {% if status.client_secrets_json and status.token_json %}
+            <span class="badge badge-ok">連携済み</span>
+            {% elif status.client_secrets_json %}
+            <span class="badge badge-warn">認証待ち</span>
+            {% else %}
+            <span class="badge badge-ng">未設定</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>YouTube Analytics</td>
+          <td>
+            {% if status.client_secrets_json and status.token_analytics_json %}
+            <span class="badge badge-ok">連携済み</span>
+            {% elif status.client_secrets_json %}
+            <span class="badge badge-warn">認証待ち</span>
+            {% else %}
+            <span class="badge badge-ng">未設定</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>VOICEVOX</td>
+          <td>
+            {% if status.voicevox.ok %}
+            <span class="badge badge-ok">接続OK{% if status.voicevox.version %} v{{ status.voicevox.version }}{% endif %}</span>
+            {% else %}
+            <span class="badge badge-ng">未接続: {{ status.voicevox.get('error','') }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>Ollama</td>
+          <td>
+            {% if status.ollama.ok %}
+            <span class="badge badge-ok">接続OK ({{ status.ollama.model_count }}モデル)</span>
+            {% else %}
+            <span class="badge badge-ng">未接続: {{ status.ollama.get('error','') }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>ComfyUI</td>
+          <td>
+            {% if status.comfyui.ok %}
+            <span class="badge badge-ok">接続OK</span>
+            {% else %}
+            <span class="badge badge-ng">未接続</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
+          <td>ffmpeg</td>
+          <td>
+            {% if status.ffmpeg.ok %}
+            <span class="badge badge-ok">利用可{% if status.ffmpeg.version %} v{{ status.ffmpeg.version }}{% endif %}</span>
+            <br><small style="color:var(--text-muted)">動作: {{ status.ffmpeg.gpu }}</small>
+            {% else %}
+            <span class="badge badge-ng">未インストール</span>
+            {% endif %}
+          </td>
+        </tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>パス設定</h2>
+      <table class="status-table">
+        <tr><td>出力フォルダ</td><td><code>{{ status.output_dir }}</code></td></tr>
+        <tr><td>フォルダ存在</td><td>{% if status.output_dir_exists %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-ng">なし</span>{% endif %}</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── タブ: 設定変更 ── -->
+<div id="tab-config" class="tab-panel">
   <div class="card">
-    <h2>連携アプリ</h2>
+    <h2>設定変更</h2>
+    <p class="hint">変更は <code>.env</code> に書き込まれます。多くの設定は保存後すぐ反映されますが、起動時にだけ読む設定はアプリ再起動後に反映されます。</p>
+    <div class="action-row mt">
+      <button class="btn btn-primary" onclick="saveConfig()">保存</button>
+      <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
+    </div>
+    <div id="config-form"><p>読み込み中...</p></div>
+    <div class="action-row mt">
+      <button class="btn btn-primary" onclick="saveConfig()">保存</button>
+      <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
+    </div>
+    <div id="save-status" style="display:none" class="log-box mt"></div>
+  </div>
+</div>
+
+<!-- ── タブ: APIキー ── -->
+<div id="tab-apikey" class="tab-panel">
+  <div class="card">
+    <h2>APIキー設定</h2>
+    <p class="hint">APIキーは <code>.env</code> に直接保存され、<strong>アプリ再起動後</strong>に反映されます（空欄は変更されません）。</p>
     <table class="status-table">
       <tr>
-        <td>Google AI</td>
-        <td>{% if status.google_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
-      </tr>
-      <tr>
-        <td>OpenAI</td>
-        <td>{% if status.openai_api_key %}<span class="badge badge-ok">利用可</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</td>
-      </tr>
-      <tr>
-        <td>YouTubeアップロード</td>
-        <td>
-          {% if status.client_secrets_json and status.token_json %}
-          <span class="badge badge-ok">連携済み</span>
-          {% elif status.client_secrets_json %}
-          <span class="badge badge-warn">認証待ち</span>
-          {% else %}
-          <span class="badge badge-ng">未設定</span>
-          {% endif %}
+        <td style="width:55%">
+          <label for="secret-GOOGLE_API_KEY"><strong>GOOGLE_API_KEY</strong></label>
+          <br><small style="color:var(--text-muted)">現在: {% if status.google_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</small>
         </td>
+        <td><input id="secret-GOOGLE_API_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px"></td>
       </tr>
       <tr>
-        <td>YouTube Analytics</td>
         <td>
-          {% if status.client_secrets_json and status.token_analytics_json %}
-          <span class="badge badge-ok">連携済み</span>
-          {% elif status.client_secrets_json %}
-          <span class="badge badge-warn">認証待ち</span>
-          {% else %}
-          <span class="badge badge-ng">未設定</span>
-          {% endif %}
+          <label for="secret-OPENAI_API_KEY"><strong>OPENAI_API_KEY</strong></label>
+          <br><small style="color:var(--text-muted)">現在: {% if status.openai_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</small>
         </td>
+        <td><input id="secret-OPENAI_API_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px"></td>
       </tr>
-      <tr>
-        <td>VOICEVOX</td>
-        <td>
-          {% if status.voicevox.ok %}
-          <span class="badge badge-ok">接続OK{% if status.voicevox.version %} v{{ status.voicevox.version }}{% endif %}</span>
-          {% else %}
-          <span class="badge badge-ng">未接続: {{ status.voicevox.get('error','') }}</span>
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td>Ollama</td>
-        <td>
-          {% if status.ollama.ok %}
-          <span class="badge badge-ok">接続OK ({{ status.ollama.model_count }}モデル)</span>
-          {% else %}
-          <span class="badge badge-ng">未接続: {{ status.ollama.get('error','') }}</span>
-          {% endif %}
-        </td>
-      </tr>
-      <tr>
-        <td>ffmpeg</td>
-        <td>
-          {% if status.ffmpeg.ok %}
-          <span class="badge badge-ok">利用可{% if status.ffmpeg.version %} v{{ status.ffmpeg.version }}{% endif %}</span>
-          <br><small style="color:var(--text-muted)">動作: {{ status.ffmpeg.gpu }}</small>
-          {% else %}
-          <span class="badge badge-ng">未インストール</span>
-          {% endif %}
-        </td>
-      </tr>
+      <tr><td><strong>client_secrets.json</strong></td><td>{% if status.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
+      <tr><td><strong>token.json</strong></td><td>{% if status.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
+      <tr><td><strong>token_analytics.json</strong></td><td>{% if status.token_analytics_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
     </table>
+    <div class="action-row mt">
+      <button class="btn btn-primary" onclick="saveSecrets()">APIキーを保存</button>
+    </div>
+    <div id="secrets-status" style="display:none" class="log-box mt"></div>
   </div>
+</div>
 
-  <!-- パス設定 -->
+<!-- ── タブ: よみがな辞書 ── -->
+<div id="tab-dict" class="tab-panel">
   <div class="card">
-    <h2>パス設定</h2>
-    <table class="status-table">
-      <tr><td>出力フォルダ</td><td><code>{{ status.output_dir }}</code></td></tr>
-      <tr><td>フォルダ存在</td><td>{% if status.output_dir_exists %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-ng">なし</span>{% endif %}</td></tr>
+    <h2>よみがな辞書</h2>
+    <p class="hint">VOICEVOXが読み間違える語を登録します。同梱辞書は手動管理、自動学習はsafe_autoモードが育てます。</p>
+
+    <h3 style="margin-top:1rem">同梱辞書（手動登録）</h3>
+    <div style="display:flex; gap:8px; align-items:center; margin:8px 0">
+      <input id="dict-word" type="text" placeholder="表記（例: 黒板）" class="form-input" style="width:140px">
+      <input id="dict-reading" type="text" placeholder="よみ（例: こくばん）" class="form-input" style="width:160px">
+      <button class="btn btn-primary" onclick="addDictEntry()">追加</button>
+    </div>
+    <div id="dict-status" style="display:none; margin-bottom:8px" class="log-box"></div>
+    <table class="status-table" id="dict-base-table">
+      <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
+    </table>
+
+    <h3 style="margin-top:1.5rem">自動学習辞書（safe_autoが蓄積）</h3>
+    <p class="hint">間違っているエントリは削除すると次回から再判定されます。</p>
+    <table class="status-table" id="dict-user-table">
+      <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
     </table>
   </div>
-</div>
-
-<!-- 設定変更フォーム -->
-<div class="card mt">
-  <h2>設定変更</h2>
-  <p class="hint">変更は <code>.env</code> に書き込まれます。多くの設定は保存後すぐ反映されますが、起動時にだけ読む設定はアプリ再起動後に反映されます。</p>
-  <div class="action-row mt">
-    <button class="btn btn-primary" onclick="saveConfig()">保存</button>
-    <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
-  </div>
-  <div id="config-form">
-    <p>読み込み中...</p>
-  </div>
-  <div class="action-row mt">
-    <button class="btn btn-primary" onclick="saveConfig()">保存</button>
-    <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
-  </div>
-  <div id="save-status" style="display:none" class="log-box mt"></div>
-</div>
-
-<!-- APIキー設定・変更 -->
-<div class="card mt">
-  <h2>APIキー設定</h2>
-  <p class="hint">APIキーは <code>.env</code> に直接保存され、<strong>アプリ再起動後</strong>に反映されます（空欄は変更されません）。</p>
-  <table class="status-table">
-    <tr>
-      <td style="width:55%">
-        <label for="secret-GOOGLE_API_KEY"><strong>GOOGLE_API_KEY</strong></label>
-        <br><small style="color:var(--text-muted)">現在: {% if status.google_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</small>
-      </td>
-      <td>
-        <input id="secret-GOOGLE_API_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px">
-      </td>
-    </tr>
-    <tr>
-      <td>
-        <label for="secret-OPENAI_API_KEY"><strong>OPENAI_API_KEY</strong></label>
-        <br><small style="color:var(--text-muted)">現在: {% if status.openai_api_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-ng">未設定</span>{% endif %}</small>
-      </td>
-      <td>
-        <input id="secret-OPENAI_API_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px">
-      </td>
-    </tr>
-    <tr>
-      <td><strong>client_secrets.json</strong></td>
-      <td>{% if status.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
-    </tr>
-    <tr>
-      <td><strong>token.json</strong></td>
-      <td>{% if status.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
-    </tr>
-    <tr>
-      <td><strong>token_analytics.json</strong></td>
-      <td>{% if status.token_analytics_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td>
-    </tr>
-  </table>
-  <div class="action-row mt">
-    <button class="btn btn-primary" onclick="saveSecrets()">APIキーを保存</button>
-  </div>
-  <div id="secrets-status" style="display:none" class="log-box mt"></div>
-</div>
-
-<!-- よみがな辞書管理 -->
-<div class="card mt">
-  <h2>よみがな辞書</h2>
-  <p class="hint">VOICEVOXが読み間違える語を登録します。同梱辞書は手動管理、自動学習はsafe_autoモードが育てます。</p>
-
-  <h3 style="margin-top:1rem">同梱辞書（手動登録）</h3>
-  <div style="display:flex; gap:8px; align-items:center; margin:8px 0">
-    <input id="dict-word" type="text" placeholder="表記（例: 黒板）" class="form-input" style="width:140px">
-    <input id="dict-reading" type="text" placeholder="よみ（例: こくばん）" class="form-input" style="width:160px">
-    <button class="btn btn-primary" onclick="addDictEntry()">追加</button>
-  </div>
-  <div id="dict-status" style="display:none; margin-bottom:8px" class="log-box"></div>
-  <table class="status-table" id="dict-base-table">
-    <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
-  </table>
-
-  <h3 style="margin-top:1.5rem">自動学習辞書（safe_autoが蓄積）</h3>
-  <p class="hint">間違っているエントリは削除すると次回から再判定されます。</p>
-  <table class="status-table" id="dict-user-table">
-    <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
-  </table>
 </div>
 
 {% endblock %}
 {% block scripts %}
 <script>
 let _configItems = [];
+let _dictLoaded = false;
+let _configLoaded = false;
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'config' && !_configLoaded) loadConfig();
+  if (name === 'dict' && !_dictLoaded) loadDict();
+}
 
 async function loadConfig() {
   const form = document.getElementById('config-form');
@@ -204,7 +227,6 @@ async function loadConfig() {
             <option value="1" ${item.current === '1' ? 'selected' : ''}>有効</option>
             <option value="0" ${item.current === '0' ? 'selected' : ''}>無効</option>
           </select>`;
-
       } else if (item.type === 'select') {
         const opts = (item.choices || []).map(([value, label]) =>
           `<option value="${esc(value)}" ${value === item.current ? 'selected' : ''}>${esc(label)}</option>`
@@ -213,44 +235,23 @@ async function loadConfig() {
           <select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">
             ${opts}
           </select>`;
-
       } else if (item.type === 'ollama_model') {
         if (ollamaAvailable && ollamaModels.length > 0) {
-          const allModels = ollamaModels.includes(item.current)
-            ? ollamaModels
-            : [item.current, ...ollamaModels];
-          const opts = allModels.map(m =>
-            `<option value="${esc(m)}" ${m === item.current ? 'selected' : ''}>${esc(m)}</option>`
-          ).join('');
-          tdInput.innerHTML = `
-            <select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">
-              ${opts}
-            </select>`;
+          const allModels = ollamaModels.includes(item.current) ? ollamaModels : [item.current, ...ollamaModels];
+          const opts = allModels.map(m => `<option value="${esc(m)}" ${m === item.current ? 'selected' : ''}>${esc(m)}</option>`).join('');
+          tdInput.innerHTML = `<select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">${opts}</select>`;
         } else {
           const note = ollamaAvailable ? '（モデルなし）' : '（Ollama 未起動）';
-          tdInput.innerHTML = `
-            <input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:180px">
-            <small style="color:var(--text-muted)"> ${note}</small>`;
+          tdInput.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:180px"><small style="color:var(--text-muted)"> ${note}</small>`;
         }
-
       } else if (item.type === 'bgm_file') {
         if (bgmFiles.length > 0) {
-          const allFiles = bgmFiles.includes(item.current)
-            ? bgmFiles
-            : [item.current, ...bgmFiles];
-          const opts = allFiles.map(f =>
-            `<option value="${esc(f)}" ${f === item.current ? 'selected' : ''}>${esc(f)}</option>`
-          ).join('');
-          tdInput.innerHTML = `
-            <select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">
-              ${opts}
-            </select>`;
+          const allFiles = bgmFiles.includes(item.current) ? bgmFiles : [item.current, ...bgmFiles];
+          const opts = allFiles.map(f => `<option value="${esc(f)}" ${f === item.current ? 'selected' : ''}>${esc(f)}</option>`).join('');
+          tdInput.innerHTML = `<select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">${opts}</select>`;
         } else {
-          tdInput.innerHTML = `
-            <input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:220px">
-            <small style="color:var(--text-muted)"> （assets/bgm/ にファイルなし）</small>`;
+          tdInput.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:220px"><small style="color:var(--text-muted)"> （assets/bgm/ にファイルなし）</small>`;
         }
-
       } else {
         const inputType = item.type === 'float' || item.type === 'int' ? 'number' : 'text';
         const step = item.type === 'float' ? '0.01' : '1';
@@ -264,13 +265,13 @@ async function loadConfig() {
       table.appendChild(tr);
     }
     form.appendChild(table);
-
     if (ollamaAvailable && ollamaModels.length > 0) {
       const note = document.createElement('p');
       note.className = 'hint';
       note.textContent = `Ollama: ${ollamaModels.length} 件のモデルを検出`;
       form.appendChild(note);
     }
+    _configLoaded = true;
   } catch(e) {
     form.innerHTML = `<p class="error-text">読み込みエラー: ${e}</p>`;
   }
@@ -280,12 +281,8 @@ async function saveConfig() {
   const statusBox = document.getElementById('save-status');
   statusBox.style.display = 'block';
   statusBox.textContent = '保存中...';
-
   const updates = {};
-  document.querySelectorAll('[data-key]').forEach(el => {
-    updates[el.dataset.key] = el.value;
-  });
-
+  document.querySelectorAll('[data-key]').forEach(el => { updates[el.dataset.key] = el.value; });
   try {
     const res = await fetch('/api/settings/config', {
       method: 'POST',
@@ -311,18 +308,15 @@ async function saveSecrets() {
   statusBox.style.display = 'block';
   statusBox.textContent = '保存中...';
   statusBox.style.color = '';
-
   const updates = {};
   ['GOOGLE_API_KEY', 'OPENAI_API_KEY'].forEach(key => {
     const val = document.getElementById(`secret-${key}`).value;
     if (val.trim()) updates[key] = val;
   });
-
   if (Object.keys(updates).length === 0) {
     statusBox.textContent = '変更なし（空欄は無視されます）';
     return;
   }
-
   try {
     const res = await fetch('/api/settings/secrets', {
       method: 'POST',
@@ -335,19 +329,13 @@ async function saveSecrets() {
       statusBox.textContent = 'エラー:\n' + errs;
       statusBox.style.color = 'var(--error)';
     } else {
-      ['GOOGLE_API_KEY', 'OPENAI_API_KEY'].forEach(key => {
-        document.getElementById(`secret-${key}`).value = '';
-      });
+      ['GOOGLE_API_KEY', 'OPENAI_API_KEY'].forEach(key => { document.getElementById(`secret-${key}`).value = ''; });
       statusBox.textContent = `保存しました (${data.saved.length}件)。アプリを再起動すると反映されます。`;
       statusBox.style.color = 'var(--success)';
     }
   } catch(e) {
     statusBox.textContent = '通信エラー: ' + e;
   }
-}
-
-function esc(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 }
 
 function renderDictTable(tableId, entries, dictType) {
@@ -370,6 +358,7 @@ async function loadDict() {
     const data = await res.json();
     renderDictTable('dict-base-table', data.base || {}, 'base');
     renderDictTable('dict-user-table', data.user || {}, 'user');
+    _dictLoaded = true;
   } catch(e) {
     document.getElementById('dict-base-table').innerHTML = `<tr><td class="error-text">読み込みエラー: ${e}</td></tr>`;
   }
@@ -381,11 +370,7 @@ async function addDictEntry() {
   const statusBox = document.getElementById('dict-status');
   statusBox.style.display = 'block';
   statusBox.style.color = '';
-  if (!word || !reading) {
-    statusBox.textContent = '表記とよみを両方入力してください';
-    statusBox.style.color = 'var(--error)';
-    return;
-  }
+  if (!word || !reading) { statusBox.textContent = '表記とよみを両方入力してください'; statusBox.style.color = 'var(--error)'; return; }
   try {
     const res = await fetch('/api/settings/reading-dict/base', {
       method: 'POST',
@@ -401,12 +386,10 @@ async function addDictEntry() {
       statusBox.style.color = 'var(--success)';
       document.getElementById('dict-word').value = '';
       document.getElementById('dict-reading').value = '';
+      _dictLoaded = false;
       loadDict();
     }
-  } catch(e) {
-    statusBox.textContent = '通信エラー: ' + e;
-    statusBox.style.color = 'var(--error)';
-  }
+  } catch(e) { statusBox.textContent = '通信エラー: ' + e; statusBox.style.color = 'var(--error)'; }
 }
 
 async function deleteDictEntry(dictType, word) {
@@ -422,15 +405,31 @@ async function deleteDictEntry(dictType, word) {
     } else {
       statusBox.textContent = `削除しました: ${data.deleted}`;
       statusBox.style.color = 'var(--success)';
+      _dictLoaded = false;
       loadDict();
     }
-  } catch(e) {
-    statusBox.textContent = '通信エラー: ' + e;
-    statusBox.style.color = 'var(--error)';
-  }
+  } catch(e) { statusBox.textContent = '通信エラー: ' + e; statusBox.style.color = 'var(--error)'; }
 }
 
-loadConfig();
-loadDict();
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+}
+
+async function refreshStatus() {
+  const btn = document.getElementById('btn-refresh-status');
+  const msg = document.getElementById('refresh-status-msg');
+  btn.disabled = true;
+  msg.textContent = '確認中...';
+  try {
+    const res = await fetch('/api/settings/status/refresh', {method: 'POST'});
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    msg.textContent = '完了。ページを再読み込みします...';
+    setTimeout(() => location.reload(), 800);
+  } catch(e) {
+    msg.style.color = 'var(--error)';
+    msg.textContent = 'エラー: ' + e;
+    btn.disabled = false;
+  }
+}
 </script>
 {% endblock %}

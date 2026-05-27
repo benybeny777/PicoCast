@@ -13,6 +13,9 @@ import httpx
 import config
 from core.output_paths import OUTPUT_DIR, ANALYTICS_DIR
 
+# 起動時にウォームアップし、以降はキャッシュを返す
+_settings_status_cache: dict | None = None
+
 
 def check_voicevox() -> dict[str, Any]:
     try:
@@ -25,7 +28,7 @@ def check_voicevox() -> dict[str, Any]:
 def check_ollama() -> dict[str, Any]:
     try:
         base = config.OLLAMA_BASE_URL.rstrip("/")
-        r = httpx.get(f"{base}/api/tags", timeout=3.0)
+        r = httpx.get(f"{base}/api/tags", timeout=config.WEB_VOICEVOX_CHECK_TIMEOUT_SEC)
         if r.status_code == 200:
             models = r.json().get("models", [])
             return {"ok": True, "model_count": len(models)}
@@ -38,7 +41,7 @@ def check_ollama() -> dict[str, Any]:
 def check_comfyui() -> dict[str, Any]:
     try:
         base = config.LOCAL_COMFYUI_URL.rstrip("/")
-        r = httpx.get(f"{base}/system_stats", timeout=3.0)
+        r = httpx.get(f"{base}/system_stats", timeout=config.WEB_VOICEVOX_CHECK_TIMEOUT_SEC)
         if r.status_code == 200:
             return {
                 "ok": True,
@@ -97,14 +100,39 @@ def check_ffmpeg() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
+def refresh_settings_status() -> dict[str, Any]:
+    """サービスチェックを実行してキャッシュを更新して返す。"""
+    global _settings_status_cache
+    _settings_status_cache = get_settings_status()
+    return _settings_status_cache
+
+
+def get_cached_settings_status() -> dict[str, Any]:
+    """キャッシュがあればそれを返す。なければ refresh_settings_status() を呼ぶ。"""
+    if _settings_status_cache is not None:
+        return _settings_status_cache
+    return refresh_settings_status()
+
+
 def get_settings_status() -> dict[str, Any]:
     root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        f_vv     = ex.submit(check_voicevox)
+        f_ffmpeg = ex.submit(check_ffmpeg)
+        f_ollama = ex.submit(check_ollama)
+        f_comfyui= ex.submit(check_comfyui)
+        voicevox_result  = f_vv.result()
+        ffmpeg_result    = f_ffmpeg.result()
+        ollama_result    = f_ollama.result()
+        comfyui_result   = f_comfyui.result()
+
     return {
-        "voicevox": check_voicevox(),
-        "ffmpeg": check_ffmpeg(),
-        "ollama": check_ollama(),
-        "comfyui": check_comfyui(),
+        "voicevox": voicevox_result,
+        "ffmpeg": ffmpeg_result,
+        "ollama": ollama_result,
+        "comfyui": comfyui_result,
         "google_api_key": bool(config.GOOGLE_API_KEY),
         "openai_api_key": bool(config.OPENAI_API_KEY),
         "client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),
@@ -126,7 +154,7 @@ def get_settings_status() -> dict[str, Any]:
 
 
 def get_dashboard_summary() -> dict[str, Any]:
-    status = get_settings_status()
+    status = get_cached_settings_status()
 
     # 直近分析ファイル
     latest_analytics = None

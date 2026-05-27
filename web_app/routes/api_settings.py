@@ -16,6 +16,13 @@ def api_settings_status():
     return get_settings_status()
 
 
+@router.post("/status/refresh")
+def api_refresh_status():
+    """サービスチェックを再実行してキャッシュを更新する。"""
+    from web_app.services.status_service import refresh_settings_status
+    return refresh_settings_status()
+
+
 @router.get("/config")
 def api_get_config():
     """編集可能な設定項目と現在値を返す。"""
@@ -121,7 +128,7 @@ def api_ollama_models():
     import httpx
     base = getattr(cfg, "OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
     try:
-        r = httpx.get(f"{base}/api/tags", timeout=3.0)
+        r = httpx.get(f"{base}/api/tags", timeout=cfg.WEB_VOICEVOX_CHECK_TIMEOUT_SEC)
         models = [m["name"] for m in r.json().get("models", [])]
         return {"models": sorted(models), "available": True}
     except Exception:

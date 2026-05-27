@@ -33,8 +33,11 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def _lifespan(app):
+    import threading
     from web_app.services.auto_fixed_comment_service import start_auto_watcher
+    from web_app.services.status_service import refresh_settings_status
     start_auto_watcher()
+    threading.Thread(target=refresh_settings_status, daemon=True).start()
     yield
 
 app = FastAPI(

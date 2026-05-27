@@ -179,7 +179,7 @@ def page_fixed_comment(request: Request):
 
 @router.get("/settings", response_class=HTMLResponse)
 def page_settings(request: Request):
-    status = status_service.get_settings_status()
+    status = status_service.get_cached_settings_status()
     return _render(request, "settings.html", {"status": status})
 
 
