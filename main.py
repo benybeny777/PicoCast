@@ -418,11 +418,13 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     except Exception:
         pass
 
-    # サムネイルは常に nanobanana2 で生成（背景と統一）
+    # サムネイルは IMAGE_BACKEND に従う（sd_webui の場合は SD WebUI で生成）
+    # background_engine を明示的に渡すことでバックエンドを固定する
+    thumb_engine = img_gen.background_engine
     thumb_img_gen = ImageGenerator(
         width=img_gen.width, height=img_gen.height,
-        debug=img_gen.debug, image_style="nanobanana2", sd_size_mode=img_gen.sd_size_mode,
-        background_engine="nanobanana",
+        debug=img_gen.debug, image_style=img_gen.image_style, sd_size_mode=img_gen.sd_size_mode,
+        background_engine=thumb_engine,
     )
 
     def _finish_thumbnail(value):
@@ -438,6 +440,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             target_dir=theme_bg_dir,
             raw=True,
             reference_image_paths=char_refs,
+            is_thumbnail=True,
         )
         if not generated_name:
             return None
@@ -590,7 +593,8 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     theme_bg_dir = os.path.join(output_dir, "backgrounds")
     os.makedirs(theme_bg_dir, exist_ok=True)
 
-    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode, background_engine="nanobanana")
+    # background_engine=None → IMAGE_BACKEND の設定に従う
+    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode)
     try:
         thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
                                         update_status, script_content=script_content, debug_mode=debug,

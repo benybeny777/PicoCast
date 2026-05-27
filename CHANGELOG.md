@@ -14,6 +14,19 @@
 
 ## 2026-05-27
 
+### 画像生成バックエンドに Stable Diffusion WebUI Forge を追加
+
+- `IMAGE_BACKEND=sd_webui` を設定することで、Forge / AUTOMATIC1111互換APIから背景・サムネイルを生成できるようにした。
+- `IMAGE_BACKEND=gemini`（デフォルト）のときは従来どおり Nano Banana / Gemini 画像生成を使う。
+- ComfyUI依存を主ルートから外し、`IMAGE_BACKGROUND_ENGINE` は後方互換扱いに変更（既存の `local_comfyui` / `nanobanana` 設定は引き続き動作する）。
+- 画像生成失敗時は別エンジンへ自動フォールバックせず、明示エラーで停止する（設計方針不変）。
+- `core/sd_webui_generator.py: StableDiffusionWebUIGenerator` を新規追加。`POST /sdapi/v1/txt2img` で生成し、base64 PNG をファイル保存する。
+- サムネイル生成も `IMAGE_BACKEND` に従うよう変更。背景と同じエンジンでサムネを生成する。
+- GUIの「設定」画面のサービス確認に「SD WebUI Forge」ステータスを追加。`IMAGE_BACKEND=sd_webui` のとき接続OK/NG とロード中モデル名を表示する。
+- 設定画面から `IMAGE_BACKEND` / `SD_WEBUI_*` を変更できるよう `config_service.py` に追加。
+- `tests/test_sd_webui_generator.py` を追加（httpx monkeypatch によるモックテスト）。
+- README / SPEC を更新し、Forge セットアップ手順・設定一覧・バックエンド切り替え表を追記した。
+
 ### Web UI画像スタイル選択肢の引用符表示を修正
 
 - `.env` の `WEB_DEFAULT_IMAGE_STYLE` / `WEB_IMAGE_STYLE_CHOICES` に `'通常'` や `’通常’` のような引用符付き値が入っても、生成画面・履歴詳細画面のセレクトボックスには `通常` と表示するよう正規化

@@ -84,6 +84,21 @@
           </td>
         </tr>
         <tr>
+          <td>SD WebUI Forge<br><small style="color:var(--text-muted)">IMAGE_BACKEND={{ status.image_backend }}</small></td>
+          <td>
+            {% if status.image_backend == 'sd_webui' %}
+              {% if status.sd_webui.ok %}
+              <span class="badge badge-ok">接続OK</span>
+              {% if status.sd_webui.model %}<br><small style="color:var(--text-muted)">モデル: {{ status.sd_webui.model }}</small>{% endif %}
+              {% else %}
+              <span class="badge badge-ng">未接続: {{ status.sd_webui.get('error','') }}</span>
+              {% endif %}
+            {% else %}
+            <span class="badge" style="background:var(--text-muted)">非アクティブ (IMAGE_BACKEND={{ status.image_backend }})</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr>
           <td>ffmpeg</td>
           <td>
             {% if status.ffmpeg.ok %}

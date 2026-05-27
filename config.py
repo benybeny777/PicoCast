@@ -124,6 +124,25 @@ OLLAMA_REVIEW_MODEL          = os.environ.get("OLLAMA_REVIEW_MODEL",          "q
 OLLAMA_REWRITE_MODEL         = os.environ.get("OLLAMA_REWRITE_MODEL",         "qwen3:8b")               # 冒頭リライトモデル
 
 # ───────────────────────────────────────────────
+# 画像生成バックエンド統合設定
+# ───────────────────────────────────────────────
+IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "gemini").strip().lower()  # 画像生成バックエンド（gemini / sd_webui）
+SD_WEBUI_BASE_URL = os.environ.get("SD_WEBUI_BASE_URL", "http://127.0.0.1:7860")  # Stable Diffusion WebUI Forge / A1111 API URL
+SD_WEBUI_TIMEOUT_SEC = int(os.environ.get("SD_WEBUI_TIMEOUT_SEC", "180"))          # SD WebUI API タイムアウト(秒)
+SD_WEBUI_MODEL = os.environ.get("SD_WEBUI_MODEL", "")                              # SD WebUI で使用するモデル名（空=起動中モデルをそのまま使用）
+SD_WEBUI_SAMPLER = os.environ.get("SD_WEBUI_SAMPLER", "DPM++ 2M Karras")           # SD WebUI サンプラー名
+SD_WEBUI_STEPS = int(os.environ.get("SD_WEBUI_STEPS", "24"))                       # SD WebUI 生成ステップ数
+SD_WEBUI_CFG_SCALE = float(os.environ.get("SD_WEBUI_CFG_SCALE", "7"))              # SD WebUI CFGスケール
+SD_WEBUI_WIDTH = int(os.environ.get("SD_WEBUI_WIDTH", "1024"))                     # SD WebUI 出力幅(px) — 背景デフォルト
+SD_WEBUI_HEIGHT = int(os.environ.get("SD_WEBUI_HEIGHT", "576"))                    # SD WebUI 出力高さ(px) — 背景デフォルト
+SD_WEBUI_NEGATIVE_PROMPT = os.environ.get(                                         # SD WebUI ネガティブプロンプト（人物・低品質抑制）
+    "SD_WEBUI_NEGATIVE_PROMPT",
+    "people, human, person, face, hands, photorealistic, realistic photo, "
+    "bad anatomy, blurry, low quality, watermark, signature, logo, "
+    "unreadable text, garbled text",
+)
+
+# ───────────────────────────────────────────────
 # Local ComfyUI
 # ───────────────────────────────────────────────
 LOCAL_COMFYUI_URL = os.environ.get("LOCAL_COMFYUI_URL", "http://127.0.0.1:8188")  # ローカルComfyUI URL
@@ -180,6 +199,10 @@ LOCAL_COMFYUI_PRESET = os.environ.get("LOCAL_COMFYUI_PRESET", "anime_standard").
 LOCAL_COMFYUI_OUTPUT_WIDTH = int(os.environ.get("LOCAL_COMFYUI_OUTPUT_WIDTH", "832"))  # ComfyUI 背景生成の標準幅
 LOCAL_COMFYUI_OUTPUT_HEIGHT = int(os.environ.get("LOCAL_COMFYUI_OUTPUT_HEIGHT", "1472"))  # ComfyUI 背景生成の標準高さ
 LOCAL_COMFYUI_PRESET_FILE = os.environ.get("LOCAL_COMFYUI_PRESET_FILE", os.path.join(os.path.dirname(__file__), "assets", "comfyui", "presets.json"))  # ComfyUI プリセット定義ファイル
+COMFYUI_PROMPT_TRANSLATE_ENABLED     = os.environ.get("COMFYUI_PROMPT_TRANSLATE_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")  # ComfyUI背景プロンプトをLLMで英語変換するか（0で無効・日本語プロンプトをそのまま使用）
+COMFYUI_PROMPT_TRANSLATE_MODEL       = os.environ.get("COMFYUI_PROMPT_TRANSLATE_MODEL", "qwen2.5:7b-instruct")  # プロンプト変換に使うOllamaモデル
+COMFYUI_PROMPT_TRANSLATE_OLLAMA_URL  = os.environ.get("COMFYUI_PROMPT_TRANSLATE_OLLAMA_URL", "http://localhost:11434")  # プロンプト変換用OllamaエンドポイントURL
+COMFYUI_PROMPT_TRANSLATE_TIMEOUT_SEC = float(os.environ.get("COMFYUI_PROMPT_TRANSLATE_TIMEOUT_SEC", "60.0"))  # プロンプト変換LLMタイムアウト（秒）
 
 # ───────────────────────────────────────────────
 # キャラクター定義（VOICEVOX スピーカー ID）

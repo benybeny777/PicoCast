@@ -130,6 +130,9 @@ def test_local_comfyui_failure_writes_failed_meta_and_does_not_call_nanobanana(m
     from core.image_generator import ImageGenerator
 
     monkeypatch.setattr(ComfyUIModelManager, "check_all_models_ready", lambda self: True)
+    # COMFYUI_PROMPT_TRANSLATE_ENABLED=True 時の Ollama 接続を回避する
+    import config as _cfg
+    monkeypatch.setattr(_cfg, "COMFYUI_PROMPT_TRANSLATE_ENABLED", False)
 
     def fail_generate(self, **kwargs):
         raise RuntimeError("ComfyUI down")
@@ -156,6 +159,10 @@ def test_local_comfyui_failure_writes_failed_meta_and_does_not_call_nanobanana(m
 def test_local_comfyui_model_missing_writes_failed_meta(monkeypatch, tmp_path):
     from core.comfyui_model_manager import ComfyUIModelManager
     from core.image_generator import ImageGenerator
+
+    # COMFYUI_PROMPT_TRANSLATE_ENABLED=True 時の Ollama 接続を回避する
+    import config as _cfg
+    monkeypatch.setattr(_cfg, "COMFYUI_PROMPT_TRANSLATE_ENABLED", False)
 
     def fail_model_check(self):
         raise RuntimeError("ComfyUI必要モデルが不足しています。不足: TestModel.safetensors")
