@@ -12,6 +12,38 @@
 
 ---
 
+## 2026-05-28
+
+### Stable Diffusion WebUI プロンプトを Ollama で日→英翻訳
+
+- `core/image_generator.py` に `_translate_to_english_for_sd()` を追加。Stable Diffusion WebUI に送る前に日本語の背景描写を Ollama で英語プロンプトへ変換する。
+- `config.py` に `OLLAMA_TRANSLATE_MODEL`（デフォルト `qwen3:8b`）を追加。`.env` / 設定画面から変更可能。
+- Ollama 未起動時は `ensure_ollama_server()` で自動起動。翻訳失敗時は例外を伝播して停止（サイレントフォールバックなし）。
+
+### 生成・再生成画面に画像エンジン選択を追加
+
+- `/generate`・`/history/{name}` の再生成フォームに **画像エンジン**（Google AI / Stable Diffusion WebUI Forge）セレクタを追加。
+- `/images` 画像再生成にも同エンジン選択と **縮小生成** チェックボックスを追加。
+- スキーマ `ImageRegenerateRequest` に `sd_size_mode` フィールドを追加し、`image_service._run_regenerate` が `ImageGenerator` へ渡すよう対応。
+
+### サイレントフォールバックをエラーに変更（`ImageGenerator`）
+
+- `__init__`: `GOOGLE_API_KEY` 未設定で nanobanana エンジン選択時に `RuntimeError` を raise（従来: 警告 print → 無言スキップ）。
+- `generate_background`: `self.client` が None のとき `return None` を廃止し `RuntimeError` を raise。
+
+### Web UI 設定画面の改善
+
+- 設定保存値をアプリ再起動なしで即時反映（`config_service._apply_runtime_updates()` が `setattr(cfg, ...)` + `sys.modules` 全走査で伝搬）。`WEB_UI_PORT` など起動時固定パラメータのみ例外。
+- 保存成功・失敗をトースト通知で表示（従来のインライン `#save-status` テキストを廃止）。
+- 「サービス状態」タブを設定画面から削除。サービス接続状態はダッシュボードで確認する。
+- ナビゲーションの「画像」リンクを削除。画像確認は `/history/{name}` からリンクする。
+
+### UI 表示から Stable Diffusion の略称「SD」を除去
+
+- テンプレート・設定ラベル・コメント内の「SD WebUI Forge」→「Stable Diffusion WebUI Forge」、「SD生成」→「縮小生成」に統一。変数名・ファイル名は変更なし。
+
+---
+
 ## 2026-05-27
 
 ### macOS向けWeb UI起動手順を追加

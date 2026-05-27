@@ -1,7 +1,7 @@
 # ずんかみ自動生成システム 仕様書
 
 チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
-最終更新: 2026-05-27
+最終更新: 2026-05-28
 
 ---
 
@@ -206,9 +206,10 @@ for item in dialogue_items:
 - `core/sd_webui_generator.py: StableDiffusionWebUIGenerator` が担当する。
 - `GET /sdapi/v1/options` で疎通確認・モデル取得、`POST /sdapi/v1/txt2img` で画像生成。
 - Forge / AUTOMATIC1111互換APIを前提とする。
-- 日本語プロンプトはそのまま渡し、英語品質補助サフィックスを自動付加する。
-  - 背景用: `anime style background, colorful manga illustration, ...` 等
-  - サムネイル用: `bold Japanese YouTube thumbnail style, ...` 等
+- 日本語の説明文は `core/image_generator.py: _translate_to_english_for_sd()` でまず Ollama（`OLLAMA_TRANSLATE_MODEL`）を使って英語プロンプトに翻訳し、その結果に英語品質補助サフィックスを自動付加してから送信する。
+  - 背景用サフィックス: `anime style background, colorful manga illustration, ...` 等
+  - サムネイル用サフィックス: `bold Japanese YouTube thumbnail style, ...` 等
+- Ollama が未起動の場合は `ensure_ollama_server()` で自動起動を試みる。翻訳失敗時は例外を伝播して停止する（サイレントスキップなし）。
 - API未起動・HTTPエラー・画像なし・タイムアウトはすべて `RuntimeError` として上位に伝播する。他エンジンへの自動フォールバックは行わない。
 - 設定: `SD_WEBUI_BASE_URL`, `SD_WEBUI_TIMEOUT_SEC`, `SD_WEBUI_MODEL`, `SD_WEBUI_SAMPLER`, `SD_WEBUI_STEPS`, `SD_WEBUI_CFG_SCALE`, `SD_WEBUI_WIDTH`, `SD_WEBUI_HEIGHT`, `SD_WEBUI_NEGATIVE_PROMPT`
 
@@ -420,13 +421,13 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 | `/check` | LLM/尺チェック |
 | `/history` | 生成履歴一覧 |
 | `/history/{name}` | 生成履歴詳細 |
-| `/images` | 画像確認 / 再生成 |
 | `/analytics` | Analytics |
 | `/schedule` | スケジュール管理 |
 | `/upload` | YouTubeアップロード |
 | `/fixed-comment` | 固定コメント |
-| `/settings` | 設定 / サービス確認 |
+| `/settings` | 設定 |
 | `/logs` | ジョブログ |
+| `/sd-models` | Stable Diffusion WebUI モデル管理 |
 
 ### API概要
 
@@ -505,14 +506,19 @@ GET  /api/settings/ollama-models
 | AI台本作成プロンプト | `/generate` |
 | Shortsタイトル案 / Longタイトル案 | `/generate` |
 | 履歴から複数生成 | `/history` |
-| 画像確認 / プロンプト編集 / 再生成 | `/images` |
+| 画像確認 / プロンプト編集 / 再生成 | `/images`（`/history/{name}` からリンク） |
 | YouTubeアップロード / 一括アップロード | `/upload` |
 | 固定コメント投稿 | `/fixed-comment` |
 | スケジュール確認 / 同期 / 公開予定変更 | `/schedule` |
 | アナリティクス取得・表示 | `/analytics` |
-| 設定 / サービス確認 | `/settings` |
+| 設定（即時反映 / APIキー変更） | `/settings` |
+| Stable Diffusion WebUI モデル管理 | `/sd-models` |
 
-`/settings` のAPIキー状態表示とAPIキー変更欄は常に画面最下部に置く。通常の設定変更欄には秘密値を含めない。
+`/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI Forge）と **縮小生成**（`sd_size_mode`）の選択が含まれる。`/images` 再生成にも同様のエンジン選択と縮小生成チェックボックスがある。
+
+`/settings` のAPIキー状態表示とAPIキー変更欄は常に画面最下部に置く。通常の設定変更欄には秘密値を含めない。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
+
+画像確認・再生成（`/images`）は `/history/{name}` 詳細画面の「画像確認・再生成」リンクからも遷移できる。ナビゲーションには独立リンクを設けない。
 
 ### ログカラー
 
@@ -678,6 +684,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
+| `OLLAMA_TRANSLATE_MODEL` | `qwen3:8b` | Stable Diffusion WebUI プロンプト日→英翻訳モデル |
 | `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.2` | ChatGPT生成前レビューモデル |
 | `OPENING_SCORE_ABORT_THRESHOLD` | 80 | pass / warning 表示の目安 |
 | `OPENING_SCORE_HARD_ABORT_THRESHOLD` | 70 | 処理中止スコア閾値 |
@@ -691,7 +698,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_DEFAULT_REUSE_BACKGROUNDS` | `false` | Web UI生成画面の背景再利用既定値 |
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `false` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `false` | Web UI生成画面のLong節約既定値 |
-| `WEB_DEFAULT_SD_SIZE_MODE` | `false` | Web UI生成画面のSD生成既定値 |
+| `WEB_DEFAULT_SD_SIZE_MODE` | `false` | Web UI生成画面の縮小生成既定値 |
 | `WEB_JOB_POLL_INTERVAL_MS` | 2000 | Web UIジョブ状態更新間隔(ms) |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | 1500 | Web UIジョブ成功後再読み込み待ち時間(ms) |
 | `WEB_TOAST_VISIBLE_MS` | 2000 | Web UIトースト表示時間(ms) |
@@ -791,11 +798,11 @@ YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案�
 
 `_meta/title_ab_test.json` でタイトルバリアントを管理（手動切り替え）。YouTube APIアップロード時はA案タイトルを既定として使い、B/C案はYouTube Studioで手動テスト。
 
-### 画像 SD 生成モード
+### 縮小生成モード
 
-Web UI の **「SD生成」チェックボックス**（デフォルト OFF）または `WEB_DEFAULT_SD_SIZE_MODE` で制御する。Shorts / Long 両方に適用される。
+Web UI の **「縮小生成」チェックボックス**（デフォルト OFF）または `WEB_DEFAULT_SD_SIZE_MODE` で制御する。Shorts / Long 両方に適用される。
 
-ON にすると `SD_SIZE_IMAGE_SCALE`（デフォルト 0.5、`.env` で変更可）倍の小サイズで画像を生成し、元の解像度に拡大してセットする。API トークン消費とコストを削減できる反面、解像度が粗くなる。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
+ON にすると `SD_SIZE_IMAGE_SCALE`（デフォルト 0.5、`.env` で変更可）倍の小サイズで画像を生成し、元の解像度に拡大してセットする。生成時間・API トークン消費・コストを削減できる反面、解像度が粗くなる。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
 
 ### Long画像節約モード
 
