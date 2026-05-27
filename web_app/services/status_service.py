@@ -86,8 +86,8 @@ def check_ffmpeg() -> dict[str, Any]:
                 encoders_stdout = encoders_result.stdout
                 if configured_encoder in encoders_stdout:
                     gpu_supported = True
-        except Exception:
-            pass
+        except Exception as _e:
+            raise RuntimeError(f"Error: {_e}") from _e
 
         # 動作環境の判定
         if configured_encoder == "libx264":

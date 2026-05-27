@@ -242,7 +242,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
                 if hours_since < 24:
                     is_provisional = True
             except Exception:
-                pass
+                pass  # フォールバック許可: 日付パース失敗時は本判定とする
 
     # 横展開の最低視聴率ライン（viewsだけ・avg_percentだけで横展開しない）
     if video_type == "Shorts":

@@ -89,7 +89,7 @@ def _find_locking_process(path):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
     except Exception:
-        pass
+        raise
     return None
 
 
@@ -416,7 +416,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         with open(prompt_path, "w", encoding="utf-8") as pf:
             pf.write(prompt)
     except Exception:
-        pass
+        raise
 
     # サムネイルは IMAGE_BACKEND に従う（sd_webui の場合は SD WebUI で生成）
     # background_engine を明示的に渡すことでバックエンドを固定する
@@ -686,7 +686,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "warning",
             )
     except Exception:
-        pass
+        raise
     if is_shorts:
         max_backgrounds = MAX_BACKGROUNDS_SHORTS
     elif long_budget_mode:
@@ -1208,10 +1208,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "warning",
             )
             for _f in _saved_bg_files:
-                try:
+                if os.path.exists(os.path.join(theme_bg_dir, _f)):
                     os.remove(os.path.join(theme_bg_dir, _f))
-                except Exception:
-                    pass
             _has_saved_bgs = False
 
     update_status(
@@ -1413,7 +1411,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     with open(prompt_file, "w", encoding="utf-8") as _pf:
                         _pf.write(bg_description)
                 except Exception:
-                    pass
+                    raise
                 if debug_mode:
                     update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
                 generated_file = img_gen.generate_background(

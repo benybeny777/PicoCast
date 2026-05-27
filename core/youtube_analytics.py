@@ -67,8 +67,8 @@ def _local_upload_records_by_video_id() -> dict:
             video_id = record.get("video_id")
             if video_id:
                 records[video_id] = dict(record)
-    except Exception:
-        pass
+    except Exception as _e:
+        raise RuntimeError(f"Error: {_e}") from _e
     uploaded_dir = os.path.join(ROOT_DIR, "output", "000_uploaded")
     if not os.path.isdir(uploaded_dir):
         return records
@@ -101,8 +101,8 @@ def _local_upload_records_by_video_id() -> dict:
                     record.setdefault("genre_group", script_meta.get("genre_group", ""))
                     record.setdefault("topic_request_cta", script_meta.get("topic_request_cta", ""))
                     record.setdefault("topic_request_cta_reason", script_meta.get("topic_request_cta_reason", ""))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    raise RuntimeError(f"Error: {_e}") from _e
             if os.path.exists(policy_path):
                 try:
                     with open(policy_path, "r", encoding="utf-8") as f:
@@ -114,8 +114,8 @@ def _local_upload_records_by_video_id() -> dict:
                         record["topic_request_cta"] = "禁止"
                     record.setdefault("topic_request_cta_reason", policy.get("topic_request_cta_reason", ""))
                     record.setdefault("final_cta_type", policy.get("final_cta_type", ""))
-                except Exception:
-                    pass
+                except Exception as _e:
+                    raise RuntimeError(f"Error: {_e}") from _e
             merged = dict(records.get(video_id, {}))
             merged.update(record)
             records[video_id] = merged
@@ -212,8 +212,8 @@ def _fetch_channel_subscriber_totals(analytics, start_date: str, end_date: str) 
             gained = int(float(data.get("subscribersGained", 0) or 0))
             lost = int(float(data.get("subscribersLost", 0) or 0))
             return {"gained": gained, "lost": lost}
-    except Exception:
-        pass
+    except Exception as _e:
+        raise RuntimeError(f"Error: {_e}") from _e
     return None
 
 

@@ -34,8 +34,9 @@ def _kill_all_workers() -> None:
     for proc in procs:
         try:
             _kill_tree(proc)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Failed to kill worker {proc.pid}: {e}", file=sys.stderr)
+            pass  # フォールバック許可: atexit時はエラーを無視して後続のkillを継続する
 
 
 atexit.register(_kill_all_workers)

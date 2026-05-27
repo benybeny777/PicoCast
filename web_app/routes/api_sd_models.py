@@ -92,8 +92,8 @@ def _run_delete_redownload(model_id: str) -> None:
 
         try:
             sd_model_service.rescan_models()
-        except Exception:
-            pass
+        except Exception as _e:
+            raise RuntimeError(f"Error: {_e}") from _e
 
         _progress[model_id] = _make_progress("done")
     except Exception as e:

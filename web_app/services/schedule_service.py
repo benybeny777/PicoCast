@@ -164,8 +164,8 @@ def _update_local_record(video_id: str, new_publish_at: str) -> None:
                 try:
                     with open(local_path, "w", encoding="utf-8") as f:
                         json.dump(rec_to_save, f, ensure_ascii=False, indent=2)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    raise RuntimeError(f"Error: {_e}") from _e
             break
 
 

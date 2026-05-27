@@ -34,7 +34,7 @@ def _stdin_watcher() -> None:
                 _cancel_event.set()
                 break
     except Exception:
-        pass
+        raise
 
 
 def _emit(tag: str, message: str) -> None:

@@ -256,8 +256,8 @@ def _save_render_info(output_dir: str, info: dict) -> None:
         try:
             with open(path, "r", encoding="utf-8") as f:
                 existing = json.load(f)
-        except Exception:
-            pass
+        except Exception as _e:
+            raise RuntimeError(f"Error: {_e}") from _e
     existing.update(info)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(existing, f, ensure_ascii=False, indent=2)
@@ -955,8 +955,8 @@ def _video_size(output_dir: str, script_path: str) -> tuple[int, int]:
             items = ScriptParser.parse_string(f.read())
         if any(it.get("type") == "video_format" and str(it.get("text", "")).strip().lower() in ("shorts", "short") for it in items):
             return 1080, 1920
-    except Exception:
-        pass
+    except Exception as _e:
+        raise RuntimeError(f"Error: {_e}") from _e
     return 1920, 1080
 
 

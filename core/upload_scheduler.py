@@ -490,8 +490,8 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
                 if _parse_slot(publish_at.replace("Z", "+00:00")) <= now:
                     record["publish_at"] = None
                     record["publish_status"] = "private"
-            except Exception:
-                pass
+            except Exception as _e:
+                raise RuntimeError(f"Error: {_e}") from _e
         if record != before:
             changed_records += 1
 

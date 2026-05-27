@@ -53,7 +53,7 @@ def _to_timestamp(value) -> int | None:
         return None
     try:
         return int(value.timestamp())
-    except Exception:
+    except AttributeError:
         pass
     try:
         text = str(value).strip()

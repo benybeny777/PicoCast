@@ -36,7 +36,7 @@ def pre_generate_check(items: list[dict], is_shorts: bool) -> tuple[list[str], l
                     f"ループ締めに変更してください: {', '.join(hits)}"
                 )
         except Exception:
-            pass
+            raise
 
         if not meta.get("video_title"):
             errors.append("video_titleがありません")
