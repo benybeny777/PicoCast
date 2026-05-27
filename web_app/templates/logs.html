@@ -65,6 +65,17 @@
 </div>
 {% endif %}
 
+<!-- デバッグログ -->
+<div class="card mt">
+  <h2>デバッグログ</h2>
+  <p class="hint">アプリの詳細ログ（<code>app_debug.log</code>）。<span id="debug-log-path" style="color:var(--text-muted)"></span></p>
+  <div class="action-row" style="margin-bottom:8px">
+    <button class="btn btn-secondary" onclick="loadDebugLog()">読み込み / 更新</button>
+  </div>
+  <div id="debug-log-content" class="log-box" style="height:400px; overflow-y:auto; font-size:12px; white-space:pre; display:none"></div>
+  <p id="debug-log-message" style="color:var(--text-muted)"></p>
+</div>
+
 <!-- 自動更新: 実行中ジョブがある場合はAJAXで差分更新 -->
 <script>
 const _TERMINAL = new Set(['success', 'failed', 'cancelled']);
@@ -175,6 +186,28 @@ async function cancelJob(jobId) {
     location.reload();
   } catch(e) {
     alert('エラー: ' + e);
+  }
+}
+
+async function loadDebugLog() {
+  const box = document.getElementById('debug-log-content');
+  const msg = document.getElementById('debug-log-message');
+  const pathEl = document.getElementById('debug-log-path');
+  try {
+    const res = await fetch('/api/settings/debug-log');
+    const data = await res.json();
+    pathEl.textContent = data.path || '';
+    if (data.lines && data.lines.length > 0) {
+      box.textContent = data.lines.join('\n');
+      box.style.display = 'block';
+      msg.textContent = '';
+      box.scrollTop = box.scrollHeight;
+    } else {
+      box.style.display = 'none';
+      msg.textContent = data.message || 'ログがありません。';
+    }
+  } catch(e) {
+    msg.textContent = '読み込みエラー: ' + e;
   }
 }
 </script>

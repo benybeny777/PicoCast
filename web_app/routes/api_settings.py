@@ -122,6 +122,13 @@ def api_delete_reading_dict_user(word: str):
     return {"deleted": word}
 
 
+@router.get("/debug-log")
+def api_debug_log():
+    """デバッグログの末尾行を返す。"""
+    from web_app.services.debug_log_service import recent_debug_log
+    return recent_debug_log()
+
+
 @router.get("/ollama-models")
 def api_ollama_models():
     """Ollama が起動していれば利用可能なモデル一覧を返す。"""
