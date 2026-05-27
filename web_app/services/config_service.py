@@ -55,7 +55,6 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "VOICE_READING_MODE",                     "type": "select",         "label": "よみがな補正モード",            "default": str(cfg.VOICE_READING_MODE), "choices": [("off", "無効 (off)"), ("dictionary", "自前辞書のみ (dictionary)"), ("safe_auto", "安全自動補正 (safe_auto)")]},
     {"key": "OPENAI_FINAL_REVIEW_ENABLED",     "type": "bool",  "label": "ChatGPT 最終レビュー有効",   "default": "1" if cfg.OPENAI_FINAL_REVIEW_ENABLED else "0"},
     {"key": "OPENAI_FINAL_REVIEW_MODEL",       "type": "str",   "label": "ChatGPT 最終レビューモデル", "default": str(cfg.OPENAI_FINAL_REVIEW_MODEL)},
-    {"key": "WEB_UI_PORT",                     "type": "int",   "label": "Web UI ポート番号",          "default": str(cfg.WEB_UI_PORT), "min": 1024, "max": 65535},
     {"key": "WEB_DEFAULT_IMAGE_STYLE",         "type": "str",   "label": "Web既定画像スタイル",        "default": str(cfg.WEB_DEFAULT_IMAGE_STYLE)},
     {"key": "WEB_IMAGE_STYLE_CHOICES",         "type": "str",   "label": "Web画像スタイル選択肢",      "default": ",".join(cfg.WEB_IMAGE_STYLE_CHOICES)},
     {"key": "WEB_DEFAULT_REUSE_BACKGROUNDS",   "type": "bool",  "label": "Web既定: 背景再利用",        "default": "1" if cfg.WEB_DEFAULT_REUSE_BACKGROUNDS else "0"},
@@ -206,7 +205,14 @@ def _write_env(updates: dict[str, str]) -> None:
 
 
 def _apply_runtime_updates(updates: dict[str, str]) -> None:
-    """保存した設定を、可能な範囲で現在のWebプロセスへ即時反映する。"""
+    """保存した設定を現在のWebプロセスへ即時反映する。
+
+    1. os.environ を更新
+    2. config モジュール属性を更新
+    3. 'from config import X' でキャプチャ済みの全モジュール変数も更新
+       → native_renderer, voicevox など起動時にインポートしたモジュールにも即反映
+    """
+    import sys
     key_map = {item["key"]: item for item in EDITABLE_CONFIG}
     for key, raw_val in updates.items():
         spec = key_map.get(key)
@@ -226,6 +232,18 @@ def _apply_runtime_updates(updates: dict[str, str]) -> None:
                 value = cfg._clean_env_choice(raw_val)
             else:
                 value = str(raw_val)
-            setattr(cfg, key, value)
         except (ValueError, TypeError):
             continue
+
+        # config モジュール自身を更新
+        setattr(cfg, key, value)
+
+        # 'from config import KEY' でキャプチャしたモジュールの変数も一括更新
+        for mod in list(sys.modules.values()):
+            if mod is None or mod is cfg:
+                continue
+            if hasattr(mod, key):
+                try:
+                    setattr(mod, key, value)
+                except (AttributeError, TypeError):
+                    pass
