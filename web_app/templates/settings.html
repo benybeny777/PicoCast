@@ -7,7 +7,8 @@
   <button class="tab-btn active" onclick="switchTab('status', this)">サービス状態</button>
   <button class="tab-btn" onclick="switchTab('config', this)">設定変更</button>
   <button class="tab-btn" onclick="switchTab('apikey', this)">APIキー</button>
-  <button class="tab-btn" onclick="switchTab('dict', this)">よみがな辞書</button>
+  <button class="tab-btn" onclick="switchTab('dict-base', this)">よみがな辞書</button>
+  <button class="tab-btn" onclick="switchTab('dict-user', this)">自動学習辞書</button>
 </div>
 
 <!-- ── タブ: サービス状態 ── -->
@@ -154,14 +155,12 @@
   </div>
 </div>
 
-<!-- ── タブ: よみがな辞書 ── -->
-<div id="tab-dict" class="tab-panel">
+<!-- ── タブ: よみがな辞書（手動） ── -->
+<div id="tab-dict-base" class="tab-panel">
   <div class="card">
     <h2>よみがな辞書</h2>
-    <p class="hint">VOICEVOXが読み間違える語を登録します。同梱辞書は手動管理、自動学習はsafe_autoモードが育てます。</p>
-
-    <h3 style="margin-top:1rem">同梱辞書（手動登録）</h3>
-    <div style="display:flex; gap:8px; align-items:center; margin:8px 0">
+    <p class="hint">VOICEVOXが読み間違える語を手動登録します。登録語は優先的に適用されます。</p>
+    <div style="display:flex; gap:8px; align-items:center; margin:12px 0">
       <input id="dict-word" type="text" placeholder="表記（例: 黒板）" class="form-input" style="width:140px">
       <input id="dict-reading" type="text" placeholder="よみ（例: こくばん）" class="form-input" style="width:160px">
       <button class="btn btn-primary" onclick="addDictEntry()">追加</button>
@@ -170,9 +169,15 @@
     <table class="status-table" id="dict-base-table">
       <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
     </table>
+  </div>
+</div>
 
-    <h3 style="margin-top:1.5rem">自動学習辞書（safe_autoが蓄積）</h3>
-    <p class="hint">間違っているエントリは削除すると次回から再判定されます。</p>
+<!-- ── タブ: 自動学習辞書 ── -->
+<div id="tab-dict-user" class="tab-panel">
+  <div class="card">
+    <h2>自動学習辞書</h2>
+    <p class="hint">safe_auto モードが自動的に蓄積した読み仮名です。間違っているエントリを削除すると次回から再判定されます。</p>
+    <div id="dict-user-status" style="display:none; margin-bottom:8px" class="log-box"></div>
     <table class="status-table" id="dict-user-table">
       <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
     </table>
@@ -192,7 +197,7 @@ function switchTab(name, btn) {
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
   if (name === 'config' && !_configLoaded) loadConfig();
-  if (name === 'dict' && !_dictLoaded) loadDict();
+  if ((name === 'dict-base' || name === 'dict-user') && !_dictLoaded) loadDict();
 }
 
 async function loadConfig() {
@@ -393,7 +398,7 @@ async function addDictEntry() {
 }
 
 async function deleteDictEntry(dictType, word) {
-  const statusBox = document.getElementById('dict-status');
+  const statusBox = document.getElementById(dictType === 'user' ? 'dict-user-status' : 'dict-status');
   statusBox.style.display = 'block';
   statusBox.style.color = '';
   try {
