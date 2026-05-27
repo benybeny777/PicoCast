@@ -1,5 +1,7 @@
 import os
+import json
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 from web_app.services.status_service import get_settings_status
 from web_app.services.config_service import get_editable_config, save_config
 from web_app.services.secrets_service import save_secrets
@@ -50,6 +52,67 @@ def api_bgm_files():
         return {"files": files, "available": True}
     except Exception:
         return {"files": [], "available": False}
+
+
+class ReadingDictEntry(BaseModel):
+    word: str
+    reading: str
+
+
+def _load_reading_dict(path: str) -> dict:
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def _save_reading_dict(path: str, data: dict) -> None:
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+@router.get("/reading-dict")
+def api_get_reading_dict():
+    """よみがな辞書（同梱・ユーザー）を返す。"""
+    base = _load_reading_dict(cfg.VOICE_READING_BASE_DICT_PATH)
+    user = _load_reading_dict(cfg.VOICE_READING_USER_DICT_PATH)
+    return {"base": base, "user": user}
+
+
+@router.post("/reading-dict/base")
+def api_add_reading_dict_base(entry: ReadingDictEntry):
+    """同梱辞書にエントリを追加/上書きする。"""
+    word = entry.word.strip()
+    reading = entry.reading.strip()
+    if not word or not reading:
+        raise HTTPException(status_code=422, detail="word と reading は必須です")
+    base = _load_reading_dict(cfg.VOICE_READING_BASE_DICT_PATH)
+    base[word] = reading
+    _save_reading_dict(cfg.VOICE_READING_BASE_DICT_PATH, base)
+    return {"saved": word, "reading": reading}
+
+
+@router.delete("/reading-dict/base/{word:path}")
+def api_delete_reading_dict_base(word: str):
+    """同梱辞書からエントリを削除する。"""
+    base = _load_reading_dict(cfg.VOICE_READING_BASE_DICT_PATH)
+    if word not in base:
+        raise HTTPException(status_code=404, detail=f"'{word}' が辞書にありません")
+    del base[word]
+    _save_reading_dict(cfg.VOICE_READING_BASE_DICT_PATH, base)
+    return {"deleted": word}
+
+
+@router.delete("/reading-dict/user/{word:path}")
+def api_delete_reading_dict_user(word: str):
+    """ユーザー辞書からエントリを削除する。"""
+    user = _load_reading_dict(cfg.VOICE_READING_USER_DICT_PATH)
+    if word not in user:
+        raise HTTPException(status_code=404, detail=f"'{word}' が辞書にありません")
+    del user[word]
+    _save_reading_dict(cfg.VOICE_READING_USER_DICT_PATH, user)
+    return {"deleted": word}
 
 
 @router.get("/ollama-models")

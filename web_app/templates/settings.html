@@ -144,6 +144,29 @@
   <div id="secrets-status" style="display:none" class="log-box mt"></div>
 </div>
 
+<!-- よみがな辞書管理 -->
+<div class="card mt">
+  <h2>よみがな辞書</h2>
+  <p class="hint">VOICEVOXが読み間違える語を登録します。同梱辞書は手動管理、自動学習はsafe_autoモードが育てます。</p>
+
+  <h3 style="margin-top:1rem">同梱辞書（手動登録）</h3>
+  <div style="display:flex; gap:8px; align-items:center; margin:8px 0">
+    <input id="dict-word" type="text" placeholder="表記（例: 黒板）" class="form-input" style="width:140px">
+    <input id="dict-reading" type="text" placeholder="よみ（例: こくばん）" class="form-input" style="width:160px">
+    <button class="btn btn-primary" onclick="addDictEntry()">追加</button>
+  </div>
+  <div id="dict-status" style="display:none; margin-bottom:8px" class="log-box"></div>
+  <table class="status-table" id="dict-base-table">
+    <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
+  </table>
+
+  <h3 style="margin-top:1.5rem">自動学習辞書（safe_autoが蓄積）</h3>
+  <p class="hint">間違っているエントリは削除すると次回から再判定されます。</p>
+  <table class="status-table" id="dict-user-table">
+    <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
+  </table>
+</div>
+
 {% endblock %}
 {% block scripts %}
 <script>
@@ -327,6 +350,87 @@ function esc(str) {
   return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
 }
 
+function renderDictTable(tableId, entries, dictType) {
+  const table = document.getElementById(tableId);
+  if (Object.keys(entries).length === 0) {
+    table.innerHTML = `<tr><td colspan="3" style="color:var(--text-muted)">登録なし</td></tr>`;
+    return;
+  }
+  table.innerHTML = Object.entries(entries).sort(([a],[b]) => a.localeCompare(b)).map(([word, reading]) => `
+    <tr>
+      <td style="width:40%">${esc(word)}</td>
+      <td>${esc(reading)}</td>
+      <td style="text-align:right"><button class="btn btn-secondary" style="padding:2px 10px;font-size:12px" onclick="deleteDictEntry(${esc(JSON.stringify(dictType))}, ${esc(JSON.stringify(word))})">削除</button></td>
+    </tr>`).join('');
+}
+
+async function loadDict() {
+  try {
+    const res = await fetch('/api/settings/reading-dict');
+    const data = await res.json();
+    renderDictTable('dict-base-table', data.base || {}, 'base');
+    renderDictTable('dict-user-table', data.user || {}, 'user');
+  } catch(e) {
+    document.getElementById('dict-base-table').innerHTML = `<tr><td class="error-text">読み込みエラー: ${e}</td></tr>`;
+  }
+}
+
+async function addDictEntry() {
+  const word = document.getElementById('dict-word').value.trim();
+  const reading = document.getElementById('dict-reading').value.trim();
+  const statusBox = document.getElementById('dict-status');
+  statusBox.style.display = 'block';
+  statusBox.style.color = '';
+  if (!word || !reading) {
+    statusBox.textContent = '表記とよみを両方入力してください';
+    statusBox.style.color = 'var(--error)';
+    return;
+  }
+  try {
+    const res = await fetch('/api/settings/reading-dict/base', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({word, reading}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data));
+      statusBox.style.color = 'var(--error)';
+    } else {
+      statusBox.textContent = `追加しました: ${data.saved} → ${data.reading}`;
+      statusBox.style.color = 'var(--success)';
+      document.getElementById('dict-word').value = '';
+      document.getElementById('dict-reading').value = '';
+      loadDict();
+    }
+  } catch(e) {
+    statusBox.textContent = '通信エラー: ' + e;
+    statusBox.style.color = 'var(--error)';
+  }
+}
+
+async function deleteDictEntry(dictType, word) {
+  const statusBox = document.getElementById('dict-status');
+  statusBox.style.display = 'block';
+  statusBox.style.color = '';
+  try {
+    const res = await fetch(`/api/settings/reading-dict/${dictType}/${encodeURIComponent(word)}`, {method: 'DELETE'});
+    const data = await res.json();
+    if (!res.ok) {
+      statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data));
+      statusBox.style.color = 'var(--error)';
+    } else {
+      statusBox.textContent = `削除しました: ${data.deleted}`;
+      statusBox.style.color = 'var(--success)';
+      loadDict();
+    }
+  } catch(e) {
+    statusBox.textContent = '通信エラー: ' + e;
+    statusBox.style.color = 'var(--error)';
+  }
+}
+
 loadConfig();
+loadDict();
 </script>
 {% endblock %}
