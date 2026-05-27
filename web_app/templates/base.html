@@ -17,6 +17,7 @@
     <li><a href="/generate" {% if request.url.path == "/generate" %}class="active"{% endif %}>生成</a></li>
     <li><a href="/check" {% if request.url.path == "/check" %}class="active"{% endif %}>チェック</a></li>
     <li><a href="/history" {% if request.url.path.startswith("/history") %}class="active"{% endif %}>履歴</a></li>
+    <li><a href="/images" {% if request.url.path == "/images" %}class="active"{% endif %}>画像</a></li>
     <li><a href="/analytics" {% if request.url.path == "/analytics" %}class="active"{% endif %}>Analytics</a></li>
     <li><a href="/schedule" {% if request.url.path == "/schedule" %}class="active"{% endif %}>スケジュール</a></li>
     <li><a href="/upload" {% if request.url.path == "/upload" %}class="active"{% endif %}>アップロード</a></li>

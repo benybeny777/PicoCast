@@ -138,10 +138,7 @@ def page_images(request: Request, history: str = ""):
     histories = history_service.list_histories()
     selected = None
     if history:
-        try:
-            selected = image_service.list_images(history)
-        except Exception:
-            selected = None
+        selected = image_service.list_images(history)
     return _render(request, "images.html", {
         "histories": histories,
         "selected_history": history,

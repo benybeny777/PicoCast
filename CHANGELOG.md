@@ -14,6 +14,13 @@
 
 ## 2026-05-27
 
+### macOS向けWeb UI起動手順を追加
+
+- macOS用の `start.command` を追加し、`.venv/bin/python -m web_app.app --open-browser --reload` でWeb UIを起動できるように整理
+- `VOICEVOX_URL` / `VOICEVOX_PATH` を環境変数で上書き可能にし、Windows固定パスを既定値から外して手動起動前提に変更
+- README / SPEC にWindowsとmacOSのセットアップ・起動手順を併記
+- Web UIのナビゲーションに `画像` を追加し、画像確認・再生成画面へ直接移動できるよう修正
+
 ### Web UI画像スタイル選択肢の引用符表示を修正
 
 - `.env` の `WEB_DEFAULT_IMAGE_STYLE` / `WEB_IMAGE_STYLE_CHOICES` に `'通常'` や `’通常’` のような引用符付き値が入っても、生成画面・履歴詳細画面のセレクトボックスには `通常` と表示するよう正規化
