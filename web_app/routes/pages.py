@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import os
 
+import config as _cfg
 from config import (
     WEB_APP_NAME,
     WEB_DEFAULT_IMAGE_STYLE,
@@ -132,6 +133,7 @@ def page_images(request: Request, history: str = ""):
         "histories": histories,
         "selected_history": history,
         "image_data": selected,
+        "image_backend": _cfg.IMAGE_BACKEND,
     })
 
 

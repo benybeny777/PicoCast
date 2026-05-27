@@ -31,8 +31,8 @@
     <label style="font-size:13px; display:flex; align-items:center; gap:4px">
       エンジン:
       <select id="regen-engine" class="form-input" style="width:auto">
-        <option value="nanobanana">Google AI</option>
-        <option value="sd_webui">SD WebUI Forge</option>
+        <option value="nanobanana" {% if image_backend == 'gemini' %}selected{% endif %}>Google AI</option>
+        <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>SD WebUI Forge</option>
       </select>
     </label>
   </div>
