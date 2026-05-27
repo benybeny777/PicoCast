@@ -3,6 +3,12 @@
 {% block content %}
 <h1>設定</h1>
 
+<div id="settings-toast" style="
+  display:none; position:fixed; bottom:28px; right:28px; z-index:9999;
+  padding:10px 20px; border-radius:6px; font-size:14px; font-weight:600;
+  color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.3); pointer-events:none;">
+</div>
+
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchTab('config', this)">設定変更</button>
   <button class="tab-btn" onclick="switchTab('apikey', this)">APIキー</button>
@@ -24,7 +30,6 @@
       <button class="btn btn-primary" onclick="saveConfig()">保存</button>
       <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
     </div>
-    <div id="save-status" style="display:none" class="log-box mt"></div>
   </div>
 </div>
 
@@ -55,7 +60,6 @@
     <div class="action-row mt">
       <button class="btn btn-primary" onclick="saveSecrets()">APIキーを保存</button>
     </div>
-    <div id="secrets-status" style="display:none" class="log-box mt"></div>
   </div>
 </div>
 
@@ -93,6 +97,22 @@
 <script>
 let _configItems = [];
 let _dictLoaded = false;
+let _toastTimer = null;
+
+function showToast(msg, isError) {
+  const el = document.getElementById('settings-toast');
+  el.textContent = msg;
+  el.style.background = isError ? 'var(--error, #c0392b)' : 'var(--success, #27ae60)';
+  el.style.display = 'block';
+  el.style.opacity = '1';
+  el.style.transition = '';
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => {
+    el.style.transition = 'opacity 0.4s';
+    el.style.opacity = '0';
+    setTimeout(() => { el.style.display = 'none'; el.style.transition = ''; }, window.WEB_TOAST_HIDE_DELAY_MS || 420);
+  }, window.WEB_TOAST_VISIBLE_MS || 2000);
+}
 
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -184,9 +204,6 @@ async function loadConfig() {
 }
 
 async function saveConfig() {
-  const statusBox = document.getElementById('save-status');
-  statusBox.style.display = 'block';
-  statusBox.textContent = '保存中...';
   const updates = {};
   document.querySelectorAll('[data-key]').forEach(el => { updates[el.dataset.key] = el.value; });
   try {
@@ -198,29 +215,23 @@ async function saveConfig() {
     const data = await res.json();
     if (!res.ok) {
       const errs = Array.isArray(data.detail) ? data.detail.join('\n') : (data.detail || JSON.stringify(data));
-      statusBox.textContent = 'エラー:\n' + errs;
-      statusBox.style.color = 'var(--error)';
+      showToast('エラー: ' + errs, true);
     } else {
-      statusBox.textContent = data.note || `保存しました (${data.saved.length}件)。`;
-      statusBox.style.color = 'var(--success)';
+      showToast(data.note || `保存しました (${data.saved.length}件)`, false);
     }
   } catch(e) {
-    statusBox.textContent = '通信エラー: ' + e;
+    showToast('通信エラー: ' + e, true);
   }
 }
 
 async function saveSecrets() {
-  const statusBox = document.getElementById('secrets-status');
-  statusBox.style.display = 'block';
-  statusBox.textContent = '保存中...';
-  statusBox.style.color = '';
   const updates = {};
   ['GOOGLE_API_KEY', 'OPENAI_API_KEY'].forEach(key => {
     const val = document.getElementById(`secret-${key}`).value;
     if (val.trim()) updates[key] = val;
   });
   if (Object.keys(updates).length === 0) {
-    statusBox.textContent = '変更なし（空欄は無視されます）';
+    showToast('変更なし（空欄は無視されます）', false);
     return;
   }
   try {
@@ -232,15 +243,13 @@ async function saveSecrets() {
     const data = await res.json();
     if (!res.ok) {
       const errs = Array.isArray(data.detail) ? data.detail.join('\n') : (data.detail || JSON.stringify(data));
-      statusBox.textContent = 'エラー:\n' + errs;
-      statusBox.style.color = 'var(--error)';
+      showToast('エラー: ' + errs, true);
     } else {
       ['GOOGLE_API_KEY', 'OPENAI_API_KEY'].forEach(key => { document.getElementById(`secret-${key}`).value = ''; });
-      statusBox.textContent = `保存しました (${data.saved.length}件)。アプリを再起動すると反映されます。`;
-      statusBox.style.color = 'var(--success)';
+      showToast(`保存しました (${data.saved.length}件)。再起動後に反映されます`, false);
     }
   } catch(e) {
-    statusBox.textContent = '通信エラー: ' + e;
+    showToast('通信エラー: ' + e, true);
   }
 }
 
