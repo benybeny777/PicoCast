@@ -163,13 +163,30 @@ SD_WEBUI_CFG_SCALE=7
 SD_WEBUI_WIDTH=1024
 SD_WEBUI_HEIGHT=576
 SD_WEBUI_NEGATIVE_PROMPT=people, human, person, face, hands, photorealistic, realistic photo, bad anatomy, blurry, low quality, watermark, signature, logo, unreadable text, garbled text
+
+# モデル管理（任意）
+SD_WEBUI_ROOT=C:\path\to\stable-diffusion-webui
+SD_MODEL_MANIFEST_PATH=assets/sd_webui/model_manifest.json
+AUTO_DOWNLOAD_SD_MODELS=0
 ```
 
 > [!IMPORTANT]
 > - `IMAGE_BACKEND=sd_webui` のとき、Forge が未起動であれば画像生成は**フォールバックせず停止**します。
 > - Gemini / Nano Banana / ComfyUI への自動切替は一切行いません。
 > - `SD_WEBUI_MODEL` が空の場合は Forge に現在ロード中のモデルをそのまま使います。
+> - `SD_WEBUI_MODEL` を設定した場合、画像生成前にマニフェストでインストール確認 → 未インストールなら `AUTO_DOWNLOAD_SD_MODELS=1` 時は自動DL、`0` 時はエラー停止 → `set_active_model()` を実行します。
 > - Shorts（縦動画）では幅・高さが自動で入れ替わります（`SD_WEBUI_WIDTH` / `SD_WEBUI_HEIGHT` は横動画基準で設定してください）。
+
+#### SD WebUI モデル管理 Web UI
+
+Web UI の「SDモデル」ページ（`/sd-models`）からマニフェスト内モデルの状態確認・ダウンロード・モデル切り替えができます。
+
+- **マニフェスト内モデル**: `assets/sd_webui/model_manifest.json` に定義されたモデルのインストール状況と DL ボタン
+- **現在のモデル**: SD WebUI API から取得した現在ロード済みモデル名
+- **インストール済みモデル**: SD WebUI API から取得したモデル一覧と「使用」ボタン（モデル切り替え）
+- **再スキャン**: SD WebUI にモデル再スキャンを依頼する
+
+> `SD_WEBUI_ROOT` を設定するとマニフェスト内モデルのファイルパスを解決し、インストール済みかどうかを確認できます。未設定時はファイルパスを確認できません（SD WebUI API 経由のみ確認可能）。
 
 #### バックエンド切り替え一覧
 

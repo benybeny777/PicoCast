@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}SD WebUI モデル管理{% endblock %}
+
+{% block content %}
+<div class="content-header">
+  <h2>SD WebUI Forge モデル管理</h2>
+  <div class="header-actions">
+    <button type="button" class="btn btn-secondary" onclick="rescanModels()">WebUI 再スキャン</button>
+    <button type="button" class="btn btn-primary" id="btn-load" onclick="loadModels()">マニフェスト再読込</button>
+  </div>
+</div>
+
+<div class="card">
+  <h3>現在の設定</h3>
+  <table class="status-table" style="width:100%">
+    <tr><th style="width:14em">項目</th><th>値</th></tr>
+    <tr>
+      <td>SD_WEBUI_ROOT</td>
+      <td style="font-family:monospace">
+        {% if sd_webui_root %}{{ sd_webui_root }}{% else %}<span style="color:var(--text-dim)">（未設定）</span>{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>SD_WEBUI_MODEL</td>
+      <td style="font-family:monospace">
+        {% if sd_webui_model %}{{ sd_webui_model }}{% else %}<span style="color:var(--text-dim)">（未設定: 現在ロード済みモデルを使用）</span>{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>AUTO_DOWNLOAD_SD_MODELS</td>
+      <td>
+        {% if auto_download_sd_models %}
+          <span class="badge badge-ok">有効</span>
+        {% else %}
+          <span class="badge badge-warn">無効</span>
+        {% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td>SD_WEBUI_BASE_URL</td>
+      <td style="font-family:monospace">{{ sd_webui_base_url }}</td>
+    </tr>
+  </table>
+  <p style="margin-top:0.75rem;color:var(--text-dim);font-size:0.85em">
+    設定は <a href="/settings">設定ページ</a> から変更できます。
+  </p>
+</div>
+
+<div class="card">
+  <h3>SD WebUI 現在のモデル</h3>
+  <div id="current-model-container"><p>読み込み中...</p></div>
+</div>
+
+<div class="card">
+  <h3>マニフェスト内モデル一覧</h3>
+  <p class="hint" style="margin-bottom: 1rem;">
+    <code>assets/sd_webui/model_manifest.json</code> に定義されたモデルの一覧です。
+    SD_WEBUI_ROOT が設定されている場合、インストール状況を確認できます。
+  </p>
+  <div id="models-container"><p>読み込み中...</p></div>
+</div>
+
+<div class="card">
+  <h3>SD WebUI インストール済みモデル</h3>
+  <p class="hint" style="margin-bottom: 0.5rem;">SD WebUI API から取得したインストール済みモデルの一覧です（SD WebUI 起動時のみ）。</p>
+  <div id="webui-models-container"><p>読み込み中...</p></div>
+</div>
+
+<style>
+.progress-wrap { background: var(--border); border-radius: 4px; height: 10px; overflow: hidden; margin: 4px 0; }
+.progress-bar  { height: 10px; background: var(--accent2); transition: width 0.3s ease; }
+.progress-text { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _models = [];
+let _pollTimer = null;
+
+function safeId(id) { return 'model-' + String(id).replace(/[^a-zA-Z0-9]/g, '_'); }
+
+function fmtBytes(b) {
+  if (!b) return '0 B';
+  const u = ['B','KB','MB','GB'];
+  let i = 0;
+  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+  return b.toFixed(i > 1 ? 1 : 0) + ' ' + u[i];
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ─── 現在のモデル ─── */
+async function loadCurrentModel() {
+  const el = document.getElementById('current-model-container');
+  try {
+    const res = await fetch('/api/sd-models/current');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      el.innerHTML = data.model
+        ? `<p style="font-family:monospace;font-size:0.95em">${esc(data.model)}</p>`
+        : '<p style="color:var(--text-dim)">SD WebUI が起動していないか、モデル情報を取得できませんでした。</p>';
+    } else {
+      el.innerHTML = `<p style="color:var(--text-dim)">SD WebUI 未起動: ${esc(data.message)}</p>`;
+    }
+  } catch (e) {
+    el.innerHTML = '<p style="color:var(--text-dim)">通信エラー。SD WebUI が起動していない可能性があります。</p>';
+  }
+}
+
+/* ─── マニフェストモデル一覧 ─── */
+async function loadModels(progress = {}) {
+  const container = document.getElementById('models-container');
+  container.innerHTML = '<p>読み込み中...</p>';
+  try {
+    const res = await fetch('/api/sd-models');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      _models = data.models;
+      renderTable(_models, progress);
+    } else {
+      container.innerHTML = `<p class="error-text">エラー: ${esc(data.message)}</p>`;
+    }
+  } catch (e) {
+    container.innerHTML = '<p class="error-text">通信エラーが発生しました。</p>';
+  }
+}
+
+function renderTable(models, progress) {
+  const container = document.getElementById('models-container');
+  if (!models || models.length === 0) {
+    container.innerHTML = '<p>マニフェストにモデルが定義されていません。</p>';
+    return;
+  }
+
+  let html = '<table class="status-table" style="width:100%">';
+  html += '<thead><tr><th style="width:7em">状態</th><th>モデル名</th><th>ファイル名</th><th style="width:18em">アクション</th></tr></thead><tbody>';
+
+  for (const m of models) {
+    const sid = safeId(m.id);
+    const prog = progress[m.id];
+    const isDownloading = prog && prog.status === 'downloading';
+    const isDone        = prog && prog.status === 'done';
+    const isError       = prog && prog.status === 'error';
+    const installed     = isDone ? true : m.installed;
+
+    html += `<tr id="${sid}">`;
+
+    // 状態列
+    if (installed) {
+      html += '<td><span class="badge badge-ok">導入済み</span></td>';
+    } else if (isDownloading) {
+      html += '<td><span class="badge badge-warn">DL中</span></td>';
+    } else if (isError) {
+      html += '<td><span class="badge badge-ng">エラー</span></td>';
+    } else if (m.path) {
+      html += '<td><span class="badge badge-ng">未導入</span></td>';
+    } else {
+      html += '<td><span class="badge" style="background:var(--text-dim)">未確認</span></td>';
+    }
+
+    // 名前列
+    let nameHtml = `<strong>${esc(m.display_name)}</strong>`;
+    if (m.recommended) nameHtml += ' <span style="color:var(--accent2);font-size:11px">★推奨</span>';
+    if (m.description) nameHtml += `<br><small style="color:var(--text-dim)">${esc(m.description)}</small>`;
+    html += `<td>${nameHtml}</td>`;
+
+    // ファイル名列
+    html += `<td style="font-family:monospace;font-size:0.85em">${esc(m.filename)}<br><span style="color:var(--text-dim)">${esc(m.target_subdir)}</span></td>`;
+
+    // アクション列
+    html += '<td>';
+    if (isDownloading) {
+      const pct = prog.percent || 0;
+      const dlText = prog.total
+        ? `${fmtBytes(prog.downloaded)} / ${fmtBytes(prog.total)} (${pct}%)`
+        : `${fmtBytes(prog.downloaded)} ダウンロード中...`;
+      html += `<div class="progress-wrap"><div class="progress-bar" style="width:${pct}%"></div></div>`;
+      html += `<div class="progress-text">${esc(dlText)}</div>`;
+    } else if (isError) {
+      html += `<span style="color:var(--err);font-size:12px">${esc(prog.message || 'エラー')}</span><br>`;
+      if (m.can_download) {
+        html += `<button class="btn btn-secondary" style="margin-top:4px;font-size:12px" onclick="downloadModel('${esc(m.id)}')">再試行</button>`;
+      }
+    } else if (installed) {
+      html += `<button class="btn btn-secondary" style="font-size:12px" onclick="useModel('${esc(m.filename)}')">使用</button>`;
+    } else if (m.can_download) {
+      html += `<button class="btn btn-primary" style="font-size:12px" onclick="downloadModel('${esc(m.id)}')">DLして配置</button>`;
+    } else if (m.requires_auth) {
+      html += `<small style="color:var(--text-dim)">要認証: 手動配置が必要</small>`;
+    } else {
+      html += `<small style="color:var(--text-dim)">URL未設定: 手動配置</small>`;
+    }
+    if (m.path) {
+      html += `<br><small style="color:var(--text-dim);font-size:10px">${esc(m.path)}</small>`;
+    }
+    html += '</td></tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+/* ─── SD WebUI インストール済みモデル ─── */
+async function loadWebuiModels() {
+  const container = document.getElementById('webui-models-container');
+  try {
+    const res = await fetch('/api/sd-models/webui');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      const models = data.models || [];
+      if (models.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-dim)">SD WebUI にモデルが見つかりません。</p>';
+        return;
+      }
+      let html = '<table class="status-table" style="width:100%"><thead><tr><th>タイトル</th><th>ファイル名</th><th style="width:8em">アクション</th></tr></thead><tbody>';
+      for (const m of models) {
+        const title = m.title || m.model_name || '?';
+        const fname = m.filename ? m.filename.split(/[\\/]/).pop() : '';
+        html += `<tr><td>${esc(title)}</td><td style="font-family:monospace;font-size:0.85em">${esc(fname)}</td>`;
+        html += `<td><button class="btn btn-secondary" style="font-size:12px" onclick="useModel('${esc(title)}')">使用</button></td></tr>`;
+      }
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    } else {
+      container.innerHTML = `<p style="color:var(--text-dim)">SD WebUI 未起動: ${esc(data.message)}</p>`;
+    }
+  } catch (e) {
+    container.innerHTML = '<p style="color:var(--text-dim)">通信エラー。SD WebUI が起動していない可能性があります。</p>';
+  }
+}
+
+/* ─── ポーリング ─── */
+async function pollProgress() {
+  try {
+    const res = await fetch('/api/sd-models/progress');
+    const data = await res.json();
+    const progress = data.progress || {};
+    renderTable(_models, progress);
+    const anyActive = Object.values(progress).some(
+      p => p.status === 'downloading'
+    );
+    if (!anyActive) {
+      stopPolling();
+      await loadModels(progress);
+      await loadCurrentModel();
+    }
+  } catch (e) {
+    console.warn('progress poll error:', e);
+  }
+}
+
+function startPolling() {
+  if (_pollTimer) return;
+  _pollTimer = setInterval(pollProgress, 500);
+}
+
+function stopPolling() {
+  if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+}
+
+/* ─── アクション ─── */
+async function downloadModel(modelId) {
+  try {
+    const res = await fetch('/api/sd-models/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_id: modelId }),
+    });
+    const data = await res.json();
+    if (data.status === 'started') {
+      startPolling();
+    } else {
+      alert('エラー: ' + data.message);
+    }
+  } catch (e) {
+    alert('通信エラーが発生しました。');
+  }
+}
+
+async function useModel(modelName) {
+  if (!confirm(`SD WebUI のアクティブモデルを "${modelName}" に切り替えますか？\n（SD WebUI が起動している必要があります）`)) return;
+  try {
+    const res = await fetch('/api/sd-models/use', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_name: modelName }),
+    });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      await loadCurrentModel();
+      alert('モデルを切り替えました: ' + modelName);
+    } else {
+      alert('エラー: ' + data.message);
+    }
+  } catch (e) {
+    alert('通信エラーが発生しました。');
+  }
+}
+
+async function rescanModels() {
+  try {
+    const res = await fetch('/api/sd-models/rescan', { method: 'POST' });
+    const data = await res.json();
+    if (data.status === 'ok') {
+      alert('再スキャンを完了しました。');
+      await loadWebuiModels();
+    } else {
+      alert('エラー: ' + data.message);
+    }
+  } catch (e) {
+    alert('通信エラーが発生しました。');
+  }
+}
+
+/* ─── 初期ロード ─── */
+document.addEventListener('DOMContentLoaded', async () => {
+  await Promise.all([loadModels(), loadCurrentModel(), loadWebuiModels()]);
+});
+</script>
+{% endblock %}

@@ -207,3 +207,155 @@ class StableDiffusionWebUIGenerator:
 
         logger.debug("SD WebUI 保存完了: %s", output_path)
         return output_path
+
+    # ─────────────────────────────────────────
+    # モデル管理API
+    # ─────────────────────────────────────────
+
+    def get_options(self) -> dict:
+        """SD WebUI の現在の全オプション設定を返す。
+
+        Returns:
+            SD WebUI /sdapi/v1/options のレスポンスそのまま。
+
+        Raises:
+            RuntimeError: API未接続・HTTPエラー。
+        """
+        url = f"{self.base_url}/sdapi/v1/options"
+        try:
+            r = httpx.get(url, timeout=10)
+        except httpx.ConnectError as e:
+            raise RuntimeError(
+                f"SD WebUI API に接続できません ({self.base_url}): {e}"
+            ) from e
+        if r.status_code != 200:
+            raise RuntimeError(
+                f"SD WebUI API エラー (GET /sdapi/v1/options): "
+                f"status={r.status_code}, body={r.text[:300]}"
+            )
+        return r.json()
+
+    def get_current_model(self) -> str:
+        """現在ロードされているチェックポイントモデル名を返す。
+
+        Returns:
+            sd_model_checkpoint の文字列（例: "v1-5-pruned-emaonly.safetensors [...]"）
+
+        Raises:
+            RuntimeError: API未接続・HTTPエラー。
+        """
+        opts = self.get_options()
+        return opts.get("sd_model_checkpoint", "")
+
+    def get_models(self) -> list[dict]:
+        """SD WebUI にインストールされているモデルの一覧を返す。
+
+        Returns:
+            /sdapi/v1/sd-models のリスト（各要素は title, model_name, hash, sha256, filename など）
+
+        Raises:
+            RuntimeError: API未接続・HTTPエラー。
+        """
+        url = f"{self.base_url}/sdapi/v1/sd-models"
+        try:
+            r = httpx.get(url, timeout=30)
+        except httpx.ConnectError as e:
+            raise RuntimeError(
+                f"SD WebUI API に接続できません ({self.base_url}): {e}"
+            ) from e
+        if r.status_code != 200:
+            raise RuntimeError(
+                f"SD WebUI API エラー (GET /sdapi/v1/sd-models): "
+                f"status={r.status_code}, body={r.text[:300]}"
+            )
+        return r.json()
+
+    def set_active_model(self, model_name: str) -> None:
+        """SD WebUI のアクティブモデルを切り替える。
+
+        Args:
+            model_name: タイトル文字列またはファイル名で指定（部分一致で解決する）。
+
+        Raises:
+            RuntimeError: モデルが見つからない・API未接続・HTTPエラー。
+        """
+        # インストール済みモデル一覧から一致するものを探す
+        models = self.get_models()
+        matched_title = _find_model_title(models, model_name)
+        if matched_title is None:
+            available = [m.get("title", m.get("model_name", "?")) for m in models]
+            raise RuntimeError(
+                f"SD WebUI に '{model_name}' が見つかりません。"
+                f"rescan を実行してモデルを再検出してください。"
+                f"利用可能: {available}"
+            )
+
+        url = f"{self.base_url}/sdapi/v1/options"
+        payload = {"sd_model_checkpoint": matched_title}
+        try:
+            r = httpx.post(url, json=payload, timeout=60)
+        except httpx.ConnectError as e:
+            raise RuntimeError(
+                f"SD WebUI API に接続できません ({self.base_url}): {e}"
+            ) from e
+        if r.status_code != 200:
+            raise RuntimeError(
+                f"SD WebUI モデル切替エラー (POST /sdapi/v1/options): "
+                f"status={r.status_code}, body={r.text[:300]}"
+            )
+        logger.info("SD WebUI アクティブモデル切替完了: %s", matched_title)
+
+    def rescan_models(self) -> None:
+        """SD WebUI にモデル一覧の再スキャンを依頼する。
+
+        Raises:
+            RuntimeError: API未接続・HTTPエラー。
+        """
+        url = f"{self.base_url}/sdapi/v1/refresh-checkpoints"
+        try:
+            r = httpx.post(url, timeout=60)
+        except httpx.ConnectError as e:
+            raise RuntimeError(
+                f"SD WebUI API に接続できません ({self.base_url}): {e}"
+            ) from e
+        if r.status_code != 200:
+            raise RuntimeError(
+                f"SD WebUI rescan エラー (POST /sdapi/v1/refresh-checkpoints): "
+                f"status={r.status_code}, body={r.text[:300]}"
+            )
+        logger.info("SD WebUI モデル再スキャン完了")
+
+
+# ─────────────────────────────────────────────
+# ユーティリティ
+# ─────────────────────────────────────────────
+
+def _find_model_title(models: list[dict], name: str) -> str | None:
+    """インストール済みモデルリストから name に一致する title を探す。
+
+    完全一致（title / model_name / filename） → 部分一致（name が title/filename に含まれる）
+    の順で検索する。
+
+    Args:
+        models: /sdapi/v1/sd-models のリスト
+        name: 検索対象の文字列
+
+    Returns:
+        見つかった場合は title 文字列、見つからない場合は None。
+    """
+    name_lower = name.lower()
+    # 完全一致
+    for m in models:
+        if (
+            m.get("title", "").lower() == name_lower
+            or m.get("model_name", "").lower() == name_lower
+            or os.path.basename(m.get("filename", "")).lower() == name_lower
+        ):
+            return m.get("title") or m.get("model_name")
+    # 部分一致
+    for m in models:
+        title = m.get("title", "")
+        filename = os.path.basename(m.get("filename", ""))
+        if name_lower in title.lower() or name_lower in filename.lower():
+            return title or m.get("model_name")
+    return None

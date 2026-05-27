@@ -54,11 +54,22 @@ def check_comfyui() -> dict[str, Any]:
 
 
 def check_sd_webui() -> dict[str, Any]:
-    """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API の疎通確認とモデル名を返す。"""
+    """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API の疎通確認とモデル情報を返す。"""
     try:
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
         gen = StableDiffusionWebUIGenerator()
-        return gen.check_health()
+        result = gen.check_health()
+        # マニフェスト内モデルの導入状況を追加（SD_WEBUI_ROOT 設定時のみ）
+        if config.SD_WEBUI_ROOT:
+            try:
+                from core.sd_model_manager import SDWebUIModelManager
+                manager = SDWebUIModelManager()
+                statuses = manager.get_model_status()
+                result["manifest_total"] = len(statuses)
+                result["manifest_installed"] = sum(1 for s in statuses if s["installed"])
+            except Exception:
+                pass  # フォールバック許可: マニフェスト情報は補助的。取得失敗しても疎通確認結果は返す
+        return result
     except Exception as e:
         return {"ok": False, "url": config.SD_WEBUI_BASE_URL, "error": str(e)}
 

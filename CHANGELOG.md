@@ -14,6 +14,18 @@
 
 ## 2026-05-27
 
+### SD WebUI Forge 用モデル管理機能を追加
+
+- `core/sd_model_manager.py: SDWebUIModelManager` を新規追加。`assets/sd_webui/model_manifest.json` に基づきモデルのインストール確認・ダウンロード・SHA256検証を行う。
+- `SD_WEBUI_MODEL` 設定時に画像生成前にモデルの準備（インストール確認 → 必要なら自動ダウンロード → `set_active_model()`）を実行するよう `core/image_generator.py` に `_prepare_sd_webui_model()` を追加した。`SD_WEBUI_MODEL` 未設定時はスキップ（現在のロード済みモデルを使う）。
+- `StableDiffusionWebUIGenerator` に `get_models()`, `get_current_model()`, `set_active_model()`, `rescan_models()` を追加。SD WebUI API 経由でモデル情報取得・切り替えを実行する。
+- `/sd-models` Web UI ページを追加。マニフェスト内モデルの状態・ダウンロード・使用切り替え・再スキャンを行える。
+- `web_app/routes/api_sd_models.py` に REST API を追加。ダウンロードはバックグラウンドスレッドで実行しポーリング形式で進捗を確認する。
+- 設定に `SD_WEBUI_ROOT`, `SD_MODEL_MANIFEST_PATH`, `AUTO_DOWNLOAD_SD_MODELS` を追加。設定画面から変更可能。
+- 設定画面の SD WebUI ステータスにマニフェスト導入済み数を追加（SD_WEBUI_ROOT 設定時のみ）。
+- 設定画面から `/sd-models` ページへのリンクを追加。
+- `tests/test_sd_model_manager.py`, `tests/test_sd_model_service.py` を追加（合計 29 テスト）。
+
 ### 画像生成バックエンドに Stable Diffusion WebUI Forge を追加
 
 - `IMAGE_BACKEND=sd_webui` を設定することで、Forge / AUTOMATIC1111互換APIから背景・サムネイルを生成できるようにした。

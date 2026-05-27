@@ -192,3 +192,14 @@ def page_logs(request: Request):
 @router.get("/comfyui-models", response_class=HTMLResponse)
 def page_comfyui_models(request: Request):
     return _render(request, "comfyui_models.html", {})
+
+
+@router.get("/sd-models", response_class=HTMLResponse)
+def page_sd_models(request: Request):
+    import config as _cfg
+    return _render(request, "sd_models.html", {
+        "sd_webui_root": _cfg.SD_WEBUI_ROOT,
+        "sd_webui_model": _cfg.SD_WEBUI_MODEL,
+        "auto_download_sd_models": _cfg.AUTO_DOWNLOAD_SD_MODELS,
+        "sd_webui_base_url": _cfg.SD_WEBUI_BASE_URL,
+    })

@@ -226,6 +226,41 @@ for item in dialogue_items:
 - API未起動・HTTPエラー・画像なし・タイムアウトはすべて `RuntimeError` として上位に伝播する。他エンジンへの自動フォールバックは行わない。
 - 設定: `SD_WEBUI_BASE_URL`, `SD_WEBUI_TIMEOUT_SEC`, `SD_WEBUI_MODEL`, `SD_WEBUI_SAMPLER`, `SD_WEBUI_STEPS`, `SD_WEBUI_CFG_SCALE`, `SD_WEBUI_WIDTH`, `SD_WEBUI_HEIGHT`, `SD_WEBUI_NEGATIVE_PROMPT`
 
+### SD WebUI Forge モデル管理
+
+- `core/sd_model_manager.py: SDWebUIModelManager` がモデルのインストール確認・ダウンロードを担当する。
+- モデルマニフェストは `assets/sd_webui/model_manifest.json`（`SD_MODEL_MANIFEST_PATH` で変更可）。
+- マニフェスト形式: `{"version": 1, "models": [{id, display_name, type, filename, target_subdir, source_url, sha256, description, recommended, requires_auth, api_match_hint}]}`
+- ダウンロードは `.part` 一時ファイルを使用し、完了後に `os.replace` でリネームする。
+- SHA256 が非空文字のときは検証を実施し、不一致の場合は RuntimeError を送出して `.part` を削除する。SHA256 が空文字のときは検証をスキップする。
+- フォールバック禁止: 指定モデルが未インストール・SHA256不一致のいずれでも処理を中止する。
+
+**`SD_WEBUI_MODEL` 設定時の事前モデル準備フロー（画像生成前に実行）:**
+1. `SD_WEBUI_MODEL` が空 → スキップ（現在 Forge にロードされているモデルを使用）
+2. `SD_WEBUI_MODEL` が設定されている場合:
+   - マニフェスト内で一致するモデルを検索（ファイル名・api_match_hint 部分一致）
+   - 見つかりかつ未インストール:
+     - `AUTO_DOWNLOAD_SD_MODELS=1` → `download_model()` → `rescan_models()`
+     - `AUTO_DOWNLOAD_SD_MODELS=0` → RuntimeError（"インストールされていません"）
+   - `StableDiffusionWebUIGenerator.set_active_model(SD_WEBUI_MODEL)` でモデル切り替え
+
+**SD WebUI モデル管理 Web UI:**
+- `/sd-models` ページ: マニフェスト内モデルのインストール状況・ダウンロード・モデル切り替えを行う
+- `/api/sd-models` (GET): マニフェスト内全モデルのステータス
+- `/api/sd-models/webui` (GET): SD WebUI API からインストール済みモデル一覧
+- `/api/sd-models/current` (GET): SD WebUI の現在ロード済みモデル名
+- `/api/sd-models/download` (POST): バックグラウンドダウンロード開始
+- `/api/sd-models/progress` (GET): ダウンロード進捗確認（ポーリング用）
+- `/api/sd-models/use` (POST): SD WebUI のアクティブモデル切り替え
+- `/api/sd-models/rescan` (POST): SD WebUI への再スキャン依頼
+
+**追加設定項目:**
+| 設定 | 説明 | デフォルト |
+|---|---|---|
+| `SD_WEBUI_ROOT` | SD WebUI インストールディレクトリ（モデルパス解決用） | `""` |
+| `SD_MODEL_MANIFEST_PATH` | SD モデルマニフェスト JSON パス | `assets/sd_webui/model_manifest.json` |
+| `AUTO_DOWNLOAD_SD_MODELS` | `1` のとき未インストールモデルを自動ダウンロード | `0` |
+
 ComfyUIプリセットは `assets/comfyui/presets.json` に定義する。初期プリセット:
 
 | preset | 表示名 | model_type | checkpoint | sampler | steps | cfg | サイズ |

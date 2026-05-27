@@ -238,6 +238,69 @@ class ImageGenerator:
             print("❌ フォールバック禁止方針により処理を中止しました。")
             raise
 
+    def _prepare_sd_webui_model(self) -> None:
+        """SD_WEBUI_MODEL が設定されている場合、インストール確認・ダウンロード・モデル切り替えを行う。
+
+        SD_WEBUI_MODEL が空文字のときは何もしない（Forge の現在ロード済みモデルをそのまま使う）。
+        モデルが未インストールかつ AUTO_DOWNLOAD_SD_MODELS=False のときは RuntimeError を送出する。
+        フォールバック禁止: 指定モデルが使用不可な場合は中止する。
+        """
+        model_name = config.SD_WEBUI_MODEL.strip()
+        if not model_name:
+            return  # SD_WEBUI_MODEL 未設定: 現在ロード済みモデルをそのまま使用
+
+        from core.sd_model_manager import SDWebUIModelManager
+        from core.sd_webui_generator import StableDiffusionWebUIGenerator
+
+        manager = SDWebUIModelManager()
+
+        # マニフェストから該当モデルを探す（見つからなければスキップ）
+        matched = None
+        try:
+            statuses = manager.get_model_status()
+            for s in statuses:
+                hint = s.get("api_match_hint", "").lower()
+                fname_lower = s["filename"].lower()
+                name_lower = model_name.lower()
+                if (
+                    fname_lower == name_lower
+                    or (hint and hint in name_lower)
+                    or name_lower in fname_lower
+                ):
+                    matched = s
+                    break
+        except RuntimeError:
+            # マニフェストが利用不可の場合はインストールチェックをスキップ
+            pass
+
+        if matched is not None and not matched["installed"]:
+            if config.AUTO_DOWNLOAD_SD_MODELS:
+                def _progress(filename, downloaded, total):
+                    if total > 0:
+                        pct = downloaded * 100 // total
+                        print(
+                            f"  [SD] ダウンロード中: {filename} "
+                            f"{downloaded // 1024 // 1024}MB/{total // 1024 // 1024}MB ({pct}%)"
+                        )
+                    else:
+                        print(f"  [SD] ダウンロード中: {filename} {downloaded // 1024 // 1024}MB")
+
+                print(f"  [SD] モデルをダウンロードします: {matched['filename']}")
+                manager.download_model(matched["id"], progress_callback=_progress)
+                # ダウンロード後に SD WebUI へ再スキャンを依頼
+                StableDiffusionWebUIGenerator().rescan_models()
+            else:
+                raise RuntimeError(
+                    f"SD WebUI モデル '{matched['filename']}' がインストールされていません。\n"
+                    f"対処方法:\n"
+                    f"  1. AUTO_DOWNLOAD_SD_MODELS=1 を設定して自動ダウンロードを有効にする\n"
+                    f"  2. 手動で '{matched['target_subdir']}' に配置後 rescan を実行する"
+                )
+
+        # モデル切り替え（SD WebUI API 経由）
+        gen = StableDiffusionWebUIGenerator()
+        gen.set_active_model(model_name)
+
     def _generate_background_sd_webui(self, description, save_dir, fname, *, is_thumbnail=False):
         """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API で背景画像を生成する。"""
         from core.sd_webui_generator import (
@@ -257,6 +320,9 @@ class ImageGenerator:
             next_num = max(existing_nums, default=0) + 1
             fname = f"bg_{next_num:03d}_001.png"
         output_path = os.path.join(save_dir, fname)
+
+        # SD_WEBUI_MODEL 設定時: インストール確認 → 必要に応じてダウンロード → モデル切り替え
+        self._prepare_sd_webui_model()
 
         # Shorts の場合は縦長サイズに切り替え
         is_shorts = self.height > self.width

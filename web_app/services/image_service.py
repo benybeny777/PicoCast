@@ -59,11 +59,17 @@ def list_images(history_name: str) -> dict[str, Any]:
 
 
 def _read_bg_prompt(bg_dir: str, fname: str) -> str:
+    """prompt_bg_XXXX.txt を読む。【台本】以降の台本全文は除去してシーン説明のみ返す。"""
     try:
         bg_num = int(fname.split("_")[1])
         path = os.path.join(bg_dir, f"prompt_bg_{bg_num:04d}.txt")
         with open(path, "r", encoding="utf-8") as f:
-            return f.read().strip()
+            content = f.read().strip()
+        # 「以下の台本を参考に、「○○」のシーンの背景画像を生成してください。\n\n【台本】\n<script>」
+        # → シーン説明部分のみ表示する
+        if "【台本】" in content:
+            content = content.split("【台本】")[0].strip()
+        return content
     except Exception:
         return ""
 
