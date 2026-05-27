@@ -74,6 +74,8 @@ class ImageRegenerateRequest(BaseModel):
     history_name: str
     image_keys: list[str]          # "backgrounds/bg_NNN_001.png" / "thumbnails/..." 等
     prompts: dict[str, str] = {}   # key → テキスト（未保存のプロンプト上書き用）
+    background_engine: str = ""    # "" = configデフォルト / "local_comfyui" / "nanobanana"
+    comfyui_preset: str = ""       # "" = configデフォルト
 
 
 # ── アップロード ──────────────────────────────────────

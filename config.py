@@ -135,6 +135,8 @@ COMFYUI_ROOT_DIR = os.environ.get("COMFYUI_ROOT_DIR", "C:\\ComfyUI_windows_porta
 COMFYUI_MODEL_MANIFEST_PATH = os.environ.get("COMFYUI_MODEL_MANIFEST_PATH", "assets/comfyui/model_manifest.json")  # モデルマニフェストパス
 COMFYUI_MODEL_DOWNLOAD_TIMEOUT_SEC = int(os.environ.get("COMFYUI_MODEL_DOWNLOAD_TIMEOUT_SEC", 3600))  # ダウンロードタイムアウト(秒)
 COMFYUI_MODEL_VERIFY_SHA256 = os.environ.get("COMFYUI_MODEL_VERIFY_SHA256", "1").strip().lower() in ("1", "true", "yes", "on")  # SHA256検証を有効にするか
+COMFYUI_START_COMMAND = os.environ.get("COMFYUI_START_COMMAND", "")   # 未起動時の自動起動コマンド（空=無効）
+COMFYUI_START_WAIT_SEC = int(os.environ.get("COMFYUI_START_WAIT_SEC", "90"))  # 起動待機タイムアウト(秒)
 
 OLLAMA_REWRITE_FALLBACK_MODEL = os.environ.get("OLLAMA_REWRITE_FALLBACK_MODEL", "gemma4:e4b")           # リライト失敗時のフォールバックモデル
 OPENING_REWRITE_MAX_FALLBACKS = int(os.environ.get("OPENING_REWRITE_MAX_FALLBACKS", "1"))               # フォールバック試行上限

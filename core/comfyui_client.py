@@ -31,6 +31,43 @@ class ComfyUIClient:
             response = client.get(f"{self.base_url}/system_stats")
             response.raise_for_status()
 
+    def ensure_running(self) -> None:
+        """ComfyUIが起動していなければ COMFYUI_START_COMMAND で自動起動し、準備完了まで待機する。"""
+        import logging
+        import subprocess
+        logger = logging.getLogger(__name__)
+
+        try:
+            self.check_connection()
+            return
+        except Exception:
+            pass
+
+        start_cmd = getattr(config, "COMFYUI_START_COMMAND", "").strip()
+        if not start_cmd:
+            raise RuntimeError(
+                f"ComfyUIに接続できません ({self.base_url})。"
+                " ComfyUIを起動してください。"
+                " 自動起動するには COMFYUI_START_COMMAND を .env に設定してください。"
+            )
+
+        logger.info("ComfyUI自動起動: %s", start_cmd)
+        subprocess.Popen(start_cmd, shell=True)
+
+        wait_sec = int(getattr(config, "COMFYUI_START_WAIT_SEC", 90))
+        for elapsed in range(2, wait_sec + 1, 2):
+            time.sleep(2)
+            try:
+                self.check_connection()
+                logger.info("ComfyUI起動確認 (%d秒)", elapsed)
+                return
+            except Exception:
+                pass
+
+        raise RuntimeError(
+            f"ComfyUIの起動を {wait_sec} 秒待ちましたが、接続できませんでした ({self.base_url})。"
+        )
+
     def load_presets(self) -> dict[str, dict[str, Any]]:
         with open(self.preset_file, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -64,7 +101,7 @@ class ComfyUIClient:
         height: int | None = None,
         seed: int | None = None,
     ) -> dict[str, Any]:
-        self.check_connection()
+        self.ensure_running()
         preset = self.load_preset(preset_name)
         self._validate_checkpoint_available(str(preset["checkpoint"]))
         seed = int(seed if seed is not None else random.randint(1, 2**31 - 1))
