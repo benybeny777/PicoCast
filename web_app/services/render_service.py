@@ -31,7 +31,7 @@ def _run_render(job: Job, history_name: str) -> dict[str, Any]:
     _log(job, f"対象フォルダ: {theme_dir}", "info")
 
     worker_result = run_in_worker(
-        "worker_render.py",
+        "workers/worker_render.py",
         {
             "history_name": history_name,
             "theme_dir": theme_dir,

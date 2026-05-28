@@ -114,16 +114,16 @@ python3 -m venv .venv
 - **PowerShell:**
   ```powershell
   .venv\Scripts\Activate.ps1
-  pip install --upgrade -r requirements.txt
+  pip install --upgrade -r config/requirements.txt
   ```
 - **cmd:**
   ```cmd
   .venv\Scripts\activate.bat
-  pip install --upgrade -r requirements.txt
+  pip install --upgrade -r config/requirements.txt
   ```
 - **macOS:**
   ```bash
-  .venv/bin/python -m pip install --upgrade -r requirements.txt
+  .venv/bin/python -m pip install --upgrade -r config/requirements.txt
   ```
 
 ### Step 2. APIキーとOAuth設定ファイルの配置

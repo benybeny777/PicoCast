@@ -3,7 +3,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.opening_quality import opening_score_tag
-import main
+from workers import main
 
 
 def test_opening_score_tag():

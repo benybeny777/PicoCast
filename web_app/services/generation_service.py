@@ -122,7 +122,7 @@ def _run_generate(
     _log(job, f"動画生成開始: {topic}", "info")
 
     worker_result = run_in_worker(
-        "worker_pipeline.py",
+        "workers/worker_pipeline.py",
         {
             "topic": topic,
             "pregenerated_script": script,

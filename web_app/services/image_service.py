@@ -18,7 +18,7 @@ def _detect_is_shorts_from_dir(theme_dir: str) -> bool:
     try:
         with open(script_path, "r", encoding="utf-8") as f:
             content = f.read()
-        from main import _detect_is_shorts
+        from workers.main import _detect_is_shorts
         return _detect_is_shorts(content)
     except Exception as e:
         # フォールバック許可: script.txt が読めない場合は画像再生成を止めず Shorts として扱う
@@ -129,7 +129,7 @@ def _run_regenerate(
     サムネイル: main.regenerate_thumbnail_only() を使用。
     """
     from core.image_generator import ImageGenerator
-    from main import regenerate_thumbnail_only
+    from workers.main import regenerate_thumbnail_only
 
     theme_dir = safe_output_path(history_name)
     bg_dir = os.path.join(theme_dir, "backgrounds")
