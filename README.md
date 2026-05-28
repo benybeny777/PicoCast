@@ -63,7 +63,7 @@ graph TD
    
    **Windows:**
    ```powershell
-   .\start.bat
+   .\start.ps1
    ```
    **macOS:**
    ```bash
@@ -72,7 +72,10 @@ graph TD
 3. 自動的にブラウザが立ち上がり、`http://127.0.0.1:58080` にアクセスできます。
 
 > [!NOTE]
-> `start.bat` / `start.command` は内部で `python -m web_app.app --open-browser --reload` を実行しています。普段の操作入口はローカル Web UI です。
+> 開発時（ソースコード変更を自動反映したい場合）は `start-dev.ps1` / `start-dev.command` を使ってください（`--reload` 付き）。
+
+> [!NOTE]
+> 普段の操作入口はローカル Web UI です。
 
 ---
 
