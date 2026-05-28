@@ -18,6 +18,7 @@
 
 - [🔄 システム処理フロー](#-システム処理フロー)
 - [🚀 クイックスタート](#-クイックスタート)
+- [🖥 開発環境](#-開発環境)
 - [🛠 前提条件 (Prerequisites)](#-前提条件-prerequisites)
 - [📦 セットアップ手順](#-セットアップ手順)
 - [💻 起動方法と起動オプション](#-起動方法と起動オプション)
@@ -72,6 +73,25 @@ graph TD
 
 > [!NOTE]
 > `start.bat` / `start.command` は内部で `python -m web_app.app --open-browser --reload` を実行しています。普段の操作入口はローカル Web UI です。
+
+---
+
+## 🖥 開発環境
+
+本プロジェクトの主開発機（Windows）の環境です。動作確認はこの構成を基準としています。
+
+| 項目 | 詳細 |
+| :--- | :--- |
+| OS | Windows 11 Home |
+| CPU | Intel Core 7 240H（10コア / 16スレッド） |
+| RAM | 32 GB |
+| GPU | NVIDIA GeForce RTX 5060 Laptop GPU（NVENC 対応） |
+| Python | 3.11.9（`.venv` 仮想環境） |
+| ffmpeg | 8.0.1 full build（[gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 版） |
+| デフォルトエンコーダ | `h264_nvenc`（`NATIVE_FFMPEG_ENCODER` 未設定時） |
+
+> [!NOTE]
+> macOS 環境での動作については [クイックスタート](#-クイックスタート) および [セットアップ手順](#-セットアップ手順) の macOS 向け手順を参照してください。
 
 ---
 
