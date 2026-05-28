@@ -516,9 +516,9 @@ a:hover { text-decoration: underline; }
 }
 
 /* ── タブ ── */
-.tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 16px; }
-.tab-btn { padding: 8px 18px; background: none; border: none; color: var(--text-dim); font-size: 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
-.tab-btn:hover { color: var(--text); }
-.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: bold; }
+.tab-bar { display: flex; gap: 4px; border-bottom: 2px solid var(--border); margin-bottom: 16px; padding-left: 8px; }
+.tab-btn { padding: 10px 24px; background: var(--surface2); border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; color: var(--text-dim); font-size: 14px; cursor: pointer; margin-bottom: -2px; transition: background 0.2s, color 0.2s; }
+.tab-btn:hover { background: var(--surface); color: var(--text); }
+.tab-btn.active, .tab-btn.tab-active { background: var(--surface); color: var(--accent); border: 2px solid var(--border); border-bottom: 2px solid var(--surface); font-weight: bold; }
 .tab-panel { display: none; }
-.tab-panel.active { display: block; }
+.tab-panel.active, .tab-panel.tab-active { display: block; }
