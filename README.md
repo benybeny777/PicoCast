@@ -18,7 +18,6 @@
 
 - [🔄 システム処理フロー](#-システム処理フロー)
 - [🚀 クイックスタート](#-クイックスタート)
-- [🖥 開発環境](#-開発環境)
 - [🛠 前提条件 (Prerequisites)](#-前提条件-prerequisites)
 - [📦 セットアップ手順](#-セットアップ手順)
 - [💻 起動方法と起動オプション](#-起動方法と起動オプション)
@@ -27,6 +26,7 @@
 - [⚙️ 主な設定値 (config.py)](#️-主な設定値-configpy)
 - [⚠️ 注意・制約事項](#️-注意制約事項)
 - [📢 CTA/Long動画の運用ポリシー](#-ctalong動画の運用ポリシー)
+- [🖥 開発環境](#-開発環境)
 
 ---
 
@@ -73,63 +73,6 @@ graph TD
 
 > [!NOTE]
 > `start.bat` / `start.command` は内部で `python -m web_app.app --open-browser --reload` を実行しています。普段の操作入口はローカル Web UI です。
-
----
-
-## 🖥 開発環境
-
-本プロジェクトの主開発機（Windows）の環境です。動作確認はこの構成を基準としています。
-
-| 項目 | 詳細 |
-| :--- | :--- |
-| OS | Windows 11 Home |
-| CPU | Intel Core 7 240H（10コア / 16スレッド） |
-| RAM | 32 GB |
-| GPU | NVIDIA GeForce RTX 5060 Laptop GPU（NVENC 対応） |
-| Python | 3.11.9（`.venv` 仮想環境） |
-| ffmpeg | 8.0.1 full build（[gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 版） |
-| デフォルトエンコーダ | `h264_nvenc`（`NATIVE_FFMPEG_ENCODER` 未設定時） |
-
-<details>
-<summary><b>主要 Python パッケージ・連携アプリのバージョン</b></summary>
-
-**Python パッケージ（`.venv` 内）**
-
-| パッケージ | バージョン |
-| :--- | :--- |
-| FastAPI | 0.136.3 |
-| Starlette | 1.1.0 |
-| Uvicorn | 0.48.0 |
-| google-genai | 1.75.0 |
-| SudachiPy | 0.6.11 |
-| Pillow | 12.2.0 |
-| httpx | 0.28.1 |
-
-**連携アプリ**（別プロセスとして起動）
-
-| アプリ | バージョン | エンドポイント |
-| :--- | :--- | :--- |
-| VOICEVOX | 0.25.2 | `http://localhost:50021` |
-| Ollama | 0.24.0 | `http://localhost:11434` |
-| Stable Diffusion WebUI | v1.10.1 | `http://localhost:7860`（任意） |
-
-**Ollama インストール済みモデル**
-
-| モデル | サイズ |
-| :--- | ---: |
-| qwen3:8b（デフォルト） | 4.9 GB |
-| qwen2.5:7b-instruct | 4.4 GB |
-| llama3:latest | 4.3 GB |
-| gemma3:1b | 0.8 GB |
-| gemma4:e2b | 6.7 GB |
-| gemma4:e4b / latest | 8.9 GB |
-| glm-4.7-flash:latest | 17.7 GB |
-| gpt-oss:20b | 12.8 GB |
-
-</details>
-
-> [!NOTE]
-> macOS 環境での動作については [クイックスタート](#-クイックスタート) および [セットアップ手順](#-セットアップ手順) の macOS 向け手順を参照してください。
 
 ---
 
@@ -317,4 +260,59 @@ SD_WEBUI_HEIGHT=576
 - **Long動画の目次:** 概要欄用の `【目次】(0:00形式)` チャプターマーカーを自動追加。
 - **Longサムネイル A/B テスト:** 3パターンのサムネイル画像を自動出力し YouTube Studio でのテストをサポート。
 
+---
 
+## 🖥 開発環境
+
+本プロジェクトの主開発機（Windows）の環境です。動作確認はこの構成を基準としています。
+
+| 項目 | 詳細 |
+| :--- | :--- |
+| OS | Windows 11 Home |
+| CPU | Intel Core 7 240H（10コア / 16スレッド） |
+| RAM | 32 GB |
+| GPU | NVIDIA GeForce RTX 5060 Laptop GPU（NVENC 対応） |
+| Python | 3.11.9（`.venv` 仮想環境） |
+| ffmpeg | 8.0.1 full build（[gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 版） |
+| デフォルトエンコーダ | `h264_nvenc`（`NATIVE_FFMPEG_ENCODER` 未設定時） |
+
+<details>
+<summary><b>主要 Python パッケージ・連携アプリのバージョン</b></summary>
+
+**Python パッケージ（`.venv` 内）**
+
+| パッケージ | バージョン |
+| :--- | :--- |
+| FastAPI | 0.136.3 |
+| Starlette | 1.1.0 |
+| Uvicorn | 0.48.0 |
+| google-genai | 1.75.0 |
+| SudachiPy | 0.6.11 |
+| Pillow | 12.2.0 |
+| httpx | 0.28.1 |
+
+**連携アプリ**（別プロセスとして起動）
+
+| アプリ | バージョン | エンドポイント |
+| :--- | :--- | :--- |
+| VOICEVOX | 0.25.2 | `http://localhost:50021` |
+| Ollama | 0.24.0 | `http://localhost:11434` |
+| Stable Diffusion WebUI | v1.10.1 | `http://localhost:7860`（任意） |
+
+**Ollama インストール済みモデル**
+
+| モデル | サイズ |
+| :--- | ---: |
+| qwen3:8b（デフォルト） | 4.9 GB |
+| qwen2.5:7b-instruct | 4.4 GB |
+| llama3:latest | 4.3 GB |
+| gemma3:1b | 0.8 GB |
+| gemma4:e2b | 6.7 GB |
+| gemma4:e4b / latest | 8.9 GB |
+| glm-4.7-flash:latest | 17.7 GB |
+| gpt-oss:20b | 12.8 GB |
+
+</details>
+
+> [!NOTE]
+> macOS 環境での動作については [クイックスタート](#-クイックスタート) および [セットアップ手順](#-セットアップ手順) の macOS 向け手順を参照してください。
