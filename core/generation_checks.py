@@ -51,17 +51,32 @@ def pre_generate_check(items: list[dict], is_shorts: bool) -> tuple[list[str], l
 
         # ネタ会議専用チェック
         if is_netakaigi:
+            screen_fmt = next((it["text"] for it in items if it["type"] == "screen_format"), "").strip()
+            is_long_variant = (
+                "Long" in video_format or "ロング" in video_format
+                or "横" in screen_fmt or "wide" in screen_fmt.lower()
+            )
             dc = len(dialogue_items)
             if len(bg_items) < 1:
                 errors.append("ネタ会議: 背景が1件もありません")
-            if dc < 20:
-                errors.append(f"ネタ会議: セリフ数不足（{dc}行 / 最低20行以上）")
-            elif dc < 35:
-                warnings.append(f"ネタ会議: セリフ数がやや少なめです（{dc}行 / 理想55〜85行）")
-            elif dc > 120:
-                errors.append(f"ネタ会議: セリフ数過多（{dc}行 / 120行以下推奨）")
-            elif dc > 85:
-                warnings.append(f"ネタ会議: セリフ数がやや多めです（{dc}行 / 理想55〜85行）")
+            if is_long_variant:
+                # ネタ会議Long（横）: 55〜120行
+                if dc < 30:
+                    errors.append(f"ネタ会議Long: セリフ数不足（{dc}行 / 最低30行以上）")
+                elif dc < 55:
+                    warnings.append(f"ネタ会議Long: セリフ数がやや少なめです（{dc}行 / 理想55〜120行）")
+                elif dc > 120:
+                    errors.append(f"ネタ会議Long: セリフ数過多（{dc}行 / 120行以下推奨）")
+            else:
+                # ネタ会議Shorts（縦・デフォルト）: 35〜65行
+                if dc < 20:
+                    errors.append(f"ネタ会議Shorts: セリフ数不足（{dc}行 / 最低20行以上）")
+                elif dc < 35:
+                    warnings.append(f"ネタ会議Shorts: セリフ数がやや少なめです（{dc}行 / 理想35〜65行）")
+                elif dc > 85:
+                    errors.append(f"ネタ会議Shorts: セリフ数過多（{dc}行 / 85行以下推奨）")
+                elif dc > 65:
+                    warnings.append(f"ネタ会議Shorts: セリフ数がやや多めです（{dc}行 / 理想35〜65行）")
             return errors, warnings
 
         min_bg = 4 if is_shorts else 3

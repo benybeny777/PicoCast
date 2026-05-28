@@ -19,6 +19,7 @@ class ScriptParser:
     _genre_group_re = re.compile(r'^(?:ジャンル|Genre(?:Group)?)[:：](.*)$', re.IGNORECASE)
     _topic_request_cta_re = re.compile(r'^(?:ネタ募集CTA|TopicRequestCTA)[:：](.*)$', re.IGNORECASE)
     _topic_request_cta_reason_re = re.compile(r'^(?:ネタ募集CTA理由|TopicRequestCTAReason)[:：](.*)$', re.IGNORECASE)
+    _screen_format_re = re.compile(r'^(?:画面形式|ScreenFormat)[:：](.*)$', re.IGNORECASE)
     _meeting_candidates_re = re.compile(r'^(?:候補ネタ|MeetingCandidates|Candidates)[:：](.*)$', re.IGNORECASE)
     _candidate_num_re = re.compile(r'^候補番号[:：](.*)$', re.IGNORECASE)
     _poll_options_re = re.compile(r'^(?:アンケート設定案|アンケート手動設定用|PollOptions)[:：]', re.IGNORECASE)
@@ -78,7 +79,7 @@ class ScriptParser:
     # Web UI / main.py で共通利用するメタタイプセット
     META_TYPES = frozenset({
         "thumbnail", "video_title", "description", "tags",
-        "video_format", "thumbnail_text", "fixed_comment",
+        "video_format", "screen_format", "thumbnail_text", "fixed_comment",
         "generation_kind", "source_video_title", "generation_purpose",
         "character_pattern", "genre_group", "topic_request_cta", "topic_request_cta_reason",
         "meeting_candidates", "poll_options",
@@ -217,6 +218,7 @@ class ScriptParser:
                     (genre_group_re, "genre_group"),
                     (topic_request_cta_re, "topic_request_cta"),
                     (topic_request_cta_reason_re, "topic_request_cta_reason"),
+                    (ScriptParser._screen_format_re, "screen_format"),
                     (meeting_candidates_re, "meeting_candidates"),
                 ]:
                     m = meta_re.match(line)

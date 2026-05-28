@@ -341,13 +341,43 @@ def _detect_is_shorts(script_content):
 
 
 def _detect_is_netakaigi(script_content):
-    """台本テキストからネタ会議モードを検出する。動画形式: ネタ会議 のみ True。"""
+    """台本テキストからネタ会議モードを検出する。動画形式: ネタ会議* のみ True。"""
     for line in script_content.splitlines():
         line = line.strip().replace("**", "")
         m = re.match(r'^(?:動画形式|Format)[:：]\s*(.+)$', line, re.IGNORECASE)
         if m:
             return "ネタ会議" in m.group(1)
     return False
+
+
+def _detect_netakaigi_variant(script_content: str) -> str:
+    """ネタ会議の画面形式バリアントを返す。'Long'（横） または 'Shorts'（縦・デフォルト）。
+
+    判定優先順位:
+      1. 動画形式: ネタ会議Long  → "Long"
+      2. 動画形式: ネタ会議Shorts → "Shorts"
+      3. 画面形式: 横            → "Long"
+      4. その他（動画形式: ネタ会議 等） → "Shorts"（縦デフォルト）
+    """
+    format_val = ""
+    screen_format = ""
+    for line in script_content.splitlines():
+        s = line.strip().replace("**", "")
+        m = re.match(r'^(?:動画形式|Format)[:：]\s*(.+)$', s, re.IGNORECASE)
+        if m:
+            format_val = m.group(1).strip()
+        m2 = re.match(r'^(?:画面形式|ScreenFormat)[:：]\s*(.+)$', s, re.IGNORECASE)
+        if m2:
+            screen_format = m2.group(1).strip()
+        if format_val and screen_format:
+            break
+    if "Long" in format_val or "ロング" in format_val:
+        return "Long"
+    if "Shorts" in format_val or "ショート" in format_val:
+        return "Shorts"
+    if screen_format and ("横" in screen_format or "wide" in screen_format.lower()):
+        return "Long"
+    return "Shorts"  # デフォルトは縦（Shorts相当）
 
 
 class GenerationReport:
@@ -691,6 +721,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # Step 2: 動画形式を検出
     is_shorts = _detect_is_shorts(script_content)
     is_netakaigi = _detect_is_netakaigi(script_content)
+    netakaigi_variant = _detect_netakaigi_variant(script_content) if is_netakaigi else None
     try:
         _nav_hits = check_shorts_navigation_ng(script_content, "Shorts" if is_shorts else "Long")
         if _nav_hits:
@@ -721,8 +752,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             f"   📏 台本基準: {NATIVE_SHORTS_LINES_TARGET_MIN}〜{NATIVE_SHORTS_LINES_TARGET_MAX}行 / "
             f"{NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}字目標"
         )
-    _fmt_label = "Shorts" if is_shorts else ("ネタ会議" if is_netakaigi else "ロング")
-    update_status(f"📐 動画形式: {_fmt_label}")
+    if is_netakaigi:
+        _fmt_label = f"ネタ会議{'Long（横）' if netakaigi_variant == 'Long' else 'Shorts（縦）'}"
+    else:
+        _fmt_label = "Shorts" if is_shorts else "ロング"
+    update_status(f"📐 動画形式: {_fmt_label}  {width}x{height}")
 
     # Step 3: パス設定（台本のvideo_titleを優先してフォルダ名に使う）
     folder_base = _early_title if _early_title else topic
@@ -738,6 +772,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     width = 1080 if is_shorts else 1920
     height = 1920 if is_shorts else 1080
+    # ネタ会議は variant に基づいて画面サイズを上書き（is_shorts の値に依存しない）
+    if is_netakaigi:
+        if netakaigi_variant == "Long":
+            width, height = 1920, 1080
+        else:
+            width, height = 1080, 1920  # Shorts / デフォルト（縦）
 
     # Step 4: 既存フォルダは削除せず、先にバックアップへ退避する。
     # 開きっぱなしで退避できない場合は、Web UI側で警告して同じ生成を再試行する。
