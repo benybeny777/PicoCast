@@ -756,7 +756,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         _fmt_label = f"ネタ会議{'Long（横）' if netakaigi_variant == 'Long' else 'Shorts（縦）'}"
     else:
         _fmt_label = "Shorts" if is_shorts else "ロング"
-    update_status(f"📐 動画形式: {_fmt_label}  {width}x{height}")
+    update_status(f"📐 動画形式: {_fmt_label}")
 
     # Step 3: パス設定（台本のvideo_titleを優先してフォルダ名に使う）
     folder_base = _early_title if _early_title else topic
@@ -778,6 +778,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             width, height = 1920, 1080
         else:
             width, height = 1080, 1920  # Shorts / デフォルト（縦）
+    update_status(f"   📐 解像度: {width}x{height}")
 
     # Step 4: 既存フォルダは削除せず、先にバックアップへ退避する。
     # 開きっぱなしで退避できない場合は、Web UI側で警告して同じ生成を再試行する。
