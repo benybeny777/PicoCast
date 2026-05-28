@@ -365,7 +365,10 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 | Long | 21:00（毎日）/ 12:00（土日のみ） | 毎日 |
 
 - スロット割当範囲: 最大90日先まで探索
-- アップロード実行後: 各動画フォルダの `_meta/upload_record.json` に記録
+- アップロード実行後:
+  - `_meta/upload_record.json` を書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=private`）
+  - フォルダを `output/000_uploaded/<フォルダ名>/` へ移動する
+  - `output/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
 - スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`schedule_from_youtube()` / `rebalance_slots()` はYouTube側の予約状態を参照する。旧 `upload_schedule_*.json` と中央 `upload_records.json` は廃止
 - `sync_schedule_from_youtube()`: YouTube API を正として、必要に応じて各動画のアップロード記録へ反映する。チャンネル全件取得（`get_channel_upload_video_statuses`）に失敗した場合は既知 video_id のみでフォールバック
 - `infer_video_type()`: タイトルプレフィックス優先。タイトルなしの場合は duration ≤ 60s を shorts と推定

@@ -12,6 +12,18 @@
 
 ---
 
+## 2026-05-28 (2)
+
+### バグ修正 + 機能追加: Webアップロード後処理の実装
+
+- `web_app/services/upload_service.py`:
+  - `result.get('video_id')` が文字列に対して呼ばれて `AttributeError` になるバグを修正（`upload_video()` は `video_id` 文字列を返す）
+  - アップロード成功後に `_meta/upload_record.json` を書き込むよう実装（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=private`）
+  - アップロード成功後にフォルダを `output/000_uploaded/` へ移動するよう実装
+  - アップロード成功後に `output/000_backups/` 内の同テーマバックアップを全削除するよう実装
+
+---
+
 ## 2026-05-28
 
 ### 機能追加: 設定ページに Stable Diffusion WebUI モデル管理タブを統合・デバッグログを表示
