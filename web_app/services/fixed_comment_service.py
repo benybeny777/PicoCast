@@ -271,8 +271,8 @@ def _video_title(render_info: dict, upload_record: dict, metadata: dict[str, str
 
 
 def _is_local_displayable_publish_status(publish_status: str) -> bool:
-    if publish_status in ("scheduled", "private", "unlisted"):
-        return False
+    # YouTube API による実公開確認 (_filter_existing_public_videos) が最終フィルター。
+    # ローカルステータスはアップロード直後に "private" のまま残ることがあるため除外しない。
     return True
 
 

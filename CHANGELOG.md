@@ -12,6 +12,14 @@
 
 ---
 
+## 2026-05-28 (3)
+
+### バグ修正: 固定コメント候補が表示されない
+
+- `web_app/services/fixed_comment_service.py`: `_is_local_displayable_publish_status` が `"private"` を除外していたため、アップロード直後（ローカルステータスが `private`）の動画が固定コメント一覧に表示されなかった。実際の公開確認は YouTube API (`_filter_existing_public_videos`) が行うため、ローカルステータスによる除外を廃止。
+
+---
+
 ## 2026-05-28 (2)
 
 ### バグ修正 + 機能追加: Webアップロード後処理の実装
