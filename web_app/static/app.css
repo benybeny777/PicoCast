@@ -51,6 +51,7 @@ body {
 
 .nav-links {
   display: flex;
+  flex: 1;
   list-style: none;
   flex-wrap: wrap;
   gap: 2px;
