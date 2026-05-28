@@ -10,6 +10,16 @@
 
 ---
 
+## 2026-05-29 ネタ会議本編の具体数値の読み上げを禁止
+
+**対象ファイル:** `config/prompt_parts/local/script_generation_prompt_meeting.txt` / `config/samples/...`
+
+**変更内容:**
+- ネタ会議本編で具体的な再生数・視聴率・高評価数・コメント数を読み上げないルールを追加
+- 第1部の候補一覧には従来通り実績数値を残し、本編では自然な査定表現へ変換するようプロンプトを修正
+
+---
+
 ## 2026-05-29 ffmpeg 8.x 対応・ジョブログ永続化・ログ全件出力
 
 **対象ファイル:** `core/native_renderer.py` / `web_app/job_manager.py` / `web_app/worker_runner.py` / `workers/worker_pipeline.py` / `workers/worker_render.py` / `web_app/templates/logs.html` / `web_app/static/app.css` / `config/config.py`
