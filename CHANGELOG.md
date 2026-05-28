@@ -10,6 +10,22 @@
 
 ---
 
+## 2026-05-29 ネタ会議プロンプトにブレ減少ルールを追加（フック型定義・セリフ量目安）
+
+**対象ファイル:** `config/prompt_parts/local/script_generation_prompt_meeting.txt` / `config/samples/prompt_parts/food/script_generation_prompt_meeting.txt`
+
+**変更内容:**
+
+- **フック型を定義:** 数字・否定逆説・固有名詞＋衝撃事実・名前の罠・昔と今の価値逆転・食べ物の正体ズレ の6条件に当てはまる場合のみフック型とする。「おいしい理由」「人気の理由」は弱いフック扱い
+- **めたん判定基準を更新:** 「冒頭1秒案がフック型」を上記6条件で明確化。保留・ボツ寄りにもフック型条件への参照を追加
+- **候補ごとのセリフ量目安を追加:** 採用寄り8〜12行 / 保留5〜7行 / ボツ寄り3〜4行。全候補を同じ長さにしない
+- **実績データへの言及条件を限定:** 本編内の言及は3パターンのみ許可（採用根拠・驚きの前フリ・data_wait暫定）。1候補1回・1文以内。分析用語の多用禁止
+- **テロップルールに「ネタ会議スタート」を追加:** 6種類 → 7種類に修正（出力例との矛盾を解消）
+
+localプロンプトのみ変更 → samples/ に同期してコミット
+
+---
+
 ## 2026-05-29 ネタ会議モードプロンプトに安定化ルールを追加（vidIQレビュー対応）
 
 **対象ファイル:** `config/prompt_parts/local/script_generation_prompt_meeting.txt` / `config/samples/prompt_parts/food/script_generation_prompt_meeting.txt`
