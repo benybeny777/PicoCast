@@ -3,7 +3,7 @@ import os
 import re
 import subprocess
 
-import config as cfg
+from config.config import config as cfg
 
 
 SHORTS_DIRECT_NAVIGATION_NG = [

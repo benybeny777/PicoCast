@@ -251,7 +251,7 @@ def test_config_rejects_newline_injection():
 
 
 def test_config_image_style_choices_current_is_csv(monkeypatch):
-    import config
+    from config.config import config
     from web_app.services.config_service import get_editable_config
 
     monkeypatch.setattr(config, "WEB_IMAGE_STYLE_CHOICES", ("通常", "アニメ", "水彩"))

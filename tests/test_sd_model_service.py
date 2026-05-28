@@ -144,7 +144,7 @@ class TestStableDiffusionWebUIGeneratorModelMethods:
 class TestPrepareSDWebUIModel:
     def test_no_model_set_skips_all_checks(self, monkeypatch, tmp_path):
         """SD_WEBUI_MODEL が空のときはモデル準備を完全スキップする"""
-        import config as _cfg
+        from config.config import config as _cfg
         from core.image_generator import ImageGenerator
 
         monkeypatch.setattr(_cfg, "IMAGE_BACKEND", "sd_webui")
@@ -156,7 +156,7 @@ class TestPrepareSDWebUIModel:
 
     def test_model_set_and_installed_calls_set_active(self, monkeypatch, tmp_path):
         """モデルがインストール済みであれば set_active_model が呼ばれる"""
-        import config as _cfg
+        from config.config import config as _cfg
         from core.image_generator import ImageGenerator
         from core.sd_model_manager import SDWebUIModelManager
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
@@ -183,7 +183,7 @@ class TestPrepareSDWebUIModel:
 
     def test_model_missing_no_auto_download_raises(self, monkeypatch, tmp_path):
         """モデル未インストール + AUTO_DOWNLOAD_SD_MODELS=False → RuntimeError"""
-        import config as _cfg
+        from config.config import config as _cfg
         from core.image_generator import ImageGenerator
 
         monkeypatch.setattr(_cfg, "IMAGE_BACKEND", "sd_webui")
@@ -201,7 +201,7 @@ class TestPrepareSDWebUIModel:
     def test_model_missing_with_auto_download_triggers_download(self, monkeypatch, tmp_path):
         """モデル未インストール + AUTO_DOWNLOAD_SD_MODELS=True → ダウンロードが呼ばれる"""
         import httpx
-        import config as _cfg
+        from config.config import config as _cfg
         from core.image_generator import ImageGenerator
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 

@@ -26,7 +26,7 @@ from typing import Any, Callable
 
 import httpx
 
-import config
+from config.config import config
 
 logger = logging.getLogger(__name__)
 

@@ -1,4 +1,4 @@
-import config
+from config.config import config
 import importlib
 
 

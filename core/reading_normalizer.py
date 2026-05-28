@@ -7,7 +7,7 @@ LLMによる全文変換を廃止し、形態素解析（SudachiPy）と自前�
 import os
 import json
 import re
-import config as _cfg
+from config.config import config as _cfg
 
 def _kata_to_hira(text: str) -> str:
     """カタカナをひらがなに変換する"""

@@ -54,7 +54,7 @@ def main() -> None:
 
     result: dict = {"status": "failed", "error": "不明なエラー"}
     try:
-        from main import run_pipeline  # noqa: PLC0415
+        from workers.main import run_pipeline  # noqa: PLC0415
 
         def progress(msg: str, tag: str = "info") -> None:
             _emit(tag, msg)

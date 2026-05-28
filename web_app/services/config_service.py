@@ -4,7 +4,7 @@ APIキー・トークンなど秘密値は対象外。一部設定は保存直�
 """
 import os
 from typing import Any
-import config as cfg
+from config.config import config as cfg
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 _ENV_PATH = os.path.join(_ROOT, ".env")

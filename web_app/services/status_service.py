@@ -10,7 +10,7 @@ from typing import Any
 
 import httpx
 
-import config
+from config.config import config
 from core.output_paths import OUTPUT_DIR, ANALYTICS_DIR
 
 # 起動時にウォームアップし、以降はキャッシュを返す

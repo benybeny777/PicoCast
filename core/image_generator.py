@@ -2,7 +2,7 @@ import json
 import os
 import time
 from google import genai
-import config
+from config.config import config
 from config import (
     GOOGLE_API_KEY,
     NANOBANANA_FLASH_MODEL,
