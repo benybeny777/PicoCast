@@ -1454,155 +1454,176 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             except Exception as e:
                 raise Exception(f"Batch API エラー: {e}")
 
-    for i, item in enumerate(items):
+    # ── 前処理: 各 dialogue に対応する bg_num を先読み割り当て ──────────────────
+    # 音声ファイル名に bg_num を埋め込む必要があるため、
+    # 2パス化（音声→背景の順）に先立って対応する背景番号を確定しておく。
+    _REUSE_MARKERS = ("前と同じ", "[前と同じ]", "[再利用]", "再利用")
+    _pre_bg = 0
+    for _it in items:
+        if _it["type"] == "background":
+            _raw = _it.get("text", _it.get("file", "")).strip()
+            if not any(_raw == m or _raw.startswith(m) for m in _REUSE_MARKERS):
+                _pre_bg += 1
+        elif _it["type"] == "dialogue":
+            _it["_bg_num"] = _pre_bg  # この時点での背景番号を一時保持
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # パス1: 全音声生成（VOICEVOX）
+    # ══════════════════════════════════════════════════════════════════════════
+    update_status(f"🎤 音声生成フェーズ（{total_voices}行）...")
+    for item in items:
         if is_cancelled():
             return cancel_result()
-
-        if item["type"] == "background":
-            # 明示的再利用マーカーの検出（「背景: 前と同じ」など）
-            _bg_raw = item.get("text", item.get("file", "")).strip()
-            _REUSE_MARKERS = ("前と同じ", "[前と同じ]", "[再利用]", "再利用")
-            if any(_bg_raw == m or _bg_raw.startswith(m) for m in _REUSE_MARKERS):
-                update_status(f"🖼  背景 再利用指定 — 前の背景を継続")
-                continue
-
-            bg_num += 1
-            if bg_num > max_backgrounds:
-                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 上限({max_backgrounds})超過 — 前の背景を継続使用")
-                continue
-
-            bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
-
-            if _has_saved_bgs:
-                # 既存背景を順番に割り当て
-                existing_bgs = sorted(
-                    f for f in os.listdir(theme_bg_dir)
-                    if f.lower().endswith(".png") and f.lower().startswith("bg_")
-                )
-                bg_idx = bg_num - 1
-                if bg_idx < len(existing_bgs):
-                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 再利用: {existing_bgs[bg_idx]}")
-                    report.backgrounds_generated += 1
-                else:
-                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 既存ファイル不足 — スキップ")
-                    report.backgrounds_failed += 1
-                continue
-
-            if use_batch_api:
-                # バッチ結果から割り当て
-                if bg_num in batch_bg_results:
-                    update_status(f"🖼  背景 [{bg_num}/{total_bgs}] バッチ結果使用: {batch_bg_results[bg_num]}")
-                else:
-                    update_status(f"  ⚠ 背景 [{bg_num}/{total_bgs}] バッチ結果なし — スキップ")
-                continue
-
-            update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 生成中: {bg_name[:30]}...")
-            try:
-                if is_cancelled():
-                    return cancel_result()
-                bg_description = (
-                    f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
-                    f"【台本】\n{script_content}"
-                )
-                # プロンプトをファイルに保存（デバッグ・再生成参照用）
-                prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:04d}.txt")
-                try:
-                    with open(prompt_file, "w", encoding="utf-8") as _pf:
-                        _pf.write(bg_description)
-                except Exception:
-                    raise
-                if debug_mode:
-                    update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
-                generated_file = img_gen.generate_background(
-                    bg_description, target_dir=theme_bg_dir,
-                    fname=f"bg_{bg_num:03d}_001.png",
-                )
-                if is_cancelled():
-                    return cancel_result()
-            except Exception as e:
-                update_status(f"  ❌ 背景生成失敗: {e}", "error")
-                generated_file = None
-            if generated_file:
-                report.backgrounds_generated += 1
-                update_status(f"  ✅ 背景生成完了")
-            else:
-                report.backgrounds_failed += 1
-                update_status(f"  ⚠ 背景生成スキップ")
+        if item["type"] != "dialogue":
             continue
 
-        if item["type"] == "dialogue":
-            char_key = item["character"]
-            text = item["text"]
-            emotion = item.get("emotion", "ノーマル")
-            voice_num += 1
+        char_key = item["character"]
+        text = item["text"]
+        emotion = item.get("emotion", "ノーマル")
+        voice_num += 1
 
-            speaker_id = 3
-            for k, v in CHARACTERS.items():
-                if v["name"] == char_key:
-                    speaker_id = v.get("styles", {}).get(emotion, v["speaker_id"])
-                    break
+        speaker_id = 3
+        for k, v in CHARACTERS.items():
+            if v["name"] == char_key:
+                speaker_id = v.get("styles", {}).get(emotion, v["speaker_id"])
+                break
 
-            chunks = _split_at_punctuation(text)
+        chunks = _split_at_punctuation(text)
 
-            for chunk_text in chunks:
-                if is_cancelled():
-                    return cancel_result()
-                audio_num += 1
-                _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
-                audio_filename = f"{bg_num:03d}_{audio_num:03d}_{_safe_text}.wav"
-                audio_path = os.path.join(theme_audio_dir, audio_filename)
-                speed_scale = intro_voice_speed if voice_num <= VOICE_INTRO_FAST_LINES else body_voice_speed
+        for chunk_text in chunks:
+            if is_cancelled():
+                return cancel_result()
+            audio_num += 1
+            _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
+            audio_filename = f"{item['_bg_num']:03d}_{audio_num:03d}_{_safe_text}.wav"
+            audio_path = os.path.join(theme_audio_dir, audio_filename)
+            speed_scale = intro_voice_speed if voice_num <= VOICE_INTRO_FAST_LINES else body_voice_speed
 
-                speech_text = reading_map.get(chunk_text, chunk_text)
-                preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
-                update_status(f"🎤 音声 [{voice_num}/{total_voices}] {char_key}({emotion}) x{speed_scale:g}「{preview}」")
-                try:
-                    vv.generate_audio(speech_text, speaker_id, audio_path, speed_scale=speed_scale)
-                    report.voices_generated += 1
-                except Exception as e:
-                    report.voices_failed += 1
-                    report.elapsed_sec = time.time() - pipeline_start
-                    msg = (
-                        f"❌ 音声合成失敗のため処理を中止しました\n"
-                        f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
-                        f"理由: {e}"
-                    )
-                    update_status(msg, "error")
-                    return finish_result(msg)
-                if is_cancelled():
-                    return cancel_result()
+            speech_text = reading_map.get(chunk_text, chunk_text)
+            preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
+            update_status(f"🎤 音声 [{voice_num}/{total_voices}] コマ{item['_bg_num']} {char_key}({emotion}) x{speed_scale:g}「{preview}」")
+            try:
+                vv.generate_audio(speech_text, speaker_id, audio_path, speed_scale=speed_scale)
+                report.voices_generated += 1
+            except Exception as e:
+                report.voices_failed += 1
+                report.elapsed_sec = time.time() - pipeline_start
+                msg = (
+                    f"❌ 音声合成失敗のため処理を中止しました\n"
+                    f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
+                    f"理由: {e}"
+                )
+                update_status(msg, "error")
+                return finish_result(msg)
+            if is_cancelled():
+                return cancel_result()
 
-                # VOICEVOXのpostPhonemeが効かない場合があるため、生成後に無音を直接追加
-                # 速度が高いほど末尾フォネームが詰まるので比例して余白を増やす
-                _TAIL_SILENCE_SEC = max(0.1, 0.1 * speed_scale)
-                try:
-                    with wave.open(audio_path, 'rb') as wr:
-                        sr = wr.getframerate()
-                        ch = wr.getnchannels()
-                        sw = wr.getsampwidth()
-                        orig_frames = wr.readframes(wr.getnframes())
-                    silence = b'\x00' * (int(sr * _TAIL_SILENCE_SEC) * ch * sw)
-                    with wave.open(audio_path, 'wb') as ww:
-                        ww.setframerate(sr)
-                        ww.setnchannels(ch)
-                        ww.setsampwidth(sw)
-                        ww.writeframes(orig_frames + silence)
-                except Exception as e:
-                    update_status(f"  ⚠ 無音追加失敗(無視): {e}")
+            # VOICEVOXのpostPhonemeが効かない場合があるため、生成後に無音を直接追加
+            # 速度が高いほど末尾フォネームが詰まるので比例して余白を増やす
+            _TAIL_SILENCE_SEC = max(0.1, 0.1 * speed_scale)
+            try:
+                with wave.open(audio_path, 'rb') as wr:
+                    sr = wr.getframerate()
+                    ch = wr.getnchannels()
+                    sw = wr.getsampwidth()
+                    orig_frames = wr.readframes(wr.getnframes())
+                silence = b'\x00' * (int(sr * _TAIL_SILENCE_SEC) * ch * sw)
+                with wave.open(audio_path, 'wb') as ww:
+                    ww.setframerate(sr)
+                    ww.setnchannels(ch)
+                    ww.setsampwidth(sw)
+                    ww.writeframes(orig_frames + silence)
+            except Exception as e:
+                update_status(f"  ⚠ 無音追加失敗(無視): {e}")
 
-                try:
-                    with wave.open(audio_path, 'rb') as wr:
-                        wr.getnframes()
-                except Exception as e:
-                    report.voices_failed += 1
-                    report.elapsed_sec = time.time() - pipeline_start
-                    msg = (
-                        f"❌ WAV読み込み失敗のため処理を中止しました\n"
-                        f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
-                        f"理由: {e}"
-                    )
-                    update_status(msg, "error")
-                    return finish_result(msg)
+            try:
+                with wave.open(audio_path, 'rb') as wr:
+                    wr.getnframes()
+            except Exception as e:
+                report.voices_failed += 1
+                report.elapsed_sec = time.time() - pipeline_start
+                msg = (
+                    f"❌ WAV読み込み失敗のため処理を中止しました\n"
+                    f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
+                    f"理由: {e}"
+                )
+                update_status(msg, "error")
+                return finish_result(msg)
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # パス2: 全背景生成（Gemini / SD WebUI）
+    # ══════════════════════════════════════════════════════════════════════════
+    update_status(f"🖼  背景生成フェーズ（{total_bgs}件）...")
+    for item in items:
+        if is_cancelled():
+            return cancel_result()
+        if item["type"] != "background":
+            continue
+
+        _bg_raw = item.get("text", item.get("file", "")).strip()
+        if any(_bg_raw == m or _bg_raw.startswith(m) for m in _REUSE_MARKERS):
+            update_status(f"🖼  背景 再利用指定 — 前の背景を継続")
+            continue
+
+        bg_num += 1
+        if bg_num > max_backgrounds:
+            update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 上限({max_backgrounds})超過 — 前の背景を継続使用")
+            continue
+
+        bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
+
+        if _has_saved_bgs:
+            existing_bgs = sorted(
+                f for f in os.listdir(theme_bg_dir)
+                if f.lower().endswith(".png") and f.lower().startswith("bg_")
+            )
+            bg_idx = bg_num - 1
+            if bg_idx < len(existing_bgs):
+                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 再利用: {existing_bgs[bg_idx]}")
+                report.backgrounds_generated += 1
+            else:
+                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 既存ファイル不足 — スキップ")
+                report.backgrounds_failed += 1
+            continue
+
+        if use_batch_api:
+            if bg_num in batch_bg_results:
+                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] バッチ結果使用: {batch_bg_results[bg_num]}")
+            else:
+                update_status(f"  ⚠ 背景 [{bg_num}/{total_bgs}] バッチ結果なし — スキップ")
+            continue
+
+        update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 生成中: {bg_name[:30]}...")
+        try:
+            if is_cancelled():
+                return cancel_result()
+            bg_description = (
+                f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
+                f"【台本】\n{script_content}"
+            )
+            prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:04d}.txt")
+            try:
+                with open(prompt_file, "w", encoding="utf-8") as _pf:
+                    _pf.write(bg_description)
+            except Exception:
+                raise
+            if debug_mode:
+                update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
+            generated_file = img_gen.generate_background(
+                bg_description, target_dir=theme_bg_dir,
+                fname=f"bg_{bg_num:03d}_001.png",
+            )
+            if is_cancelled():
+                return cancel_result()
+        except Exception as e:
+            update_status(f"  ❌ 背景生成失敗: {e}", "error")
+            generated_file = None
+        if generated_file:
+            report.backgrounds_generated += 1
+            update_status(f"  ✅ 背景生成完了")
+        else:
+            report.backgrounds_failed += 1
+            update_status(f"  ⚠ 背景生成スキップ")
 
     if is_cancelled():
         return cancel_result()
