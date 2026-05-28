@@ -4,7 +4,7 @@ import pytest
 
 
 def _set_paths(monkeypatch, tmp_path):
-    from config.config import config
+    from config import config
 
     base_path = tmp_path / "base.json"
     user_path = tmp_path / "user.json"
@@ -17,7 +17,7 @@ def _set_paths(monkeypatch, tmp_path):
 
 
 def test_dictionary_mode_uses_configured_dictionary(monkeypatch, tmp_path):
-    from config.config import config
+    from config import config
     from core.reading_normalizer import ReadingNormalizer
 
     _set_paths(monkeypatch, tmp_path)
@@ -28,7 +28,7 @@ def test_dictionary_mode_uses_configured_dictionary(monkeypatch, tmp_path):
 
 
 def test_invalid_dictionary_json_aborts(monkeypatch, tmp_path):
-    from config.config import config
+    from config import config
     from core.reading_normalizer import ReadingNormalizer
 
     base_path, user_path, cand_path = _set_paths(monkeypatch, tmp_path)
@@ -40,7 +40,7 @@ def test_invalid_dictionary_json_aborts(monkeypatch, tmp_path):
 
 
 def test_safe_auto_initializes_with_sudachipy(monkeypatch, tmp_path):
-    from config.config import config
+    from config import config
     from core.reading_normalizer import ReadingNormalizer
 
     _set_paths(monkeypatch, tmp_path)

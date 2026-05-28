@@ -1,7 +1,7 @@
 import os
 from typing import Any
 
-from config.config import config
+from config import config
 
 
 def recent_debug_log(max_lines: int | None = None) -> dict[str, Any]:

@@ -4,7 +4,7 @@ import re
 import time
 from logging.handlers import TimedRotatingFileHandler
 
-from config.config import config
+from config import config
 
 
 _CONFIGURED = False

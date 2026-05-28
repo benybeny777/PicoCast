@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
-from config.config import config
+from config import config
 from core.debug_logging import setup_debug_logging
 from core.gui_support import build_app_version
 

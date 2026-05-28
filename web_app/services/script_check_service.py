@@ -25,7 +25,7 @@ def _run_check(job: Job, script: str) -> list[dict[str, Any]]:
         duration_status_label,
         final_chatgpt_review,
     )
-    from config.config import config
+    from config import config
 
     scripts = split_input_scripts(script)
     if not scripts:

@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime, timedelta, timezone
 
-from config.config import config as _cfg
+from config import config as _cfg
 from core.output_paths import OUTPUT_DIR
 from core.upload_scheduler import JST, SLOTS, LONG_SLOTS_WEEKDAY, LONG_SLOTS_WEEKEND
 from web_app.security import safe_output_path

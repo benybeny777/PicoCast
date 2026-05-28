@@ -234,7 +234,7 @@ class TestImageGeneratorBackendDispatch:
 
     def test_image_backend_env_sd_webui(self, monkeypatch, tmp_path):
         """IMAGE_BACKEND=sd_webui のとき sd_webui エンジンが選ばれる。"""
-        from config.config import config
+        from config import config
         monkeypatch.setattr(config, "IMAGE_BACKEND", "sd_webui")
 
         from core.image_generator import ImageGenerator
@@ -248,7 +248,7 @@ class TestImageGeneratorBackendDispatch:
 
     def test_image_backend_env_gemini(self, monkeypatch):
         """IMAGE_BACKEND=gemini のとき nanobanana が選ばれる。"""
-        from config.config import config
+        from config import config
         monkeypatch.setattr(config, "IMAGE_BACKEND", "gemini")
 
         from core.image_generator import ImageGenerator
@@ -261,7 +261,7 @@ class TestImageGeneratorBackendDispatch:
 
     def test_unsupported_image_backend_raises(self, monkeypatch):
         """IMAGE_BACKEND に未対応値を設定すると ValueError になる。"""
-        from config.config import config
+        from config import config
         monkeypatch.setattr(config, "IMAGE_BACKEND", "totally_unknown")
 
         from core.image_generator import ImageGenerator

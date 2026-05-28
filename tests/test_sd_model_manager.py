@@ -363,7 +363,7 @@ def _auth_model_entry():
 class TestAuthDownload:
     def test_requires_auth_no_token_raises(self, tmp_path, monkeypatch):
         """requires_auth=true かつ HF_TOKEN 未設定でエラー（ダウンロードを試みない）"""
-        from config.config import config
+        from config import config
         from core.sd_model_manager import SDWebUIModelManager
         monkeypatch.setattr(config, "HF_TOKEN", "")
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
@@ -373,7 +373,7 @@ class TestAuthDownload:
 
     def test_requires_auth_with_token_adds_authorization_header(self, tmp_path, monkeypatch):
         """requires_auth=true かつ HF_TOKEN 設定済みで Authorization ヘッダーが付く"""
-        from config.config import config
+        from config import config
         import httpx
         from core.sd_model_manager import SDWebUIModelManager
 
@@ -408,7 +408,7 @@ class TestAuthDownload:
 
     def test_requires_auth_401_raises_auth_error(self, tmp_path, monkeypatch):
         """requires_auth=true かつ 401 応答 → 認証エラーメッセージ"""
-        from config.config import config
+        from config import config
         import httpx
         from core.sd_model_manager import SDWebUIModelManager
 
@@ -437,7 +437,7 @@ class TestAuthDownload:
 
     def test_requires_auth_403_raises_auth_error(self, tmp_path, monkeypatch):
         """requires_auth=true かつ 403 応答 → ライセンス同意エラーメッセージ"""
-        from config.config import config
+        from config import config
         import httpx
         from core.sd_model_manager import SDWebUIModelManager
 

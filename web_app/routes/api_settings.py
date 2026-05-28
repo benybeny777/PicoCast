@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from web_app.services.status_service import get_settings_status
 from web_app.services.config_service import get_editable_config, save_config
 from web_app.services.secrets_service import save_secrets
-from config.config import config as cfg
+from config import config as cfg
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 

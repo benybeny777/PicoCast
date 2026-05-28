@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import os
 
-from config.config import config as _cfg
+from config import config as _cfg
 from config import (
     WEB_APP_NAME,
     WEB_DEFAULT_IMAGE_STYLE,
@@ -181,7 +181,7 @@ def page_logs(request: Request):
 
 @router.get("/sd-models", response_class=HTMLResponse)
 def page_sd_models(request: Request):
-    from config.config import config as _cfg
+    from config import config as _cfg
     return _render(request, "sd_models.html", {
         "sd_webui_root": _cfg.SD_WEBUI_ROOT,
         "sd_webui_model": _cfg.SD_WEBUI_MODEL,
