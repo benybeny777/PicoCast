@@ -10,7 +10,36 @@
 
 ---
 
+## 2026-05-29 ffmpeg 8.x 対応・ジョブログ永続化・ログ全件出力
+
+**対象ファイル:** `core/native_renderer.py` / `web_app/job_manager.py` / `web_app/worker_runner.py` / `workers/worker_pipeline.py` / `workers/worker_render.py` / `web_app/templates/logs.html` / `web_app/static/app.css` / `config/config.py`
+
+**変更内容:**
+
+- **native_renderer.py**: ffmpeg 8.x 対応
+  - `subtitles` フィルターに `filename=` キーワード引数と `original_size=WxH` を明示（positional 引数が禁止に）
+  - `_subtitles_filter_path()` を新設（旧 `_filter_escape_path` を置換）。Windowsドライブレターの二重エスケープバグを修正。絶対パス化→スラッシュ統一→ドライブレター分離→`'`→`[]` の順でエスケープ
+- **job_manager.py**: ジョブログ永続化
+  - `Job.from_dict()` を追加。起動時に `JOB_LOG_DIR/jobs.json` から履歴を復元
+  - 実行中だったジョブは再起動時に `failed`（アプリ再起動により中断）としてマーク
+  - 成功・失敗・キャンセルすべてで `_save_jobs()` を呼ぶ（`except` + `finally` 二重保存で確実性を確保）
+  - 保存失敗をジョブ自身のログに `warning` として記録
+  - `traceback.format_exc()` をエラーログに記録（スタックトレース全文をジョブログで確認可能に）
+- **worker_runner.py**: ログ全件出力
+  - `stderr` をリアルタイムで `job.logs`（`stderr` タグ）に転送
+  - `result.json` の `status=failed` 時もエラー内容をジョブログに明示記録
+- **worker_pipeline.py / worker_render.py**: トレースバックを stdout JSONL 経由で出力
+  - `traceback.format_exc()` を `_emit("error", ...)` 経由でジョブログに転送（stderr 捨て→stdout 転送に変更）
+- **logs.html**: ジョブログ UI 改善
+  - `render` タイプをフィルターに追加
+  - 常時ポーリング（2秒）に変更。ページ表示後に新規登録されたジョブも自動でカード追加
+- **app.css**: `.log-stderr` スタイルを追加（薄いオレンジ色、トレースバックを視覚的に区別）
+- **config/config.py**: `JOB_LOG_DIR` / `JOB_LOG_MAX_JOBS` を追加
+
+---
+
 ## 2026-05-29 ネタ会議モードに縦/横の画面形式対応を追加
+
 
 **対象ファイル:** `core/parser.py` / `core/generation_checks.py` / `workers/main.py` / プロンプト
 

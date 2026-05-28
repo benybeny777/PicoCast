@@ -431,7 +431,10 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 | logs | [{time, tag, message}] のリスト |
 | result / error | 成功時の結果 / 失敗時のエラーメッセージ |
 
-初期実装はメモリ内管理。将来DB/JSON保存へ移行しやすい構造。
+ジョブ情報は JSON ファイルへ永続化され、アプリ再起動後も指定件数分を参照できる。
+実行中かつ再起動されたジョブは、起動時に `failed`（アプリ再起動により中断）としてマークされる。
+保存タイミング: 成功・失敗・キャンセル時（ `JOB_LOG_DIR/jobs.json` ）。
+保存失敗はジョブ自身のログに warning として記録する（ジョブ実行は妨げない）。
 
 ### 主要画面
 
@@ -561,6 +564,7 @@ POST /api/sd-models/rescan
 | success | #05c46b | 成功 |
 | warning | #ffa502 bold | 警告 |
 | error | #ff5e57 | エラー |
+| stderr | #ffaa66 | stderr（トレースバック等） |
 | batch | #ef57ff bold | バッチ処理 |
 | score | #ffd32a bold 11pt | スコア表示 |
 | duration | #34ace0 bold 11pt | 尺情報 |
@@ -743,6 +747,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
+| `JOB_LOG_DIR` | `output/000_data/job_logs` | ジョブログ永続化ファイルの保存ディレクトリ |
+| `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数 |
 
 ---
 
