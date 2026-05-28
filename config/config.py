@@ -392,7 +392,7 @@ DEBUG_LOG_VIEW_LINES = int(os.environ.get("DEBUG_LOG_VIEW_LINES", "400"))  # Web
 # ───────────────────────────────────────────────
 VOICEVOX_CONNECTION_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_CONNECTION_TIMEOUT_SEC", "5.0"))  # VOICEVOX接続確認タイムアウト（秒）
 VOICEVOX_QUERY_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_QUERY_TIMEOUT_SEC", "10.0"))            # VOICEVOXクエリ生成タイムアウト（秒）
-VOICEVOX_SYNTHESIS_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_SYNTHESIS_TIMEOUT_SEC", "30.0"))    # VOICEVOX音声合成タイムアウト（秒）
+VOICEVOX_SYNTHESIS_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_SYNTHESIS_TIMEOUT_SEC", "120.0"))    # VOICEVOX音声合成タイムアウト（秒）
 # READING_NORMALIZE_CHECK_TIMEOUT_SEC / READING_NORMALIZE_CHAT_TIMEOUT_SEC は
 # Ollama方式のよみがな正規化（廃止済み）で使用していた設定。SudachiPy方式では不使用。
 
