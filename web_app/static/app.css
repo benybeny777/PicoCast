@@ -288,6 +288,7 @@ select {
 .log-success { color: var(--ok); }
 .log-warning { color: var(--warn); }
 .log-error { color: var(--err); }
+.log-stderr { color: #ffaa66; }   /* stderr（トレースバック等）: 薄いオレンジ */
 .log-running, .log-queued { color: #60aaff; }
 .log-failed { color: var(--err); }
 .log-cancelled { color: var(--text-dim); }

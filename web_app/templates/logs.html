@@ -16,6 +16,7 @@
     <select id="type-filter" onchange="filterJobs()">
       <option value="">すべてのタイプ</option>
       <option value="generate">generate</option>
+      <option value="render">render</option>
       <option value="check">check</option>
       <option value="upload">upload</option>
       <option value="analytics_refresh">analytics</option>
@@ -147,6 +148,27 @@ function _updateCard(card, job) {
   }
 }
 
+// 新規ジョブカード挿入用テンプレート
+function _buildJobCard(job) {
+  const statusLabel = { success: 'badge-ok', failed: 'badge-ng', running: 'badge-running' }[job.status] || 'badge-warn';
+  const t = (job.started_at || '').slice(0, 19);
+  const cancelBtn = job.status === 'running'
+    ? `<button class="btn btn-xs btn-danger" type="button" onclick="cancelJob('${escapeHtml(job.job_id)}')">中止する</button>`
+    : '';
+  return `
+    <div class="card mt job-card status-${escapeHtml(job.status)}" data-status="${escapeHtml(job.status)}" data-type="${escapeHtml(job.type)}" data-job-id="${escapeHtml(job.job_id)}">
+      <div class="job-header">
+        <span class="job-type-badge">${escapeHtml(job.type)}</span>
+        <span class="badge ${escapeHtml(statusLabel)}">${escapeHtml(job.status)}</span>
+        <span class="job-id-small">${escapeHtml(job.job_id.slice(0,8))}…</span>
+        <span class="job-time">${escapeHtml(t)}</span>
+        ${cancelBtn}
+      </div>
+      <div class="job-progress">${escapeHtml(job.progress_text || '')}</div>
+    </div>`;
+}
+
+// 常時ポーリング（2秒間隔）: 新しいジョブが登録されても自動反映
 let _pollTimer = null;
 function _startPolling() {
   if (_pollTimer) return;
@@ -154,20 +176,22 @@ function _startPolling() {
     try {
       const res = await fetch('/api/jobs');
       const jobs = await res.json();
+      const container = document.getElementById('job-container');
       jobs.forEach(job => {
-        const card = document.querySelector(`.job-card[data-job-id="${job.job_id}"]`);
-        if (card) _updateCard(card, job);
+        let card = document.querySelector(`.job-card[data-job-id="${job.job_id}"]`);
+        if (card) {
+          _updateCard(card, job);
+        } else if (container) {
+          // ページ表示後に新規登録されたジョブをカードとして追加
+          container.insertAdjacentHTML('afterbegin', _buildJobCard(job));
+          const newCard = container.querySelector(`.job-card[data-job-id="${job.job_id}"]`);
+          if (newCard) _updateCard(newCard, job);
+        }
       });
-      if (jobs.every(j => _TERMINAL.has(j.status))) {
-        clearInterval(_pollTimer);
-        _pollTimer = null;
-      }
     } catch(e) {}
-  }, 3000);
+  }, 2000);
 }
-
-const hasRunning = {{ 'true' if jobs and (jobs | selectattr('status', 'equalto', 'running') | list) else 'false' }};
-if (hasRunning) _startPolling();
+_startPolling();
 
 function filterJobs() {
   const status = document.getElementById('status-filter').value;

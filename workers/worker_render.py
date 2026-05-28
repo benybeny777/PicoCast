@@ -74,9 +74,11 @@ def main() -> None:
                 "history_name": history_name,
             }
     except Exception as e:
+        tb = traceback.format_exc()
         result = {"status": "failed", "error": str(e)}
         _emit("error", f"レンダリングエラー: {e}")
-        traceback.print_exc(file=sys.stderr)
+        if tb:
+            _emit("error", tb)  # トレースバックを stdout JSONL 経由でジョブログに渡す
     finally:
         with open(args.result, "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False)

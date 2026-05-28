@@ -117,12 +117,17 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
         cancel_thread = threading.Thread(target=_cancel_monitor, daemon=True)
         cancel_thread.start()
 
-        # stderr をバックグラウンドで読み捨て（パイプバッファ詰まり防止）
+        # stderr をリアルタイムで job.logs へ転送（パイプバッファ詰まりを防ぎつつログに残す）
         stderr_lines: list[str] = []
 
         def _drain_stderr() -> None:
             for line in proc.stderr:
-                stderr_lines.append(line.rstrip())
+                stripped = line.rstrip()
+                if not stripped:
+                    continue
+                stderr_lines.append(stripped)
+                # traceback・ImportError など Python 例外を job.logs に転送する
+                _log(job, stripped, "stderr")
 
         stderr_thread = threading.Thread(target=_drain_stderr, daemon=True)
         stderr_thread.start()
@@ -150,8 +155,13 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
 
         if os.path.exists(result_path):
             with open(result_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                result = json.load(f)
+            # worker が status=failed を返した場合もエラー内容をログに記録
+            if result.get("status") == "failed":
+                err_msg = result.get("error") or "ワーカーエラー（詳細不明）"
+                _log(job, f"❌ ワーカー失敗: {err_msg}", "error")
+            return result
 
         # result ファイルがない＝ worker がクラッシュした
-        err_tail = "\n".join(stderr_lines[-20:]) if stderr_lines else "(stderr なし)"
+        err_tail = "\n".join(stderr_lines[-30:]) if stderr_lines else "(stderr なし)"
         raise RuntimeError(f"ワーカーが結果ファイルを生成しませんでした\n{err_tail}")

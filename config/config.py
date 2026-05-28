@@ -410,3 +410,9 @@ NATIVE_TELOP_POP_MAX_SEC = float(os.environ.get("NATIVE_TELOP_POP_MAX_SEC", "1.5
 # ───────────────────────────────────────────────
 AUTO_FIXED_COMMENT_ENABLED       = os.environ.get("AUTO_FIXED_COMMENT_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")
 AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC", "600"))  # 確認間隔（秒）既定10分
+
+# ───────────────────────────────────────────────
+# ジョブログ永続化
+# ───────────────────────────────────────────────
+JOB_LOG_DIR      = os.environ.get("JOB_LOG_DIR",      os.path.join(OUTPUT_DATA_DIR, "job_logs"))  # ジョブログ保存ディレクトリ
+JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))                                  # 保持する最大ジョブ件数

@@ -308,15 +308,47 @@ def _concat_escape(path: str) -> str:
     return os.path.abspath(path).replace("\\", "/").replace("'", "'\\''")
 
 
-def _filter_escape_path(path: str) -> str:
+def _subtitles_filter_path(path: str) -> str:
+    """ffmpeg subtitles フィルターの filename 引数用パスエスケープ。
+
+    subtitles=filename='<result>':original_size=WxH の形式で使用する想定。
+    Windows / macOS 両対応。
+
+    エスケープ処理（適用順）:
+      1. 絶対パスに変換し、バックスラッシュをスラッシュに統一
+      2. Windows ドライブレター（例: C:/）のコロンを \\: にエスケープ
+         ※ ffmpeg フィルターオプション内でコロンはオプションセパレータとして
+           扱われるため、ドライブレターのコロンを先に分離して個別にエスケープ
+      3. ドライブレター以降に残るバックスラッシュを \\\\ にエスケープ
+         （ドライブレターと一括置換しないことで二重エスケープバグを防ぐ）
+      4. シングルクォートを \\' にエスケープ
+         ※ filename='...' の外側クォートを壊さないため
+      5. [ ] を \\[ \\] にエスケープ（ffmpeg フィルターグラフの特殊文字）
+
+    注意: ffmpeg 8.x 以降では positional 引数解析が変わったため、
+    必ず filename= キーワードと original_size= を明示することで
+    パスを image size として誤解釈されるバグを回避する。
+    """
+    # 絶対パスへ変換、バックスラッシュをスラッシュに統一
     text = os.path.abspath(path).replace("\\", "/")
-    text = re.sub(r"^([A-Za-z]):", r"\1\\:", text)
-    return (
-        text.replace("\\", r"\\")
-        .replace("'", r"\'")
-        .replace("[", r"\[")
-        .replace("]", r"\]")
-    )
+
+    # Windows ドライブレターのコロンだけを先に分離してエスケープ
+    # 例: "C:/foo/bar" → drive_prefix="C\:", rest="/foo/bar"
+    # ここで分離することで、この後の \\ 置換がドライブレターを二重エスケープしない
+    drive_prefix = ""
+    m = re.match(r"^([A-Za-z]):(/.*)$", text)
+    if m:
+        drive_prefix = m.group(1) + "\\:"
+        text = m.group(2)  # "/foo/bar" のみ残す
+
+    # 残存バックスラッシュ（通常ゼロのはずだが UNC パス等の念のためのガード）
+    text = text.replace("\\", "\\\\")
+    # シングルクォートエスケープ（filename='...' の外側クォートを破壊しない）
+    text = text.replace("'", "\\'")
+    # ffmpeg フィルターグラフ内の角括弧エスケープ
+    text = text.replace("[", "\\[").replace("]", "\\]")
+
+    return drive_prefix + text
 
 
 def _ass_escape(text: str) -> str:
@@ -810,7 +842,7 @@ def _segment_filter(
     if shake_on:
         chains.append(_maybe_shake_filter(f"[{current}]", "[motion_shake]", width, height, True))
         current = "motion_shake"
-    chains.append(f"[{current}]subtitles='{_filter_escape_path(ass_path)}'[vout]")
+    chains.append(f"[{current}]subtitles=filename='{_subtitles_filter_path(ass_path)}':original_size={width}x{height}[vout]")
     return ";".join(chains)
 
 
