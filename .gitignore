@@ -3,7 +3,7 @@ client_secrets.json
 token.json
 token_analytics.json
 .claude/
-core/prompt_parts/local/
+config/prompt_parts/local/
 assets/characters/_native_cache/
 __pycache__/
 *.pyc
