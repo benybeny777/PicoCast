@@ -26,6 +26,7 @@ def api_generate(req: GenerateRequest):
             req.long_thumbnail_ab_test,
             req.long_budget_mode,
             req.sd_size_mode,
+            req.with_render,
         )
         return {"job_ids": [job_id], "count": 1}
     else:
@@ -37,6 +38,7 @@ def api_generate(req: GenerateRequest):
             req.long_thumbnail_ab_test,
             req.long_budget_mode,
             req.sd_size_mode,
+            req.with_render,
         )
         return {"job_ids": job_ids, "count": len(job_ids)}
 
@@ -54,5 +56,6 @@ def api_batch_generate(req: BatchGenerateRequest):
         req.long_thumbnail_ab_test,
         req.long_budget_mode,
         req.sd_size_mode,
+        req.with_render,
     )
     return {"job_ids": job_ids, "count": len(job_ids)}

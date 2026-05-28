@@ -21,6 +21,7 @@ class GenerateRequest(BaseModel):
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
     sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
+    with_render: bool = True
 
     @field_validator("script")
     @classmethod
@@ -38,6 +39,7 @@ class BatchGenerateRequest(BaseModel):
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
     sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
+    with_render: bool = True
 
 
 class HistoryRegenerateRequest(BaseModel):

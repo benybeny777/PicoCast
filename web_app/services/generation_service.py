@@ -22,6 +22,7 @@ def submit_generate_job(
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
     sd_size_mode: bool = False,
+    with_render: bool = False,
 ) -> str:
     """台本1本分の生成ジョブを登録してjob_idを返す。"""
     prepared = apply_topic_request_cta_policy_to_scripts([script])
@@ -34,6 +35,7 @@ def submit_generate_job(
         long_thumbnail_ab_test,
         long_budget_mode,
         sd_size_mode,
+        with_render,
     )
 
 
