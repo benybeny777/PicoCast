@@ -10,6 +10,33 @@
 
 ---
 
+## 2026-05-29 ネタ会議モード正式対応・アンケートコピー機能追加
+
+**対象ファイル:** `core/parser.py` / `core/generation_checks.py` / `workers/main.py` / `web_app/security.py` / `web_app/services/history_service.py` / `web_app/routes/api_history.py` / `web_app/templates/history_detail.html`
+
+**変更内容:**
+
+- **parser.py**: 特殊ブロックをすべて dialogue_items から除外
+  - `候補番号:` → `meeting_candidates` メタに find-or-create で集約
+  - `固定コメント:` の複数行サポート（`1: ワサビ` 等の番号形式行も捕捉）
+  - `---アンケート設定案---` / `---アンケート手動設定用---` / `アンケート設定案:` → `poll_options` メタ
+  - `META_TYPES` に `poll_options` を追加
+  - `parse_poll_options()` / `format_poll_copy()` スタティックメソッドを追加
+- **generation_checks.py**: ネタ会議モード時は CTA ナビゲーションチェックをスキップ
+- **workers/main.py**: ネタ会議モード対応
+  - `_detect_is_netakaigi()` 関数追加
+  - フォルダ名プレフィックスを `[ネタ会議]` に設定
+  - opening quality の hard abort をスキップしてwarningに降格
+  - `poll_options` → `_meta/poll_options.json` + `_meta/poll_copy.txt` として保存（選択肢4件上限・2件未満は警告）
+  - `meeting_candidates` → `_meta/topic_candidates.json` に保存（旧 netakaigi.json を改名）
+  - 生成完了時に「固定コメント: あり/なし」「アンケート設定案: あり/なし」「候補一覧: あり/なし」をログ表示
+- **web_app/security.py**: `[ネタ会議]` を `is_video_folder()` に追加（履歴画面に表示）
+- **web_app/services/history_service.py**: `has_poll_copy` / ネタ会議の `video_format` 判定を追加
+- **web_app/routes/api_history.py**: `GET /api/history/{name}/poll-copy` エンドポイント追加
+- **web_app/templates/history_detail.html**: `poll_copy.txt` がある場合に「アンケートをコピー」ボタンを表示。クリップボードコピー（フォールバックあり）
+
+---
+
 ## 2026-05-29 ネタ会議プロンプトにブレ減少ルールを追加（フック型定義・セリフ量目安）
 
 **対象ファイル:** `config/prompt_parts/local/script_generation_prompt_meeting.txt` / `config/samples/prompt_parts/food/script_generation_prompt_meeting.txt`

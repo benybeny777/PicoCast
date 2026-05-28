@@ -20,6 +20,9 @@ class ScriptParser:
     _topic_request_cta_re = re.compile(r'^(?:ネタ募集CTA|TopicRequestCTA)[:：](.*)$', re.IGNORECASE)
     _topic_request_cta_reason_re = re.compile(r'^(?:ネタ募集CTA理由|TopicRequestCTAReason)[:：](.*)$', re.IGNORECASE)
     _meeting_candidates_re = re.compile(r'^(?:候補ネタ|MeetingCandidates|Candidates)[:：](.*)$', re.IGNORECASE)
+    _candidate_num_re = re.compile(r'^候補番号[:：](.*)$', re.IGNORECASE)
+    _poll_options_re = re.compile(r'^(?:アンケート設定案|アンケート手動設定用|PollOptions)[:：]', re.IGNORECASE)
+    _poll_options_marker_re = re.compile(r'^---\s*(?:アンケート設定案|アンケート手動設定用)\s*---')
     _chapter_re = re.compile(r'^(?:チャプター|チャプター一覧|Chapter(?:s|List)?)[:：]', re.IGNORECASE)
     _bracket_meta_re = re.compile(
         r'^【\s*(動画形式|Format|動画タイトル|Title|サムネ文字|サムネテキスト|サムネイル|Thumbnail|説明文|Description|タグ|Tags?|固定コメント|PinnedComment|生成区分|GenerationKind|元動画|派生元|SourceVideo|目的|生成目的|GenerationPurpose|ネタ募集CTA|TopicRequestCTA|ネタ募集CTA理由|TopicRequestCTAReason|候補ネタ|MeetingCandidates|Candidates)\s*】\s*(.*)$',
@@ -78,7 +81,7 @@ class ScriptParser:
         "video_format", "thumbnail_text", "fixed_comment",
         "generation_kind", "source_video_title", "generation_purpose",
         "character_pattern", "genre_group", "topic_request_cta", "topic_request_cta_reason",
-        "meeting_candidates",
+        "meeting_candidates", "poll_options",
     })
 
     @staticmethod
@@ -102,6 +105,9 @@ class ScriptParser:
         topic_request_cta_re = ScriptParser._topic_request_cta_re
         topic_request_cta_reason_re = ScriptParser._topic_request_cta_reason_re
         meeting_candidates_re = ScriptParser._meeting_candidates_re
+        candidate_num_re = ScriptParser._candidate_num_re
+        poll_options_re = ScriptParser._poll_options_re
+        poll_options_marker_re = ScriptParser._poll_options_marker_re
         bracket_meta_re = ScriptParser._bracket_meta_re
         ignore_patterns = ScriptParser._ignore_patterns
 
@@ -129,13 +135,23 @@ class ScriptParser:
                         last_meta = item
                         continue
 
-                # メタ値の続き（description=複数行、それ以外=次の1行のみ）
+                # メタ値の続き（description/meeting_candidates/fixed_comment/poll_options は複数行）
                 if last_meta:
-                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, meeting_candidates_re, bracket_meta_re])
+                    # アンケートマーカーは最優先でコンテキストを切り替える
+                    if poll_options_marker_re.match(line):
+                        last_meta = None
+                        item = {"type": "poll_options", "text": ""}
+                        lines.append(item)
+                        last_dialogue = None
+                        last_meta = item
+                        continue
+                    _multiline_types = ("description", "meeting_candidates", "fixed_comment", "poll_options")
+                    _dialogue_safe_types = ("meeting_candidates", "fixed_comment", "poll_options")
+                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, meeting_candidates_re, candidate_num_re, poll_options_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
                     is_ignore = any(p.match(line) for p in ignore_patterns)
-                    if not is_keyword and (not is_dialogue or last_meta["type"] == "meeting_candidates") and (not is_ignore or last_meta["type"] in ("description", "meeting_candidates")):
-                        if last_meta["type"] in ("description", "meeting_candidates"):
+                    if not is_keyword and (not is_dialogue or last_meta["type"] in _dialogue_safe_types) and (not is_ignore or last_meta["type"] in _multiline_types):
+                        if last_meta["type"] in _multiline_types:
                             last_meta["text"] = (last_meta["text"] + "\n" + line).strip()
                             continue
                         elif not last_meta["text"]:
@@ -145,6 +161,22 @@ class ScriptParser:
                             last_meta = None
                             continue
                     last_meta = None  # キーワード処理へ
+
+                # アンケートブロック開始（---アンケート設定案--- / ---アンケート手動設定用--- 形式）
+                if poll_options_marker_re.match(line):
+                    item = {"type": "poll_options", "text": ""}
+                    lines.append(item)
+                    last_dialogue = None
+                    last_meta = item
+                    continue
+
+                # アンケートブロック開始（アンケート設定案: 形式）
+                if poll_options_re.match(line):
+                    item = {"type": "poll_options", "text": ""}
+                    lines.append(item)
+                    last_dialogue = None
+                    last_meta = item
+                    continue
 
                 # 無視パターンに一致する行をスキップ
                 if any(p.match(line) for p in ignore_patterns):
@@ -196,6 +228,19 @@ class ScriptParser:
                         matched_meta = True
                         break
                 if matched_meta:
+                    continue
+
+                # 候補番号: → 既存 meeting_candidates に追記、なければ新規作成
+                if not matched_meta and candidate_num_re.match(line):
+                    existing_mc = next((it for it in reversed(lines) if it["type"] == "meeting_candidates"), None)
+                    if existing_mc:
+                        existing_mc["text"] = (existing_mc["text"] + "\n" + line).strip()
+                        last_meta = existing_mc
+                    else:
+                        item = {"type": "meeting_candidates", "text": line}
+                        lines.append(item)
+                        last_meta = item
+                    last_dialogue = None
                     continue
 
                 # テロップ
@@ -290,6 +335,83 @@ class ScriptParser:
         if current:
             candidates.append(current)
         return candidates
+
+    @staticmethod
+    def parse_poll_options(text: str) -> dict:
+        """poll_options メタテキストから question / options / memo を抽出する。"""
+        question = ""
+        options: list[str] = []
+        memo = ""
+        current_key: str | None = None
+        pending: str = ""
+
+        def _flush():
+            nonlocal question, memo, pending, current_key
+            val = pending.strip()
+            if not val or not current_key:
+                return
+            if current_key == "question":
+                question = val
+            elif current_key == "option":
+                options.append(val)
+            elif current_key == "memo":
+                memo = val
+            pending = ""
+            current_key = None
+
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not line:
+                _flush()
+                continue
+            if re.match(r'^質問[:：](.*)', line):
+                _flush()
+                val = re.sub(r'^質問[:：]\s*', '', line)
+                if val:
+                    question = val
+                else:
+                    current_key = "question"
+            elif m := re.match(r'^選択肢\d+[:：](.*)', line):
+                _flush()
+                val = m.group(1).strip()
+                if val:
+                    options.append(val)
+                else:
+                    current_key = "option"
+            elif re.match(r'^メモ[:：](.*)', line):
+                _flush()
+                val = re.sub(r'^メモ[:：]\s*', '', line)
+                if val:
+                    memo = val
+                else:
+                    current_key = "memo"
+            else:
+                if current_key:
+                    pending = (pending + "\n" + line).strip() if pending else line
+        _flush()
+
+        # YouTubeライブ投票は最大4択
+        extra = [o for o in options[4:] if o]
+        options = [o for o in options[:4] if o]
+        if extra:
+            suffix = "5件目以降: " + " / ".join(extra)
+            memo = (memo + " / " + suffix) if memo else suffix
+
+        return {"question": question, "options": options, "memo": memo}
+
+    @staticmethod
+    def format_poll_copy(poll_data: dict) -> str:
+        """poll_options dict を YouTube アンケート用コピーテキストに整形する。"""
+        lines: list[str] = []
+        if poll_data.get("question"):
+            lines.append(poll_data["question"])
+            lines.append("")
+        for i, opt in enumerate(poll_data.get("options", []), 1):
+            lines.append(f"{i}. {opt}")
+        if poll_data.get("memo"):
+            lines.append("")
+            lines.append(f"※{poll_data['memo']}")
+        return "\n".join(lines)
 
     @staticmethod
     def parse_string(text: str):

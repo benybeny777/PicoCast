@@ -24,17 +24,21 @@ def pre_generate_check(items: list[dict], is_shorts: bool) -> tuple[list[str], l
     dialogue_items = [it for it in items if it["type"] == "dialogue"]
     bg_items = [it for it in items if it["type"] == "background"]
 
+    video_format = next((it["text"] for it in items if it["type"] == "video_format"), "").strip()
+    is_netakaigi = "ネタ会議" in video_format
+
     try:
         try:
             from core.cta_policy import check_shorts_navigation_ng
 
-            script_text = "\n".join(it.get("text", "") for it in dialogue_items)
-            hits = check_shorts_navigation_ng(script_text, "Shorts" if is_shorts else "Long")
-            if hits:
-                warnings.append(
-                    "Shortsでは直接的な他動画誘導・次回予告が含まれています。"
-                    f"ループ締めに変更してください: {', '.join(hits)}"
-                )
+            if not is_netakaigi:
+                script_text = "\n".join(it.get("text", "") for it in dialogue_items)
+                hits = check_shorts_navigation_ng(script_text, "Shorts" if is_shorts else "Long")
+                if hits:
+                    warnings.append(
+                        "Shortsでは直接的な他動画誘導・次回予告が含まれています。"
+                        f"ループ締めに変更してください: {', '.join(hits)}"
+                    )
         except Exception:
             raise
 

@@ -18,6 +18,10 @@
     {% endif %}
     <a href="/images?history={{ detail.name | urlencode }}" class="btn btn-secondary mt-sm">画像確認・再生成</a>
     <button class="btn btn-secondary mt-sm" onclick="openFolder()">フォルダを開く</button>
+    {% if detail.has_poll_copy %}
+    <button class="btn btn-secondary mt-sm" id="poll-copy-btn" onclick="copyPollText()">アンケートをコピー</button>
+    <span id="poll-copy-msg" style="margin-left:8px;font-size:0.85em;display:none"></span>
+    {% endif %}
   </div>
 
   <!-- アップロード状態 -->
@@ -368,5 +372,30 @@ function prepareLogView() {
   logBox.innerHTML = saved;
   logBox.scrollTop = logBox.scrollHeight;
 })();
+
+async function copyPollText() {
+  const btn = document.getElementById('poll-copy-btn');
+  const msg = document.getElementById('poll-copy-msg');
+  try {
+    const res = await fetch(`/api/history/${encodeURIComponent('{{ detail.name }}')}/poll-copy`);
+    const data = await res.json();
+    if (!data.exists) { msg.textContent = 'poll_copy.txtが見つかりません'; msg.style.display = 'inline'; return; }
+    if (navigator.clipboard) {
+      await navigator.clipboard.writeText(data.text);
+      msg.textContent = 'アンケート文をコピーしました';
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = data.text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+      msg.textContent = 'アンケート文をコピーしました（フォールバック）';
+    }
+  } catch (e) {
+    msg.textContent = 'コピーに失敗しました。poll_copy.txtを確認してください';
+  }
+  msg.style.display = 'inline';
+  setTimeout(() => { msg.style.display = 'none'; }, 3000);
+}
 </script>
 {% endblock %}

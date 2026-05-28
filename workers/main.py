@@ -340,6 +340,16 @@ def _detect_is_shorts(script_content):
     return False
 
 
+def _detect_is_netakaigi(script_content):
+    """台本テキストからネタ会議モードを検出する。動画形式: ネタ会議 のみ True。"""
+    for line in script_content.splitlines():
+        line = line.strip().replace("**", "")
+        m = re.match(r'^(?:動画形式|Format)[:：]\s*(.+)$', line, re.IGNORECASE)
+        if m:
+            return "ネタ会議" in m.group(1)
+    return False
+
+
 class GenerationReport:
     def __init__(self):
         self.voices_generated = 0
@@ -677,6 +687,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # Step 2: 動画形式を検出
     is_shorts = _detect_is_shorts(script_content)
+    is_netakaigi = _detect_is_netakaigi(script_content)
     try:
         _nav_hits = check_shorts_navigation_ng(script_content, "Shorts" if is_shorts else "Long")
         if _nav_hits:
@@ -707,14 +718,17 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             f"   📏 台本基準: {NATIVE_SHORTS_LINES_TARGET_MIN}〜{NATIVE_SHORTS_LINES_TARGET_MAX}行 / "
             f"{NATIVE_SHORTS_TARGET_CHARS_MIN}〜{NATIVE_SHORTS_TARGET_CHARS_MAX}字目標"
         )
-    update_status(f"📐 動画形式: {'Shorts' if is_shorts else 'ロング'}")
+    _fmt_label = "Shorts" if is_shorts else ("ネタ会議" if is_netakaigi else "ロング")
+    update_status(f"📐 動画形式: {_fmt_label}")
 
     # Step 3: パス設定（台本のvideo_titleを優先してフォルダ名に使う）
     folder_base = _early_title if _early_title else topic
     safe_topic = re.sub(r'[\\/:*?"<>|]', '_', folder_base)
     if is_shorts and not safe_topic.startswith("[Shorts]"):
         safe_topic = f"[Shorts]{safe_topic}"
-    elif not is_shorts and not safe_topic.startswith("[Long]"):
+    elif is_netakaigi and not safe_topic.startswith("[ネタ会議]"):
+        safe_topic = f"[ネタ会議]{safe_topic}"
+    elif not is_shorts and not is_netakaigi and not safe_topic.startswith("[Long]"):
         safe_topic = f"[Long]{safe_topic}"
 
     theme_dir = os.path.join("output", safe_topic)
@@ -996,13 +1010,19 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status(f"    must_fix: {issue}", "warning")
 
     if final_score < OPENING_SCORE_HARD_ABORT_THRESHOLD or opening_critical_errors:
-        msg = (
-            f"❌ 冒頭チェックの重大エラーで処理を中止しました（{final_score}点 / 停止基準: {OPENING_SCORE_HARD_ABORT_THRESHOLD}点未満またはmust_fixあり）\n"
-            "台本の冒頭を修正してから再実行してください。"
-        )
-        update_status(msg, "error")
-        report.elapsed_sec = time.time() - pipeline_start
-        return finish_result(msg)
+        if is_netakaigi:
+            update_status(
+                f"⚠ ネタ会議モード: 冒頭スコア低め（{final_score}点）ですが処理を続行します",
+                "warning",
+            )
+        else:
+            msg = (
+                f"❌ 冒頭チェックの重大エラーで処理を中止しました（{final_score}点 / 停止基準: {OPENING_SCORE_HARD_ABORT_THRESHOLD}点未満またはmust_fixあり）\n"
+                "台本の冒頭を修正してから再実行してください。"
+            )
+            update_status(msg, "error")
+            report.elapsed_sec = time.time() - pipeline_start
+            return finish_result(msg)
 
     estimated_sec, estimated_lines, estimated_avg_chars = _estimate_script_duration(items, is_shorts)
     estimated_sec = float(estimated_sec or 0.0)
@@ -1159,20 +1179,34 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             lines += ["【サムネイルプロンプト】", meta["thumbnail"], ""]
         if "meeting_candidates" in meta:
             lines += ["【候補ネタ】", meta["meeting_candidates"], ""]
-            
-            # Save netakaigi.json for Phase 2
             cands = ScriptParser.parse_meeting_candidates(meta["meeting_candidates"])
-            netakaigi_data = {
+            topic_candidates_data = {
                 "mode": "netakaigi",
                 "purpose": "premiere_poll",
                 "candidate_count": len(cands),
                 "candidates": cands,
                 "poll_method": "comments_and_poll",
                 "winner": None,
-                "later_shorts_video_id": None
+                "later_shorts_video_id": None,
             }
-            with open(os.path.join(_meta_dir(theme_dir), "netakaigi.json"), "w", encoding="utf-8") as nf:
-                json.dump(netakaigi_data, nf, ensure_ascii=False, indent=2)
+            with open(os.path.join(_meta_dir(theme_dir), "topic_candidates.json"), "w", encoding="utf-8") as nf:
+                json.dump(topic_candidates_data, nf, ensure_ascii=False, indent=2)
+            update_status(f"📋 候補一覧: あり（{len(cands)}件）")
+
+        if "poll_options" in meta:
+            poll_data = ScriptParser.parse_poll_options(meta["poll_options"])
+            poll_opts = poll_data.get("options", [])
+            if len(poll_opts) < 2:
+                update_status("⚠ アンケート設定案: 選択肢が2件未満のため poll_options.json を保存しません", "warning")
+            else:
+                if len(set(poll_opts)) < len(poll_opts):
+                    update_status("⚠ アンケート設定案: 重複選択肢があります", "warning")
+                with open(os.path.join(_meta_dir(theme_dir), "poll_options.json"), "w", encoding="utf-8") as pf:
+                    json.dump(poll_data, pf, ensure_ascii=False, indent=2)
+                poll_copy_text = ScriptParser.format_poll_copy(poll_data)
+                with open(os.path.join(_meta_dir(theme_dir), "poll_copy.txt"), "w", encoding="utf-8") as ptf:
+                    ptf.write(poll_copy_text)
+                update_status(f"📊 アンケート設定案: あり（選択肢{len(poll_opts)}件）  保存先: _meta/poll_copy.txt")
         # 台本に固定コメントがなければめたん調テンプレートで生成
         pinned_comment = meta.get("fixed_comment", "")
         if not pinned_comment:
@@ -1185,6 +1219,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             mf.write("\n".join(lines))
         if "video_title" in meta:
             update_status(f"📝 動画タイトル: {meta['video_title']}")
+        if is_netakaigi:
+            has_fixed_comment = bool(meta.get("fixed_comment", "").strip())
+            update_status(f"💬 固定コメント: {'あり' if has_fixed_comment else 'なし'}")
+            if "poll_options" not in meta:
+                update_status("📊 アンケート設定案: なし")
     if is_cancelled():
         return cancel_result()
 

@@ -51,5 +51,5 @@ def is_safe_output_path(path: str) -> bool:
 
 
 def is_video_folder(name: str) -> bool:
-    """[Shorts] または [Long] プレフィックスがあるフォルダのみ動画フォルダとみなす。"""
-    return name.startswith("[Shorts]") or name.startswith("[Long]")
+    """[Shorts] / [Long] / [ネタ会議] プレフィックスがあるフォルダのみ動画フォルダとみなす。"""
+    return name.startswith("[Shorts]") or name.startswith("[Long]") or name.startswith("[ネタ会議]")

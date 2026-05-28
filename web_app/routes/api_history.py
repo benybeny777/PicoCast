@@ -49,6 +49,18 @@ def api_open_folder(history_name: str):
     return {"opened": path}
 
 
+@router.get("/{history_name}/poll-copy")
+def api_poll_copy(history_name: str):
+    """アンケート用コピーテキストを返す。poll_copy.txt が存在しない場合は exists=false。"""
+    theme_dir = safe_output_path(history_name)
+    poll_copy_path = os.path.join(theme_dir, "_meta", "poll_copy.txt")
+    if os.path.isfile(poll_copy_path):
+        with open(poll_copy_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        return {"exists": True, "text": text}
+    return {"exists": False, "text": ""}
+
+
 @router.post("/regenerate")
 def api_regenerate_histories(req: HistoryRegenerateRequest):
     if not req.confirmed:

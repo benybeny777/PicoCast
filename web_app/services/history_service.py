@@ -63,6 +63,8 @@ def _video_format(name: str, render_info: dict, script_meta: dict[str, str]) -> 
         return "Shorts"
     if name.startswith("[Long]"):
         return "Long"
+    if name.startswith("[ネタ会議]"):
+        return "ネタ会議"
     return ""
 
 
@@ -158,6 +160,8 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
             if fname.endswith(".png"):
                 backgrounds.append(f"backgrounds/{fname}")
 
+    has_poll_copy = os.path.isfile(os.path.join(meta_d, "poll_copy.txt"))
+
     return {
         "name": history_name,
         "theme_dir": theme_dir,
@@ -174,6 +178,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         "thumbnail_rel": thumb_rel,
         "long_thumbnails": long_thumbnails,
         "backgrounds": backgrounds,
+        "has_poll_copy": has_poll_copy,
     }
 
 
