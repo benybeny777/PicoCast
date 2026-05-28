@@ -41,7 +41,7 @@
           <span class="badge {% if 'Short' in h.video_format %}badge-shorts{% else %}badge-long{% endif %}">{{ h.video_format }}</span>
           {% else %}—{% endif %}
         </td>
-        <td>{% if h.has_mp4 %}<span class="badge badge-ok">あり</span>{% else %}—{% endif %}</td>
+        <td>{% if h.has_mp4 %}<a href="/api/images/{{ h.name | urlencode }}/file/{{ h.mp4_name | urlencode }}" target="_blank" class="btn btn-xs btn-secondary">▶ 再生</a>{% else %}—{% endif %}</td>
         <td>{% if h.has_thumbnail %}<span class="badge badge-ok">あり</span>{% else %}—{% endif %}</td>
         <td>
           {% if h.final_score %}
