@@ -17,7 +17,7 @@ from web_app.worker_runner import run_in_worker
 def submit_generate_job(
     script: str,
     image_style: str = "通常",
-    background_engine: str = "nanobanana",
+    background_engine: str = "",
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
@@ -40,7 +40,7 @@ def submit_generate_job(
 def _submit_generate_job_prepared(
     script: str,
     image_style: str = "通常",
-    background_engine: str = "nanobanana",
+    background_engine: str = "",
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
@@ -58,7 +58,7 @@ def _submit_generate_job_prepared(
 def submit_batch_generate_jobs(
     scripts: list[str],
     image_style: str = "通常",
-    background_engine: str = "nanobanana",
+    background_engine: str = "",
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
@@ -75,7 +75,7 @@ def submit_batch_generate_jobs(
 def submit_history_regenerate_jobs(
     history_names: list[str],
     image_style: str = "通常",
-    background_engine: str = "nanobanana",
+    background_engine: str = "",
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,

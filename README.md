@@ -10,7 +10,7 @@
 
 <br />
 
-> 台本を入力するだけで、**VOICEVOXによる音声合成**、**Nano Banana / SD WebUI Forge による背景画像・サムネイル生成**、**ffmpegによる高品質なネイティブMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができるローカルWebツールです。
+> 台本を入力するだけで、**VOICEVOXによる音声合成**、**Nano Banana / Stable Diffusion WebUI による背景画像・サムネイル生成**、**ffmpegによる高品質なネイティブMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができるローカルWebツールです。
 
 ---
 
@@ -39,8 +39,8 @@ graph TD
     B -->|修正必要/Must Fix| A
     B -->|品質クリア| C[よみがな正規化<br/>SudachiPy + 自前辞書]
     C --> D[音声生成 WAV<br/>VOICEVOX]
-    C --> E[背景生成 PNG<br/>Gemini / SD WebUI Forge]
-    C --> T[サムネ生成 PNG<br/>Gemini / SD WebUI Forge]
+    C --> E[背景生成 PNG<br/>Gemini / Stable Diffusion WebUI]
+    C --> T[サムネ生成 PNG<br/>Gemini / Stable Diffusion WebUI]
     D --> F[ネイティブレンダリング<br/>ffmpeg]
     E --> F
     T --> F
@@ -136,7 +136,7 @@ HF_TOKEN=your_huggingface_token
 |:---|:---|
 | `GOOGLE_API_KEY` | Google AI Studio (Gemini API)。台本や背景画像の生成に使用。 |
 | `OPENAI_API_KEY` | OpenAI Platform。ChatGPT による台本の生成前最終レビューに使用。 |
-| `HF_TOKEN` | Hugging Face トークン。SDモデルの自動ダウンロード時に使用（任意）。 |
+| `HF_TOKEN` | Hugging Face トークン。Stable Diffusion WebUI モデルの自動ダウンロード時に使用（任意）。 |
 
 - **`client_secrets.json`:** YouTube API 利用のための OAuth 2.0 クライアント認証情報。Google Cloud Console からダウンロードし、**リポジトリ直下**に配置してください。
 
@@ -147,11 +147,11 @@ HF_TOKEN=your_huggingface_token
 
 初期状態では、「食べ物雑学」用の設定が適用されます。別ジャンルで運用する場合は、`core/prompt_parts/local/` ディレクトリを作成し、そこに個人用プロンプト部品を配置してください。
 
-### Step 4. Stable Diffusion WebUI Forge で画像生成する場合
+### Step 4. Stable Diffusion WebUI で画像生成する場合
 
 Gemini / Nano Banana の代替として、APIキーなしでローカルに画像生成したい場合に使用します。
 
-- Forge / AUTOMATIC1111 を `--api` オプション付きで起動してください（例: `webui.bat --api`）。
+- Stable Diffusion WebUI を `--api` オプション付きで起動してください（例: `webui.bat --api`）。
 - APIが `http://127.0.0.1:7860` で応答している必要があります。
 
 **.env 設定例:**
@@ -166,7 +166,7 @@ SD_WEBUI_HEIGHT=576
 ```
 
 > [!TIP]
-> `IMAGE_BACKEND=sd_webui` のとき、Forge が未起動であれば画像生成は**停止**します。自動切替は行われません。
+> `IMAGE_BACKEND=sd_webui` のとき、Stable Diffusion WebUI が未起動であれば画像生成は**停止**します。自動切替は行われません。
 
 ---
 

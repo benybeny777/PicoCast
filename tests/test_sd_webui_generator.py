@@ -259,35 +259,6 @@ class TestImageGeneratorBackendDispatch:
         finally:
             gen.close()
 
-    def test_nanobanana_timeout_seconds_converted_to_milliseconds(self, monkeypatch):
-        """NANOBANANA_TIMEOUT は秒設定なので Google SDK へはミリ秒に変換して渡す。"""
-        import config
-        import core.image_generator as image_generator
-
-        captured = {}
-
-        class FakeClient:
-            def __init__(self, *, api_key, http_options=None):
-                captured["api_key"] = api_key
-                captured["http_options"] = http_options
-
-            def close(self):
-                pass
-
-        monkeypatch.setattr(config, "IMAGE_BACKEND", "gemini")
-        monkeypatch.setattr(image_generator, "GOOGLE_API_KEY", "dummy-key")
-        monkeypatch.setattr(image_generator, "NANOBANANA_TIMEOUT", 300)
-        monkeypatch.setattr(image_generator.genai, "Client", FakeClient)
-
-        from core.image_generator import ImageGenerator
-
-        gen = ImageGenerator(width=1920, height=1080, background_engine="nanobanana")
-        try:
-            assert captured["api_key"] == "dummy-key"
-            assert captured["http_options"].timeout == 300000
-        finally:
-            gen.close()
-
     def test_unsupported_image_backend_raises(self, monkeypatch):
         """IMAGE_BACKEND に未対応値を設定すると ValueError になる。"""
         import config

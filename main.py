@@ -89,7 +89,7 @@ def _find_locking_process(path):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
     except Exception:
-        raise
+        return None  # フォールバック許可: プロセスロック確認は補助情報のため失敗しても継続
     return None
 
 

@@ -12,7 +12,51 @@
 
 ---
 
+## 2026-05-28 (3)
+
+### バグ修正: 固定コメント候補が表示されない
+
+- `web_app/services/fixed_comment_service.py`: `_is_local_displayable_publish_status` が `"private"` を除外していたため、アップロード直後（ローカルステータスが `private`）の動画が固定コメント一覧に表示されなかった。実際の公開確認は YouTube API (`_filter_existing_public_videos`) が行うため、ローカルステータスによる除外を廃止。
+
+---
+
+## 2026-05-28 (2)
+
+### バグ修正 + 機能追加: Webアップロード後処理の実装
+
+- `web_app/services/upload_service.py`:
+  - `result.get('video_id')` が文字列に対して呼ばれて `AttributeError` になるバグを修正（`upload_video()` は `video_id` 文字列を返す）
+  - アップロード成功後に `_meta/upload_record.json` を書き込むよう実装（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=private`）
+  - アップロード成功後にフォルダを `output/000_uploaded/` へ移動するよう実装
+  - アップロード成功後に `output/000_backups/` 内の同テーマバックアップを全削除するよう実装
+
+---
+
 ## 2026-05-28
+
+### macOS nativeレンダー設定を修正
+
+- `config.py`: `NATIVE_FFMPEG_ENCODER=libx264` のとき既定プリセットを `p5` ではなく `veryfast` にし、macOSのレンダーのみ再作成で `invalid preset 'p5'` にならないよう修正。
+- `core/native_renderer.py`: ffmpeg filtergraph内のASS字幕パスで `[Shorts]` などの角括弧をエスケープし、出力フォルダ名を含む字幕ファイルをmacOSでも読み込めるよう修正。
+
+### 機能追加: 設定ページに Stable Diffusion WebUI モデル管理タブを統合・デバッグログを表示
+
+- `web_app/templates/settings.html`: Stable Diffusion WebUI モデル管理を「Stable Diffusionモデル」タブとして設定ページに統合。タブ切り替え時に遅延ロード。設定値・HF_TOKEN 状態・モデル一覧・Stable Diffusion WebUI 認識済みモデルを Ajax で取得。「設定から飛べるリンクボタン」も同時に削除。
+- `web_app/templates/logs.html` / `web_app/routes/api_settings.py`: デバッグログ（`app_debug.log`）をログページに表示するセクションを追加。`GET /api/settings/debug-log` エンドポイントを新設。`debug_log_service.py` は存在していたが UI 接続がなく未機能だった。
+
+### Revert: NANOBANANA_TIMEOUT 機能を削除
+
+タイムアウト設定の導入後に設定値の混乱でバグが頻発したため、`NANOBANANA_TIMEOUT` 関連をすべて撤去し元の状態に戻した。
+
+- `config.py`: `NANOBANANA_TIMEOUT` 削除
+- `core/image_generator.py`: `HttpOptions` タイムアウト設定を削除。`genai.Client(api_key=...)` のみのシンプルな初期化に戻す
+- `web_app/services/config_service.py`: `EDITABLE_CONFIG` から `NANOBANANA_TIMEOUT` エントリを削除
+- `SPEC.md`: 対応する行を削除
+
+### バグ修正: generation_service デフォルト値・_find_locking_process 例外安全性
+
+- `web_app/services/generation_service.py`: `submit_generate_job` / `_submit_generate_job_prepared` / `submit_batch_generate_jobs` / `submit_history_regenerate_jobs` の `background_engine` デフォルトが `"nanobanana"` のままで、schemas.py の修正（空文字デフォルト）と不整合だった。`""` に統一。直接呼び出し時も `IMAGE_BACKEND` 設定に従う。
+- `main.py`: `_find_locking_process()` の外側 `except Exception: raise` がパイプラインを異常終了させる可能性があった。この関数はバックアップ失敗時のロックプロセス表示用の補助診断であり、失敗しても生成継続すべき。`return None` に戻し `# フォールバック許可` コメントを付与。
 
 ### バグ修正: 画像エンジン選択・ハングアップ・Ollama 起動フラグ
 
@@ -25,34 +69,33 @@
 #### Nano Banana API タイムアウト未設定によるハングアップ修正
 
 - `config.py`: `NANOBANANA_TIMEOUT = 120`（秒）を追加。`.env` の `NANOBANANA_TIMEOUT` で変更可能。
-- `core/image_generator.py`: `genai.Client` の初期化時に `HttpOptions(timeout=NANOBANANA_TIMEOUT * 1000)` を渡すよう変更。Google GenAI SDK はミリ秒指定のため、秒単位の設定値を変換してから渡す。
-- `config.py`: `NATIVE_FFMPEG_ENCODER=libx264` のとき既定プリセットを `p5` ではなく `veryfast` にし、macOSのレンダーのみ再作成で `invalid preset 'p5'` にならないよう修正。
+- `core/image_generator.py`: `genai.Client` の初期化時に `HttpOptions(timeout=NANOBANANA_TIMEOUT)` を渡すよう変更。タイムアウトなし（無制限ブロック）から 120 秒後にタイムアウト例外を発生させる。
 - `main.py` / `web_app/services/image_service.py`: サムネイル再生成時に `background_engine` パラメータが渡されていなかったバグを修正（前セッションの修正）。
 - `web_app/services/config_service.py`: 設定画面から `NANOBANANA_TIMEOUT` を変更できるよう `EDITABLE_CONFIG` に追加（min:0, max:600）。
 
 #### Ollama 起動試行フラグのスレッド安全性修正
 
-- `core/opening_quality.py`: `_OLLAMA_START_ATTEMPTED` グローバル boolean フラグを廃止し、`_OLLAMA_LAST_START_TIME` + `_OLLAMA_START_LOCK` + `_OLLAMA_START_COOLDOWN_SEC (60秒)` のクールダウン方式に変更。1 回目の起動試行後 60 秒経過すれば再試行可能となり、SD WebUI 画像再生成ジョブを複数回実行した際も Ollama が応答しない状態が固定しない。
+- `core/opening_quality.py`: `_OLLAMA_START_ATTEMPTED` グローバル boolean フラグを廃止し、`_OLLAMA_LAST_START_TIME` + `_OLLAMA_START_LOCK` + `_OLLAMA_START_COOLDOWN_SEC (60秒)` のクールダウン方式に変更。1 回目の起動試行後 60 秒経過すれば再試行可能となり、Stable Diffusion WebUI 画像再生成ジョブを複数回実行した際も Ollama が応答しない状態が固定しない。
 
 #### サイレントフォールバック警告ログ化
 
 - `web_app/services/image_service.py`: `_detect_is_shorts_from_dir()` の `except Exception: return True` を警告ログ付きフォールバックに変更（`logging.warning` でパス・エラー内容を記録してから `return True`）。
 
-- `/sd-models` ページ最上部に「🎨 次の生成で使われるモデル」バナーを追加。`SD_WEBUI_MODEL` 設定値がある場合はそれを、未設定の場合は Forge 現在ロード中モデルを表示する。どちらも未取得の場合は警告を表示。
-- 「このモデルを使う」は Forge への即時切り替えに加えて `SD_WEBUI_MODEL` を `.env` に保存するよう変更。次回起動後も設定が維持される。
+- `/sd-models` ページ最上部に「🎨 次の生成で使われるモデル」バナーを追加。`SD_WEBUI_MODEL` 設定値がある場合はそれを、未設定の場合は Stable Diffusion WebUI 現在ロード中モデルを表示する。どちらも未取得の場合は警告を表示。
+- 「このモデルを使う」は Stable Diffusion WebUI への即時切り替えに加えて `SD_WEBUI_MODEL` を `.env` に保存するよう変更。次回起動後も設定が維持される。
 - モデル情報テーブルを 4 列から 3 列（状態 / モデル情報 / アクション）に変更。`table-layout:fixed` + `<colgroup>` でカラム幅を固定し、レイアウトの不均衡を解消。ファイル名を「モデル情報」列に統合。
 - ナビゲーションバーの「設定」リンクを常に最右端に固定（`margin-left: auto`）。
 
-### SD WebUI モデル導入をアプリ内ワンクリック方式に整理
+### Stable Diffusion WebUI モデル導入をアプリ内ワンクリック方式に整理
 
-- SD WebUI Forge 用 checkpoint モデルは原則として手動配置させず、`/sd-models` 画面からダウンロード・SHA256 検証・配置・Forge 再スキャン・使用モデル切替まで行う方針に変更。
+- Stable Diffusion WebUI 用 checkpoint モデルは原則として手動配置させず、`/sd-models` 画面からダウンロード・SHA256 検証・配置・再スキャン・使用モデル切替まで行う方針に変更。
 - 認証が必要なモデル向けに `HF_TOKEN` 設定を追加。Hugging Face 認証付きダウンロードに対応（`Authorization: Bearer {HF_TOKEN}` ヘッダー）。
 - `requires_auth=true` のモデルは HF_TOKEN 未設定またはライセンス未同意時に明示エラー。別モデルへフォールバックしない。
 - 既存ファイルが SHA256 一致なら再ダウンロードしない。SHA256 不一致は自動上書きせずエラーを表示。
-- 破損ファイルや SHA256 不一致時に Web UI から「削除して再ダウンロード」できる導線を追加（`confirmed=true` 必須、SD_WEBUI_ROOT 配下のみ削除可）。
+- 破損ファイルや SHA256 不一致時に Web UI から「削除して再ダウンロード」できる導線を追加（`confirmed=true` 必須、`SD_WEBUI_ROOT` 配下のみ削除可）。
 - `model_manifest.json` に推奨モデル 4 件（Counterfeit-V3.0・DreamShaper 8・Anything V5・SD 1.5）を追加。手動配置前提の空 URL エントリを廃止。
 - `/settings` の「APIキー設定」タブに `HF_TOKEN` フィールドを追加。値はレスポンス・ログに含めない。
-- エラーメッセージから「手動配置」の案内を削除し、「SDモデル管理画面 (/sd-models) からダウンロードしてください」に統一。
+- エラーメッセージから「手動配置」の案内を削除し、「Stable Diffusion WebUI モデル管理画面 (/sd-models) からダウンロードしてください」に統一。
 - `test_sd_model_manager.py` に認証・既存ファイル・削除系テスト計 10 件を追加（88 件全パス）。
 
 ### Stable Diffusion WebUI プロンプトを Ollama で日→英翻訳
@@ -63,7 +106,7 @@
 
 ### 生成・再生成画面に画像エンジン選択を追加
 
-- `/generate`・`/history/{name}` の再生成フォームに **画像エンジン**（Google AI / Stable Diffusion WebUI Forge）セレクタを追加。
+- `/generate`・`/history/{name}` の再生成フォームに **画像エンジン**（Google AI / Stable Diffusion WebUI）セレクタを追加。
 - `/images` 画像再生成にも同エンジン選択と **縮小生成** チェックボックスを追加。
 - スキーマ `ImageRegenerateRequest` に `sd_size_mode` フィールドを追加し、`image_service._run_regenerate` が `ImageGenerator` へ渡すよう対応。
 
@@ -81,7 +124,7 @@
 
 ### UI 表示から Stable Diffusion の略称「SD」を除去
 
-- テンプレート・設定ラベル・コメント内の「SD WebUI Forge」→「Stable Diffusion WebUI Forge」、「SD生成」→「縮小生成」に統一。変数名・ファイル名は変更なし。
+- テンプレート・設定ラベル・コメント内の略称を「Stable Diffusion WebUI」に統一。変数名・ファイル名は変更なし。
 
 ---
 
@@ -94,29 +137,29 @@
 - README / SPEC にWindowsとmacOSのセットアップ・起動手順を併記
 - Web UIのナビゲーションに `画像` を追加し、画像確認・再生成画面へ直接移動できるよう修正
 
-### SD WebUI Forge 用モデル管理機能を追加
+### Stable Diffusion WebUI 用モデル管理機能を追加
 
 - `core/sd_model_manager.py: SDWebUIModelManager` を新規追加。`assets/sd_webui/model_manifest.json` に基づきモデルのインストール確認・ダウンロード・SHA256検証を行う。
 - `SD_WEBUI_MODEL` 設定時に画像生成前にモデルの準備（インストール確認 → 必要なら自動ダウンロード → `set_active_model()`）を実行するよう `core/image_generator.py` に `_prepare_sd_webui_model()` を追加した。`SD_WEBUI_MODEL` 未設定時はスキップ（現在のロード済みモデルを使う）。
-- `StableDiffusionWebUIGenerator` に `get_models()`, `get_current_model()`, `set_active_model()`, `rescan_models()` を追加。SD WebUI API 経由でモデル情報取得・切り替えを実行する。
+- `StableDiffusionWebUIGenerator` に `get_models()`, `get_current_model()`, `set_active_model()`, `rescan_models()` を追加。Stable Diffusion WebUI API 経由でモデル情報取得・切り替えを実行する。
 - `/sd-models` Web UI ページを追加。マニフェスト内モデルの状態・ダウンロード・使用切り替え・再スキャンを行える。
 - `web_app/routes/api_sd_models.py` に REST API を追加。ダウンロードはバックグラウンドスレッドで実行しポーリング形式で進捗を確認する。
 - 設定に `SD_WEBUI_ROOT`, `SD_MODEL_MANIFEST_PATH`, `AUTO_DOWNLOAD_SD_MODELS` を追加。設定画面から変更可能。
-- 設定画面の SD WebUI ステータスにマニフェスト導入済み数を追加（SD_WEBUI_ROOT 設定時のみ）。
+- 設定画面の Stable Diffusion WebUI ステータスにマニフェスト導入済み数を追加（`SD_WEBUI_ROOT` 設定時のみ）。
 - 設定画面から `/sd-models` ページへのリンクを追加。
 - `tests/test_sd_model_manager.py`, `tests/test_sd_model_service.py` を追加（合計 29 テスト）。
 
-### 画像生成バックエンドに Stable Diffusion WebUI Forge を追加
+### 画像生成バックエンドに Stable Diffusion WebUI を追加
 
-- `IMAGE_BACKEND=sd_webui` を設定することで、Forge / AUTOMATIC1111互換APIから背景・サムネイルを生成できるようにした。
+- `IMAGE_BACKEND=sd_webui` を設定することで、Stable Diffusion WebUI (AUTOMATIC1111互換API)から背景・サムネイルを生成できるようにした。
 - `IMAGE_BACKEND=gemini`（デフォルト）のときは従来どおり Nano Banana / Gemini 画像生成を使う。
 - 画像生成失敗時は別エンジンへ自動フォールバックせず、明示エラーで停止する（設計方針不変）。
 - `core/sd_webui_generator.py: StableDiffusionWebUIGenerator` を新規追加。`POST /sdapi/v1/txt2img` で生成し、base64 PNG をファイル保存する。
 - サムネイル生成も `IMAGE_BACKEND` に従うよう変更。背景と同じエンジンでサムネを生成する。
-- GUIの「設定」画面のサービス確認に「SD WebUI Forge」ステータスを追加。`IMAGE_BACKEND=sd_webui` のとき接続OK/NG とロード中モデル名を表示する。
+- GUIの「設定」画面のサービス確認に「Stable Diffusion WebUI」ステータスを追加。`IMAGE_BACKEND=sd_webui` のとき接続OK/NG とロード中モデル名を表示する。
 - 設定画面から `IMAGE_BACKEND` / `SD_WEBUI_*` を変更できるよう `config_service.py` に追加。
 - `tests/test_sd_webui_generator.py` を追加（httpx monkeypatch によるモックテスト）。
-- README / SPEC を更新し、Forge セットアップ手順・設定一覧・バックエンド切り替え表を追記した。
+- README / SPEC を更新し、Stable Diffusion WebUI セットアップ手順・設定一覧・バックエンド切り替え表を追記した。
 
 ### Web UI画像スタイル選択肢の引用符表示を修正
 

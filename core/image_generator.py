@@ -7,7 +7,6 @@ from config import (
     GOOGLE_API_KEY,
     NANOBANANA_FLASH_MODEL,
     NANOBANANA_PRO_MODEL,
-    NANOBANANA_TIMEOUT,
     SD_SIZE_IMAGE_SCALE,
 )
 # IMAGE_BACKEND は実行時に config から直接参照する（monkeypatch対応）
@@ -100,10 +99,7 @@ class ImageGenerator:
                     "Google API キー (GOOGLE_API_KEY) が未設定です。"
                     " .env に GOOGLE_API_KEY を設定してください。"
                 )
-            from google.genai.types import HttpOptions as _HttpOptions
-            _timeout_ms = int(NANOBANANA_TIMEOUT * 1000)
-            _http_opts = _HttpOptions(timeout=_timeout_ms) if NANOBANANA_TIMEOUT > 0 else None
-            self.client = genai.Client(api_key=GOOGLE_API_KEY, http_options=_http_opts)
+            self.client = genai.Client(api_key=GOOGLE_API_KEY)
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):

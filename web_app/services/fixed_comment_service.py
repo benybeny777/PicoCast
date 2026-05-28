@@ -67,6 +67,7 @@ def list_fixed_comment_candidates(only_unposted: bool = True) -> list[dict[str, 
             "auto_posted": bool(upload_record.get("fixed_comment_auto_posted")),
             "auto_submitted_at": upload_record.get("fixed_comment_auto_submitted_at", ""),
         })
+    results.sort(key=lambda r: r.get("published_at") or "", reverse=True)
     return _filter_existing_public_videos(results)
 
 
@@ -271,8 +272,8 @@ def _video_title(render_info: dict, upload_record: dict, metadata: dict[str, str
 
 
 def _is_local_displayable_publish_status(publish_status: str) -> bool:
-    if publish_status in ("scheduled", "private", "unlisted"):
-        return False
+    # YouTube API による実公開確認 (_filter_existing_public_videos) が最終フィルター。
+    # ローカルステータスはアップロード直後に "private" のまま残ることがあるため除外しない。
     return True
 
 

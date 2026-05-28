@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 
-{% block title %}Stable Diffusion モデル管理{% endblock %}
+{% block title %}Stable Diffusion WebUI モデル管理{% endblock %}
 
 {% block content %}
 <div class="content-header">
-  <h2>Stable Diffusion WebUI Forge モデル管理</h2>
+  <h2>Stable Diffusion WebUI モデル管理</h2>
   <div class="header-actions">
     <button type="button" class="btn btn-secondary" onclick="rescanModels()">WebUI 再スキャン</button>
     <button type="button" class="btn btn-primary" id="btn-load" onclick="loadModels()">一覧再読込</button>
@@ -65,10 +65,10 @@
   <div id="models-container"><p>読み込み中...</p></div>
 </div>
 
-<!-- Forge 認識済みモデル -->
+<!-- Stable Diffusion WebUI 認識済みモデル -->
 <div class="card">
-  <h3>Forge 認識済みモデル</h3>
-  <p class="hint" style="margin-bottom: 0.5rem;">SD WebUI API から取得した認識済みモデルの一覧です（Forge 起動時のみ）。</p>
+  <h3>Stable Diffusion WebUI 認識済みモデル</h3>
+  <p class="hint" style="margin-bottom: 0.5rem;">Stable Diffusion WebUI API から取得した認識済みモデルの一覧です（起動時のみ）。</p>
   <div id="webui-models-container"><p style="color:var(--text-dim)">読み込み中...</p></div>
 </div>
 
@@ -114,14 +114,14 @@ function renderActiveBanner(forgeModel) {
       `<span style="font-family:monospace;font-weight:700;font-size:1.05em">${esc(_sdModelSetting)}</span>` +
       `<span style="color:var(--text-dim);font-size:0.85em;margin-left:8px">（SD_WEBUI_MODEL で指定 — 生成時に自動ロード）</span>`;
   } else if (forgeModel) {
-    // SD_WEBUI_MODEL 未設定 → Forge 現在ロード中のものを使う
+    // SD_WEBUI_MODEL 未設定 → Stable Diffusion WebUI 現在ロード中のものを使う
     banner.innerHTML =
       `<span style="font-family:monospace;font-weight:700;font-size:1.05em">${esc(forgeModel)}</span>` +
-      `<span style="color:var(--text-dim);font-size:0.85em;margin-left:8px">（SD_WEBUI_MODEL 未設定のため Forge 現在ロード中のモデルを使用）</span>`;
+      `<span style="color:var(--text-dim);font-size:0.85em;margin-left:8px">（SD_WEBUI_MODEL 未設定のため Stable Diffusion WebUI 現在ロード中のモデルを使用）</span>`;
   } else {
     banner.innerHTML =
-      `<span style="color:var(--warn,#c7a600)">⚠️ Forge 未起動 / SD_WEBUI_MODEL 未設定</span>` +
-      `<span style="color:var(--text-dim);font-size:0.85em;margin-left:8px">Forge を起動するか、下の一覧から「このモデルを使う」を押してください。</span>`;
+      `<span style="color:var(--warn,#c7a600)">⚠️ Stable Diffusion WebUI 未起動 / SD_WEBUI_MODEL 未設定</span>` +
+      `<span style="color:var(--text-dim);font-size:0.85em;margin-left:8px">Stable Diffusion WebUI を起動するか、下の一覧から「このモデルを使う」を押してください。</span>`;
   }
 }
 
@@ -265,7 +265,7 @@ function _hfTokenRequired(m) {
   </div>`;
 }
 
-/* ─── Forge 認識済みモデル ─── */
+/* ─── Stable Diffusion WebUI 認識済みモデル ─── */
 async function loadWebuiModels() {
   const container = document.getElementById('webui-models-container');
   container.innerHTML = '<p style="color:var(--text-dim)">読み込み中...</p>';
@@ -275,7 +275,7 @@ async function loadWebuiModels() {
     if (data.status === 'ok') {
       const models = data.models || [];
       if (models.length === 0) {
-        container.innerHTML = '<p style="color:var(--text-dim)">Forge にモデルが見つかりません。ダウンロード後に「WebUI 再スキャン」してください。</p>';
+        container.innerHTML = '<p style="color:var(--text-dim)">Stable Diffusion WebUI にモデルが見つかりません。ダウンロード後に「WebUI 再スキャン」してください。</p>';
         return;
       }
       let html = '<table class="status-table" style="width:100%;table-layout:fixed"><colgroup>'
@@ -292,11 +292,11 @@ async function loadWebuiModels() {
       html += '</tbody></table>';
       container.innerHTML = html;
     } else {
-      container.innerHTML = `<p style="color:var(--text-dim)">Forge 未起動: ${esc(data.message)}</p>
+      container.innerHTML = `<p style="color:var(--text-dim)">Stable Diffusion WebUI 未起動: ${esc(data.message)}</p>
         <p style="font-size:12px;color:var(--text-dim)">自動起動するには <a href="/settings">設定ページ</a> で <code>SD_WEBUI_START_COMMAND</code> を設定してください。</p>`;
     }
   } catch (e) {
-    container.innerHTML = '<p style="color:var(--text-dim)">通信エラー。Forge が起動していない可能性があります。</p>';
+    container.innerHTML = '<p style="color:var(--text-dim)">通信エラー。Stable Diffusion WebUI が起動していない可能性があります。</p>';
   }
 }
 
@@ -368,9 +368,9 @@ async function deleteRedownload(modelId, displayName) {
 async function useModel(modelName) {
   if (!confirm(
     `「${modelName}」を生成モデルとして設定します。\n\n` +
-    `・Forge のロード済みモデルを切り替えます\n` +
+    `・Stable Diffusion WebUI のロード済みモデルを切り替えます\n` +
     `・SD_WEBUI_MODEL 設定を保存（次回起動後も有効）\n\n` +
-    `（Forge が起動している必要があります）`
+    `（Stable Diffusion WebUI が起動している必要があります）`
   )) return;
   try {
     const res = await fetch('/api/sd-models/use', {
@@ -397,7 +397,7 @@ async function rescanModels() {
     const data = await res.json();
     if (data.status === 'ok') {
       await loadWebuiModels();
-      alert('Forge の再スキャンが完了しました。');
+      alert('Stable Diffusion WebUI の再スキャンが完了しました。');
     } else {
       alert('エラー: ' + data.message);
     }

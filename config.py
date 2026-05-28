@@ -181,7 +181,6 @@ VOICE_READING_CANDIDATES_PATH = os.environ.get("VOICE_READING_CANDIDATES_PATH", 
 GEMINI_MODEL          = os.environ.get("GEMINI_MODEL",          "gemini-3.1-pro-preview")       # 台本生成モデル
 NANOBANANA_PRO_MODEL  = os.environ.get("NANOBANANA_PRO_MODEL",  "gemini-3-pro-image-preview")   # 背景・サムネ生成（高品質）
 NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-flash-image-preview")  # 背景・サムネ生成（高速）
-NANOBANANA_TIMEOUT    = int(os.environ.get("NANOBANANA_TIMEOUT", "120"))                         # Nano Banana API タイムアウト秒（0 = タイムアウトなし）
 SD_SIZE_IMAGE_SCALE   = float(os.environ.get("SD_SIZE_IMAGE_SCALE", "0.5"))                     # SD 生成モード: 縮小倍率（生成後に拡大）
 
 
@@ -370,7 +369,7 @@ MAX_BACKGROUNDS             = MAX_BACKGROUNDS_SHORTS  # 後方互換エイリア
 WEB_APP_NAME = os.environ.get("WEB_APP_NAME", "Native Video Factory")  # Web UI の表示アプリ名
 WEB_UI_HOST = os.environ.get("WEB_UI_HOST", "127.0.0.1")  # バインドホスト（外部公開禁止）
 WEB_UI_PORT = int(os.environ.get("WEB_UI_PORT", "58080"))  # ポート番号（他アプリと競合しにくい高番号）
-WEB_DEFAULT_IMAGE_STYLE = _clean_env_choice(os.environ.get("WEB_DEFAULT_IMAGE_STYLE", "通常"))  # Web UI の既定画像スタイル
+WEB_DEFAULT_IMAGE_STYLE = _clean_env_choice(os.environ.get("WEB_DEFAULT_IMAGE_STYLE", "アニメ"))  # Web UI の既定画像スタイル
 WEB_IMAGE_STYLE_CHOICES = _split_env_choices(os.environ.get("WEB_IMAGE_STYLE_CHOICES", "通常,アニメ,水彩"))  # Web UI 画像スタイル選択肢
 WEB_DEFAULT_REUSE_BACKGROUNDS = os.environ.get("WEB_DEFAULT_REUSE_BACKGROUNDS", "1").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時の背景再利用既定値
 WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST = os.environ.get("WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のLongサムネAB既定値

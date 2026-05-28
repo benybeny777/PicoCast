@@ -14,6 +14,7 @@
   <button class="tab-btn" onclick="switchTab('apikey', this)">APIキー</button>
   <button class="tab-btn" onclick="switchTab('dict-base', this)">よみがな辞書</button>
   <button class="tab-btn" onclick="switchTab('dict-user', this)">自動学習辞書</button>
+  <button class="tab-btn" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
 </div>
 
 <!-- ── タブ: 設定変更 ── -->
@@ -29,9 +30,6 @@
     <div class="action-row mt">
       <button class="btn btn-primary" onclick="saveConfig()">保存</button>
       <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
-    </div>
-    <div class="mt" style="border-top:1px solid var(--border); padding-top:12px">
-      <a href="/sd-models" class="btn btn-secondary">Stable Diffusion WebUI モデル管理 →</a>
     </div>
   </div>
 </div>
@@ -72,6 +70,44 @@
       <button class="btn btn-primary" onclick="saveSecrets()">APIキーを保存</button>
     </div>
   </div>
+</div>
+
+<!-- ── タブ: Stable Diffusionモデル ── -->
+<div id="tab-sd-models" class="tab-panel">
+  <div class="card" style="border-left:4px solid var(--accent2)">
+    <h3 style="margin-top:0">次の生成で使われるモデル</h3>
+    <div id="sd-active-model-banner" style="font-size:1.05em;margin-bottom:0.5rem"><span style="color:var(--text-muted)">読み込み中...</span></div>
+    <p style="margin:0;font-size:0.85em;color:var(--text-muted)">下の一覧の「このモデルを使う」を押すと変更できます。</p>
+  </div>
+  <div class="card">
+    <h3>設定</h3>
+    <table class="status-table" style="width:100%">
+      <tr><th style="width:14em">項目</th><th>値</th></tr>
+      <tr><td>SD_WEBUI_ROOT</td><td id="sd-cfg-root" style="font-family:monospace"></td></tr>
+      <tr><td>HF_TOKEN</td><td id="sd-cfg-hf"></td></tr>
+      <tr><td>SD_WEBUI_BASE_URL</td><td id="sd-cfg-url" style="font-family:monospace"></td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h3>モデル一覧
+      <button type="button" class="btn btn-secondary" style="margin-left:12px;font-size:13px" onclick="sdLoadModels()">再読込</button>
+      <button type="button" class="btn btn-secondary" style="margin-left:6px;font-size:13px" onclick="sdRescanModels()">WebUI 再スキャン</button>
+    </h3>
+    <p class="hint" style="margin-bottom:0.75rem">「ダウンロード」を押すとアプリ内で自動取得・配置します。手動でファイルを探す必要はありません。</p>
+    <div id="sd-models-container"><p style="color:var(--text-muted)">読み込み中...</p></div>
+  </div>
+  <div class="card">
+    <h3>Stable Diffusion WebUI 認識済みモデル</h3>
+    <p class="hint" style="margin-bottom:0.5rem">Stable Diffusion WebUI API から取得した認識済みモデル一覧です（起動時のみ）。</p>
+    <div id="sd-webui-models-container"><p style="color:var(--text-muted)">読み込み中...</p></div>
+  </div>
+  <style>
+  .sd-progress-wrap { background:var(--border);border-radius:4px;height:10px;overflow:hidden;margin:4px 0 }
+  .sd-progress-bar  { height:10px;background:var(--accent2);transition:width 0.3s ease }
+  .sd-progress-text { font-size:11px;color:var(--text-muted);margin-top:2px }
+  .sd-model-actions { display:flex;flex-wrap:wrap;gap:4px;align-items:center }
+  .sd-license-note  { font-size:11px;color:var(--text-muted);margin-top:3px }
+  </style>
 </div>
 
 <!-- ── タブ: よみがな辞書（手動） ── -->
@@ -131,6 +167,7 @@ function switchTab(name, btn) {
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
   if ((name === 'dict-base' || name === 'dict-user') && !_dictLoaded) loadDict();
+  if (name === 'sd-models' && !_sdLoaded) sdInitTab();
 }
 
 async function loadConfig() {
@@ -149,60 +186,76 @@ async function loadConfig() {
     const bgmFiles = bgmData.files || [];
 
     form.innerHTML = '';
-    const table = document.createElement('table');
-    table.className = 'status-table';
 
+    // グループ化
+    const groupMap = {};
+    const groupOrder = [];
     for (const item of _configItems) {
-      const tr = document.createElement('tr');
-      const tdLabel = document.createElement('td');
-      tdLabel.style.width = '55%';
-      tdLabel.innerHTML = `<label for="cfg-${item.key}"><strong>${item.label}</strong><br><small style="color:var(--text-muted)">${item.key}</small></label>`;
-      const tdInput = document.createElement('td');
+      const g = item.group || 'その他';
+      if (!groupMap[g]) { groupMap[g] = []; groupOrder.push(g); }
+      groupMap[g].push(item);
+    }
 
+    function buildInputCell(item) {
+      const td = document.createElement('td');
       if (item.type === 'bool') {
-        tdInput.innerHTML = `
-          <select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">
-            <option value="1" ${item.current === '1' ? 'selected' : ''}>有効</option>
-            <option value="0" ${item.current === '0' ? 'selected' : ''}>無効</option>
-          </select>`;
+        td.innerHTML = `<select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">
+          <option value="1" ${item.current === '1' ? 'selected' : ''}>有効</option>
+          <option value="0" ${item.current === '0' ? 'selected' : ''}>無効</option>
+        </select>`;
       } else if (item.type === 'select') {
         const opts = (item.choices || []).map(([value, label]) =>
           `<option value="${esc(value)}" ${value === item.current ? 'selected' : ''}>${esc(label)}</option>`
         ).join('');
-        tdInput.innerHTML = `
-          <select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">
-            ${opts}
-          </select>`;
+        td.innerHTML = `<select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">${opts}</select>`;
       } else if (item.type === 'ollama_model') {
         if (ollamaAvailable && ollamaModels.length > 0) {
           const allModels = ollamaModels.includes(item.current) ? ollamaModels : [item.current, ...ollamaModels];
           const opts = allModels.map(m => `<option value="${esc(m)}" ${m === item.current ? 'selected' : ''}>${esc(m)}</option>`).join('');
-          tdInput.innerHTML = `<select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">${opts}</select>`;
+          td.innerHTML = `<select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">${opts}</select>`;
         } else {
           const note = ollamaAvailable ? '（モデルなし）' : '（Ollama 未起動）';
-          tdInput.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:180px"><small style="color:var(--text-muted)"> ${note}</small>`;
+          td.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:180px"><small style="color:var(--text-muted)"> ${note}</small>`;
         }
       } else if (item.type === 'bgm_file') {
         if (bgmFiles.length > 0) {
           const allFiles = bgmFiles.includes(item.current) ? bgmFiles : [item.current, ...bgmFiles];
           const opts = allFiles.map(f => `<option value="${esc(f)}" ${f === item.current ? 'selected' : ''}>${esc(f)}</option>`).join('');
-          tdInput.innerHTML = `<select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">${opts}</select>`;
+          td.innerHTML = `<select id="cfg-${item.key}" data-key="${item.key}" class="form-input" style="width:auto">${opts}</select>`;
         } else {
-          tdInput.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:220px"><small style="color:var(--text-muted)"> （assets/bgm/ にファイルなし）</small>`;
+          td.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:220px"><small style="color:var(--text-muted)"> （assets/bgm/ にファイルなし）</small>`;
         }
       } else {
         const inputType = item.type === 'float' || item.type === 'int' ? 'number' : 'text';
         const step = item.type === 'float' ? '0.01' : '1';
         const minAttr = item.min !== undefined ? `min="${item.min}"` : '';
         const maxAttr = item.max !== undefined ? `max="${item.max}"` : '';
-        tdInput.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="${inputType}" step="${step}" ${minAttr} ${maxAttr} value="${esc(item.current)}" class="form-input" style="width:120px">`;
+        const w = inputType === 'number' ? 'width:80px' : 'width:min(400px,100%)';
+        td.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="${inputType}" step="${step}" ${minAttr} ${maxAttr} value="${esc(item.current)}" class="form-input" style="${w}">`;
       }
-
-      tr.appendChild(tdLabel);
-      tr.appendChild(tdInput);
-      table.appendChild(tr);
+      return td;
     }
-    form.appendChild(table);
+
+    for (const groupName of groupOrder) {
+      const header = document.createElement('h3');
+      header.textContent = groupName;
+      header.style.cssText = 'margin:1.4rem 0 0.4rem;padding-bottom:4px;border-bottom:1px solid var(--border);font-size:0.95em;color:var(--text-muted)';
+      form.appendChild(header);
+
+      const table = document.createElement('table');
+      table.className = 'status-table';
+      for (const item of groupMap[groupName]) {
+        const tr = document.createElement('tr');
+        const tdLabel = document.createElement('td');
+        tdLabel.style.width = '55%';
+        tdLabel.innerHTML = `<label for="cfg-${item.key}"><strong>${item.label}</strong><br><small style="color:var(--text-muted)">${item.key}</small></label>`;
+        tr.appendChild(tdLabel);
+        tr.appendChild(buildInputCell(item));
+        table.appendChild(tr);
+      }
+      form.appendChild(table);
+    }
+
     if (ollamaAvailable && ollamaModels.length > 0) {
       const note = document.createElement('p');
       note.className = 'hint';
@@ -343,5 +396,233 @@ function esc(str) {
 
 // 初期ロード
 loadConfig();
+
+/* ══════════════════════════════════════════════
+   SD モデル管理タブ
+══════════════════════════════════════════════ */
+let _sdLoaded = false;
+let _sdModels = [];
+let _sdPollTimer = null;
+let _sdHfTokenSet = false;
+let _sdModelSetting = '';
+
+function sdSafeId(id) { return 'sdm-' + String(id).replace(/[^a-zA-Z0-9]/g,'_'); }
+
+function sdFmtBytes(b) {
+  if (!b) return '0 B';
+  const u = ['B','KB','MB','GB']; let i = 0;
+  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+  return b.toFixed(i > 1 ? 1 : 0) + ' ' + u[i];
+}
+
+function sdRenderActiveBanner(forgeModel) {
+  const el = document.getElementById('sd-active-model-banner');
+  if (!el) return;
+  if (_sdModelSetting) {
+    el.innerHTML = `<span style="font-family:monospace;font-weight:700">${esc(_sdModelSetting)}</span>`
+      + `<span style="color:var(--text-muted);font-size:0.85em;margin-left:8px">（SD_WEBUI_MODEL で指定）</span>`;
+  } else if (forgeModel) {
+    el.innerHTML = `<span style="font-family:monospace;font-weight:700">${esc(forgeModel)}</span>`
+      + `<span style="color:var(--text-muted);font-size:0.85em;margin-left:8px">（Stable Diffusion WebUI 現在ロード中のモデル）</span>`;
+  } else {
+    el.innerHTML = `<span style="color:var(--error,#c0392b)">⚠ Stable Diffusion WebUI 未起動 / SD_WEBUI_MODEL 未設定</span>`;
+  }
+}
+
+async function sdInitTab() {
+  _sdLoaded = true;
+  // 設定値・ステータスをロード
+  try {
+    const [cfgRes, statusRes] = await Promise.all([
+      fetch('/api/settings/config'),
+      fetch('/api/settings/status'),
+    ]);
+    const cfgItems = await cfgRes.json();
+    const status = await statusRes.json();
+    _sdHfTokenSet = !!status.hf_token;
+    const rootItem = cfgItems.find(i => i.key === 'SD_WEBUI_ROOT');
+    const urlItem  = cfgItems.find(i => i.key === 'SD_WEBUI_BASE_URL');
+    const modelItem = cfgItems.find(i => i.key === 'SD_WEBUI_MODEL');
+    _sdModelSetting = modelItem ? (modelItem.current || '') : '';
+
+    const rootEl = document.getElementById('sd-cfg-root');
+    const urlEl  = document.getElementById('sd-cfg-url');
+    const hfEl   = document.getElementById('sd-cfg-hf');
+    if (rootEl) rootEl.textContent = (rootItem && rootItem.current) ? rootItem.current : '（未設定）';
+    if (urlEl)  urlEl.textContent  = (urlItem  && urlItem.current)  ? urlItem.current  : '';
+    if (hfEl)   hfEl.innerHTML = _sdHfTokenSet
+      ? '<span class="badge badge-ok">設定済み</span>'
+      : '<span class="badge badge-warn">未設定</span> <small style="color:var(--text-muted)">認証付きモデルのDLに必要</small>';
+  } catch(e) { console.warn('SD tab init error:', e); }
+
+  await Promise.all([sdLoadModels(), sdLoadCurrentModel(), sdLoadWebuiModels()]);
+}
+
+async function sdLoadCurrentModel() {
+  try {
+    const res = await fetch('/api/sd-models/current');
+    const data = await res.json();
+    sdRenderActiveBanner(data.status === 'ok' ? (data.model || '') : '');
+  } catch(e) { sdRenderActiveBanner(''); }
+}
+
+async function sdLoadModels(progress) {
+  const container = document.getElementById('sd-models-container');
+  if (!progress) container.innerHTML = '<p style="color:var(--text-muted)">読み込み中...</p>';
+  try {
+    const res = await fetch('/api/sd-models');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      _sdModels = data.models;
+      sdRenderTable(_sdModels, progress || {});
+    } else {
+      container.innerHTML = `<p class="error-text">エラー: ${esc(data.message)}</p>`;
+    }
+  } catch(e) { container.innerHTML = '<p class="error-text">通信エラー</p>'; }
+}
+
+function sdRenderTable(models, progress) {
+  const container = document.getElementById('sd-models-container');
+  if (!models || models.length === 0) { container.innerHTML = '<p>マニフェストにモデルがありません。</p>'; return; }
+  let html = '<table class="status-table" style="width:100%;table-layout:fixed"><colgroup>'
+    + '<col style="width:7em"><col><col style="width:14em"></colgroup>'
+    + '<thead><tr><th>状態</th><th>モデル情報</th><th>アクション</th></tr></thead><tbody>';
+  for (const m of models) {
+    const sid = sdSafeId(m.id);
+    const prog = progress[m.id];
+    const isDownloading = prog && prog.status === 'downloading';
+    const isDone = prog && prog.status === 'done';
+    const isError = prog && prog.status === 'error';
+    const installed = isDone ? true : m.installed;
+    html += `<tr id="${sid}">`;
+    if (installed) html += '<td><span class="badge badge-ok">導入済み</span></td>';
+    else if (isDownloading) html += '<td><span class="badge badge-warn">DL中</span></td>';
+    else if (isError) html += '<td><span class="badge badge-ng">エラー</span></td>';
+    else html += '<td><span class="badge badge-ng">未導入</span></td>';
+
+    let nameHtml = `<strong style="font-size:0.95em">${esc(m.display_name)}</strong>`;
+    if (m.recommended) nameHtml += ' <span style="color:var(--accent2);font-size:11px">★推奨</span>';
+    if (m.description)  nameHtml += `<br><small style="color:var(--text-muted)">${esc(m.description)}</small>`;
+    nameHtml += `<br><span style="font-family:monospace;font-size:0.82em;color:var(--text-muted)">${esc(m.filename)}</span>`;
+    if (m.license_note) nameHtml += `<br><small class="sd-license-note">📄 ${esc(m.license_note)}</small>`;
+    if (m.source_page_url) nameHtml += ` <a href="${esc(m.source_page_url)}" target="_blank" rel="noopener" style="font-size:11px">配布元 →</a>`;
+    html += `<td style="word-break:break-word;min-width:0">${nameHtml}</td>`;
+
+    html += '<td style="vertical-align:top;padding-top:8px">';
+    if (isDownloading) {
+      const pct = prog.percent || 0;
+      const dlText = prog.total ? `${sdFmtBytes(prog.downloaded)} / ${sdFmtBytes(prog.total)} (${pct}%)` : (prog.message || `${sdFmtBytes(prog.downloaded)} DL中...`);
+      html += `<div class="sd-progress-wrap"><div class="sd-progress-bar" style="width:${pct}%"></div></div>`;
+      html += `<div class="sd-progress-text">${esc(dlText)}</div>`;
+    } else if (isError) {
+      html += `<div style="color:var(--error,#c0392b);font-size:12px;margin-bottom:4px">${esc(prog.message || 'エラー')}</div>`;
+      if (m.can_download) {
+        if (m.requires_auth && !_sdHfTokenSet) html += sdHfTokenRequired(m);
+        else html += `<button class="btn btn-secondary" style="font-size:12px" onclick="sdDownloadModel('${esc(m.id)}')">再試行</button>`;
+      }
+    } else if (installed) {
+      html += '<div class="sd-model-actions">';
+      html += `<button class="btn btn-primary" style="font-size:12px" onclick="sdUseModel('${esc(m.filename)}')">このモデルを使う</button>`;
+      html += `<button class="btn btn-secondary" style="font-size:12px" onclick="sdDeleteRedownload('${esc(m.id)}','${esc(m.display_name)}')">削除して再DL</button>`;
+      html += '</div>';
+    } else if (!m.can_download) {
+      html += `<span style="color:var(--text-muted);font-size:12px">URL未設定</span>`;
+    } else if (m.requires_auth && !_sdHfTokenSet) {
+      html += sdHfTokenRequired(m);
+    } else {
+      html += `<div class="sd-model-actions"><button class="btn btn-primary" style="font-size:12px" onclick="sdDownloadModel('${esc(m.id)}')">ダウンロード</button></div>`;
+    }
+    html += '</td></tr>';
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function sdHfTokenRequired(m) {
+  return `<div><span style="color:var(--warn,#c7a600);font-size:12px">🔑 HF_TOKEN が必要です</span><br>`
+    + `<small style="color:var(--text-muted)">APIキータブで設定してください</small>`
+    + (m.source_page_url ? `<br><a href="${esc(m.source_page_url)}" target="_blank" rel="noopener" style="font-size:12px">配布元でライセンス同意 →</a>` : '')
+    + '</div>';
+}
+
+async function sdLoadWebuiModels() {
+  const container = document.getElementById('sd-webui-models-container');
+  try {
+    const res = await fetch('/api/sd-models/webui');
+    const data = await res.json();
+    if (data.status === 'ok') {
+      const models = data.models || [];
+      if (models.length === 0) { container.innerHTML = '<p style="color:var(--text-muted)">Stable Diffusion WebUI にモデルが見つかりません。ダウンロード後に「WebUI 再スキャン」してください。</p>'; return; }
+      let html = '<table class="status-table" style="width:100%;table-layout:fixed"><colgroup><col><col style="width:12em"></colgroup>'
+        + '<thead><tr><th>モデル（タイトル / ファイル名）</th><th>アクション</th></tr></thead><tbody>';
+      for (const m of models) {
+        const title = m.title || m.model_name || '?';
+        const fname = m.filename ? m.filename.split(/[\\/]/).pop() : '';
+        html += `<tr><td><span style="font-weight:600">${esc(title)}</span><br>`
+          + `<span style="font-family:monospace;font-size:0.82em;color:var(--text-muted)">${esc(fname)}</span></td>`
+          + `<td><button class="btn btn-primary" style="font-size:12px" onclick="sdUseModel('${esc(title)}')">このモデルを使う</button></td></tr>`;
+      }
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    } else {
+      container.innerHTML = `<p style="color:var(--text-muted)">Stable Diffusion WebUI 未起動: ${esc(data.message)}</p>`;
+    }
+  } catch(e) { container.innerHTML = '<p style="color:var(--text-muted)">通信エラー。Stable Diffusion WebUI が起動していない可能性があります。</p>'; }
+}
+
+async function sdPollProgress() {
+  try {
+    const res = await fetch('/api/sd-models/progress');
+    const data = await res.json();
+    const progress = data.progress || {};
+    sdRenderTable(_sdModels, progress);
+    if (!Object.values(progress).some(p => p.status === 'downloading')) {
+      sdStopPolling();
+      await sdLoadModels(progress);
+      await sdLoadCurrentModel();
+    }
+  } catch(e) { console.warn('sd poll error:', e); }
+}
+
+function sdStartPolling() { if (!_sdPollTimer) _sdPollTimer = setInterval(sdPollProgress, 500); }
+function sdStopPolling()  { if (_sdPollTimer) { clearInterval(_sdPollTimer); _sdPollTimer = null; } }
+
+async function sdDownloadModel(modelId) {
+  try {
+    const res = await fetch('/api/sd-models/download', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({model_id:modelId}) });
+    const data = await res.json();
+    if (data.status === 'started') sdStartPolling();
+    else alert('エラー: ' + data.message);
+  } catch(e) { alert('通信エラー'); }
+}
+
+async function sdDeleteRedownload(modelId, displayName) {
+  if (!confirm(`「${displayName}」を削除して再ダウンロードします。よろしいですか？`)) return;
+  try {
+    const res = await fetch('/api/sd-models/delete-redownload', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({model_id:modelId,confirmed:true}) });
+    const data = await res.json();
+    if (data.status === 'started') sdStartPolling();
+    else alert('エラー: ' + data.message);
+  } catch(e) { alert('通信エラー'); }
+}
+
+async function sdUseModel(modelName) {
+  if (!confirm(`「${modelName}」を生成モデルとして設定します。\nStable Diffusion WebUI のモデルを切り替え、SD_WEBUI_MODEL 設定を保存します。\n（Stable Diffusion WebUI が起動している必要があります）`)) return;
+  try {
+    const res = await fetch('/api/sd-models/use', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({model_name:modelName}) });
+    const data = await res.json();
+    if (data.status === 'ok') { _sdModelSetting = data.model_name; await sdLoadCurrentModel(); }
+    else alert('エラー: ' + data.message);
+  } catch(e) { alert('通信エラー'); }
+}
+
+async function sdRescanModels() {
+  try {
+    const res = await fetch('/api/sd-models/rescan', { method:'POST' });
+    const data = await res.json();
+    if (data.status === 'ok') { await sdLoadWebuiModels(); alert('再スキャン完了。'); }
+    else alert('エラー: ' + data.message);
+  } catch(e) { alert('通信エラー'); }
+}
 </script>
 {% endblock %}
