@@ -7,7 +7,8 @@ TITLE_ANALYTICS_TSV_HEADER = (
     "average_view_duration\taverage_percentage_viewed\tlikes\tlike_rate\tcomments\tsubscribers_net\tscore\taction"
 )
 
-PROMPT_PARTS_DIR = Path(__file__).with_name("prompt_parts")
+_PROJECT_ROOT = Path(__file__).parent.parent
+PROMPT_PARTS_DIR = _PROJECT_ROOT / "config" / "prompt_parts"
 PROMPT_PARTS_LOCAL_DIR = PROMPT_PARTS_DIR / "local"
 
 CHANNEL_CONTEXT = (
@@ -220,7 +221,7 @@ MULTI_SCRIPT_RULES = """\
 
 def build_script_generation_prompt(existing_titles=None) -> str:
     local_prompt = PROMPT_PARTS_LOCAL_DIR / "script_generation_prompt.txt"
-    prompt_path = local_prompt if local_prompt.exists() else Path(__file__).with_name("script_generation_prompt.txt")
+    prompt_path = local_prompt if local_prompt.exists() else _PROJECT_ROOT / "config" / "script_generation_prompt.txt"
     base = prompt_path.read_text(encoding="utf-8").strip()
     if existing_titles:
         lines = "\n".join(f"・{t}" for t in existing_titles)
