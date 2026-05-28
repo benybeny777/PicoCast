@@ -90,6 +90,44 @@ graph TD
 | ffmpeg | 8.0.1 full build（[gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 版） |
 | デフォルトエンコーダ | `h264_nvenc`（`NATIVE_FFMPEG_ENCODER` 未設定時） |
 
+<details>
+<summary><b>主要 Python パッケージ・連携アプリのバージョン</b></summary>
+
+**Python パッケージ（`.venv` 内）**
+
+| パッケージ | バージョン |
+| :--- | :--- |
+| FastAPI | 0.136.3 |
+| Starlette | 1.1.0 |
+| Uvicorn | 0.48.0 |
+| google-genai | 1.75.0 |
+| SudachiPy | 0.6.11 |
+| Pillow | 12.2.0 |
+| httpx | 0.28.1 |
+
+**連携アプリ**（別プロセスとして起動）
+
+| アプリ | バージョン | エンドポイント |
+| :--- | :--- | :--- |
+| VOICEVOX | 0.25.2 | `http://localhost:50021` |
+| Ollama | 0.24.0 | `http://localhost:11434` |
+| Stable Diffusion WebUI | v1.10.1 | `http://localhost:7860`（任意） |
+
+**Ollama インストール済みモデル**
+
+| モデル | サイズ |
+| :--- | ---: |
+| qwen3:8b（デフォルト） | 4.9 GB |
+| qwen2.5:7b-instruct | 4.4 GB |
+| llama3:latest | 4.3 GB |
+| gemma3:1b | 0.8 GB |
+| gemma4:e2b | 6.7 GB |
+| gemma4:e4b / latest | 8.9 GB |
+| glm-4.7-flash:latest | 17.7 GB |
+| gpt-oss:20b | 12.8 GB |
+
+</details>
+
 > [!NOTE]
 > macOS 環境での動作については [クイックスタート](#-クイックスタート) および [セットアップ手順](#-セットアップ手順) の macOS 向け手順を参照してください。
 
