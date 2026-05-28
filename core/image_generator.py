@@ -101,7 +101,8 @@ class ImageGenerator:
                     " .env に GOOGLE_API_KEY を設定してください。"
                 )
             from google.genai.types import HttpOptions as _HttpOptions
-            _http_opts = _HttpOptions(timeout=NANOBANANA_TIMEOUT) if NANOBANANA_TIMEOUT > 0 else None
+            _timeout_ms = int(NANOBANANA_TIMEOUT * 1000)
+            _http_opts = _HttpOptions(timeout=_timeout_ms) if NANOBANANA_TIMEOUT > 0 else None
             self.client = genai.Client(api_key=GOOGLE_API_KEY, http_options=_http_opts)
 
     def close(self):

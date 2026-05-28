@@ -25,7 +25,7 @@
 #### Nano Banana API タイムアウト未設定によるハングアップ修正
 
 - `config.py`: `NANOBANANA_TIMEOUT = 120`（秒）を追加。`.env` の `NANOBANANA_TIMEOUT` で変更可能。
-- `core/image_generator.py`: `genai.Client` の初期化時に `HttpOptions(timeout=NANOBANANA_TIMEOUT)` を渡すよう変更。タイムアウトなし（無制限ブロック）から 120 秒後にタイムアウト例外を発生させる。
+- `core/image_generator.py`: `genai.Client` の初期化時に `HttpOptions(timeout=NANOBANANA_TIMEOUT * 1000)` を渡すよう変更。Google GenAI SDK はミリ秒指定のため、秒単位の設定値を変換してから渡す。
 - `main.py` / `web_app/services/image_service.py`: サムネイル再生成時に `background_engine` パラメータが渡されていなかったバグを修正（前セッションの修正）。
 - `web_app/services/config_service.py`: 設定画面から `NANOBANANA_TIMEOUT` を変更できるよう `EDITABLE_CONFIG` に追加（min:0, max:600）。
 
