@@ -34,6 +34,11 @@
 
 ## 2026-05-28
 
+### macOS nativeレンダー設定を修正
+
+- `config.py`: `NATIVE_FFMPEG_ENCODER=libx264` のとき既定プリセットを `p5` ではなく `veryfast` にし、macOSのレンダーのみ再作成で `invalid preset 'p5'` にならないよう修正。
+- `core/native_renderer.py`: ffmpeg filtergraph内のASS字幕パスで `[Shorts]` などの角括弧をエスケープし、出力フォルダ名を含む字幕ファイルをmacOSでも読み込めるよう修正。
+
 ### 機能追加: 設定ページに Stable Diffusion WebUI モデル管理タブを統合・デバッグログを表示
 
 - `web_app/templates/settings.html`: Stable Diffusion WebUI モデル管理を「Stable Diffusionモデル」タブとして設定ページに統合。タブ切り替え時に遅延ロード。設定値・HF_TOKEN 状態・モデル一覧・Stable Diffusion WebUI 認識済みモデルを Ajax で取得。「設定から飛べるリンクボタン」も同時に削除。

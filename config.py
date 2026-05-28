@@ -253,8 +253,8 @@ THUMBNAIL_CHARACTER_PNGS = {                                     # サムネイ�
 # ───────────────────────────────────────────────
 # native ffmpeg エンコーダ設定
 # ───────────────────────────────────────────────
-NATIVE_FFMPEG_ENCODER = os.environ.get("NATIVE_FFMPEG_ENCODER", "h264_nvenc")  # エンコーダ（NVENC / libx264 等）
-NATIVE_FFMPEG_PRESET  = os.environ.get("NATIVE_FFMPEG_PRESET",  "p5")          # エンコードプリセット
+NATIVE_FFMPEG_ENCODER = os.environ.get("NATIVE_FFMPEG_ENCODER", "h264_nvenc").strip()  # エンコーダ（NVENC / libx264 等）
+NATIVE_FFMPEG_PRESET  = os.environ.get("NATIVE_FFMPEG_PRESET", "p5" if NATIVE_FFMPEG_ENCODER in ("h264_nvenc", "hevc_nvenc") else "veryfast")  # エンコードプリセット
 NATIVE_FFMPEG_CRF     = os.environ.get("NATIVE_FFMPEG_CRF",     "20")          # CRF 値（libx264 用）
 NATIVE_FFMPEG_CQ      = os.environ.get("NATIVE_FFMPEG_CQ",      "23")          # CQ 値（NVENC 用）
 
