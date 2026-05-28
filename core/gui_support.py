@@ -45,7 +45,8 @@ def split_input_scripts(raw_scripts: str) -> list[str]:
     if not raw_scripts:
         return []
 
-    scripts = [s.strip() for s in re.split(r"\n-{3,}\n", raw_scripts) if s.strip()]
+    # 純粋ハイフン行（---アンケート設定案--- のような名前付き行は分割しない）
+    scripts = [s.strip() for s in re.split(r"(?m)^-{3,}$", raw_scripts) if s.strip()]
     if len(scripts) > 1:
         return scripts
 

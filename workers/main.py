@@ -666,8 +666,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if is_cancelled():
         return cancel_result()
 
-    # ★ 最初のバリデーション（sanitize前）
-    _early_items = ScriptParser.parse_string(script_content)
+    # ★ 非本編ブロック（候補一覧/固定コメント/アンケート）を本編から分離
+    _blocks = ScriptParser.extract_non_body_blocks(script_content)
+
+    # ★ 最初のバリデーション（sanitize前・body_text のみで検証）
+    _early_items = ScriptParser.parse_string(_blocks["body_text"])
     _is_valid, _messages = ScriptParser.validate(_early_items)
     _early_title = next((it["text"] for it in _early_items if it["type"] == "video_title"), None)
     if _early_title:
@@ -795,12 +798,20 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     script_txt_path = os.path.join(theme_dir, "script.txt")
     with open(script_txt_path, "w", encoding="utf-8") as f:
-        f.write(script_content)
+        f.write(script_content)  # 元テキスト全文を保存（参照用）
 
-    items = ScriptParser.parse(script_txt_path)
+    # 本編テキスト（候補一覧/固定コメント/アンケートを除外済み）をパース
+    items = ScriptParser.parse_string(_blocks["body_text"])
 
     # メタデータ（サムネ/タイトル/説明文/タグ）を取得して保存
     meta = {it["type"]: it["text"] for it in items if it["type"] in ScriptParser.META_TYPES}
+    # 抽出ブロックのデータをメタに補完（body_text 側に同じキーがなければ追加）
+    if _blocks["has_candidates"] and "meeting_candidates" not in meta:
+        meta["meeting_candidates"] = _blocks["candidates_text"]
+    if _blocks["has_fixed_comment"] and "fixed_comment" not in meta:
+        meta["fixed_comment"] = _blocks["fixed_comment_text"]
+    if _blocks["has_poll_options"] and "poll_options" not in meta:
+        meta["poll_options"] = _blocks["poll_options_text"]
     items = [it for it in items if it["type"] not in ScriptParser.META_TYPES]
     items = normalize_background_order(items)
     try:
@@ -1207,8 +1218,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 with open(os.path.join(_meta_dir(theme_dir), "poll_copy.txt"), "w", encoding="utf-8") as ptf:
                     ptf.write(poll_copy_text)
                 update_status(f"📊 アンケート設定案: あり（選択肢{len(poll_opts)}件）  保存先: _meta/poll_copy.txt")
+        # 固定コメントを _meta/fixed_comment.txt にも保存
+        raw_fixed_comment = meta.get("fixed_comment", "").strip()
+        if raw_fixed_comment:
+            with open(os.path.join(_meta_dir(theme_dir), "fixed_comment.txt"), "w", encoding="utf-8") as fcf:
+                fcf.write(raw_fixed_comment)
+
         # 台本に固定コメントがなければめたん調テンプレートで生成
-        pinned_comment = meta.get("fixed_comment", "")
+        pinned_comment = raw_fixed_comment
         if not pinned_comment:
             _cmt_mode = "topic_request" if topic_request_allowed else "normal"
             pinned_comment = build_fixed_comment(meta.get("video_title", topic), mode=_cmt_mode)
@@ -1220,10 +1237,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if "video_title" in meta:
             update_status(f"📝 動画タイトル: {meta['video_title']}")
         if is_netakaigi:
-            has_fixed_comment = bool(meta.get("fixed_comment", "").strip())
-            update_status(f"💬 固定コメント: {'あり' if has_fixed_comment else 'なし'}")
+            has_fc = bool(raw_fixed_comment)
+            update_status(f"💬 固定コメント: {'あり' if has_fc else 'なし'}")
             if "poll_options" not in meta:
                 update_status("📊 アンケート設定案: なし")
+            if not _blocks["has_candidates"] and not meta.get("meeting_candidates"):
+                update_status("⚠ ネタ会議モード: 候補一覧ブロックが見つかりません", "warning")
     if is_cancelled():
         return cancel_result()
 

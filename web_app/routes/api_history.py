@@ -49,6 +49,18 @@ def api_open_folder(history_name: str):
     return {"opened": path}
 
 
+@router.get("/{history_name}/fixed-comment-copy")
+def api_fixed_comment_copy(history_name: str):
+    """固定コメント本文を返す。fixed_comment.txt が存在しない場合は exists=false。"""
+    theme_dir = safe_output_path(history_name)
+    fc_path = os.path.join(theme_dir, "_meta", "fixed_comment.txt")
+    if os.path.isfile(fc_path):
+        with open(fc_path, "r", encoding="utf-8") as f:
+            text = f.read()
+        return {"exists": True, "text": text}
+    return {"exists": False, "text": ""}
+
+
 @router.get("/{history_name}/poll-copy")
 def api_poll_copy(history_name: str):
     """アンケート用コピーテキストを返す。poll_copy.txt が存在しない場合は exists=false。"""

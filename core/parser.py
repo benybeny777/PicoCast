@@ -413,6 +413,124 @@ class ScriptParser:
             lines.append(f"※{poll_data['memo']}")
         return "\n".join(lines)
 
+    # ブロック境界パターン（extract_non_body_blocks 用）
+    _BODY_START_RE = re.compile(r'^(?:背景|Background|シーン|Scene)\d*[:：]', re.IGNORECASE)
+    _FC_START_RE = re.compile(r'^固定コメント[:：](.*)', re.IGNORECASE)
+    _POLL_START_RE = re.compile(r'^(?:アンケート設定案|アンケート手動設定用|PollOptions)[:：]', re.IGNORECASE)
+    _POLL_MARKER_RE = re.compile(r'^---\s*(?:アンケート設定案|アンケート手動設定用)\s*---')
+    _CANDIDATE_START_RE = re.compile(r'^候補番号[:：]', re.IGNORECASE)
+
+    @staticmethod
+    def extract_non_body_blocks(raw_text: str) -> dict:
+        """台本テキストから本編（body_text）と非本編ブロックを分離して返す。
+
+        戻り値キー:
+          body_text            ScriptParser に渡す本編テキスト（ヘッダ + 本編セリフのみ）
+          candidates_text      候補一覧ブロックの生テキスト
+          fixed_comment_text   固定コメントブロックの本文（ヘッダ行を除いた値）
+          poll_options_text    アンケートブロックの生テキスト
+          has_candidates       bool
+          has_fixed_comment    bool
+          has_poll_options     bool
+        """
+        BODY_START = ScriptParser._BODY_START_RE
+        FC_START = ScriptParser._FC_START_RE
+        POLL_START = ScriptParser._POLL_START_RE
+        POLL_MARKER = ScriptParser._POLL_MARKER_RE
+        CAND_START = ScriptParser._CANDIDATE_START_RE
+
+        lines = raw_text.splitlines()
+
+        header_lines: list[str] = []
+        candidate_lines: list[str] = []
+        body_lines: list[str] = []
+        fc_lines: list[str] = []
+        poll_lines: list[str] = []
+
+        # state: "pre_body" | "candidates" | "body" | "fixed_comment" | "poll"
+        state = "pre_body"
+
+        for line in lines:
+            s = line.strip()
+
+            # ──── 状態遷移チェック ────
+            # 本編開始（背景: 行）
+            if state in ("pre_body", "candidates") and BODY_START.match(s):
+                state = "body"
+                body_lines.append(line)
+                continue
+
+            # 本編終了：固定コメント
+            if state == "body" and FC_START.match(s):
+                state = "fixed_comment"
+                m = FC_START.match(s)
+                inline = m.group(1).strip() if m else ""
+                if inline:
+                    fc_lines.append(inline)
+                continue
+
+            # 本編/固定コメント終了：アンケート
+            if state in ("body", "fixed_comment") and (POLL_START.match(s) or POLL_MARKER.match(s)):
+                state = "poll"
+                # マーカー行自体は保持（parse_poll_options が使う）
+                poll_lines.append(line)
+                continue
+
+            # ──── 各状態でラインを振り分け ────
+            if state == "pre_body":
+                if CAND_START.match(s):
+                    state = "candidates"
+                    candidate_lines.append(line)
+                else:
+                    header_lines.append(line)
+
+            elif state == "candidates":
+                candidate_lines.append(line)
+
+            elif state == "body":
+                body_lines.append(line)
+
+            elif state == "fixed_comment":
+                fc_lines.append(line)
+
+            elif state == "poll":
+                poll_lines.append(line)
+
+        # ──── body_text を構築 ────
+        if state == "pre_body":
+            # 背景: が一度も出なかった = 通常台本または未生成 → 全文をそのまま返す
+            return {
+                "body_text": raw_text,
+                "candidates_text": "",
+                "fixed_comment_text": "",
+                "poll_options_text": "",
+                "has_candidates": False,
+                "has_fixed_comment": False,
+                "has_poll_options": False,
+            }
+
+        candidates_text = "\n".join(candidate_lines).strip()
+        fixed_comment_text = "\n".join(fc_lines).strip()
+        poll_options_text = "\n".join(poll_lines).strip()
+
+        # header + 候補ブロック（meeting_candidates メタ化）+ 本編
+        body_parts: list[str] = ["\n".join(header_lines)]
+        if candidates_text:
+            # ScriptParser の meeting_candidates 継続パースに乗せる
+            body_parts.append("候補ネタ:\n" + candidates_text)
+        body_parts.append("\n".join(body_lines))
+        body_text = "\n".join(p for p in body_parts if p.strip()).strip()
+
+        return {
+            "body_text": body_text,
+            "candidates_text": candidates_text,
+            "fixed_comment_text": fixed_comment_text,
+            "poll_options_text": poll_options_text,
+            "has_candidates": bool(candidates_text),
+            "has_fixed_comment": bool(fixed_comment_text),
+            "has_poll_options": bool(poll_options_text),
+        }
+
     @staticmethod
     def parse_string(text: str):
         return ScriptParser._parse_lines(line.strip() for line in text.splitlines())

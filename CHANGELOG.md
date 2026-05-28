@@ -10,6 +10,23 @@
 
 ---
 
+## 2026-05-29 汎用ブロック抽出機構・分割バグ修正・固定コメントコピー追加
+
+**対象ファイル:** `core/gui_support.py` / `core/parser.py` / `core/generation_checks.py` / `workers/main.py` / `web_app` 各ファイル / プロンプト
+
+**変更内容:**
+
+- **gui_support.py**: `split_input_scripts()` の分割正規表現を `(?m)^-{3,}$`（純粋ハイフン行のみ）に修正。`---アンケート設定案---` / `---アンケート手動設定用---` などの名前付きマーカー行を誤分割しないようにした
+- **parser.py**: `ScriptParser.extract_non_body_blocks(raw_text)` を追加。台本テキストを4ブロック（header/candidates/body/fixed_comment/poll_options）に分離し、body_text だけを ScriptParser に渡す設計に変更
+- **generation_checks.py**: ネタ会議専用チェックを追加（セリフ数20〜120行の段階的評価、背景≥1件の必須チェック）。通常Shorts/Longチェックはスキップ
+- **workers/main.py**: `extract_non_body_blocks()` を早期バリデーションと本パースの両方で使用。`_meta/fixed_comment.txt` を保存。候補一覧未検出時の warning を追加
+- **history_service.py**: `has_fixed_comment` を detail に追加
+- **api_history.py**: `GET /api/history/{name}/fixed-comment-copy` エンドポイント追加
+- **history_detail.html**: 「固定コメントをコピー」ボタン追加（`fixed_comment.txt` 存在時のみ表示）
+- **プロンプト**: `---アンケート設定案---` 形式を廃止し `アンケート手動設定用:` / `固定コメント:` の2ブロック形式に変更。`アンケートにない候補もコメントなら拾います。` の文も追加
+
+---
+
 ## 2026-05-29 ネタ会議モード正式対応・アンケートコピー機能追加
 
 **対象ファイル:** `core/parser.py` / `core/generation_checks.py` / `workers/main.py` / `web_app/security.py` / `web_app/services/history_service.py` / `web_app/routes/api_history.py` / `web_app/templates/history_detail.html`

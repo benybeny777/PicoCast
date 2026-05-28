@@ -161,6 +161,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
                 backgrounds.append(f"backgrounds/{fname}")
 
     has_poll_copy = os.path.isfile(os.path.join(meta_d, "poll_copy.txt"))
+    has_fixed_comment = os.path.isfile(os.path.join(meta_d, "fixed_comment.txt"))
 
     return {
         "name": history_name,
@@ -179,6 +180,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         "long_thumbnails": long_thumbnails,
         "backgrounds": backgrounds,
         "has_poll_copy": has_poll_copy,
+        "has_fixed_comment": has_fixed_comment,
     }
 
 

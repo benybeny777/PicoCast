@@ -49,6 +49,21 @@ def pre_generate_check(items: list[dict], is_shorts: bool) -> tuple[list[str], l
         if thumb_text and len(thumb_text) > 15:
             warnings.append(f"サムネイル文字が長い（{len(thumb_text)}文字）: 「{thumb_text[:20]}」")
 
+        # ネタ会議専用チェック
+        if is_netakaigi:
+            dc = len(dialogue_items)
+            if len(bg_items) < 1:
+                errors.append("ネタ会議: 背景が1件もありません")
+            if dc < 20:
+                errors.append(f"ネタ会議: セリフ数不足（{dc}行 / 最低20行以上）")
+            elif dc < 35:
+                warnings.append(f"ネタ会議: セリフ数がやや少なめです（{dc}行 / 理想55〜85行）")
+            elif dc > 120:
+                errors.append(f"ネタ会議: セリフ数過多（{dc}行 / 120行以下推奨）")
+            elif dc > 85:
+                warnings.append(f"ネタ会議: セリフ数がやや多めです（{dc}行 / 理想55〜85行）")
+            return errors, warnings
+
         min_bg = 4 if is_shorts else 3
         if len(bg_items) < min_bg:
             warnings.append(f"背景数が少ない（{len(bg_items)}箇所、推奨{min_bg}以上）")
