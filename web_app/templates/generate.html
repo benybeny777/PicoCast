@@ -3,73 +3,130 @@
 {% block content %}
 <h1>台本貼り付け / 動画生成</h1>
 
-<!-- プロンプト生成 -->
-<div class="card">
-  <h2>プロンプト生成</h2>
-  <p class="hint">ボタンを押してプロンプトを生成 → コピーして Gemini / ChatGPT に貼り付けてください。</p>
-  <div style="display:flex; flex-direction:column; gap:8px">
-    <div style="display:flex; align-items:center; gap:12px">
-      <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('script')">AI台本作成プロンプト</button>
-      <span class="hint" style="font-size:12px">既存タイトルを除外した台本生成指示</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:12px">
-      <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('title')">Shortsタイトル案プロンプト</button>
-      <span class="hint" style="font-size:12px">実績データ付き・Shorts中心のタイトル20案を依頼</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:12px">
-      <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('title-long')">Longタイトル案プロンプト</button>
-      <span class="hint" style="font-size:12px">Long動画専用タイトル20案を依頼</span>
-    </div>
-    <div style="display:flex; align-items:center; gap:12px">
-      <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('meeting')">ネタ会議台本案プロンプト</button>
-      <span class="hint" style="font-size:12px">制作会議コント形式の候補ネタ会議（横画面 Long）</span>
-    </div>
-  </div>
-  <div id="prompt-result" style="display:none" class="mt">
-    <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
-      <span id="prompt-meta" class="hint" style="flex:1"></span>
-      <button class="btn btn-xs btn-secondary" onclick="selectAllPrompt()">全選択</button>
-      <button class="btn btn-xs btn-primary" onclick="copyPrompt()">コピー</button>
-    </div>
-    <textarea id="prompt-text" rows="12" readonly style="width:100%; font-size:12px; font-family:monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:8px; box-sizing:border-box; resize:vertical"></textarea>
-  </div>
+<!-- タブ -->
+<div class="tab-bar">
+  <button id="tab-btn-normal"   class="tab-btn tab-active"   onclick="switchTab('normal')">通常</button>
+  <button id="tab-btn-meeting"  class="tab-btn"              onclick="switchTab('meeting')">ネタ会議</button>
 </div>
 
-<p class="hint mt">台本を貼り付けて「生成開始」を押してください。複数台本は <code>---</code> で区切ってください。</p>
+<!-- ═══════════════ 通常タブ ═══════════════ -->
+<div id="tab-normal">
 
-<div class="card">
-  <div class="form-group">
-    <label for="script-input">台本</label>
-    <textarea id="script-input" rows="20" placeholder="動画タイトル: タイトルを入力&#10;動画形式: Shorts&#10;&#10;ずんだもん: セリフ&#10;めたん: セリフ&#10;..."></textarea>
+  <div class="card">
+    <h2>プロンプト生成</h2>
+    <p class="hint">ボタンを押してプロンプトを生成 → コピーして Gemini / ChatGPT に貼り付けてください。</p>
+    <div style="display:flex; flex-direction:column; gap:8px">
+      <div style="display:flex; align-items:center; gap:12px">
+        <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('script','normal')">AI台本作成プロンプト</button>
+        <span class="hint" style="font-size:12px">既存タイトルを除外した台本生成指示</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px">
+        <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('title','normal')">Shortsタイトル案プロンプト</button>
+        <span class="hint" style="font-size:12px">実績データ付き・Shorts中心のタイトル20案を依頼</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:12px">
+        <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('title-long','normal')">Longタイトル案プロンプト</button>
+        <span class="hint" style="font-size:12px">Long動画専用タイトル20案を依頼</span>
+      </div>
+    </div>
+    <div id="prompt-result-normal" style="display:none" class="mt">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
+        <span id="prompt-meta-normal" class="hint" style="flex:1"></span>
+        <button class="btn btn-xs btn-secondary" onclick="selectAllPrompt('normal')">全選択</button>
+        <button class="btn btn-xs btn-primary"   onclick="copyPrompt('normal')">コピー</button>
+      </div>
+      <textarea id="prompt-text-normal" rows="12" readonly style="width:100%; font-size:12px; font-family:monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:8px; box-sizing:border-box; resize:vertical"></textarea>
+    </div>
   </div>
-  <div class="form-row">
+
+  <p class="hint mt">台本を貼り付けて「生成開始」を押してください。複数台本は <code>---</code> で区切ってください。</p>
+
+  <div class="card">
     <div class="form-group">
-      <label for="background-engine">画像エンジン</label>
-      <select id="background-engine">
-        <option value="nanobanana" {% if image_backend != 'sd_webui' %}selected{% endif %}>Gemini AI</option>
-        <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI</option>
-      </select>
+      <label for="script-input-normal">台本</label>
+      <textarea id="script-input-normal" rows="20" placeholder="動画タイトル: タイトルを入力&#10;動画形式: Shorts&#10;&#10;ずんだもん(ノーマル): セリフ&#10;四国めたん(ノーマル): セリフ&#10;..."></textarea>
     </div>
-    <div class="form-group check-group">
-      <label><input type="checkbox" id="reuse-backgrounds" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="background-engine-normal">画像エンジン</label>
+        <select id="background-engine-normal">
+          <option value="nanobanana" {% if image_backend != 'sd_webui' %}selected{% endif %}>Gemini AI</option>
+          <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI</option>
+        </select>
+      </div>
+      <div class="form-group check-group">
+        <label><input type="checkbox" id="reuse-backgrounds-normal" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
+      </div>
+      <div class="form-group check-group">
+        <label><input type="checkbox" id="long-thumbnail-ab-normal" {% if default_long_thumbnail_ab_test %}checked{% endif %}> LongサムネAB</label>
+      </div>
+      <div class="form-group check-group">
+        <label><input type="checkbox" id="long-budget-mode-normal" {% if default_long_budget_mode %}checked{% endif %}> Long節約</label>
+      </div>
+      <div class="form-group check-group">
+        <label><input type="checkbox" id="sd-size-mode-normal" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成</label>
+      </div>
     </div>
-    <div class="form-group check-group">
-      <label><input type="checkbox" id="long-thumbnail-ab" {% if default_long_thumbnail_ab_test %}checked{% endif %}> LongサムネAB</label>
-    </div>
-    <div class="form-group check-group">
-      <label><input type="checkbox" id="long-budget-mode" {% if default_long_budget_mode %}checked{% endif %}> Long節約</label>
-    </div>
-    <div class="form-group check-group">
-      <label><input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成</label>
+    <div class="action-row">
+      <button id="generate-btn-normal" class="btn btn-primary" onclick="startGenerate('normal')">生成開始</button>
+      <button id="cancel-btn-normal"   class="btn btn-danger"  style="display:none" onclick="cancelGenerate()">中止</button>
     </div>
   </div>
-  <div class="action-row">
-    <button id="generate-btn" class="btn btn-primary" onclick="startGenerate()">生成開始</button>
-    <button id="cancel-btn" class="btn btn-danger" style="display:none" onclick="cancelGenerate()">中止</button>
-  </div>
-</div>
 
-<!-- 生成ログ -->
+</div><!-- /tab-normal -->
+
+<!-- ═══════════════ ネタ会議タブ ═══════════════ -->
+<div id="tab-meeting" style="display:none">
+
+  <div class="card">
+    <h2>プロンプト生成</h2>
+    <p class="hint">ボタンを押してプロンプトを生成 → Gemini / ChatGPT に貼り付け、生成した台本をこのタブに貼ってください。</p>
+    <div style="display:flex; align-items:center; gap:12px">
+      <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('meeting','meeting')">ネタ会議台本案プロンプト</button>
+      <span class="hint" style="font-size:12px">候補一覧・本編・固定コメント・アンケートをまとめて生成</span>
+    </div>
+    <div id="prompt-result-meeting" style="display:none" class="mt">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px">
+        <span id="prompt-meta-meeting" class="hint" style="flex:1"></span>
+        <button class="btn btn-xs btn-secondary" onclick="selectAllPrompt('meeting')">全選択</button>
+        <button class="btn btn-xs btn-primary"   onclick="copyPrompt('meeting')">コピー</button>
+      </div>
+      <textarea id="prompt-text-meeting" rows="12" readonly style="width:100%; font-size:12px; font-family:monospace; background:var(--bg); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:8px; box-sizing:border-box; resize:vertical"></textarea>
+    </div>
+  </div>
+
+  <p class="hint mt">AIが生成したネタ会議台本を貼り付けて「生成開始」を押してください。</p>
+  <p class="hint" style="color:var(--warning)">候補一覧・固定コメント・アンケート手動設定用ブロックは自動的に本編から分離されます。</p>
+
+  <div class="card">
+    <div class="form-group">
+      <label for="script-input-meeting">ネタ会議台本</label>
+      <textarea id="script-input-meeting" rows="24" placeholder="動画形式: ネタ会議&#10;画面形式: 縦&#10;動画タイトル: 次に作る食べ物雑学ネタ会議&#10;...&#10;&#10;候補番号: 1&#10;候補タイトル: ○○&#10;...&#10;&#10;背景: 漫画風会議室。「ネタ会議」&#10;テロップ: ネタ会議スタート&#10;ずんだもん(あまあま): 今日こそ勝てるネタを持ってきたのだ！&#10;...&#10;&#10;固定コメント:&#10;次に見たい食べ物雑学ネタを番号で教えてね！&#10;...&#10;&#10;アンケート手動設定用:&#10;質問:&#10;次にShorts化してほしい食べ物雑学はどれ？&#10;..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="background-engine-meeting">画像エンジン</label>
+        <select id="background-engine-meeting">
+          <option value="nanobanana" {% if image_backend != 'sd_webui' %}selected{% endif %}>Gemini AI</option>
+          <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI</option>
+        </select>
+      </div>
+      <div class="form-group check-group">
+        <label><input type="checkbox" id="reuse-backgrounds-meeting" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
+      </div>
+      <div class="form-group check-group">
+        <label><input type="checkbox" id="sd-size-mode-meeting" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成</label>
+      </div>
+    </div>
+    <div class="action-row">
+      <button id="generate-btn-meeting" class="btn btn-primary" onclick="startGenerate('meeting')">生成開始</button>
+      <button id="cancel-btn-meeting"   class="btn btn-danger"  style="display:none" onclick="cancelGenerate()">中止</button>
+    </div>
+  </div>
+
+</div><!-- /tab-meeting -->
+
+<!-- 生成ログ（共通） -->
 <div id="generate-status" class="card mt" style="display:none">
   <h2>生成ログ</h2>
   <div id="job-ids-info" class="hint"></div>
@@ -101,10 +158,30 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.tab-bar { display:flex; gap:0; margin-bottom:0; border-bottom:2px solid var(--border); }
+.tab-btn {
+  padding:8px 24px; font-size:15px; font-weight:600; cursor:pointer;
+  background:none; border:none; border-bottom:3px solid transparent;
+  color:var(--text-muted, #888); margin-bottom:-2px; transition:color .15s, border-color .15s;
+}
+.tab-btn:hover { color:var(--text); }
+.tab-btn.tab-active { color:var(--accent); border-bottom-color:var(--accent); }
+</style>
 <script>
 let activeJobIds = [];
 let pollTimer = null;
+let activeTab = 'normal';
 
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-normal').style.display  = tab === 'normal'  ? '' : 'none';
+  document.getElementById('tab-meeting').style.display = tab === 'meeting' ? '' : 'none';
+  document.getElementById('tab-btn-normal').classList.toggle('tab-active',  tab === 'normal');
+  document.getElementById('tab-btn-meeting').classList.toggle('tab-active', tab === 'meeting');
+}
+
+// ─── Toast ───
 let _toastTimer = null;
 function showToast() {
   const toast = document.getElementById('copy-toast');
@@ -118,23 +195,24 @@ function showToast() {
   }, window.WEB_TOAST_VISIBLE_MS);
 }
 
-async function fetchPrompt(type) {
-  const resultDiv = document.getElementById('prompt-result');
-  const meta = document.getElementById('prompt-meta');
+// ─── プロンプト取得 ───
+async function fetchPrompt(type, tab) {
+  const resultDiv = document.getElementById(`prompt-result-${tab}`);
+  const meta      = document.getElementById(`prompt-meta-${tab}`);
   resultDiv.style.display = 'block';
   meta.textContent = '生成中...';
 
   try {
     let url = '/api/prompt/script';
-    if (type === 'title') url = '/api/prompt/title';
+    if (type === 'title')      url = '/api/prompt/title';
     else if (type === 'title-long') url = '/api/prompt/title?long_only=true';
-    else if (type === 'meeting') url = '/api/prompt/meeting';
+    else if (type === 'meeting')    url = '/api/prompt/meeting';
 
-    const res = await fetch(url);
+    const res  = await fetch(url);
     const data = await res.json();
     if (!res.ok) { meta.textContent = 'エラー: ' + JSON.stringify(data); return; }
 
-    document.getElementById('prompt-text').value = data.prompt;
+    document.getElementById(`prompt-text-${tab}`).value = data.prompt;
     const parts = [`既存タイトル: ${data.title_count}件`];
     if (data.analytics_count) parts.push(`実績データ: ${data.analytics_count}件`);
     meta.textContent = parts.join(' / ');
@@ -142,9 +220,8 @@ async function fetchPrompt(type) {
     try {
       await navigator.clipboard.writeText(data.prompt);
     } catch(e) {
-      const ta = document.getElementById('prompt-text');
-      ta.select();
-      document.execCommand('copy');
+      const ta = document.getElementById(`prompt-text-${tab}`);
+      ta.select(); document.execCommand('copy');
     }
     showToast();
   } catch(e) {
@@ -152,37 +229,32 @@ async function fetchPrompt(type) {
   }
 }
 
-function selectAllPrompt() {
-  const ta = document.getElementById('prompt-text');
-  ta.select();
-  ta.setSelectionRange(0, ta.value.length);
+function selectAllPrompt(tab) {
+  const ta = document.getElementById(`prompt-text-${tab}`);
+  ta.select(); ta.setSelectionRange(0, ta.value.length);
 }
-
-async function copyPrompt() {
-  const text = document.getElementById('prompt-text').value;
+async function copyPrompt(tab) {
+  const text = document.getElementById(`prompt-text-${tab}`).value;
   if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch(e) {
-    selectAllPrompt();
-    document.execCommand('copy');
-  }
+  try { await navigator.clipboard.writeText(text); }
+  catch(e) { selectAllPrompt(tab); document.execCommand('copy'); }
   showToast();
 }
 
-async function startGenerate() {
-  const script = document.getElementById('script-input').value.trim();
+// ─── 生成 ───
+async function startGenerate(tab) {
+  const script = document.getElementById(`script-input-${tab}`).value.trim();
   if (!script) { alert('台本を入力してください'); return; }
 
-  const imageStyle = {{ default_image_style | tojson }};
-  const backgroundEngine = document.getElementById('background-engine').value;
-  const reuseBg = document.getElementById('reuse-backgrounds').checked;
-  const longThumbnailAb = document.getElementById('long-thumbnail-ab').checked;
-  const longBudgetMode = document.getElementById('long-budget-mode').checked;
-  const sdSizeMode = document.getElementById('sd-size-mode').checked;
+  const imageStyle       = {{ default_image_style | tojson }};
+  const backgroundEngine = document.getElementById(`background-engine-${tab}`).value;
+  const reuseBg          = document.getElementById(`reuse-backgrounds-${tab}`).checked;
+  const longThumbnailAb  = tab === 'normal' ? document.getElementById('long-thumbnail-ab-normal').checked : false;
+  const longBudgetMode   = tab === 'normal' ? document.getElementById('long-budget-mode-normal').checked  : false;
+  const sdSizeMode       = document.getElementById(`sd-size-mode-${tab}`).checked;
 
-  document.getElementById('generate-btn').disabled = true;
-  document.getElementById('cancel-btn').style.display = 'inline-block';
+  document.getElementById(`generate-btn-${tab}`).disabled = true;
+  document.getElementById(`cancel-btn-${tab}`).style.display = 'inline-block';
   document.getElementById('generate-status').style.display = 'block';
   const logBox = document.getElementById('log-container');
   logBox.innerHTML = '';
@@ -194,38 +266,36 @@ async function startGenerate() {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
         script,
-        image_style: imageStyle,
-        background_engine: backgroundEngine,
-        reuse_backgrounds: reuseBg,
+        image_style:           imageStyle,
+        background_engine:     backgroundEngine,
+        reuse_backgrounds:     reuseBg,
         long_thumbnail_ab_test: longThumbnailAb,
-        long_budget_mode: longBudgetMode,
-        sd_size_mode: sdSizeMode,
+        long_budget_mode:      longBudgetMode,
+        sd_size_mode:          sdSizeMode,
       }),
     });
     const data = await res.json();
-    if (!res.ok) { appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error'); finishGenerate(); return; }
+    if (!res.ok) { appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error'); finishGenerate(tab); return; }
 
     activeJobIds = data.job_ids;
     document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')} (${data.count}本)`;
     appendLog(`生成ジョブを登録しました (${data.count}本)`, 'info');
-    pollJobs();
+    pollJobs(tab);
   } catch(e) {
     appendLog('通信エラー: ' + e, 'error');
-    finishGenerate();
+    finishGenerate(tab);
   }
 }
 
 async function cancelGenerate() {
   for (const jobId of activeJobIds) {
-    try {
-      await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'});
-    } catch {}
+    try { await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'}); } catch {}
   }
   appendLog('キャンセル要求を送信しました', 'warning');
-  finishGenerate();
+  finishGenerate(activeTab);
 }
 
-function pollJobs() {
+function pollJobs(tab) {
   if (pollTimer) clearInterval(pollTimer);
   let _polling = false;
   const logBox = document.getElementById('log-container');
@@ -237,16 +307,14 @@ function pollJobs() {
       const { allDone } = await updateJobLogs(activeJobIds, logBox, {
         resultLabel: r => `${r.topic || ''} — ${r.message || ''}`,
       });
-      if (allDone) { clearInterval(pollTimer); finishGenerate(); }
-    } finally {
-      _polling = false;
-    }
+      if (allDone) { clearInterval(pollTimer); finishGenerate(tab); }
+    } finally { _polling = false; }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
-function finishGenerate() {
-  document.getElementById('generate-btn').disabled = false;
-  document.getElementById('cancel-btn').style.display = 'none';
+function finishGenerate(tab) {
+  document.getElementById(`generate-btn-${tab}`).disabled = false;
+  document.getElementById(`cancel-btn-${tab}`).style.display = 'none';
 }
 
 function appendLog(msg, tag) {
@@ -258,5 +326,10 @@ function appendLog(msg, tag) {
   logBox.scrollTop = logBox.scrollHeight;
 }
 
+// ─── URLパラメータでタブ初期化（?tab=meeting 対応）───
+(function(){
+  const p = new URLSearchParams(location.search);
+  if (p.get('tab') === 'meeting') switchTab('meeting');
+})();
 </script>
 {% endblock %}
