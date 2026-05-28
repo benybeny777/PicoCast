@@ -4,8 +4,18 @@
 <h1>固定コメント</h1>
 <p class="hint">アップロード済み動画への固定コメント投稿。二重投稿防止チェック済み。</p>
 
-<div class="card">
-  <label><input type="checkbox" id="show-posted" onchange="togglePosted()"> 投稿済みも表示</label>
+<div class="card" style="display:flex; align-items:center; gap:20px; flex-wrap:wrap">
+  <label><input type="checkbox" id="show-posted" onchange="applyFilters()"> 投稿済みも表示</label>
+  <label style="display:flex; align-items:center; gap:6px">
+    ソート:
+    <select id="sort-select" onchange="applyFilters()" style="padding:2px 6px">
+      <option value="published_at_desc">公開日 新しい順</option>
+      <option value="published_at_asc">公開日 古い順</option>
+      <option value="title_asc">タイトル昇順</option>
+      <option value="title_desc">タイトル降順</option>
+      <option value="status_asc">投稿状態順</option>
+    </select>
+  </label>
 </div>
 
 <div id="post-status" class="log-box mt" style="display:none"></div>
@@ -27,7 +37,11 @@
     </thead>
     <tbody>
       {% for c in candidates %}
-      <tr class="comment-row {% if c.already_posted %}posted-row{% endif %}" data-posted="{{ c.already_posted | lower }}">
+      <tr class="comment-row {% if c.already_posted %}posted-row{% endif %}"
+          data-posted="{{ c.already_posted | lower }}"
+          data-published-at="{{ c.published_at or '' }}"
+          data-title="{{ c.title | lower }}"
+          data-status="{{ 'posted' if c.already_posted else 'unposted' }}">
         <td>{{ c.title[:30] }}</td>
         <td>{{ c.location or "—" }}</td>
         <td>{{ c.video_id }}</td>
@@ -80,14 +94,32 @@
 
 {% block scripts %}
 <script>
-function togglePosted() {
-  const show = document.getElementById('show-posted').checked;
-  document.querySelectorAll('.posted-row').forEach(r => {
-    r.style.display = show ? '' : 'none';
+function applyFilters() {
+  const showPosted = document.getElementById('show-posted').checked;
+  const sortKey = document.getElementById('sort-select').value;
+  const tbody = document.querySelector('.data-table tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr.comment-row'));
+
+  // 表示/非表示
+  rows.forEach(r => {
+    const isPosted = r.dataset.posted === 'true';
+    r.style.display = (!isPosted || showPosted) ? '' : 'none';
   });
+
+  // ソート
+  rows.sort((a, b) => {
+    if (sortKey === 'published_at_desc') return (b.dataset.publishedAt || '').localeCompare(a.dataset.publishedAt || '');
+    if (sortKey === 'published_at_asc')  return (a.dataset.publishedAt || '').localeCompare(b.dataset.publishedAt || '');
+    if (sortKey === 'title_asc')         return (a.dataset.title || '').localeCompare(b.dataset.title || '', 'ja');
+    if (sortKey === 'title_desc')        return (b.dataset.title || '').localeCompare(a.dataset.title || '', 'ja');
+    if (sortKey === 'status_asc')        return (a.dataset.status || '').localeCompare(b.dataset.status || '');
+    return 0;
+  });
+  rows.forEach(r => tbody.appendChild(r));
 }
-// 初期表示: 投稿済みは非表示
-document.querySelectorAll('.posted-row').forEach(r => r.style.display = 'none');
+
+// 初期表示
+applyFilters();
 
 async function confirmPost(historyName, title) {
   if (!confirm(`以下の動画に固定コメントを投稿しますか？\n\n${title}\n\n投稿後は取り消せません。`)) return;

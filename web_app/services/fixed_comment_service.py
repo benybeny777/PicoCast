@@ -67,6 +67,7 @@ def list_fixed_comment_candidates(only_unposted: bool = True) -> list[dict[str, 
             "auto_posted": bool(upload_record.get("fixed_comment_auto_posted")),
             "auto_submitted_at": upload_record.get("fixed_comment_auto_submitted_at", ""),
         })
+    results.sort(key=lambda r: r.get("published_at") or "", reverse=True)
     return _filter_existing_public_videos(results)
 
 
