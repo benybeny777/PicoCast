@@ -9,7 +9,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.native_character_assets import CharacterVariantSet
-from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _run_ffmpeg, _save_render_info, _write_subtitles
+from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _filter_escape_path, _native_loudnorm_filter, _run_ffmpeg, _save_render_info, _write_subtitles
 
 
 class TestDurationStatus(unittest.TestCase):
@@ -76,6 +76,10 @@ class TestFfmpegRunner(unittest.TestCase):
         self.assertIn("-nostdin", calls["args"])
         self.assertEqual(calls["kwargs"]["stdin"], subprocess.DEVNULL)
         self.assertGreater(calls["kwargs"]["timeout"], 0)
+
+    def test_filter_escape_path_escapes_brackets(self):
+        escaped = _filter_escape_path("output/[Shorts]りんご/subtitle_0001.ass")
+        self.assertIn(r"\[Shorts\]", escaped)
 
 
 class TestSaveRenderInfo(unittest.TestCase):

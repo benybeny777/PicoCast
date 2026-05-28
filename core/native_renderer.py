@@ -311,7 +311,12 @@ def _concat_escape(path: str) -> str:
 def _filter_escape_path(path: str) -> str:
     text = os.path.abspath(path).replace("\\", "/")
     text = re.sub(r"^([A-Za-z]):", r"\1\\:", text)
-    return text.replace("'", r"\'")
+    return (
+        text.replace("\\", r"\\")
+        .replace("'", r"\'")
+        .replace("[", r"\[")
+        .replace("]", r"\]")
+    )
 
 
 def _ass_escape(text: str) -> str:
