@@ -257,9 +257,26 @@ class ScriptParser:
                 m = dialogue_re.match(line)
                 if m:
                     char_name = m.group(1).strip()
-                    emotion = m.group(2) if m.group(2) else "ノーマル"
+                    emotion = m.group(2) if m.group(2) else None
                     expression = m.group(3).strip() if m.group(3) else None
                     text = m.group(4).strip()
+
+                    # 右括弧のみの誤字補正 (例: 四国めたん)[驚き]: )
+                    if char_name.endswith(")") or char_name.endswith("）"):
+                        char_name = char_name[:-1].strip()
+                        if not emotion:
+                            emotion = "ツンツン" if "めたん" in char_name else "ノーマル"
+                            import logging
+                            logging.getLogger(__name__).warning(f"台本形式を補正: {m.group(1).strip()}[{expression or ''}] → {char_name}({emotion})[{expression or ''}]")
+                    
+                    if not emotion:
+                        emotion = "ノーマル"
+
+                    # セリフ本文に混入した感情タグの分離 (例: 四国めたん(ツンツン): [驚き]セリフ )
+                    m_exp = re.match(r'^\[([^\]]+)\]\s*(.*)$', text)
+                    if m_exp and not expression:
+                        expression = m_exp.group(1).strip()
+                        text = m_exp.group(2).strip()
 
                     # キャラ名を正規化
                     found_char_name = "ずんだもん"  # デフォルト
