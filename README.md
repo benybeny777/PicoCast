@@ -149,7 +149,7 @@ HF_TOKEN=your_huggingface_token
 
 ### Step 3. プロンプト設定の確認
 
-初期状態では、「食べ物雑学」用の設定が適用されます。別ジャンルで運用する場合は、`core/prompt_parts/local/` ディレクトリを作成し、そこに個人用プロンプト部品を配置してください。
+初期状態では、「食べ物雑学」用の設定が適用されます。別ジャンルで運用する場合は、`config/prompt_parts/local/` ディレクトリを作成し、そこに個人用プロンプト部品を配置してください。
 
 ### Step 4. Stable Diffusion WebUI で画像生成する場合
 

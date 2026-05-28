@@ -102,13 +102,16 @@ yukkurijidou/
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
 │   ├── youtube_uploader.py # YouTube APIアップロード
 │   └── ng_words.py         # NGワード置換
-├── samples/
-│   ├── prompt_parts/food/   # 食べ物用プロンプト設定の復元サンプル
-│   └── scripts/             # 共有用サンプル台本
+├── config/
+│   ├── config.py            # 定数・設定
+│   ├── requirements.txt
+│   ├── script_generation_prompt.txt
+│   ├── prompt_parts/        # タイトル・台本プロンプトパーツ
+│   └── samples/             # 復元サンプル（prompt_parts/food/ / scripts/）
 └── output/                 # 生成物出力先
 ```
 
-`core/script_prompts.py` は `core/prompt_parts/local/` に同名ファイルがある場合、Git管理側の `core/prompt_parts/` より `local/` を優先して読み込む。これにより初期状態は食べ物用設定で動き、別ジャンル担当者は自分の `local/` だけを編集できる。
+`core/script_prompts.py` は `config/prompt_parts/local/` に同名ファイルがある場合、Git管理側の `config/prompt_parts/` より `local/` を優先して読み込む。これにより初期状態は食べ物用設定で動き、別ジャンル担当者は自分の `local/` だけを編集できる。
 
 ---
 
@@ -931,13 +934,13 @@ output/{テーマ名}/
 
 初回セットアップでは、必ずプロンプト設定を確認します。
 
-初回クローン直後は、Git管理されている食べ物用プロンプト設定でそのまま動きます。別ジャンルで使う場合は、Git管理ファイルを直接編集せず、必ず `core/prompt_parts/local/` に同名の差し替えファイルを置きます。`local/` はGit管理外なので、他人の設定を上書きしません。
+初回クローン直後は、Git管理されている食べ物用プロンプト設定でそのまま動きます。別ジャンルで使う場合は、Git管理ファイルを直接編集せず、必ず `config/prompt_parts/local/` に同名の差し替えファイルを置きます。`local/` はGit管理外なので、他人の設定を上書きしません。
 
 食べ物用設定を復元する場合:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path core\prompt_parts\local
-Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
+New-Item -ItemType Directory -Force -Path config\prompt_parts\local
+Copy-Item -Path config\samples\prompt_parts\food\* -Destination config\prompt_parts\local\ -Force
 ```
 
 ### 生成
@@ -993,7 +996,7 @@ vidIQ/Analytics分析の反映として、食べ物雑学Shortsでは1行目を�
 - 固定部分: チャンネル方針、タイトル・サムネルール、既知ネタ除外、採点、Shorts / Long判定、出力形式、最終チェック
 - 差し込み部分: 既存タイトル一覧、既存食材リスト、YouTube Analytics実績データ、実績サマリー、今回の生成条件
 
-コード上では `core/script_prompts.py` の `build_title_prompt()` が固定ルールに差し込みデータを合成します。ネタ固有の差し替え部分は `core/prompt_parts/` に分離しています。
+コード上では `core/script_prompts.py` の `build_title_prompt()` が固定ルールに差し込みデータを合成します。ネタ固有の差し替え部分は `config/prompt_parts/` に分離しています。
 
 - `title_dynamic_context_food.md`: 実績データ差し込み欄
 - `title_duplicate_context_food.md`: 既存タイトル・既存食材・表記ゆれの重複チェック
@@ -1002,31 +1005,31 @@ vidIQ/Analytics分析の反映として、食べ物雑学Shortsでは1行目を�
 
 別ジャンルへ差し替える場合は、上記ファイルを別名で追加し、`build_title_prompt()` が読むファイル名を切り替えます。実績データ未取得時のTSV見出しは `TITLE_ANALYTICS_TSV_HEADER` で管理します。
 
-個人用のネタ設定は `core/prompt_parts/local/` に置きます。このフォルダはGit管理外です。読み込み時は `local/` 側の同名ファイルを優先し、なければGit管理されている `core/prompt_parts/` 側のサンプルを使います。
+個人用のネタ設定は `config/prompt_parts/local/` に置きます。このフォルダはGit管理外です。読み込み時は `local/` 側の同名ファイルを優先し、なければGit管理されている `config/prompt_parts/` 側のサンプルを使います。
 
-初回クローン直後は `core/prompt_parts/` 側の食べ物用設定でそのまま動きます。別ジャンル担当者はGit管理ファイルを直接編集せず、自分の環境の `core/prompt_parts/local/` に差し替えファイルを置きます。
+初回クローン直後は `config/prompt_parts/` 側の食べ物用設定でそのまま動きます。別ジャンル担当者はGit管理ファイルを直接編集せず、自分の環境の `config/prompt_parts/local/` に差し替えファイルを置きます。
 
 AI編集者向けルール:
 
-- ネタ固有のプロンプト、既存食材リスト、別ジャンル用設定を編集する場合は、Git管理されている `core/prompt_parts/*.md` / `*.txt` を直接編集しない。
-- 必ず `core/prompt_parts/local/` の同名ファイルを編集する。
-- `local/` に同名ファイルがない場合は、`core/prompt_parts/` からコピーして作成してから編集する。
-- 例: `core/prompt_parts/title_used_foods_food.txt` を変えたい場合は、`core/prompt_parts/local/title_used_foods_food.txt` を編集する。
-- 共有サンプルを更新したい場合だけ、明示的に指示されたうえで `samples/prompt_parts/` または `core/prompt_parts/` を編集する。
+- ネタ固有のプロンプト、既存食材リスト、別ジャンル用設定を編集する場合は、Git管理されている `config/prompt_parts/*.md` / `*.txt` を直接編集しない。
+- 必ず `config/prompt_parts/local/` の同名ファイルを編集する。
+- `local/` に同名ファイルがない場合は、`config/prompt_parts/` からコピーして作成してから編集する。
+- 例: `config/prompt_parts/title_used_foods_food.txt` を変えたい場合は、`config/prompt_parts/local/title_used_foods_food.txt` を編集する。
+- 共有サンプルを更新したい場合だけ、明示的に指示されたうえで `config/samples/prompt_parts/` または `config/prompt_parts/` を編集する。
 
 例:
 
-- `core/prompt_parts/local/title_used_foods_food.txt`
-- `core/prompt_parts/local/title_dynamic_context_food.md`
-- `core/prompt_parts/local/title_duplicate_context_food.md`
-- `core/prompt_parts/local/script_generation_prompt.txt`
+- `config/prompt_parts/local/title_used_foods_food.txt`
+- `config/prompt_parts/local/title_dynamic_context_food.md`
+- `config/prompt_parts/local/title_duplicate_context_food.md`
+- `config/prompt_parts/local/script_generation_prompt.txt`
 
-別ジャンル担当者は自分の環境の `local/` に差し替え用ファイルを置けば、Git pull / push で他人のネタ設定を上書きしません。共有用の見本台本は `samples/scripts/` に置きます。
+別ジャンル担当者は自分の環境の `local/` に差し替え用ファイルを置けば、Git pull / push で他人のネタ設定を上書きしません。共有用の見本台本は `config/samples/scripts/` に置きます。
 
-食べ物用の復元サンプルは `samples/prompt_parts/food/` に置きます。`core/prompt_parts/local/` を消してしまった場合は、以下をコピーすれば食べ物用設定を戻せます。
+食べ物用の復元サンプルは `config/samples/prompt_parts/food/` に置きます。`config/prompt_parts/local/` を消してしまった場合は、以下をコピーすれば食べ物用設定を戻せます。
 
 ```powershell
-Copy-Item -Path samples\prompt_parts\food\* -Destination core\prompt_parts\local\ -Force
+Copy-Item -Path config\samples\prompt_parts\food\* -Destination config\prompt_parts\local\ -Force
 ```
 
 タイトル・サムネの基本方針:

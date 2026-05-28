@@ -20,8 +20,8 @@
 - **エラーはすべてそのまま例外として上位に伝播させる。`except Exception: pass` / `except Exception: return default` のようなサイレントスキップ・無言フォールバック・無言デフォルト降格は禁止。** 失敗時は原因が分かるエラーとして即中止する。フォールバック処理はユーザーが明示的に許可した場合のみ実装し、その箇所に `# フォールバック許可: 理由` コメントを付ける。
 - ファイルポインタ、ネットワーク接続、画像/動画オブジェクト、subprocess、ブラウザ/GUIハンドルなどのリソースは明示的に解放する。`with`、`close()`、`terminate()`、一時ファイル削除などを使い、長時間処理では不要な大きい参照を手放してメモリも解放する。
 - このリポジトリは開発環境として扱うため、`config/prompt_parts/local/` を更新したら常に対応する `config/samples/prompt_parts/` へコピーして同期する。localだけに残さない。
-- 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。必ず `config.py` に `os.environ.get(...)` 付きで定数として定義する。ループインデックスや内部カウンタなど実装上の定数は対象外。
-- `config.py` の各定数には必ず末尾コメント（`# 説明`）を付ける。新規追加・変更時もコメントを省略しない。
+- 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。必ず `config/config.py` に `os.environ.get(...)` 付きで定数として定義する。ループインデックスや内部カウンタなど実装上の定数は対象外。
+- `config/config.py` の各定数には必ず末尾コメント（`# 説明`）を付ける。新規追加・変更時もコメントを省略しない。
 - native立ち絵に表情PNG（`expression` 指定）を使用している場合、口パク・まばたきの差分オーバーレイを同セグメントで無効化する。表情PNGはPSDから合成した専用口・目レイヤーを含むため、base.pngとの差分オーバーレイと重ねると二重口・二重目が生じる。
 詳細仕様は [SPEC.md](SPEC.md) を参照。ここには作業上の注意点だけを書く。
 
@@ -29,7 +29,7 @@
 
 - Web UI は `127.0.0.1` のみバインドする。外部公開・認証なし運用は禁止。
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の中身をレスポンスやログへ絶対に含めない。APIキー設定はbool（有無）のみ返す。
-- Web UI を唯一の操作入口とする。`main.py` は生成パイプラインとして使い、旧Tkinter GUI/CLI導線を復活させない。
+- Web UI を唯一の操作入口とする。`workers/main.py` は生成パイプラインとして使い、旧Tkinter GUI/CLI導線を復活させない。
 - 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
 - output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
 - 破壊的操作（アップロード・固定コメント・スケジュール変更）は `confirmed=true` 必須 + 画面確認ダイアログ必須。
@@ -55,8 +55,8 @@
 | ファイル | 役割 |
 |---|---|
 | `web_app/app.py` | FastAPI Web UI エントリポイント |
-| `main.py` | `run_pipeline()` — Web UI から呼ぶ1本分の動画生成パイプライン |
-| `config.py` | 定数・設定（音声速度・モデル名・パスなど） |
+| `workers/main.py` | `run_pipeline()` — Web UI から呼ぶ1本分の動画生成パイプライン |
+| `config/config.py` | 定数・設定（音声速度・モデル名・パスなど） |
 | `core/parser.py` | 台本パーサー `ScriptParser` |
 | `core/ai_generator.py` | Gemini台本生成・画像プロンプト強化 |
 | `core/voicevox.py` | VOICEVOX音声生成 |
@@ -96,7 +96,7 @@ output/{テーマ名}/
 
 ### ScriptParser
 
-- メタタイプの判定には必ず `ScriptParser.META_TYPES` を使う（Web UI / `main.py` で共有）
+- メタタイプの判定には必ず `ScriptParser.META_TYPES` を使う（Web UI / `workers/main.py` で共有）
 - `parse_string(text)` はメモリ内処理（tempfileを使わない）
 
 ### アップロードスロット
