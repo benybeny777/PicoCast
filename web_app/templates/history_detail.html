@@ -82,11 +82,11 @@
   </div>
 </div>
 
-<!-- 生成ログ -->
+<!-- 処理ログ -->
 <div id="generate-status" class="card mt" style="display:none">
   <h2>処理ログ</h2>
-  <div id="job-ids-info" class="hint"></div>
-  <div id="log-container" class="log-box"></div>
+  <div id="job-status-msg" class="hint" style="margin-bottom:4px"></div>
+  <div id="job-card-log-container"></div>
 </div>
 
 <!-- スコア情報 -->
@@ -180,12 +180,81 @@ let pollTimer = null;
 const historyName = {{ detail.name | tojson }};
 
 function appendLog(msg, tag) {
-  const logBox = document.getElementById('log-container');
-  const div = document.createElement('div');
-  div.className = `log-line log-${tag || 'info'}`;
-  div.textContent = msg;
-  logBox.appendChild(div);
-  logBox.scrollTop = logBox.scrollHeight;
+  const el = document.getElementById('job-status-msg');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = tag === 'error' ? 'var(--err)' : tag === 'warning' ? 'var(--warning)' : tag === 'success' ? 'var(--ok)' : '';
+}
+
+function _buildJobCardHtml(job) {
+  const statusCls = job.status === 'success' ? 'badge-ok' :
+                    job.status === 'failed'  ? 'badge-ng' :
+                    job.status === 'running' ? 'badge-running' : 'badge-warn';
+  const t = (job.started_at || '').slice(0, 19);
+  return `<div class="card mt job-card status-${escapeHtml(job.status)}"
+               data-status="${escapeHtml(job.status)}"
+               data-type="${escapeHtml(job.type || '')}"
+               data-job-id="${escapeHtml(job.job_id)}">
+    <div class="job-header">
+      <span class="job-type-badge">${escapeHtml(job.type || '')}</span>
+      <span class="badge ${statusCls}">${escapeHtml(job.status)}</span>
+      <span class="job-time">${escapeHtml(t)}</span>
+    </div>
+    <div class="job-progress">${escapeHtml(job.progress_text || '')}</div>
+  </div>`;
+}
+
+function _updateJobCard(container, job) {
+  let card = container.querySelector(`.job-card[data-job-id="${CSS.escape(job.job_id)}"]`);
+  if (!card) {
+    container.insertAdjacentHTML('beforeend', _buildJobCardHtml(job));
+    card = container.querySelector(`.job-card[data-job-id="${CSS.escape(job.job_id)}"]`);
+  }
+
+  card.className = card.className.replace(/\bstatus-\S+/, `status-${job.status}`);
+  card.dataset.status = job.status;
+
+  const badge = card.querySelector('.badge');
+  if (badge) {
+    badge.textContent = job.status;
+    badge.className = 'badge ' + (
+      job.status === 'success' ? 'badge-ok' :
+      job.status === 'failed'  ? 'badge-ng' :
+      job.status === 'running' ? 'badge-running' : 'badge-warn'
+    );
+  }
+
+  const prog = card.querySelector('.job-progress');
+  if (prog) prog.textContent = job.progress_text || '';
+
+  let errEl = card.querySelector('.error-text');
+  if (job.error) {
+    if (!errEl) { errEl = document.createElement('div'); errEl.className = 'error-text'; prog && prog.after(errEl); }
+    errEl.textContent = 'エラー: ' + job.error;
+  } else if (errEl) errEl.remove();
+
+  const logs = job.logs || [];
+  if (logs.length > 0) {
+    let details = card.querySelector('details');
+    if (!details) {
+      details = document.createElement('details');
+      details.open = true;
+      card.appendChild(details);
+    }
+    let summary = details.querySelector('summary');
+    if (!summary) { summary = document.createElement('summary'); details.prepend(summary); }
+    summary.textContent = `ログ詳細 (${logs.length}件)`;
+
+    let logBox = details.querySelector('.log-box');
+    if (!logBox) { logBox = document.createElement('div'); logBox.className = 'log-box'; details.appendChild(logBox); }
+
+    const atBottom = details.open && (logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80);
+    logBox.innerHTML = logs.map(e => {
+      const t = (e.time || '').slice(11, 19);
+      return `<div class="log-line log-${escapeHtml(e.tag)}">${escapeHtml(t)} [${escapeHtml(e.tag)}] ${escapeHtml(e.message)}</div>`;
+    }).join('');
+    if (atBottom) logBox.scrollTop = logBox.scrollHeight;
+  }
 }
 
 function disableButtons() {
@@ -204,9 +273,7 @@ function finishGenerate() {
 
 async function cancelGenerate() {
   for (const jobId of activeJobIds) {
-    try {
-      await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'});
-    } catch {}
+    try { await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'}); } catch {}
   }
   appendLog('キャンセル要求を送信しました', 'warning');
   finishGenerate();
@@ -214,8 +281,10 @@ async function cancelGenerate() {
 
 function reloadWithLogs() {
   appendLog('処理が完了しました。ページ情報を更新します...', 'success');
-  const logBox = document.getElementById('log-container');
-  sessionStorage.setItem('restored_logs_' + historyName, logBox.innerHTML);
+  const container = document.getElementById('job-card-log-container');
+  const msg = document.getElementById('job-status-msg');
+  sessionStorage.setItem('restored_cards_' + historyName, container ? container.innerHTML : '');
+  sessionStorage.setItem('restored_msg_' + historyName, msg ? msg.textContent : '');
   setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
 }
 
@@ -223,13 +292,23 @@ function pollJobs(onSuccess) {
   const handleSuccess = onSuccess || reloadWithLogs;
   if (pollTimer) clearInterval(pollTimer);
   let _polling = false;
-  const logBox = document.getElementById('log-container');
+  const container = document.getElementById('job-card-log-container');
   pollTimer = setInterval(async () => {
     if (!activeJobIds.length) { clearInterval(pollTimer); return; }
     if (_polling) return;
     _polling = true;
     try {
-      const { allDone, hasFailed } = await updateJobLogs(activeJobIds, logBox);
+      let allDone = true;
+      let hasFailed = false;
+      for (const jobId of activeJobIds) {
+        try {
+          const res = await fetch(`/api/jobs/${jobId}`);
+          const job = await res.json();
+          _updateJobCard(container, job);
+          if (!['success', 'failed', 'cancelled'].includes(job.status)) allDone = false;
+          if (['failed', 'cancelled'].includes(job.status)) hasFailed = true;
+        } catch(e) { allDone = false; }
+      }
       if (allDone) {
         clearInterval(pollTimer);
         if (hasFailed) {
@@ -239,9 +318,7 @@ function pollJobs(onSuccess) {
           handleSuccess();
         }
       }
-    } finally {
-      _polling = false;
-    }
+    } finally { _polling = false; }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
@@ -266,7 +343,6 @@ async function renderVideo() {
     }
 
     activeJobIds = [data.job_id];
-    document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')}`;
     appendLog('レンダージョブを登録しました', 'info');
     pollJobs();
   } catch(e) {
@@ -316,7 +392,6 @@ async function _startPipelineJob(onSuccess) {
       return;
     }
     activeJobIds = data.job_ids || [];
-    document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')} (${data.count}本)`;
     appendLog(`再生成ジョブを登録しました (${data.count}本)`, 'info');
     pollJobs(onSuccess);
   } catch(e) {
@@ -343,7 +418,6 @@ async function regenerateFull() {
         return;
       }
       activeJobIds = [...activeJobIds, rdata.job_id];
-      document.getElementById('job-ids-info').textContent = `レンダージョブ: ${rdata.job_id}`;
       appendLog('MP4レンダージョブを登録しました', 'info');
       pollJobs(/* → reloadWithLogs */);
     } catch(e) {
@@ -360,21 +434,22 @@ async function regenerateWithoutRender() {
 
 function prepareLogView() {
   document.getElementById('generate-status').style.display = 'block';
-  document.getElementById('log-container').innerHTML = '';
-  document.getElementById('job-ids-info').textContent = '';
+  document.getElementById('job-card-log-container').innerHTML = '';
+  document.getElementById('job-status-msg').textContent = '';
 }
 
 // リロード後にログを復元
 (function restoreLogs() {
-  const key = 'restored_logs_' + historyName;
-  const saved = sessionStorage.getItem(key);
-  if (!saved) return;
-  sessionStorage.removeItem(key);
-  const statusEl = document.getElementById('generate-status');
-  const logBox = document.getElementById('log-container');
-  statusEl.style.display = 'block';
-  logBox.innerHTML = saved;
-  logBox.scrollTop = logBox.scrollHeight;
+  const cardsKey = 'restored_cards_' + historyName;
+  const msgKey   = 'restored_msg_' + historyName;
+  const cards = sessionStorage.getItem(cardsKey);
+  const msg   = sessionStorage.getItem(msgKey);
+  if (!cards && !msg) return;
+  sessionStorage.removeItem(cardsKey);
+  sessionStorage.removeItem(msgKey);
+  document.getElementById('generate-status').style.display = 'block';
+  if (cards) document.getElementById('job-card-log-container').innerHTML = cards;
+  if (msg)   document.getElementById('job-status-msg').textContent = msg;
 })();
 
 async function copyFixedComment() {

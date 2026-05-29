@@ -3,83 +3,102 @@
 {% block content %}
 <h1>ジョブログ</h1>
 
-<div class="card">
-  <div class="filter-row">
-    <select id="status-filter" onchange="filterJobs()">
-      <option value="">すべてのステータス</option>
-      <option value="running">running</option>
-      <option value="success">success</option>
-      <option value="failed">failed</option>
-      <option value="cancelled">cancelled</option>
-      <option value="queued">queued</option>
-    </select>
-    <select id="type-filter" onchange="filterJobs()">
-      <option value="">すべてのタイプ</option>
-      <option value="generate">generate</option>
-      <option value="render">render</option>
-      <option value="check">check</option>
-      <option value="upload">upload</option>
-      <option value="analytics_refresh">analytics</option>
-      <option value="schedule_sync">schedule_sync</option>
-      <option value="fixed_comment">fixed_comment</option>
-      <option value="image_regenerate">image_regenerate</option>
-    </select>
-    <button class="btn btn-secondary" onclick="location.reload()">更新</button>
-  </div>
+<!-- タブ -->
+<div class="tab-bar">
+  <button id="tab-btn-jobs"  class="tab-btn tab-active" onclick="switchLogsTab('jobs')">ジョブログ</button>
+  <button id="tab-btn-debug" class="tab-btn"            onclick="switchLogsTab('debug')">デバッグ</button>
 </div>
 
-{% if jobs %}
-<div id="job-container">
-{% for job in jobs %}
-<div class="card mt job-card status-{{ job.status }}" data-status="{{ job.status }}" data-type="{{ job.type }}" data-job-id="{{ job.job_id }}">
-  <div class="job-header">
-    <span class="job-type-badge">{{ job.type }}</span>
-    <span class="badge {% if job.status == 'success' %}badge-ok{% elif job.status == 'failed' %}badge-ng{% elif job.status == 'running' %}badge-running{% else %}badge-warn{% endif %}">
-      {{ job.status }}
-    </span>
-    <span class="job-id-small">{{ job.job_id[:8] }}…</span>
-    <span class="job-time">{{ (job.started_at or "")[:19] }}</span>
-    {% if job.status == 'running' %}
-    <button class="btn btn-xs btn-danger" type="button" title="この実行中ジョブへ中止要求を送ります" onclick="cancelJob('{{ job.job_id }}')">中止する</button>
+<!-- ジョブログタブ -->
+<div id="tab-jobs">
+  <div class="card">
+    <div class="filter-row">
+      <select id="status-filter" onchange="filterJobs()">
+        <option value="">すべてのステータス</option>
+        <option value="running">running</option>
+        <option value="success">success</option>
+        <option value="failed">failed</option>
+        <option value="cancelled">cancelled</option>
+        <option value="queued">queued</option>
+      </select>
+      <select id="type-filter" onchange="filterJobs()">
+        <option value="">すべてのタイプ</option>
+        <option value="generate">generate</option>
+        <option value="render">render</option>
+        <option value="check">check</option>
+        <option value="upload">upload</option>
+        <option value="analytics_refresh">analytics</option>
+        <option value="schedule_sync">schedule_sync</option>
+        <option value="fixed_comment">fixed_comment</option>
+        <option value="image_regenerate">image_regenerate</option>
+      </select>
+      <button class="btn btn-secondary" onclick="location.reload()">更新</button>
+    </div>
+  </div>
+
+  {% if jobs %}
+  <div id="job-container">
+  {% for job in jobs %}
+  <div class="card mt job-card status-{{ job.status }}" data-status="{{ job.status }}" data-type="{{ job.type }}" data-job-id="{{ job.job_id }}">
+    <div class="job-header">
+      <span class="job-type-badge">{{ job.type }}</span>
+      <span class="badge {% if job.status == 'success' %}badge-ok{% elif job.status == 'failed' %}badge-ng{% elif job.status == 'running' %}badge-running{% else %}badge-warn{% endif %}">
+        {{ job.status }}
+      </span>
+      <span class="job-id-small">{{ job.job_id[:8] }}…</span>
+      <span class="job-time">{{ (job.started_at or "")[:19] }}</span>
+      {% if job.status == 'running' %}
+      <button class="btn btn-xs btn-danger" type="button" title="この実行中ジョブへ中止要求を送ります" onclick="cancelJob('{{ job.job_id }}')">中止する</button>
+      {% endif %}
+    </div>
+    <div class="job-progress">{{ job.progress_text }}</div>
+    {% if job.error %}
+    <div class="error-text">エラー: {{ job.error }}</div>
+    {% endif %}
+    {% if job.logs %}
+    <details>
+      <summary>ログ詳細 ({{ job.logs | length }} 件)</summary>
+      <div class="log-box">
+        {% for entry in job.logs %}
+        <div class="log-line log-{{ entry.tag }}">{{ entry.time[11:19] }} [{{ entry.tag }}] {{ entry.message }}</div>
+        {% endfor %}
+      </div>
+    </details>
     {% endif %}
   </div>
-  <div class="job-progress">{{ job.progress_text }}</div>
-  {% if job.error %}
-  <div class="error-text">エラー: {{ job.error }}</div>
-  {% endif %}
-  {% if job.logs %}
-  <details>
-    <summary>ログ詳細 ({{ job.logs | length }} 件)</summary>
-    <div class="log-box">
-      {% for entry in job.logs %}
-      <div class="log-line log-{{ entry.tag }}">{{ entry.time[11:19] }} [{{ entry.tag }}] {{ entry.message }}</div>
-      {% endfor %}
-    </div>
-  </details>
-  {% endif %}
-</div>
-{% endfor %}
-</div>
-{% else %}
-<div class="card mt">
-  <p class="empty-msg">ジョブ履歴がありません。</p>
-</div>
-{% endif %}
-
-<!-- デバッグログ -->
-<div class="card mt">
-  <h2>デバッグログ</h2>
-  <p class="hint">アプリの詳細ログ（<code>app_debug.log</code>）。<span id="debug-log-path" style="color:var(--text-muted)"></span></p>
-  <div class="action-row" style="margin-bottom:8px">
-    <button class="btn btn-secondary" onclick="loadDebugLog()">読み込み / 更新</button>
+  {% endfor %}
   </div>
-  <div id="debug-log-content" class="log-box" style="height:400px; overflow-y:auto; font-size:12px; white-space:pre; display:none"></div>
-  <p id="debug-log-message" style="color:var(--text-muted)"></p>
-</div>
+  {% else %}
+  <div class="card mt">
+    <p class="empty-msg">ジョブ履歴がありません。</p>
+  </div>
+  {% endif %}
+</div><!-- /tab-jobs -->
+
+<!-- デバッグログタブ -->
+<div id="tab-debug" style="display:none">
+  <div class="card mt">
+    <h2>デバッグログ</h2>
+    <p class="hint">アプリの詳細ログ（<code>app_debug.log</code>）。<span id="debug-log-path" style="color:var(--text-muted)"></span></p>
+    <div class="action-row" style="margin-bottom:8px">
+      <button class="btn btn-secondary" onclick="loadDebugLog()">読み込み / 更新</button>
+    </div>
+    <div id="debug-log-content" class="log-box" style="height:400px; overflow-y:auto; font-size:12px; white-space:pre; display:none"></div>
+    <p id="debug-log-message" style="color:var(--text-muted)"></p>
+  </div>
+</div><!-- /tab-debug -->
 
 <!-- 自動更新: 実行中ジョブがある場合はAJAXで差分更新 -->
 <script>
 const _TERMINAL = new Set(['success', 'failed', 'cancelled']);
+
+function switchLogsTab(tab) {
+  document.getElementById('tab-jobs').style.display  = tab === 'jobs'  ? '' : 'none';
+  document.getElementById('tab-debug').style.display = tab === 'debug' ? '' : 'none';
+  document.getElementById('tab-btn-jobs').classList.toggle('tab-active',  tab === 'jobs');
+  document.getElementById('tab-btn-debug').classList.toggle('tab-active', tab === 'debug');
+  if (tab === 'debug') loadDebugLog();
+}
 
 function _buildLogHtml(logs) {
   return (logs || []).map(e => {
