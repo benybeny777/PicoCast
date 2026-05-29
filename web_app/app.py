@@ -189,6 +189,7 @@ def main():
         host=host,
         port=port,
         reload=args.reload,
+        reload_dirs=["web_app", "core", "config", "workers"] if args.reload else None,
         log_level="info",
     )
 

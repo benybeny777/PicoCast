@@ -42,6 +42,8 @@ def setup_debug_logging() -> str | None:
         ))
         handler.addFilter(_SecretRedactingFilter())
         root.addHandler(handler)
+        # watchfiles が自ファイルの書き込みを検知してループするのを防ぐ
+        logging.getLogger("watchfiles").setLevel(logging.WARNING)
         _CONFIGURED = True
 
     cleanup_old_debug_logs()
