@@ -60,7 +60,7 @@
       <summary>ログ詳細 ({{ job.logs | length }} 件)</summary>
       <div class="log-box">
         {% for entry in job.logs %}
-        <div class="log-line log-{{ entry.tag }}">{{ entry.time[11:16] }} [{{ entry.tag }}] {{ entry.message }}</div>
+        <div class="log-line log-{{ entry.tag }}">{{ entry.time[11:19] }} [{{ entry.tag }}] {{ entry.message }}</div>
         {% endfor %}
       </div>
     </details>
@@ -102,7 +102,7 @@ function switchLogsTab(tab) {
 
 function _buildLogHtml(logs) {
   return (logs || []).map(e => {
-    const t = (e.time || '').slice(11, 16);
+    const t = (e.time || '').slice(11, 19);
     return `<div class="log-line log-${escapeHtml(e.tag)}">${escapeHtml(t)} [${escapeHtml(e.tag)}] ${escapeHtml(e.message)}</div>`;
   }).join('');
 }

@@ -252,7 +252,7 @@ function _updateJobCard(container, job) {
 
     const atBottom = details.open && (logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80);
     logBox.innerHTML = logs.map(e => {
-      const t = (e.time || '').slice(11, 16);
+      const t = (e.time || '').slice(11, 19);
       return `<div class="log-line log-${escapeHtml(e.tag)}">${escapeHtml(t)} [${escapeHtml(e.tag)}] ${escapeHtml(e.message)}</div>`;
     }).join('');
     if (atBottom) logBox.scrollTop = logBox.scrollHeight;
