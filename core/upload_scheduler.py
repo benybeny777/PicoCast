@@ -5,6 +5,8 @@ Shorts slots: 07:00 / 12:00 / 19:00 JST every day.
 Long slots: 21:00 JST on weekdays, 12:00 / 21:00 JST on weekends.
 Shorts and Long are tracked separately, so they may share the same time.
 """
+import json
+import os
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
@@ -498,7 +500,6 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
 
     if changed_records:
         # 各動画の _meta/upload_record.json へ書き戻す
-        import json as _json
         for rec in records:
             local_path = rec.get("_local_path")
             if not local_path or not os.path.isfile(local_path):
@@ -506,7 +507,7 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
             rec_to_save = {k: v for k, v in rec.items() if k != "_local_path"}
             try:
                 with open(local_path, "w", encoding="utf-8") as _f:
-                    _json.dump(rec_to_save, _f, ensure_ascii=False, indent=2)
+                    json.dump(rec_to_save, _f, ensure_ascii=False, indent=2)
             except OSError as _e:
                 _log(f"レコード保存失敗: {local_path}: {_e}")
         _log(f"YouTube sync: records={changed_records}")
