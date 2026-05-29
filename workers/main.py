@@ -388,6 +388,7 @@ class GenerationReport:
         self.backgrounds_failed = 0
         self.elapsed_sec = 0.0
         self.native_render_used = False  # True when ffmpeg/native MP4 is used
+        self.theme_dir: str = ""  # 実際に作成された出力フォルダのパス
 
     def summary(self):
         m, s = divmod(int(self.elapsed_sec), 60)
@@ -1702,6 +1703,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status(f"⚠ render_info.json保存に失敗: {e}", "warning")
 
     report.elapsed_sec = time.time() - pipeline_start
+    report.theme_dir = theme_dir
     msg = f"✅ 完成! 出力フォルダ: {theme_dir}"
     update_status(msg)
 

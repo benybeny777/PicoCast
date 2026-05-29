@@ -82,10 +82,12 @@ def main() -> None:
                 "elapsed_sec": getattr(report, "elapsed_sec", None),
             }
         else:
+            theme_dir = getattr(report, "theme_dir", "")
             result = {
                 "status": "success",
                 "message": msg,
                 "elapsed_sec": getattr(report, "elapsed_sec", None),
+                "history_name": os.path.basename(theme_dir) if theme_dir else "",
             }
     except Exception as e:
         tb = traceback.format_exc()

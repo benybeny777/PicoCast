@@ -147,7 +147,8 @@ def _run_generate(
     msg = worker_result.get("message", "")
     if str(msg).lstrip().startswith("❌"):
         raise RuntimeError(msg)
-    theme_dir = os.path.join(OUTPUT_DIR, _safe_dirname(topic))
+    history_name = worker_result.get("history_name") or _safe_dirname(topic)
+    theme_dir = os.path.join(OUTPUT_DIR, history_name)
     result = {
         "topic": topic,
         "message": msg,
@@ -155,11 +156,10 @@ def _run_generate(
         "elapsed_sec": worker_result.get("elapsed_sec"),
     }
 
-    _log(job, msg, "success" if "完了" in msg or "success" in msg.lower() else "info")
+    _log(job, msg, "success" if status == "success" else "info")
 
-    if with_render and ("完了" in msg or "success" in msg.lower()):
+    if with_render and status == "success":
         from web_app.services.render_service import submit_render_job
-        history_name = _safe_dirname(topic)
         try:
             render_job_id = submit_render_job(history_name)
             _log(job, f"🎬 レンダージョブを登録しました (job_id={render_job_id[:8]}…)", "info")
