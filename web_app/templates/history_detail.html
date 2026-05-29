@@ -78,13 +78,15 @@
     <button id="regen-full-btn" class="btn btn-primary" onclick="regenerateFull()">全工程再作成</button>
     <button id="regenerate-btn" class="btn btn-secondary" onclick="regenerateWithoutRender()">動画再作成（レンダー以外）</button>
     <button id="render-btn" class="btn btn-secondary" onclick="renderVideo()">動画再作成（レンダーのみ）</button>
-    <button id="cancel-btn" class="btn btn-danger" style="display:none" onclick="cancelGenerate()">中止</button>
   </div>
 </div>
 
 <!-- 処理ログ -->
 <div id="generate-status" class="card mt" style="display:none">
-  <h2>処理ログ</h2>
+  <div style="display:flex; align-items:center; gap:12px; margin-bottom:4px">
+    <h2 style="margin:0">処理ログ</h2>
+    <button id="cancel-btn" class="btn btn-danger btn-xs" style="display:none" onclick="cancelGenerate()">中止</button>
+  </div>
   <div id="job-status-msg" class="hint" style="margin-bottom:4px"></div>
   <div id="job-card-log-container"></div>
 </div>
