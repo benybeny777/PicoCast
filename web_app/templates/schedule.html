@@ -16,7 +16,7 @@
     </select>
     <label><input type="checkbox" id="show-published" onchange="filterSchedule()"> 公開済みも表示</label>
   </div>
-  <div id="sync-status" class="log-box mt" style="display:none"></div>
+  <div id="sync-status" class="log-box mt" style="display:none; max-height:400px; overflow-y:auto"></div>
 </div>
 
 {% if schedule_error %}
@@ -132,19 +132,21 @@ async function rebalanceCalc() {
 }
 
 function pollJob(jobId, statusBox, reloadOnSuccess) {
+  let _polling = false;
   const interval = setInterval(async () => {
+    if (_polling) return;
+    _polling = true;
     try {
-      const r = await fetch(`/api/jobs/${jobId}`);
-      const job = await r.json();
-      const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length - 1].message : '';
-      statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
-      if (['success', 'failed', 'cancelled'].includes(job.status)) {
+      const { allDone, hasFailed } = await updateJobLogs([jobId], statusBox);
+      if (allDone) {
         clearInterval(interval);
-        if (job.status === 'success' && reloadOnSuccess) {
+        if (!hasFailed && reloadOnSuccess) {
           setTimeout(() => location.reload(), 1200);
         }
       }
-    } catch {}
+    } catch {} finally {
+      _polling = false;
+    }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
