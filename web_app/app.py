@@ -37,6 +37,8 @@ async def _lifespan(app):
     from web_app.services.auto_fixed_comment_service import start_auto_watcher
     from web_app.services.status_service import refresh_settings_status
     from core.external_service_check import log_external_services
+    from scripts.migrate_folder_prefixes import auto_migrate
+    auto_migrate()  # 旧 [] プレフィックスフォルダを起動時に自動リネーム
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
     threading.Thread(target=log_external_services, daemon=True).start()

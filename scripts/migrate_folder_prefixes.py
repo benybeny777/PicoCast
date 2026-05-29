@@ -55,6 +55,32 @@ def _scan_dir(parent: str) -> list[tuple[str, str]]:
     return pairs
 
 
+def auto_migrate() -> None:
+    """アプリ起動時に自動で呼び出す移行処理。旧プレフィックスのフォルダをリネームする。"""
+    import logging
+    logger = logging.getLogger(__name__)
+    output_dir = config.OUTPUT_DIR
+    scan_dirs = [
+        output_dir,
+        os.path.join(output_dir, "000_uploaded"),
+        os.path.join(output_dir, "000_backups"),
+    ]
+    all_pairs: list[tuple[str, str]] = []
+    for d in scan_dirs:
+        all_pairs.extend(_scan_dir(d))
+    if not all_pairs:
+        return
+    for src, dst in all_pairs:
+        if os.path.exists(dst):
+            logger.warning("フォルダ移行スキップ（移動先が既に存在）: %s -> %s", src, dst)
+            continue
+        try:
+            os.rename(src, dst)
+            logger.info("フォルダ移行: %s -> %s", os.path.basename(src), os.path.basename(dst))
+        except OSError as e:
+            logger.error("フォルダ移行失敗: %s -> %s: %s", src, dst, e)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="フォルダプレフィックス移行スクリプト")
     parser.add_argument("--apply", action="store_true", help="実際にリネームを実行する（省略時はドライラン）")
