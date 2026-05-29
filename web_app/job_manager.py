@@ -10,8 +10,10 @@ import pathlib
 import threading
 import traceback
 import uuid
-from datetime import datetime, timezone
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+
+_JST = timezone(timedelta(hours=9))
 from typing import Any, Callable
 
 
@@ -101,7 +103,7 @@ class JobManager:
                     job.error = "アプリ再起動により中断"
                     job.progress_text = "⚠ アプリ再起動により中断されました"
                     if not job.finished_at:
-                        job.finished_at = datetime.now(timezone.utc)
+                        job.finished_at = datetime.now(_JST)
                     _log(job, "⚠ アプリ再起動により中断されました", "warning")
                 self._jobs[job.job_id] = job
         except Exception as e:
@@ -117,7 +119,7 @@ class JobManager:
             with self._lock:
                 jobs_sorted = sorted(
                     self._jobs.values(),
-                    key=lambda j: j.started_at or datetime.min.replace(tzinfo=timezone.utc),
+                    key=lambda j: j.started_at or datetime.min.replace(tzinfo=_JST),
                     reverse=True,
                 )[:JOB_LOG_MAX_JOBS]
                 data = [j.to_dict() for j in jobs_sorted]
@@ -154,7 +156,7 @@ class JobManager:
         with self._lock:
             return [j.to_dict() for j in sorted(
                 self._jobs.values(),
-                key=lambda j: j.started_at or datetime.min.replace(tzinfo=timezone.utc),
+                key=lambda j: j.started_at or datetime.min.replace(tzinfo=_JST),
                 reverse=True,
             )]
 
@@ -166,7 +168,7 @@ class JobManager:
         if job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
             job.status = JobStatus.CANCELLED
             job.progress_text = "キャンセル要求済み"
-            job.finished_at = datetime.now(timezone.utc)
+            job.finished_at = datetime.now(_JST)
             self._save_jobs(notify_job=job)
         return True
 
@@ -176,7 +178,7 @@ class JobManager:
 
         def _run():
             job.status = JobStatus.RUNNING
-            job.started_at = datetime.now(timezone.utc)
+            job.started_at = datetime.now(_JST)
             try:
                 result = fn(job, *args, **kwargs)
                 if job.cancel_event.is_set():
@@ -197,7 +199,7 @@ class JobManager:
                 # except ブロック内でも明示的に保存する（finally と二重になるが失敗時の確実性優先）
                 manager_ref._save_jobs(notify_job=job)
             finally:
-                job.finished_at = datetime.now(timezone.utc)
+                job.finished_at = datetime.now(_JST)
                 manager_ref._save_jobs(notify_job=job)  # 成功・失敗・キャンセルすべてで保存
 
         self._executor.submit(_run)
@@ -206,7 +208,7 @@ class JobManager:
 def _log(job: Job, message: str, tag: str = "info") -> None:
     """ジョブのログに追記する。呼び出し側からも使える。"""
     job.logs.append({
-        "time": datetime.now(timezone.utc).isoformat(),
+        "time": datetime.now(_JST).isoformat(),
         "tag": tag,
         "message": message,
     })

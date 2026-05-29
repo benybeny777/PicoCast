@@ -40,7 +40,7 @@
           </span>
         </td>
         <td><small>{{ c.mp4_filename }}</small></td>
-        <td>{{ (c.publish_at or "—")[:16] }}</td>
+        <td>{{ (c.publish_at or "—")[:16].replace("T", " ") }}</td>
         <td>
           {% if c.already_uploaded %}
             <span class="badge badge-ok">アップ済み</span>

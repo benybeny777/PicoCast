@@ -46,7 +46,7 @@
         {{ job.status }}
       </span>
       <span class="job-id-small">{{ job.job_id[:8] }}…</span>
-      <span class="job-time">{{ (job.started_at or "")[:19] }}</span>
+      <span class="job-time">{{ (job.started_at or "")[:16].replace("T", " ") }}</span>
       {% if job.status == 'running' %}
       <button class="btn btn-xs btn-danger" type="button" title="この実行中ジョブへ中止要求を送ります" onclick="cancelJob('{{ job.job_id }}')">中止する</button>
       {% endif %}
@@ -60,7 +60,7 @@
       <summary>ログ詳細 ({{ job.logs | length }} 件)</summary>
       <div class="log-box">
         {% for entry in job.logs %}
-        <div class="log-line log-{{ entry.tag }}">{{ entry.time[11:19] }} [{{ entry.tag }}] {{ entry.message }}</div>
+        <div class="log-line log-{{ entry.tag }}">{{ entry.time[11:16] }} [{{ entry.tag }}] {{ entry.message }}</div>
         {% endfor %}
       </div>
     </details>
@@ -102,7 +102,7 @@ function switchLogsTab(tab) {
 
 function _buildLogHtml(logs) {
   return (logs || []).map(e => {
-    const t = (e.time || '').slice(11, 19);
+    const t = (e.time || '').slice(11, 16);
     return `<div class="log-line log-${escapeHtml(e.tag)}">${escapeHtml(t)} [${escapeHtml(e.tag)}] ${escapeHtml(e.message)}</div>`;
   }).join('');
 }
@@ -170,7 +170,7 @@ function _updateCard(card, job) {
 // 新規ジョブカード挿入用テンプレート
 function _buildJobCard(job) {
   const statusLabel = { success: 'badge-ok', failed: 'badge-ng', running: 'badge-running' }[job.status] || 'badge-warn';
-  const t = (job.started_at || '').slice(0, 19);
+  const t = (job.started_at || '').slice(0, 16).replace('T', ' ');
   const cancelBtn = job.status === 'running'
     ? `<button class="btn btn-xs btn-danger" type="button" onclick="cancelJob('${escapeHtml(job.job_id)}')">中止する</button>`
     : '';

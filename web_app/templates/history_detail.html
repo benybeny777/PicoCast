@@ -35,7 +35,7 @@
     <table class="status-table">
       <tr><td>video_id</td><td>{{ detail.upload_record.get('video_id', '—') }}</td></tr>
       <tr><td>publish_status</td><td>{{ detail.upload_record.get('publish_status', '—') }}</td></tr>
-      <tr><td>publish_at</td><td>{{ detail.upload_record.get('publish_at', '—') }}</td></tr>
+      <tr><td>publish_at</td><td>{{ (detail.upload_record.get('publish_at') or '—')[:16].replace('T', ' ') }}</td></tr>
       <tr><td>comment_thread_id</td><td>{{ detail.upload_record.get('comment_thread_id', '—') }}</td></tr>
     </table>
     {% if detail.upload_record.get('video_id') %}
@@ -192,7 +192,7 @@ function _buildJobCardHtml(job) {
   const statusCls = job.status === 'success' ? 'badge-ok' :
                     job.status === 'failed'  ? 'badge-ng' :
                     job.status === 'running' ? 'badge-running' : 'badge-warn';
-  const t = (job.started_at || '').slice(0, 19);
+  const t = (job.started_at || '').slice(0, 16).replace('T', ' ');
   return `<div class="card mt job-card status-${escapeHtml(job.status)}"
                data-status="${escapeHtml(job.status)}"
                data-type="${escapeHtml(job.type || '')}"
@@ -252,7 +252,7 @@ function _updateJobCard(container, job) {
 
     const atBottom = details.open && (logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80);
     logBox.innerHTML = logs.map(e => {
-      const t = (e.time || '').slice(11, 19);
+      const t = (e.time || '').slice(11, 16);
       return `<div class="log-line log-${escapeHtml(e.tag)}">${escapeHtml(t)} [${escapeHtml(e.tag)}] ${escapeHtml(e.message)}</div>`;
     }).join('');
     if (atBottom) logBox.scrollTop = logBox.scrollHeight;
