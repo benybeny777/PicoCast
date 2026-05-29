@@ -305,12 +305,21 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     # ルール2: views < ANALYTICS_MIN_VIEWS_FOR_SCORE → 配布不足・判定保留
     from config import config as _cfg_score
     if views < _cfg_score.ANALYTICS_MIN_VIEWS_FOR_SCORE:
+        has_strong_reaction = (
+            like_rate >= _cfg_score.ANALYTICS_REACTION_STRONG_LIKE_RATE
+            or likes >= _cfg_score.ANALYTICS_REACTION_STRONG_MIN_LIKES
+        )
         has_reaction = (
             likes >= _cfg_score.ANALYTICS_REACTION_MIN_LIKES
             or comments >= 1
             or subscribers_net >= 1
         )
-        ud_action = "配布不足・判定保留" + ("・反応あり" if has_reaction else "")
+        if has_strong_reaction:
+            ud_action = "配布不足・反応強い"
+        elif has_reaction:
+            ud_action = "配布不足・判定保留・反応あり"
+        else:
+            ud_action = "配布不足・判定保留"
         result = dict(item)
         result.update({
             "title": item.get("title") or "",
@@ -669,6 +678,49 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
     return "\n".join(lines)
 
 
+_ANALYTICS_RULES_TEXT = """\
+━━━━━━━━━━━━━━━━━━
+Analytics/vidIQ実績ルール（最新）
+━━━━━━━━━━━━━━━━━━
+
+【穴シリーズ優先横展開】
+バウムクーヘン・マカロニ・ベーグルで成立確認済み。穴・空洞・形状の理由系は高優先横展開候補。
+ただし「○○に穴がある本当の理由」の連発は避け、タイトル表現を変える。
+次候補: ちくわ、ドーナツ、れんこん、アイスの棒、ストロー菓子など。
+
+【配布不足・反応強い動画の扱い】
+views < 1000 でも like_rate >= 2.5% または likes >= 20 の動画は失敗扱いにしない。
+action に「反応強い」が付いている動画は横展開起点として優先検討する。
+例: ジンジャーエール → 薬っぽい飲み物シリーズの起点候補。
+
+【腐らない・長持ち系の採用基準】
+ハチミツのような一般食材単体は既知感・科学説明化で弱くなりやすい。
+マックポテトのように、自分も食べている身近な商品・ブランド・店に紐づく場合は優先度を上げる。
+腐らない系は「外食チェーン・コンビニ・日常購入品」に寄せて採用すること。
+
+【昔は違った系の採用基準】
+現在のイメージとの落差が大きいものだけ採用する。
+・サーモン型（優先）: 現在の人気・高級感が強く、昔の低評価とのギャップが大きいもの
+・トロ型（優先度下げ）: 既知情報になりやすいものは優先度を下げる
+次候補: ロブスター・カニカマ・チキン・タコ・サーモン系横展開。
+
+【弱動画の分類（即ブラックリストにしない）】
+・ハチミツ: 有名ネタ・科学説明型 → リベンジは歴史エピソード型で切り口を変える
+・人参: 反応は強いので入口改善候補。ネタ自体は捨てない
+・納豆フィルム: 自分事化できなければブラックリスト候補
+・プリン: 具体エピソード化すれば改善余地あり
+・メロンパン: 有名すぎる名前ネタ消耗型。通常切り口は避ける
+
+【次回タイトル案 優先候補】
+以下を最優先候補として扱う（既存タイトルと重複しないか確認すること）:
+・ちくわに穴がないと作れない理由
+・オムライスは日本生まれだった
+・昔のロブスターは貧乏人の食べ物だった
+・ドクターペッパーが薬っぽく作られた理由
+・ドーナツに穴がある本当の理由
+"""
+
+
 def _build_title_prompt_base(items: list[dict[str, Any]], video_type_filter: str | None = None) -> str:
     """Shorts/Longタイトル案プロンプトの共通ベース部分を生成する。"""
     scored = [
@@ -717,7 +769,7 @@ def build_shorts_title_prompt(items: list[dict[str, Any]]) -> str:
         "主KPI: 平均視聴率（維持率）。ブラックリスト候補と同じネタ型・切り口は原則NGです。\n"
         "改善再挑戦は切り口を明確に変える場合のみ最大2案まで許可。\n\n"
     )
-    return header + (base if base else "（実績データなし）")
+    return header + _ANALYTICS_RULES_TEXT + "\n" + (base if base else "（実績データなし）")
 
 
 def build_long_title_prompt(items: list[dict[str, Any]]) -> str:
@@ -727,7 +779,7 @@ def build_long_title_prompt(items: list[dict[str, Any]]) -> str:
         "以下の実績データをもとに、ずんだもんとめたんの食べ物雑学Long動画タイトル案を3〜5個考えてください。\n"
         "主KPI: CTR × 平均視聴率。ブラックリスト候補と同じネタ型・切り口は原則NGです。\n\n"
     )
-    return header + (base if base else "（実績データなし）")
+    return header + _ANALYTICS_RULES_TEXT + "\n" + (base if base else "（実績データなし）")
 
 
 def save_score_files(items: list[dict[str, Any]], days: int, output_dir=ANALYTICS_DIR, summary: dict[str, Any] | None = None) -> tuple[str, str]:

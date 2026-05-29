@@ -12,6 +12,19 @@
 
 ---
 
+## 2026-05-29 Analytics/vidIQ実績ルールをタイトル案・台本生成に反映
+
+**対象ファイル:** `config/config.py` / `core/analytics_score.py` / `config/prompt_parts/local/title_dynamic_context_food.md` / `config/prompt_parts/title_dynamic_context_food.md` / `config/prompt_parts/local/script_generation_prompt.txt`
+
+**変更内容:**
+- 穴シリーズ（バウムクーヘン・マカロニ・ベーグル実績）を優先横展開候補として全プロンプトに追加
+- 配布不足動画の「反応強い」判定を追加（like_rate >= 2.5% または likes >= 20 → "配布不足・反応強い"）
+- `ANALYTICS_REACTION_STRONG_LIKE_RATE` / `ANALYTICS_REACTION_STRONG_MIN_LIKES` を config.py に追加
+- 腐らない系はブランド/コンビニに寄せる、昔は違った系は落差が大きいものだけ採用などの採用基準を追加
+- 弱動画5種（ハチミツ・人参・納豆フィルム・プリン・メロンパン）の個別分類を追加
+- 次回タイトル案優先候補5件（ちくわ・オムライス・ロブスター・ドクターペッパー・ドーナツ）を追加
+- タイトルプロンプト用 `_ANALYTICS_RULES_TEXT` を analytics_score.py に定数化し Shorts/Long タイトルプロンプトに差し込み
+
 ## 2026-05-29 弱い動画ランキング・ブラックリスト候補・AI分析コピーを追加
 
 **対象ファイル:** `core/analytics_score.py` / `web_app/services/analytics_service.py` / `web_app/routes/api_analytics.py` / `web_app/templates/analytics.html` / `web_app/static/app.css` / `config/config.py`

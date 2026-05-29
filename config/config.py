@@ -323,7 +323,9 @@ ANALYTICS_CHANNEL_LEGACY_NOTE = (             # 旧チャンネル時代の登�
 )
 ANALYTICS_DISLIKE_RATE_MIN_REACTIONS = int(os.environ.get("ANALYTICS_DISLIKE_RATE_MIN_REACTIONS", "10"))  # dislike_rate を参考値と見なす likes+dislikes の下限
 ANALYTICS_MIN_VIEWS_FOR_SCORE     = int(os.environ.get("ANALYTICS_MIN_VIEWS_FOR_SCORE", "1000"))    # これ未満のviewsは配布不足・判定保留扱い（スコア非対象）
-ANALYTICS_REACTION_MIN_LIKES      = int(os.environ.get("ANALYTICS_REACTION_MIN_LIKES", "5"))        # 配布不足動画の「反応あり」判定：最低いいね数
+ANALYTICS_REACTION_MIN_LIKES           = int(os.environ.get("ANALYTICS_REACTION_MIN_LIKES", "5"))           # 配布不足動画の「反応あり」判定：最低いいね数
+ANALYTICS_REACTION_STRONG_LIKE_RATE    = float(os.environ.get("ANALYTICS_REACTION_STRONG_LIKE_RATE", "2.5")) # 配布不足動画の「反応強い」判定：最低高評価率(%)
+ANALYTICS_REACTION_STRONG_MIN_LIKES    = int(os.environ.get("ANALYTICS_REACTION_STRONG_MIN_LIKES", "20"))    # 配布不足動画の「反応強い」判定：最低いいね数
 ANALYTICS_BL_MIN_VIEWS_SHORTS     = int(os.environ.get("ANALYTICS_BL_MIN_VIEWS_SHORTS", "3000"))   # Shorts/ShortLong ブラックリスト判定の最低視聴数
 ANALYTICS_BL_MAX_AVG_PCT_SHORTS   = float(os.environ.get("ANALYTICS_BL_MAX_AVG_PCT_SHORTS", "45")) # Shorts ブラックリスト判定の最大平均視聴率
 ANALYTICS_BL_MIN_VIEWS_LONG       = int(os.environ.get("ANALYTICS_BL_MIN_VIEWS_LONG", "1000"))     # Long ブラックリスト判定の最低視聴数
