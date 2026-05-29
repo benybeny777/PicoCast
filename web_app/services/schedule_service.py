@@ -112,6 +112,17 @@ def submit_rebalance_job() -> str:
     return job.job_id
 
 
+def _fmt_jst(iso: str) -> str:
+    """JST isoformat を読みやすい表示用文字列に変換する。"""
+    try:
+        from datetime import datetime, timedelta, timezone
+        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+        jst = dt.astimezone(timezone(timedelta(hours=9)))
+        return jst.strftime("%m/%d %H:%M JST")
+    except Exception:
+        return iso
+
+
 def _run_rebalance(job: Job) -> dict[str, Any]:
     """YouTube APIから予約状態を取得してスロット詰め直し変更案を計算する。書き込みは行わない。"""
     _log(job, "スロット詰め直しを計算中（YouTube APIへの書き込みなし）...", "info")
@@ -123,11 +134,11 @@ def _run_rebalance(job: Job) -> dict[str, Any]:
 
         _log(job, f"Shorts 変更案: {len(shorts_changes)}件", "info")
         for old, new, title in shorts_changes:
-            _log(job, f"  {title}: {old} → {new}", "info")
+            _log(job, f"  {title}: {_fmt_jst(old)} → {_fmt_jst(new)}", "info")
 
         _log(job, f"Long 変更案: {len(long_changes)}件", "info")
         for old, new, title in long_changes:
-            _log(job, f"  {title}: {old} → {new}", "info")
+            _log(job, f"  {title}: {_fmt_jst(old)} → {_fmt_jst(new)}", "info")
 
         _log(job, f"計算完了: 変更案 {total}件（YouTube未適用）", "success")
         return {
