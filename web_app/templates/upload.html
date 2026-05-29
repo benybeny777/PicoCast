@@ -126,25 +126,58 @@ async function confirmBatchUpload() {
 
 function pollJobs(jobIds, names) {
   const done = new Set();
+  const errorCount = new Array(jobIds.length).fill(0);
+  const MAX_ERRORS = 10;
+  let _polling = false;
   const interval = setInterval(async () => {
-    for (let i = 0; i < jobIds.length; i++) {
-      if (done.has(i)) continue;
-      try {
-        const r = await fetch(`/api/jobs/${jobIds[i]}`);
-        const job = await r.json();
-        const lastLog = job.logs?.length ? job.logs[job.logs.length - 1].message : job.progress_text;
-        appendLog(`[${names[i]}] ${job.status}: ${lastLog}`, job.status, `job-${i}`);
-        if (['success', 'failed', 'cancelled'].includes(job.status)) {
-          done.add(i);
+    if (_polling) return;
+    _polling = true;
+    try {
+      for (let i = 0; i < jobIds.length; i++) {
+        if (done.has(i)) continue;
+        if (errorCount[i] >= MAX_ERRORS) { done.add(i); continue; }
+        try {
+          const r = await fetch(`/api/jobs/${jobIds[i]}`);
+          const job = await r.json();
+          const lastLog = job.logs?.length ? job.logs[job.logs.length - 1].message : job.progress_text;
+          appendLog(`[${names[i]}] ${job.status}: ${lastLog}`, job.status, `job-${i}`);
+          if (['success', 'failed', 'cancelled'].includes(job.status)) {
+            done.add(i);
+            updateRowStatus(names[i], job.status);
+          }
+        } catch {
+          errorCount[i]++;
+          if (errorCount[i] >= MAX_ERRORS) {
+            appendLog(`[${names[i]}] 通信エラーが続いたため監視を中断しました`, 'error', `job-${i}`);
+          }
         }
-      } catch {}
-    }
-    if (done.size === jobIds.length) {
-      clearInterval(interval);
-      appendLog('全ジョブ完了。ページを再読み込みします...', 'info');
-      setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
+      }
+      if (done.size === jobIds.length) {
+        clearInterval(interval);
+        appendLog('全ジョブ完了。ページを再読み込みします...', 'info');
+        setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
+      }
+    } finally {
+      _polling = false;
     }
   }, 3000);
+}
+
+function updateRowStatus(name, status) {
+  const row = document.querySelector(`.upload-row[data-name="${CSS.escape(name)}"]`);
+  if (!row) return;
+  const badge = row.querySelector('.badge.badge-warn');
+  if (!badge) return;
+  if (status === 'success') {
+    badge.textContent = 'アップ完了';
+    badge.className = 'badge badge-ok';
+  } else if (status === 'failed') {
+    badge.textContent = '失敗';
+    badge.className = 'badge badge-ng';
+  } else if (status === 'cancelled') {
+    badge.textContent = 'キャンセル';
+    badge.className = 'badge badge-warn';
+  }
 }
 
 function appendLog(msg, tag, id) {
