@@ -492,9 +492,10 @@ GET  /api/analytics/retention?video_id=...&duration=...
 
 GET  /api/schedule
 POST /api/schedule/sync
-POST /api/schedule/rebalance  # dry-run（YouTube APIへの書き込みなし）
-POST /api/schedule/update     # confirmed=true 必須
-POST /api/schedule/delete     # Web UIでは無効化、YouTube Studioで手動操作
+POST /api/schedule/rebalance         # dry-run（YouTube APIへの書き込みなし）
+POST /api/schedule/rebalance/apply   # 計算して YouTube へ適用（confirmed=true 必須）
+POST /api/schedule/update            # confirmed=true 必須
+POST /api/schedule/delete            # Web UIでは無効化、YouTube Studioで手動操作
 
 GET  /api/upload/candidates
 POST /api/upload
@@ -1183,9 +1184,10 @@ YouTube Studio 側で予約動画を手動公開した場合:
 予約スロットを前詰めしたい場合:
 
 1. `📅 スケジュール` を開く
-2. `スロット詰め直し` を押す
+2. `スロット詰め直し計算` で変更案を確認（YouTube への書き込みなし）
+3. 内容を確認して `スロット詰め直し適用` で YouTube へ反映
 
-未来の予約枠は、最も早い空きスロットから前詰めできる。`rebalance_slots()` は YouTube の `publishAt` / `video_id` を正として読み、YouTube 側の公開予定時刻を更新する。Shorts と Long は同じ `publishAt` を共有してよいが、同じ動画タイプ内で `publishAt` が重複している場合は詰め直し対象にする。YouTube 更新には `video_id` が必要。
+未来の予約枠は、最も早い空きスロットから前詰めできる。`rebalance_slots_detailed()` は YouTube の `publishAt` / `video_id` を正として読み、`update_video_publish_time()` で YouTube 側の公開予定時刻を更新する。Shorts と Long は同じ `publishAt` を共有してよいが、同じ動画タイプ内で `publishAt` が重複している場合は詰め直し対象にする。
 
 native Shorts の立ち絵は、字幕との重なりを抑えるため旧来の下寄せ配置より小さめ・やや上寄せにする。Shorts通常字幕は中央寄せ、既定1.4倍のフォント倍率、白文字、話者色の内フチ（ずんだもん=濃緑 / めたん=濃い紫ピンク）、黒外フチ、任意の半透明黒帯（`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`）で可読性を優先する。字幕は `NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で少し下げる。調整は `NATIVE_CHARACTER_HEIGHT_SHORTS`、`NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`、`NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`、`NATIVE_SUBTITLE_FONT_SCALE`、`NATIVE_SUBTITLE_ALIGNMENT_SHORTS`、`NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で行う。
 

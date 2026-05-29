@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-05-29 スロット詰め直し「適用」ボタンを追加
+
+**対象ファイル:** `web_app/services/schedule_service.py` / `web_app/routes/api_schedule.py` / `web_app/schemas.py` / `web_app/templates/schedule.html`
+
+**変更内容:**
+- スロット詰め直し計算（ドライラン）と実適用を分離。「計算」は変更案をログ表示するだけ、「適用」ボタンで確認後に YouTube API へ書き込む
+- `POST /api/schedule/rebalance/apply` エンドポイントを追加（`confirmed=true` 必須）
+- `_run_apply_rebalance()`: `rebalance_slots_detailed()` で video_id 付き変更案を取得し `update_video_publish_time()` で順次適用、ローカルレコードも更新
+
 ## 2026-05-29 アップロード後スロット自動割り当て・スケジュール画面YouTube直接取得
 
 **対象ファイル:** `web_app/services/upload_service.py` / `web_app/services/schedule_service.py` / `core/upload_scheduler.py`
