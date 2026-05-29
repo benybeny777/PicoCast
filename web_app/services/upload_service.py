@@ -144,6 +144,26 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
         except Exception as e:
             _log(job, f"スロット設定エラー（非公開のまま続行）: {e}", "warning")
 
+    # Long 動画は再生リストに追加
+    if video_type == "long":
+        try:
+            from config import config as _cfg
+            from core.youtube_uploader import add_video_to_playlist_by_name
+            playlist_name = _cfg.LONG_UPLOAD_PLAYLIST_NAME
+            if playlist_name:
+                result = add_video_to_playlist_by_name(
+                    video_id, playlist_name,
+                    progress_callback=lambda msg: _log(job, msg, "info"),
+                )
+                if result.get("added"):
+                    _log(job, f"再生リスト追加: {playlist_name}", "success")
+                elif result.get("already_exists"):
+                    _log(job, f"再生リスト追加済み: {playlist_name}", "info")
+                else:
+                    _log(job, f"再生リスト追加スキップ: {result.get('reason', '不明')}", "warning")
+        except Exception as e:
+            _log(job, f"再生リスト追加エラー（続行）: {e}", "warning")
+
     # upload_record.json を書く（ロック外で実施）
     record: dict = {
         "video_id": video_id,
