@@ -168,6 +168,15 @@ details.card > summary::-webkit-details-marker { display: none; }
 .btn-danger { background: #7a1a1a; color: #ff8888; }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
 .btn-xs { padding: 3px 8px; font-size: 11px; border-radius: 4px; }
+.btn-cancel-running {
+  border: 2px solid #ff5555;
+  font-weight: bold;
+  animation: cancel-pulse 1.4s ease-in-out infinite;
+}
+@keyframes cancel-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,85,85,0.5); }
+  50%       { box-shadow: 0 0 0 5px rgba(255,85,85,0); }
+}
 
 /* ── フォーム ── */
 .form-group { margin-bottom: 12px; }
