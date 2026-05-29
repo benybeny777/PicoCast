@@ -12,6 +12,15 @@
 
 ---
 
+## 2026-05-29 Analytics画面に反応計列を追加、TSV読み込み型変換を修正
+
+**対象ファイル:** `web_app/templates/analytics.html` / `web_app/services/analytics_service.py`
+
+**変更内容:**
+- Analytics画面のテーブルに `like_dislike_total`（反応計）列を追加（いいね + 低評価の合計）
+- TSVファイル読み込み時に全フィールドが文字列になる問題を修正。`_coerce_tsv_value()` を追加し空文字→`None`、bool文字列→`bool`、数値文字列→`int`/`float` に変換
+- 低評価はS/A/B/C/Dスコア判定に使わない設計を明確化（コード上は変更なし・既存設計どおり）
+
 ## 2026-05-29 スロット詰め直し「適用」ボタンを追加
 
 **対象ファイル:** `web_app/services/schedule_service.py` / `web_app/routes/api_schedule.py` / `web_app/schemas.py` / `web_app/templates/schedule.html`

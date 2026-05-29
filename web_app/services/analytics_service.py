@@ -40,13 +40,28 @@ def _load_json_file(path: str) -> list[dict[str, Any]]:
         return []
 
 
+def _coerce_tsv_value(value: str) -> Any:
+    if value == "" or value == "None":
+        return None
+    if value in ("True", "False"):
+        return value == "True"
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
 def _load_tsv_file(path: str) -> list[dict[str, Any]]:
     try:
         rows = []
         with open(path, "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f, delimiter="\t")
             for row in reader:
-                rows.append(dict(row))
+                rows.append({k: _coerce_tsv_value(v) for k, v in row.items()})
         return rows
     except Exception:
         return []
