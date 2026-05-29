@@ -155,6 +155,16 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         subscribers_net = gained - lost
     like_rate = (likes / views * 100) if views > 0 else 0.0
 
+    dislikes_raw = item.get("dislikes")
+    if dislikes_raw is not None:
+        dislikes = _int(dislikes_raw)
+        like_dislike_total = likes + dislikes
+        dislike_rate = (dislikes / max(like_dislike_total, 1)) * 100
+    else:
+        dislikes = None
+        like_dislike_total = None
+        dislike_rate = None
+
     publish_status = str(item.get("publish_status") or "published")
     analytics_available = bool(item.get("analytics_available", True))
 
@@ -175,7 +185,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "is_provisional": False,
             "views": views, "impressions": impressions, "ctr": None,
             "average_view_duration": avg_duration, "average_percentage_viewed": avg_percent,
-            "likes": likes, "like_rate": like_rate, "comments": comments,
+            "likes": likes, "like_rate": like_rate, "dislikes": None, "like_dislike_total": None, "dislike_rate": None, "comments": comments,
             "subscribers_gained": gained, "subscribers_lost": lost, "subscribers_net": subscribers_net,
             "score": "対象外", "action": "対象外",
         })
@@ -198,7 +208,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "is_provisional": False,
             "views": 0, "impressions": 0, "ctr": None,
             "average_view_duration": 0, "average_percentage_viewed": 0,
-            "likes": 0, "like_rate": 0.0, "comments": 0,
+            "likes": 0, "like_rate": 0.0, "dislikes": None, "like_dislike_total": None, "dislike_rate": None, "comments": 0,
             "subscribers_gained": 0, "subscribers_lost": 0, "subscribers_net": 0,
             "score": "未計測", "action": "予約中",
         })
@@ -222,7 +232,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "analytics_available": analytics_available,
             "views": views, "impressions": impressions, "ctr": None,
             "average_view_duration": 0, "average_percentage_viewed": 0,
-            "likes": likes, "like_rate": like_rate, "comments": comments,
+            "likes": likes, "like_rate": like_rate, "dislikes": dislikes, "like_dislike_total": like_dislike_total, "dislike_rate": dislike_rate, "comments": comments,
             "subscribers_gained": gained, "subscribers_lost": lost, "subscribers_net": subscribers_net,
             "score": "未計測", "action": "データ待ち",
         })
@@ -346,6 +356,9 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "average_percentage_viewed": avg_percent,
         "likes": likes,
         "like_rate": like_rate,
+        "dislikes": dislikes,
+        "like_dislike_total": like_dislike_total,
+        "dislike_rate": dislike_rate,
         "comments": comments,
         "subscribers_gained": gained,
         "subscribers_lost": lost,
@@ -406,6 +419,7 @@ def to_tsv(items: list[dict[str, Any]]) -> str:
         "final_cta_type", "render_engine",
         "views", "impressions", "ctr",
         "average_view_duration", "average_percentage_viewed", "likes", "like_rate",
+        "dislikes", "like_dislike_total", "dislike_rate",
         "comments", "subscribers_net", "score", "action",
     ]
     lines = ["\t".join(cols)]
