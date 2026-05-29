@@ -6,7 +6,7 @@ from typing import Any
 from core.output_paths import ANALYTICS_DIR
 
 
-SCORE_ORDER = {"S": 5, "A": 4, "B": 3, "C": 2, "D": 1, "未計測": 0, "対象外": -1}
+SCORE_ORDER = {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1, "未計測": 0, "対象外": -1}
 AUDIO_CUTOFF_RISK_DATE = date(2026, 5, 16)
 AUDIO_CUTOFF_ACTION_SUFFIX = "音切れ改善候補"
 DURATION_STATUS_LABELS = {
@@ -272,39 +272,39 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     # ルール2: 動画種別ごとのベーススコア
     if video_type == "Shorts":
         if avg_percent >= 90 or avg_duration >= 45:
-            score, action = "S", "横展開"
+            score, action = "A", "横展開"
         elif avg_percent >= 80 or avg_duration >= 38:
-            score, action = "A", "継続"
+            score, action = "B", "継続"
         elif avg_percent >= 70 or avg_duration >= 32:
-            score, action = "B", "改善して再挑戦"
+            score, action = "C", "改善して再挑戦"
         elif avg_percent >= 60:
-            score, action = "C", "弱い"
+            score, action = "D", "弱い"
         else:
-            score, action = "D", "要見直し"
+            score, action = "E", "要見直し"
     elif video_type == "ShortLong":
         # 61〜120秒の短尺Long。Shortsより長いのでしきい値を緩める
         if avg_percent >= 75 or avg_duration >= 70:
-            score, action = "S", "横展開"
+            score, action = "A", "横展開"
         elif avg_percent >= 60 or avg_duration >= 50:
-            score, action = "A", "継続"
+            score, action = "B", "継続"
         elif avg_percent >= 40 or avg_duration >= 35:
-            score, action = "B", "改善して再挑戦"
+            score, action = "C", "改善して再挑戦"
         elif avg_percent >= 25:
-            score, action = "C", "弱い"
+            score, action = "D", "弱い"
         else:
-            score, action = "D", "要見直し"
+            score, action = "E", "要見直し"
     else:
         # Long（180秒+）
         if ctr_value >= 8 and avg_percent >= 40:
-            score, action = "S", "横展開"
+            score, action = "A", "横展開"
         elif ctr_value >= 5 and avg_percent >= 30:
-            score, action = "A", "継続"
+            score, action = "B", "継続"
         elif ctr_value >= 3 and avg_percent >= 20:
-            score, action = "B", "タイトル/中身改善"
+            score, action = "C", "タイトル/中身改善"
         elif avg_percent >= 15:
-            score, action = "C", "サムネ/冒頭改善"
+            score, action = "D", "サムネ/冒頭改善"
         else:
-            score, action = "D", "要見直し"
+            score, action = "E", "要見直し"
 
     # ルール3: 最低視聴率ラインを下回る横展開を抑制
     if action == "横展開" and not above_expansion_min:
@@ -312,8 +312,8 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
 
     # ルール4: 登録者純増 >= 2 → 強い横展開候補（最低でも B）
     if subscribers_net >= 2:
-        if SCORE_ORDER.get(score, 0) < SCORE_ORDER["B"]:
-            score = "B"
+        if SCORE_ORDER.get(score, 0) < SCORE_ORDER["C"]:
+            score = "C"
             action = "登録者増・改善候補"
         if video_type != "Long" and above_expansion_min and action != "横展開":
             action = "横展開"
@@ -330,7 +330,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         if not above_expansion_min:
             # 高エンゲージメントだが低視聴率 → テーマ有望・構成改善
             action = "テーマ有望・構成改善"
-        elif score in ("C", "D"):
+        elif score in ("D", "E"):
             action = "テーマ有望・冒頭/構成改善"
 
     # ルール6: コメント反応あり（弱いスコアの補足）
@@ -474,7 +474,7 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
     data_wait = [item for item in items if item.get("analysis_status") == "data_wait"]
     strong = [
         item for item in scored
-        if item.get("score") in ("S", "A") or _num(item.get("average_percentage_viewed")) >= 70
+        if item.get("score") in ("A", "B") or _num(item.get("average_percentage_viewed")) >= 70
     ]
     top_views = sorted(scored, key=lambda x: _int(x.get("views")), reverse=True)[:limit]
     top_retention = sorted(scored, key=lambda x: _num(x.get("average_percentage_viewed")), reverse=True)[:limit]
