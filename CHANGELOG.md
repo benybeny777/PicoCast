@@ -23,16 +23,6 @@
 
 ---
 
-## 2026-05-29 Analytics画面・TSVに低評価参考指標を追加
-
-**対象ファイル:** `core/youtube_analytics.py` / `core/analytics_score.py` / `web_app/templates/analytics.html` / `SPEC.md`
-
-**変更内容:**
-- YouTube Data API (`statistics`) から `dislikeCount` が取得可能な場合、低評価（`dislikes`）および低評価率（`dislike_rate`）を算出して保持する処理を追加
-- 既存のS/A/B/C/Dスコアやアクション判定には影響させない「参考指標」として扱う仕様
-- APIから取得不能な場合は0ではなく「取得不可(None)」として例外を握りつぶさずにログを出力する仕様
-- Analytics画面に「低評価(参考)」「低評価率(参考)」の列を追加し、TSV出力にも対応
-
 ## 2026-05-29 ネタ会議本編の具体数値の読み上げを禁止
 
 **対象ファイル:** `config/prompt_parts/local/script_generation_prompt_meeting.txt` / `config/samples/...`

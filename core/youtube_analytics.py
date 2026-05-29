@@ -1,5 +1,4 @@
 import json
-import logging
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -155,12 +154,6 @@ def _video_metadata(youtube, video_ids):
             else:
                 publish_status = privacy  # "private" / "unknown"
 
-            if "dislikeCount" in stats:
-                stats_dislikes = int(stats.get("dislikeCount", 0) or 0)
-            else:
-                stats_dislikes = None
-                logging.getLogger(__name__).warning(f"Video {vid} API response is missing dislikeCount")
-
             result[vid] = {
                 "title": snippet.get("title", ""),
                 "published_at": snippet.get("publishedAt"),
@@ -170,7 +163,6 @@ def _video_metadata(youtube, video_ids):
                 "stats_views": int(stats.get("viewCount", 0) or 0),
                 "stats_likes": int(stats.get("likeCount", 0) or 0),
                 "stats_comments": int(stats.get("commentCount", 0) or 0),
-                "stats_dislikes": stats_dislikes,
             }
     return result
 
@@ -319,7 +311,6 @@ def fetch_video_analytics(days=28):
                 "average_view_duration": data.get("averageViewDuration", 0),
                 "average_percentage_viewed": data.get("averageViewPercentage", 0),
                 "likes": data.get("likes", m.get("stats_likes", 0)),
-                "dislikes": m.get("stats_dislikes"),
                 "comments": data.get("comments", m.get("stats_comments", 0)),
                 "subscribers_gained": data.get("subscribersGained", 0),
                 "subscribers_lost": data.get("subscribersLost", 0),

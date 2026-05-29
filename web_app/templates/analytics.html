@@ -63,8 +63,6 @@
         <th class="sortable" onclick="sortTable('views')">視聴数<span class="sort-icon" data-col="views"></span></th>
         <th class="sortable" onclick="sortTable('average_percentage_viewed')">視聴率%<span class="sort-icon" data-col="average_percentage_viewed"></span></th>
         <th class="sortable" onclick="sortTable('likes')">いいね<span class="sort-icon" data-col="likes"></span></th>
-        <th class="sortable" onclick="sortTable('dislikes')">低評価(参考)<span class="sort-icon" data-col="dislikes"></span></th>
-        <th class="sortable" onclick="sortTable('dislike_rate')">低評価率(参考)<span class="sort-icon" data-col="dislike_rate"></span></th>
         <th class="sortable" onclick="sortTable('comments')">コメント<span class="sort-icon" data-col="comments"></span></th>
         <th class="sortable" onclick="sortTable('subscribers_net')">登録±<span class="sort-icon" data-col="subscribers_net"></span></th>
         <th>ネタ募集CTA</th>
@@ -85,8 +83,6 @@
           data-views="{{ row.get('views','0') or 0 }}"
           data-average_percentage_viewed="{{ row.get('average_percentage_viewed','0') or 0 }}"
           data-likes="{{ row.get('likes','0') or 0 }}"
-          data-dislikes="{{ row.get('dislikes','0') or 0 }}"
-          data-dislike_rate="{{ row.get('dislike_rate','0') or 0 }}"
           data-comments="{{ row.get('comments','0') or 0 }}"
           data-subscribers_net="{{ row.get('subscribers_net','0') or 0 }}"
           data-video-id="{{ row.get('video_id','') }}"
@@ -107,8 +103,6 @@
         <td>{{ row.get('views','—') }}</td>
         <td>{{ row.get('average_percentage_viewed','—') }}</td>
         <td>{{ row.get('likes','—') }}</td>
-        <td>{% if row.get('dislikes') is not none %}{{ row.get('dislikes') }}{% else %}<span style="color:#888;font-size:0.85em">取得不可</span>{% endif %}</td>
-        <td>{% if row.get('dislike_rate') is not none %}{{ '{:.1f}'.format(row.get('dislike_rate')) }}%{% else %}—{% endif %}</td>
         <td>{{ row.get('comments','—') }}</td>
         <td>{{ row.get('subscribers_net','—') }}</td>
         <td title="{{ row.get('topic_request_cta_reason','') }}">
