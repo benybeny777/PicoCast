@@ -220,7 +220,7 @@ try:
 except (ValueError, TypeError):
     _thumbnail_hold_raw = 3
 THUMBNAIL_HOLD_FRAMES_SHORTS: int = max(1, min(5, _thumbnail_hold_raw))  # Shorts先頭サムネ保持フレーム数
-ASSETS_DIR        = os.path.join(os.path.dirname(__file__), "assets")
+ASSETS_DIR        = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")  # プロジェクトルート/assets
 CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")      # キャラ PNG 格納ディレクトリ
 CHARACTER_PSD_DIR = os.path.join(CHARACTER_PNG_DIR, "psd")      # キャラ PSD 格納ディレクトリ
 ZUNDAMON_PSD_PATH = os.environ.get("ZUNDAMON_PSD_PATH", os.path.join(CHARACTER_PSD_DIR, "zundamon.psd"))
