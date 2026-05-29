@@ -464,8 +464,8 @@ def _effects_for_audio_files(script_path: str, audio_files: list[str], is_shorts
         text, style, _expression = caption
         if not is_shorts:
             telop = None
-        should_shake = bool(is_shorts and _is_reaction_for_motion(text, style))
-        icon = _reaction_icon(text, style) if is_shorts else None
+        should_shake = bool(is_shorts and _is_reaction_for_motion(text, style, _expression))
+        icon = _reaction_icon(text, style, _expression) if is_shorts else None
         if should_shake and shake_count < max(0, NATIVE_MAX_SHAKE_COUNT_SHORTS):
             shake_count += 1
         else:
@@ -478,7 +478,9 @@ def _effects_for_audio_files(script_path: str, audio_files: list[str], is_shorts
     return result
 
 
-def _is_reaction_for_motion(text: str, style: str) -> bool:
+def _is_reaction_for_motion(text: str, style: str, expression: str | None = None) -> bool:
+    if expression in ("驚き", "焦り", "ドン引き", "困惑", "呆れ", "怒り"):
+        return True
     compact = re.sub(r"\s+", "", str(text or ""))
     if not compact:
         return False
@@ -490,7 +492,13 @@ def _is_reaction_for_motion(text: str, style: str) -> bool:
     return style == "Metan" or "？" in compact or "?" in compact
 
 
-def _reaction_icon(text: str, style: str) -> str | None:
+def _reaction_icon(text: str, style: str, expression: str | None = None) -> str | None:
+    if expression in ("驚き", "ドン引き"):
+        return "!?" if style == "Metan" else "！"
+    if expression in ("困惑", "疑問"):
+        return "？"
+    if expression in ("焦り", "怒り"):
+        return "!" if style == "Metan" else "！"
     compact = re.sub(r"\s+", "", str(text or ""))
     has_question = "？" in compact or "?" in compact
     has_exclaim = "！" in compact or "!" in compact or re.search(r"ヤバ|やば|えっ|マジ|まじ", compact)
