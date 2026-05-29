@@ -321,6 +321,7 @@ ANALYTICS_CHANNEL_LEGACY_NOTE = (             # 旧チャンネル時代の登�
     "旧チャンネル時代にインド向け広告で集めた登録者が離脱している可能性あり。"
     "チャンネルリメイク実稼働は2026/5/15以降のため、それ以前投稿分の離脱数値は参考値扱い。"
 )
+ANALYTICS_DISLIKE_RATE_MIN_REACTIONS = int(os.environ.get("ANALYTICS_DISLIKE_RATE_MIN_REACTIONS", "10"))  # dislike_rate を参考値と見なす likes+dislikes の下限
 
 # ───────────────────────────────────────────────
 # タイムライン・尺計算用定数

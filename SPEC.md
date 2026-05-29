@@ -1092,7 +1092,7 @@ Long動画のアップロード成功後は、`LONG_UPLOAD_PLAYLIST_NAME` の名
 
 台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。アップロード時に `_meta/upload_record.json` へ保存し、Analytics一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。
 
-Analytics画面には `高評価率` に加えて `低評価(参考)` / `低評価率(参考)` / `生成区分` / `元動画` / `目的` を表示します。低評価はスコア判定には使わない補助指標であり、APIから取得不能な場合は空欄扱いとなります。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、対象期間・取得日時、再生数上位・平均視聴率上位・高評価率上位・data_wait注目動画をまとめた実績サマリーを付けます。`AI分析用にコピー` では `analysis_status=data_wait` の動画にも暫定評価コメントを入れるよう指示します。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
+Analytics取得・画面表示・TSV出力には `dislikes`（低評価数）/ `like_dislike_total`（いいね+低評価合計）/ `dislike_rate`（低評価率 = dislikes / max(likes+dislikes, 1) × 100）を含める。`likes + dislikes < ANALYTICS_DISLIKE_RATE_MIN_REACTIONS`（デフォルト10）の場合は `dislike_rate_provisional=True` とし、画面では `*` を付けて参考値であることを示す。低評価はS/A/B/C/Dスコア判定には使わない。Analytics画面には `高評価率` に加えて `低評価(参考)` / `低評価率(参考)` / `生成区分` / `元動画` / `目的` を表示します。低評価はAPIから取得不能な場合は空欄扱いとなります。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、対象期間・取得日時、再生数上位・平均視聴率上位・高評価率上位・data_wait注目動画をまとめた実績サマリーを付けます。`AI分析用にコピー` では `analysis_status=data_wait` の動画にも暫定評価コメントを入れるよう指示します。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
 
 動画別列には `登録者増`（`subscribers_gained`）と `登録者減`（`subscribers_lost`）を個別表示し、`登録者増減`（純増 = gained - lost）も並べます。サマリーバーにはチャンネル全体の登録者増減（dimension なし API 取得）を `+gained -lost 純増net` 形式で表示します。AI分析コピーの実績サマリーにもチャンネル全体の登録者増減と旧チャンネル注記（`ANALYTICS_CHANNEL_LEGACY_NOTE`）を含めます。Analytics画面下部には固定の注記ラベルとして旧チャンネル時代の文脈（インド広告・リメイク開始日 `ANALYTICS_CHANNEL_REMAKE_DATE`）を常時表示します。
 
