@@ -36,8 +36,10 @@ async def _lifespan(app):
     import threading
     from web_app.services.auto_fixed_comment_service import start_auto_watcher
     from web_app.services.status_service import refresh_settings_status
+    from core.external_service_check import log_external_services
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
+    threading.Thread(target=log_external_services, daemon=True).start()
     yield
 
 app = FastAPI(
