@@ -115,16 +115,41 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
 
     _log(job, f"アップロード完了: video_id={video_id}", "success")
 
-    # upload_record.json を書く
+    # スロットを取得して YouTube でスケジュール設定
     video_format = str(render_info.get("video_format") or "").strip().lower()
     video_type = "shorts" if "short" in video_format else "long"
-    record = {
+    publish_at_iso: str | None = None
+    try:
+        from core.upload_scheduler import assign_slots_from_youtube
+        from core.youtube_uploader import update_video_publish_time
+        slots = assign_slots_from_youtube(1, video_type)
+        if slots:
+            slot_dt = slots[0]
+            _log(job, f"スロット割り当て: {slot_dt.isoformat()}", "info")
+            ok = update_video_publish_time(
+                video_id, slot_dt,
+                progress_callback=lambda msg: _log(job, msg, "info"),
+            )
+            if ok:
+                publish_at_iso = slot_dt.isoformat()
+                _log(job, f"公開予定を設定しました: {publish_at_iso}", "success")
+            else:
+                _log(job, "公開予定の設定に失敗しました。非公開のままです。", "warning")
+        else:
+            _log(job, "空きスロットが見つかりませんでした。非公開のままです。", "warning")
+    except Exception as e:
+        _log(job, f"スロット設定エラー（非公開のまま続行）: {e}", "warning")
+
+    # upload_record.json を書く
+    record: dict = {
         "video_id": video_id,
         "title": render_info.get("video_title", history_name),
         "video_type": video_type,
         "uploaded_at": datetime.now(_JST).isoformat(),
-        "publish_status": "private",
+        "publish_status": "scheduled" if publish_at_iso else "private",
     }
+    if publish_at_iso:
+        record["publish_at"] = publish_at_iso
     meta_dir = os.path.join(theme_dir, "_meta")
     os.makedirs(meta_dir, exist_ok=True)
     with open(os.path.join(meta_dir, "upload_record.json"), "w", encoding="utf-8") as f:
