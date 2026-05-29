@@ -1,7 +1,7 @@
 """
 YouTube upload schedule manager.
 
-Shorts slots: 07:00 / 12:00 / 19:00 JST every day.
+Shorts slots: 00:00 / 12:00 / 21:00 JST every day (視聴者アクティブ時間帯に合わせた検証枠).
 Long slots: 21:00 JST on weekdays, 12:00 / 21:00 JST on weekends.
 Shorts and Long are tracked separately, so they may share the same time.
 """
@@ -10,7 +10,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
-SLOTS = [7, 12, 19]
+SLOTS = [0, 12, 21]
 LONG_SLOTS_WEEKDAY = [21]
 LONG_SLOTS_WEEKEND = [12, 21]
 

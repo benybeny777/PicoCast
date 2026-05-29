@@ -12,6 +12,16 @@
 
 ---
 
+## 2026-05-29 Shorts予約スロットを 0:00/12:00/21:00 に変更（視聴者アクティブ時間帯検証）
+
+**対象ファイル:** `core/upload_scheduler.py` / `web_app/services/auto_fixed_comment_service.py` / `SPEC.md`
+
+**変更内容:**
+- `SLOTS = [7, 12, 19]` → `SLOTS = [0, 12, 21]` に変更
+- 視聴者アクティブ時間帯 (0:00〜2:00 / 12:00〜14:00 / 21:00〜23:00) に合わせた検証枠として運用
+- Long スロット（平日21:00 / 土日12:00・21:00）は変更なし
+- 既存予約済み動画は自動変更しない。スロット詰め直し・公開予定変更を実行した場合のみ新スロットが適用される
+
 ## 2026-05-29 四国めたん毒舌ツッコミ役への強化・役割固定ルール追加
 
 **対象ファイル:** `core/script_prompts.py` / `config/prompt_parts/script_generation_prompt_meeting.txt` / `SPEC.md`
