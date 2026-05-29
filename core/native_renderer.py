@@ -499,6 +499,8 @@ def _reaction_icon(text: str, style: str, expression: str | None = None) -> str 
         return "？"
     if expression in ("焦り", "怒り"):
         return "!" if style == "Metan" else "！"
+    if expression == "呆れ":
+        return None  # 揺れのみ・アイコンなし
     compact = re.sub(r"\s+", "", str(text or ""))
     has_question = "？" in compact or "?" in compact
     has_exclaim = "！" in compact or "!" in compact or re.search(r"ヤバ|やば|えっ|マジ|まじ", compact)
@@ -997,8 +999,24 @@ def _video_size(output_dir: str, script_path: str) -> tuple[int, int]:
         return 1080, 1920
     try:
         with open(script_path, "r", encoding="utf-8") as f:
-            items = ScriptParser.parse_string(f.read())
-        if any(it.get("type") == "video_format" and str(it.get("text", "")).strip().lower() in ("shorts", "short") for it in items):
+            content = f.read()
+        items = ScriptParser.parse_string(content)
+        format_val = ""
+        screen_format = ""
+        for it in items:
+            if it.get("type") == "video_format":
+                format_val = str(it.get("text", "")).strip()
+            elif it.get("type") == "screen_format":
+                screen_format = str(it.get("text", "")).strip()
+        fmt_lower = format_val.lower()
+        if "shorts" in fmt_lower or "ショート" in format_val:
+            return 1080, 1920
+        if "ネタ会議" in format_val:
+            # ネタ会議Long → 横、ネタ会議Shorts/ネタ会議 → 縦（デフォルト）
+            if "long" in fmt_lower or "ロング" in format_val:
+                return 1920, 1080
+            if "横" in screen_format or "wide" in screen_format.lower():
+                return 1920, 1080
             return 1080, 1920
     except Exception as _e:
         raise RuntimeError(f"Error: {_e}") from _e

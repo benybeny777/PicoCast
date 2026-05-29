@@ -138,7 +138,9 @@ yukkurijidou/
 - 尺: **2〜4分程度**（ShortLong / ミニ番組枠）
 - 次回の制作に向けた候補ネタ（4〜5個）をずんだもんと四国めたんが会議する「制作会議コント」
 - めたんによるチャンネル運用上の自虐メタツッコミ（「スワイプされる」「伸びない」等）を含む
-- `動画形式: ネタ会議` などの記述で **横画面（Long）** 形式のミニ番組として解釈される（Shortsの判定からは外れる）
+- `動画形式: ネタ会議` などの記述でミニ番組として解釈される（Shortsの判定からは外れる）
+- バリアント: `ネタ会議Long` → 横画面 (1920×1080)、`ネタ会議Shorts` または `ネタ会議`（デフォルト）→ 縦画面 (1080×1920)。`画面形式: 横` でも横判定
+- `render_native_test` が呼ばれる際、フォルダ名 `[ネタ会議]...` は `_video_size` で上記バリアントを台本から再判定して解像度を決定する
 - プレミア公開や視聴者への投票（コメントやアンケート）を前提とする
 - `_meta/metadata.txt` に `候補ネタ: ...` の複数行データが保存され、後日の制作参考として蓄積できる
 - ネタ会議モードでは、第1部の候補一覧に実績根拠として具体数値を保存するが、第2部の本編台本では再生数・平均視聴率・高評価数・コメント数などの具体数値を読み上げない。本編では「前に反応がよかった」「手応えがあった」「関心を持たれやすい」など、視聴者向けの自然な表現へ変換する。
@@ -769,7 +771,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
 - **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。
 - 字幕フチ幅は `NATIVE_SUBTITLE_STROKE_WIDTH`(内フチ, デフォルト 9) / `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(外フチ, デフォルト 13) で調整可能。字幕帯のパディングは `NATIVE_SUBTITLE_PADDING_Y` で調整。
-- **Shorts軽量エフェクト**: `NATIVE_ENABLE_MOTION_EFFECTS=1` のとき、背景に最大 `NATIVE_BG_ZOOM_MAX` までのKen Burns風ズーム/パン、話者キャラの0.2秒前後の軽いバウンス、`テロップ:` 行の0.8〜1.5秒ポップ表示、短いツッコミ/疑問場面の軽いシェイクと疑問/驚きアイコンを追加する。シェイクとアイコンは各 `NATIVE_MAX_SHAKE_COUNT_SHORTS` / `NATIVE_MAX_ICON_COUNT_SHORTS` 回までに制限する。
+- **Shorts軽量エフェクト**: `NATIVE_ENABLE_MOTION_EFFECTS=1` のとき、背景に最大 `NATIVE_BG_ZOOM_MAX` までのKen Burns風ズーム/パン、話者キャラの0.2秒前後の軽いバウンス、`テロップ:` 行の0.8〜1.5秒ポップ表示、短いツッコミ/疑問場面の軽いシェイクと疑問/驚きアイコンを追加する。シェイクとアイコンは各 `NATIVE_MAX_SHAKE_COUNT_SHORTS` / `NATIVE_MAX_ICON_COUNT_SHORTS` 回までに制限する。感情タグ (`expression`) が付与されている場合、タグ優先でシェイク判定とアイコン選択を行う（驚き/ドン引き → "!?" or "！"、困惑/疑問 → "？"、焦り/怒り → "!" or "！"、呆れ → 揺れのみ・アイコンなし）。
 - エフェクトはセグメント単位で付与し、BGM・音声タイミングは変更しない。ffmpegフィルタが失敗したセグメントはエフェクトなしで再レンダーして生成を継続する。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭に `THUMBNAIL_HOLD_FRAMES_SHORTS`（デフォルト3フレーム≒0.1秒）だけサムネイル画像を挿入する（Long は挿入しない）。保持フレーム数は `.env` の `THUMBNAIL_HOLD_FRAMES_SHORTS` で変更可。1秒以上の静止サムネは設定値に関係なく生じない（上限5フレーム≒0.17秒）。

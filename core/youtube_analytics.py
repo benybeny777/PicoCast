@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from datetime import datetime, timedelta, timezone
@@ -154,7 +155,6 @@ def _video_metadata(youtube, video_ids):
             else:
                 publish_status = privacy  # "private" / "unknown"
 
-            import logging
             if "dislikeCount" in stats:
                 stats_dislikes = int(stats.get("dislikeCount", 0) or 0)
             else:

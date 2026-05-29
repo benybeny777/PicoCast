@@ -12,6 +12,17 @@
 
 ---
 
+## 2026-05-29 バグ修正: ネタ会議動画の解像度誤判定・import整理・呆れアイコン明示
+
+**対象ファイル:** `core/native_renderer.py` / `core/youtube_analytics.py` / `core/parser.py`
+
+**変更内容:**
+- `_video_size` がネタ会議フォルダ (`[ネタ会議]...`) を常に 1920×1080 で出力していたバグを修正。動画形式に「ネタ会議Shorts」「ネタ会議」が含まれる場合は縦 (1080×1920)、「ネタ会議Long」または `画面形式: 横` は横 (1920×1080) と正しく判定するよう対応
+- `import logging` をメソッド/ループ内から各ファイルのトップレベルに移動
+- `_reaction_icon` で `expression="呆れ"` が定義されず誤ったアイコンが表示されることがあった問題を修正。「呆れ」は揺れのみ・アイコンなし (None) を明示
+
+---
+
 ## 2026-05-29 Analytics画面・TSVに低評価参考指標を追加
 
 **対象ファイル:** `core/youtube_analytics.py` / `core/analytics_score.py` / `web_app/templates/analytics.html` / `SPEC.md`

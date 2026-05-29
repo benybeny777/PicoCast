@@ -1,3 +1,4 @@
+import logging
 import re
 from config import CHARACTERS, CHARACTER_EXPRESSION_PNGS
 
@@ -266,7 +267,6 @@ class ScriptParser:
                         char_name = char_name[:-1].strip()
                         if not emotion:
                             emotion = "ツンツン" if "めたん" in char_name else "ノーマル"
-                            import logging
                             logging.getLogger(__name__).warning(f"台本形式を補正: {m.group(1).strip()}[{expression or ''}] → {char_name}({emotion})[{expression or ''}]")
                     
                     if not emotion:
