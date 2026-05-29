@@ -42,8 +42,17 @@ def setup_debug_logging() -> str | None:
         ))
         handler.addFilter(_SecretRedactingFilter())
         root.addHandler(handler)
-        # watchfiles が自ファイルの書き込みを検知してループするのを防ぐ
-        logging.getLogger("watchfiles").setLevel(logging.WARNING)
+        # サードパーティライブラリのノイズを抑制
+        for _noisy in (
+            "watchfiles",       # ファイル変更検知ループ防止
+            "httpcore",         # HTTP接続の内部詳細
+            "httpx",            # 同上
+            "asyncio",          # Python内部ループ
+            "googleapiclient",  # Google API ディスカバリ
+            "urllib3",          # HTTP低レベル
+            "PIL",              # Pillow内部
+        ):
+            logging.getLogger(_noisy).setLevel(logging.WARNING)
         _CONFIGURED = True
 
     cleanup_old_debug_logs()
