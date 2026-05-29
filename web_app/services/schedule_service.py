@@ -150,20 +150,31 @@ def submit_update_job(video_id: str, publish_at: str) -> dict[str, Any]:
 
 
 def _run_update_schedule(job: Job, video_id: str, publish_at: str) -> dict[str, Any]:
+    from datetime import datetime, timedelta, timezone
     from core.youtube_uploader import update_video_publish_time
 
-    _log(job, f"公開予定変更中: {video_id} → {publish_at}", "info")
+    # publish_at をJST isoformat に正規化（フォームからはタイムゾーンなしで来る場合がある）
+    _JST = timezone(timedelta(hours=9))
+    try:
+        dt = datetime.fromisoformat(publish_at)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=_JST)
+        publish_at_jst = dt.astimezone(_JST).isoformat()
+    except Exception:
+        publish_at_jst = publish_at
+
+    _log(job, f"公開予定変更中: {video_id} → {publish_at_jst}", "info")
     ok = update_video_publish_time(
         video_id,
-        publish_at,
+        publish_at_jst,
         progress_callback=lambda msg: _log(job, msg, "info"),
     )
     if not ok:
         raise Exception("YouTube API での公開予定変更に失敗しました")
 
-    _update_local_record(video_id, publish_at)
-    _log(job, f"公開予定変更完了: {publish_at}", "success")
-    return {"video_id": video_id, "publish_at": publish_at}
+    _update_local_record(video_id, publish_at_jst)
+    _log(job, f"公開予定変更完了 (JST): {publish_at_jst}", "success")
+    return {"video_id": video_id, "publish_at": publish_at_jst}
 
 
 def _update_local_record(video_id: str, new_publish_at: str) -> None:
