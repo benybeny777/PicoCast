@@ -12,6 +12,20 @@
 
 ---
 
+## 2026-05-29 四国めたん毒舌ツッコミ役への強化・役割固定ルール追加
+
+**対象ファイル:** `core/script_prompts.py` / `config/prompt_parts/script_generation_prompt_meeting.txt` / `SPEC.md`
+
+**変更内容:**
+- `METAN_TSUNDERE_RULES` / `METAN_TSUNDERE_RULES_MEETING` を `script_prompts.py` に定数として追加
+- `build_script_generation_prompt()` / `build_meeting_script_prompt()` でプロンプト末尾に常時注入
+- `COMMON_SCRIPT_RULES` のめたん記述を「相槌役ではなく強めの毒舌ツッコミ役・辛口編集者」に更新
+- 毒舌OK/NG対象、Shortsでの頻度と配置（冒頭2行目必須・中盤1回・ラスト毒舌オチ）、禁止セリフ一覧、掛け合い例、生成後チェックを追加
+- めたんの相槌・補足解説を全面禁止。全セリフに「疑問・反論・毒舌・皮肉・違和感」のいずれかを必須化
+- 会話構造「ずんだもん:事実出す → めたん:毒舌で刺す」を基本に固定
+- ネタ会議モード（`METAN_TSUNDERE_RULES_MEETING`）では辛口査定役としてさらに強化
+- samples版 `config/prompt_parts/script_generation_prompt_meeting.txt` を新規作成
+
 ## 2026-05-29 Analytics/vidIQ実績ルールをタイトル案・台本生成に反映
 
 **対象ファイル:** `config/config.py` / `core/analytics_score.py` / `config/prompt_parts/local/title_dynamic_context_food.md` / `config/prompt_parts/title_dynamic_context_food.md` / `config/prompt_parts/local/script_generation_prompt.txt`
