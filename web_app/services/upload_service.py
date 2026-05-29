@@ -5,6 +5,7 @@ YouTubeアップロードサービス。
 import json
 import os
 import shutil
+import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -13,6 +14,7 @@ from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import is_video_folder, safe_output_path
 
 _JST = timezone(timedelta(hours=9))
+_slot_lock = threading.Lock()  # スロット割り当ての同時実行を防ぐ
 
 
 def list_upload_candidates() -> list[dict[str, Any]]:
@@ -116,31 +118,33 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
     _log(job, f"アップロード完了: video_id={video_id}", "success")
 
     # スロットを取得して YouTube でスケジュール設定
+    # 複数本同時アップロード時の競合を防ぐためロックで直列化する
     video_format = str(render_info.get("video_format") or "").strip().lower()
     video_type = "shorts" if "short" in video_format else "long"
     publish_at_iso: str | None = None
-    try:
-        from core.upload_scheduler import assign_slots_from_youtube
-        from core.youtube_uploader import update_video_publish_time
-        slots = assign_slots_from_youtube(1, video_type)
-        if slots:
-            slot_dt = slots[0]
-            _log(job, f"スロット割り当て: {slot_dt.isoformat()}", "info")
-            ok = update_video_publish_time(
-                video_id, slot_dt,
-                progress_callback=lambda msg: _log(job, msg, "info"),
-            )
-            if ok:
-                publish_at_iso = slot_dt.isoformat()
-                _log(job, f"公開予定を設定しました: {publish_at_iso}", "success")
+    with _slot_lock:
+        try:
+            from core.upload_scheduler import assign_slots_from_youtube
+            from core.youtube_uploader import update_video_publish_time
+            slots = assign_slots_from_youtube(1, video_type)
+            if slots:
+                slot_dt = slots[0]
+                _log(job, f"スロット割り当て: {slot_dt.isoformat()}", "info")
+                ok = update_video_publish_time(
+                    video_id, slot_dt,
+                    progress_callback=lambda msg: _log(job, msg, "info"),
+                )
+                if ok:
+                    publish_at_iso = slot_dt.isoformat()
+                    _log(job, f"公開予定を設定しました: {publish_at_iso}", "success")
+                else:
+                    _log(job, "公開予定の設定に失敗しました。非公開のままです。", "warning")
             else:
-                _log(job, "公開予定の設定に失敗しました。非公開のままです。", "warning")
-        else:
-            _log(job, "空きスロットが見つかりませんでした。非公開のままです。", "warning")
-    except Exception as e:
-        _log(job, f"スロット設定エラー（非公開のまま続行）: {e}", "warning")
+                _log(job, "空きスロットが見つかりませんでした。非公開のままです。", "warning")
+        except Exception as e:
+            _log(job, f"スロット設定エラー（非公開のまま続行）: {e}", "warning")
 
-    # upload_record.json を書く
+    # upload_record.json を書く（ロック外で実施）
     record: dict = {
         "video_id": video_id,
         "title": render_info.get("video_title", history_name),

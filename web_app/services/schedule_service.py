@@ -14,11 +14,21 @@ def list_schedule(
     video_type_filter: str = "all",
     include_published: bool = False,
 ) -> list[dict[str, Any]]:
-    """YouTube API から直接スケジュールを取得して返す。"""
-    from datetime import datetime, timezone
+    """YouTube API から直接スケジュールを取得して返す。publish_at はJST isoformat で返す。"""
+    from datetime import datetime, timedelta, timezone
     from core.youtube_uploader import get_channel_upload_video_statuses
 
+    JST = timezone(timedelta(hours=9))
     now_utc = datetime.now(timezone.utc)
+
+    def _to_jst_iso(raw: str) -> str:
+        """YouTube APIのUTC文字列をJST isoformat に変換する。"""
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return dt.astimezone(JST).isoformat()
+        except Exception:
+            return raw
+
     try:
         statuses = get_channel_upload_video_statuses()
     except Exception as e:
@@ -27,7 +37,8 @@ def list_schedule(
     result = []
     for video_id, s in statuses.items():
         privacy = str(s.get("privacyStatus") or "").lower()
-        publish_at = str(s.get("publishAt") or "").strip()
+        raw_publish_at = str(s.get("publishAt") or "").strip()
+        publish_at = _to_jst_iso(raw_publish_at) if raw_publish_at else ""
         video_type = str(s.get("video_type") or "").lower()
         title = str(s.get("title") or "")
 
