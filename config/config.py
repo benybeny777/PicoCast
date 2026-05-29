@@ -350,6 +350,7 @@ FOLDER_PREFIX_SHORTS  = os.environ.get("FOLDER_PREFIX_SHORTS",  "Shorts_")   # �
 FOLDER_PREFIX_LONG    = os.environ.get("FOLDER_PREFIX_LONG",    "Long_")     # 長動画フォルダプレフィックス
 FOLDER_PREFIX_MEETING = os.environ.get("FOLDER_PREFIX_MEETING", "ネタ会議_") # ネタ会議フォルダプレフィックス
 # 旧プレフィックス（移行後も strip に使う）
+# TODO: 2026-06-29 以降に "[Shorts]"/"[Long]"/"[SHORT]"/"[LONG]"/"[ネタ会議]" を削除し新形式のみにする
 _LEGACY_FOLDER_PREFIXES = ("Shorts_", "Long_", "ネタ会議_", "[Shorts]", "[Long]", "[SHORT]", "[LONG]", "[ネタ会議]")
 
 # ───────────────────────────────────────────────

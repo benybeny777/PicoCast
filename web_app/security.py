@@ -55,5 +55,5 @@ def is_video_folder(name: str) -> bool:
     from config import config
     return name.startswith((
         config.FOLDER_PREFIX_SHORTS, config.FOLDER_PREFIX_LONG, config.FOLDER_PREFIX_MEETING,
-        "[Shorts]", "[Long]", "[ネタ会議]",  # 旧形式（移行期間中）
+        "[Shorts]", "[Long]", "[ネタ会議]",  # 旧形式 互換 TODO: 2026-06-29 以降に削除
     ))
