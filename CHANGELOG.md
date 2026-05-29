@@ -12,6 +12,33 @@
 
 ---
 
+## 2026-05-29 アップロード後スロット自動割り当て・スケジュール画面YouTube直接取得
+
+**対象ファイル:** `web_app/services/upload_service.py` / `web_app/services/schedule_service.py` / `core/upload_scheduler.py`
+
+**変更内容:**
+- アップロード完了後に `assign_slots_from_youtube()` で次の空きスロットを取得し YouTube API でスケジュール設定するよう修正。バッチアップロード時の競合は `_slot_lock` で防止
+- スケジュール画面（`/schedule`）を `get_channel_upload_video_statuses()` から直接取得する構成に変更。ページ表示のたびに YouTube の最新状態を反映
+- `sync_schedule_from_youtube()` が `save_upload_records()`（No-op）を呼んで変更が保存されなかったバグを修正。各動画の `_meta/upload_record.json` に個別書き戻しするよう修正
+- スロット詰め直し計算の結果ログを `MM/DD HH:MM JST` 形式で表示
+
+## 2026-05-29 日時表示をJST統一
+
+**対象ファイル:** `web_app/job_manager.py` / テンプレート全般
+
+**変更内容:**
+- `job_manager.py` の `started_at` / `finished_at` / ログタイムスタンプを UTC から JST に変更
+- テンプレートの日時表示から T 区切りを除去し `YYYY-MM-DD HH:MM` 形式に統一
+
+## 2026-05-29 複数生成後レンダリングバグ修正・外部サービス情報表示
+
+**対象ファイル:** `workers/main.py` / `workers/worker_pipeline.py` / `web_app/services/generation_service.py` / `core/external_service_check.py`（新規）
+
+**変更内容:**
+- `run_pipeline` が「完成」を返すのに `generation_service` が「完了」で判定し with_render が常にスキップされていたバグを修正
+- フォルダ名に `[Shorts]` 等のプレフィックスを含まない `_safe_dirname()` でレンダーを起動していたバグを修正。`GenerationReport.theme_dir` に実フォルダパスを格納して正しく渡すよう修正
+- `core/external_service_check.py` を新規追加。起動時と処理ログに ffmpeg（エンコーダ・HW対応）/ VOICEVOX（GPU/CPU）/ Ollama（モデルGPU率）の情報を出力
+
 ## 2026-05-29 フォルダプレフィックスを [] から _ 形式に変更（Windows/Mac 両対応）
 
 **対象ファイル:** `config/config.py` ほか全域 / `scripts/migrate_folder_prefixes.py`（新規）

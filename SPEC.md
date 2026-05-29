@@ -1,7 +1,7 @@
 # ずんかみ自動生成システム 仕様書
 
 チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
-最終更新: 2026-05-28
+最終更新: 2026-05-29
 
 ---
 
@@ -373,11 +373,15 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 - スロット割当範囲: 最大90日先まで探索
 - アップロード実行後:
-  - `_meta/upload_record.json` を書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=private`）
-  - フォルダを `output/000_uploaded/<フォルダ名>/` へ移動する
-  - `output/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
-- スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`schedule_from_youtube()` / `rebalance_slots()` はYouTube側の予約状態を参照する。旧 `upload_schedule_*.json` と中央 `upload_records.json` は廃止
-- `sync_schedule_from_youtube()`: YouTube API を正として、必要に応じて各動画のアップロード記録へ反映する。チャンネル全件取得（`get_channel_upload_video_statuses`）に失敗した場合は既知 video_id のみでフォールバック
+  1. `assign_slots_from_youtube()` で YouTube 予約済み一覧を正として次の空きスロットを取得
+  2. `update_video_publish_time()` で YouTube API に公開予定を設定（`_slot_lock` で複数本同時アップロード時の競合を防止）
+  3. `_meta/upload_record.json` を書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=scheduled` / `publish_at=JST isoformat`）。スロット取得失敗時は `publish_status=private`
+  4. フォルダを `output/000_uploaded/<フォルダ名>/` へ移動する
+  5. `output/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
+- スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。旧 `upload_schedule_*.json` と中央 `upload_records.json` は廃止
+- `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す
+- `sync_schedule_from_youtube()`: YouTube API を正として各動画の `_meta/upload_record.json` へ書き戻す。チャンネル全件取得に失敗した場合は既知 video_id のみでフォールバック
+- すべての日時（ジョブ起動時刻・ログタイムスタンプ・`publish_at`）はJST で統一する
 - `infer_video_type()`: タイトルプレフィックス優先。タイトルなしの場合は duration ≤ 60s を shorts と推定
 
 ### 出力データディレクトリ
@@ -1263,6 +1267,8 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 ---
 
 ## 外部サービス依存
+
+アプリ起動時に `core/external_service_check.py` が各サービスの起動状態と使用デバイス（GPU/CPU）を確認し、コンソールおよびデバッグログに出力する。ダッシュボードの「連携アプリ」欄の「更新」ボタンでも再確認できる。
 
 | サービス | 用途 | 認証 |
 |---|---|---|
