@@ -189,7 +189,7 @@
 .score-letter-E { background:#c0392b; color:#fff; padding:2px 6px; border-radius:4px; }
 </style>
 <script>
-const SCORE_ORDER = {'A':5,'B':4,'C':3,'D':2,'E':1,'':0};
+const SCORE_ORDER = {'A':5,'B':4,'C':3,'D':2,'E':1,'未計測':0,'対象外':-1};
 let _sortCol = 'published_at';
 let _sortDir = -1;  // -1=降順, 1=昇順
 
@@ -303,7 +303,9 @@ function sortTable(col) {
     const vb = (b.dataset[col] || '').trim();
 
     if (col === 'score') {
-      return _sortDir * ((SCORE_ORDER[va] || 99) - (SCORE_ORDER[vb] || 99));
+      const sa = va in SCORE_ORDER ? SCORE_ORDER[va] : -2;
+      const sb = vb in SCORE_ORDER ? SCORE_ORDER[vb] : -2;
+      return _sortDir * (sa - sb);
     }
     const na = parseFloat(va), nb = parseFloat(vb);
     if (!isNaN(na) && !isNaN(nb)) return _sortDir * (na - nb);
