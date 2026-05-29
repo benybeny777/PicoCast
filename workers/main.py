@@ -1697,6 +1697,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "thumbnail_hold_frames": _thumb_frames,
                 "thumbnail_hold_seconds": round(_thumb_frames / VIDEO_FPS, 3),
             },
+            # アップロード時に参照するメタデータ
+            "video_title": meta.get("video_title", topic),
+            "description": meta.get("description", ""),
+            "tags": meta.get("tags", []),
+            "video_format": meta.get("video_format", ""),
         }
         render_info_path = os.path.join(_meta_dir(theme_dir), "render_info.json")
         with open(render_info_path, "w", encoding="utf-8") as f:
