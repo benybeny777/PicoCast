@@ -7,6 +7,7 @@
   <div class="action-row">
     <button class="btn btn-primary" onclick="syncSchedule()">YouTube同期</button>
     <button class="btn btn-secondary" onclick="rebalanceCalc()">スロット詰め直し計算</button>
+    <button class="btn btn-danger" onclick="rebalanceApply()">スロット詰め直し適用</button>
   </div>
   <div class="filter-row mt-sm">
     <select id="type-filter" onchange="filterSchedule()">
@@ -92,7 +93,7 @@
 <div class="card mt">
   <p class="hint">
     <strong>注意:</strong> 削除は <a href="https://studio.youtube.com/" target="_blank">YouTube Studio</a> から手動で操作してください。
-    スロット詰め直し計算は変更案の確認のみで、YouTube への書き込みは行いません。
+    スロット詰め直し<strong>計算</strong>は変更案の確認のみ（書き込みなし）。<strong>適用</strong>ボタンで実際に YouTube へ反映します。
   </p>
 </div>
 {% endblock %}
@@ -120,12 +121,30 @@ async function rebalanceCalc() {
   if (!confirm('スロット詰め直し変更案を計算しますか？（YouTube への書き込みは行いません）')) return;
   const statusBox = document.getElementById('sync-status');
   statusBox.style.display = 'block';
-  statusBox.textContent = '計算中...';
+  statusBox.innerHTML = '';
   try {
     const res = await fetch('/api/schedule/rebalance', {method: 'POST'});
     const data = await res.json();
-    statusBox.textContent = `ジョブ登録: ${data.job_id}`;
     pollJob(data.job_id, statusBox, false);
+  } catch(e) {
+    statusBox.textContent = 'エラー: ' + e;
+  }
+}
+
+async function rebalanceApply() {
+  if (!confirm('スロットを詰め直して YouTube へ適用します。\n現在の公開予定が変更されます。よろしいですか？')) return;
+  const statusBox = document.getElementById('sync-status');
+  statusBox.style.display = 'block';
+  statusBox.innerHTML = '';
+  try {
+    const res = await fetch('/api/schedule/rebalance/apply', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirmed: true}),
+    });
+    const data = await res.json();
+    if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
+    pollJob(data.job_id, statusBox, true);
   } catch(e) {
     statusBox.textContent = 'エラー: ' + e;
   }

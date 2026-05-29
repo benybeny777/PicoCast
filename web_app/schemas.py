@@ -98,6 +98,10 @@ class ScheduleDeleteRequest(BaseModel):
     confirmed: bool = False
 
 
+class ConfirmedRequest(BaseModel):
+    confirmed: bool = False
+
+
 # ── 固定コメント ──────────────────────────────────────
 class FixedCommentRequest(BaseModel):
     history_name: str

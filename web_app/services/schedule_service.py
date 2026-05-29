@@ -112,6 +112,15 @@ def submit_rebalance_job() -> str:
     return job.job_id
 
 
+def submit_apply_rebalance_job() -> str:
+    """スロット詰め直しを計算して YouTube へ適用するジョブを登録する。"""
+    mgr = get_job_manager()
+    job = mgr.create_job("schedule_rebalance")
+    _log(job, "スロット詰め直し適用ジョブを登録しました", "info")
+    mgr.submit(job, _run_apply_rebalance)
+    return job.job_id
+
+
 def _fmt_jst(iso: str) -> str:
     """JST isoformat を読みやすい表示用文字列に変換する。"""
     try:
@@ -148,6 +157,49 @@ def _run_rebalance(job: Job) -> dict[str, Any]:
         }
     except Exception as e:
         _log(job, f"計算エラー: {e}", "error")
+        raise
+
+
+def _run_apply_rebalance(job: Job) -> dict[str, Any]:
+    """スロット詰め直しを計算して YouTube へ適用する。"""
+    from core.upload_scheduler import rebalance_slots_detailed
+    from core.youtube_uploader import update_video_publish_time
+
+    _log(job, "スロット詰め直しを計算中...", "info")
+    try:
+        all_changes = []
+        for vtype in ("shorts", "long"):
+            for old, new, title, video_id, _ in rebalance_slots_detailed(vtype):
+                all_changes.append((old, new, title, video_id))
+
+        if not all_changes:
+            _log(job, "変更なし。スロットはすでに最適です。", "success")
+            return {"applied": 0}
+
+        _log(job, f"変更案 {len(all_changes)} 件を YouTube に適用します...", "info")
+        ok_count = 0
+        for old, new, title, video_id in all_changes:
+            if job.cancel_event.is_set():
+                _log(job, "キャンセルされました", "warning")
+                break
+            if not video_id:
+                _log(job, f"  スキップ (video_id なし): {title}", "warning")
+                continue
+            _log(job, f"  適用中: {title}  {_fmt_jst(old)} → {_fmt_jst(new)}", "info")
+            ok = update_video_publish_time(
+                video_id, new,
+                progress_callback=lambda msg: _log(job, f"    {msg}", "info"),
+            )
+            if ok:
+                _update_local_record(video_id, new)
+                ok_count += 1
+            else:
+                _log(job, f"    ⚠ YouTube への適用失敗: {video_id}", "warning")
+
+        _log(job, f"完了: {ok_count}/{len(all_changes)} 件適用", "success")
+        return {"applied": ok_count, "total": len(all_changes)}
+    except Exception as e:
+        _log(job, f"適用エラー: {e}", "error")
         raise
 
 

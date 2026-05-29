@@ -1,9 +1,10 @@
 from fastapi import APIRouter, HTTPException, Query
-from web_app.schemas import ScheduleUpdateRequest, ScheduleDeleteRequest
+from web_app.schemas import ConfirmedRequest, ScheduleUpdateRequest, ScheduleDeleteRequest
 from web_app.services.schedule_service import (
     list_schedule,
     submit_sync_job,
     submit_rebalance_job,
+    submit_apply_rebalance_job,
     update_schedule,
     delete_schedule,
 )
@@ -29,6 +30,15 @@ def api_schedule_sync():
 def api_schedule_rebalance():
     """スロット詰め直し変更案を計算する（YouTube APIへの書き込みなし）。"""
     job_id = submit_rebalance_job()
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.post("/rebalance/apply")
+def api_schedule_rebalance_apply(req: ConfirmedRequest):
+    """スロット詰め直しを計算して YouTube へ適用する。"""
+    if not req.confirmed:
+        raise HTTPException(status_code=400, detail="confirmed=trueが必要です")
+    job_id = submit_apply_rebalance_job()
     return {"job_id": job_id, "status": "queued"}
 
 
