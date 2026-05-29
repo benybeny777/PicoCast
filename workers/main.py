@@ -678,6 +678,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             img_gen.close()
         return msg, report
 
+    # 外部サービスのデバイス情報をログに出力
+    try:
+        from core.external_service_check import get_service_info_lines
+        for line in get_service_info_lines():
+            update_status(line)
+    except Exception:
+        pass  # フォールバック許可: デバイス情報表示は補助的
+
     # Step 1: スクリプト取得（形式判定のために先に行う）
     ai = AIGenerator(debug=debug_mode)
     try:
