@@ -7,6 +7,9 @@
   <div class="action-row">
     <button class="btn btn-primary" onclick="refreshAnalytics()">Analytics取得・更新</button>
     <button class="btn btn-secondary" onclick="copyTSV()">TSVコピー</button>
+    <button class="btn btn-secondary" onclick="copyAiText()">AI分析用にコピー</button>
+    <button class="btn btn-secondary" onclick="copyShortsPrompt()">Shortsタイトル案</button>
+    <button class="btn btn-secondary" onclick="copyLongPrompt()">Longタイトル案</button>
     <button id="retention-btn" class="btn btn-secondary" onclick="showRetention()" disabled>維持率分析</button>
   </div>
 
@@ -47,6 +50,10 @@
       <option value="published">published</option>
       <option value="scheduled">scheduled</option>
       <option value="private">private</option>
+    </select>
+    <select id="blacklist-filter" onchange="applyFilters()">
+      <option value="">ブラックリスト: すべて</option>
+      <option value="true">ブラックリスト候補のみ</option>
     </select>
     <button class="btn btn-xs btn-secondary" onclick="clearFilters()">絞り込みクリア</button>
   </div>
@@ -94,6 +101,7 @@
           data-video-id="{{ row.get('video_id','') }}"
           data-duration="{{ row.get('duration','0') or 0 }}"
           data-full-title="{{ row.get('title','') }}"
+          data-blacklist="{{ 'true' if row.get('blacklist_candidate') else '' }}"
           onclick="selectRow(this)" style="cursor:pointer">
         <td title="{{ row.get('title','') }}">{{ (row.get('title','') or '')[:32] }}</td>
         <td>{{ (row.get('published_at','') or '')[:10] }}</td>
@@ -129,10 +137,10 @@
           —
           {% endif %}
         </td>
-        <td>
+        <td title="{{ row.get('avoid_pattern','') }}">
           {% set action = row.get('action','') %}
           {% if action %}
-          <span class="badge {% if '横展開' in action %}badge-ok{% elif '改善' in action %}badge-warn{% else %}badge-info{% endif %}">
+          <span class="badge {% if 'ブラックリスト' in action %}badge-danger{% elif '横展開' in action %}badge-ok{% elif '改善' in action or '配布不足' in action %}badge-warn{% else %}badge-info{% endif %}">
             {{ action[:15] }}
           </span>
           {% else %}—{% endif %}
@@ -229,16 +237,18 @@ function applyFilters() {
   const vtype = document.getElementById('type-filter').value;
   const topicCta = document.getElementById('topic-cta-filter').value;
   const status = document.getElementById('status-filter').value;
+  const blacklist = document.getElementById('blacklist-filter').value;
 
   let shown = 0;
   document.querySelectorAll('.ana-row').forEach(row => {
     const ok =
-      (!q      || row.dataset.title.includes(q)) &&
-      (!score  || row.dataset.score === score) &&
-      (!action || row.dataset.action.includes(action)) &&
-      (!vtype  || row.dataset.type === vtype) &&
-      (!topicCta || row.getAttribute('data-topic-request-cta') === topicCta) &&
-      (!status || row.dataset.status === status);
+      (!q         || row.dataset.title.includes(q)) &&
+      (!score     || row.dataset.score === score) &&
+      (!action    || row.dataset.action.includes(action)) &&
+      (!vtype     || row.dataset.type === vtype) &&
+      (!topicCta  || row.getAttribute('data-topic-request-cta') === topicCta) &&
+      (!status    || row.dataset.status === status) &&
+      (!blacklist || row.dataset.blacklist === blacklist);
     row.style.display = ok ? '' : 'none';
     if (ok) shown++;
   });
@@ -254,8 +264,24 @@ function clearFilters() {
   document.getElementById('type-filter').value = '';
   document.getElementById('topic-cta-filter').value = '';
   document.getElementById('status-filter').value = '';
+  document.getElementById('blacklist-filter').value = '';
   applyFilters();
 }
+
+async function _fetchAndCopy(url, label) {
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    await navigator.clipboard.writeText(data.text || '');
+    alert(`${label}をクリップボードにコピーしました`);
+  } catch(e) {
+    alert(`コピー失敗: ${e}`);
+  }
+}
+
+async function copyAiText() { await _fetchAndCopy('/api/analytics/ai-copy', 'AI分析用テキスト'); }
+async function copyShortsPrompt() { await _fetchAndCopy('/api/analytics/shorts-title-prompt', 'Shortsタイトル案プロンプト'); }
+async function copyLongPrompt() { await _fetchAndCopy('/api/analytics/long-title-prompt', 'Longタイトル案プロンプト'); }
 
 function sortTable(col) {
   if (_sortCol === col) {

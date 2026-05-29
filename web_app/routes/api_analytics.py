@@ -4,6 +4,9 @@ from web_app.services.analytics_service import (
     list_analytics_files,
     submit_refresh_job,
     get_tsv_text,
+    get_ai_copy_text,
+    get_shorts_title_prompt,
+    get_long_title_prompt,
 )
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
@@ -20,6 +23,21 @@ def api_analytics():
 @router.get("/tsv")
 def api_analytics_tsv():
     return {"tsv": get_tsv_text()}
+
+
+@router.get("/ai-copy")
+def api_analytics_ai_copy():
+    return {"text": get_ai_copy_text()}
+
+
+@router.get("/shorts-title-prompt")
+def api_analytics_shorts_title_prompt():
+    return {"text": get_shorts_title_prompt()}
+
+
+@router.get("/long-title-prompt")
+def api_analytics_long_title_prompt():
+    return {"text": get_long_title_prompt()}
 
 
 @router.post("/refresh")

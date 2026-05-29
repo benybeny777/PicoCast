@@ -12,6 +12,23 @@
 
 ---
 
+## 2026-05-29 弱い動画ランキング・ブラックリスト候補・AI分析コピーを追加
+
+**対象ファイル:** `core/analytics_score.py` / `web_app/services/analytics_service.py` / `web_app/routes/api_analytics.py` / `web_app/templates/analytics.html` / `web_app/static/app.css` / `config/config.py`
+
+**変更内容:**
+- views < 1000（`ANALYTICS_MIN_VIEWS_FOR_SCORE`）の動画を `underdistributed`（配布不足）として A〜E スコア対象外に変更。反応あり条件を満たす場合は action に `・反応あり` を補足
+- `_mark_blacklist_candidate()` を追加。Shorts: views>=3000 かつ avg_pct<45 かつ反応薄、Long: views>=1000 かつ avg_pct<30 かつ反応薄をブラックリスト候補として `blacklist_candidate=True` / `weak_reason` / `avoid_pattern` を付与
+- `_detect_avoid_pattern()` でタイトルから失敗ネタ型（歴史・由来説明型 / 有名ネタ消耗型 / 抽象理由型 / 驚き不足型）を推定
+- `build_performance_summary()` に弱い動画ランキング・避けるべきネタ型セクションを追加
+- `build_shorts_title_prompt()` / `build_long_title_prompt()` を追加
+- TSV に `blacklist_candidate` / `weak_reason` / `avoid_pattern` 列を追加
+- `_load_json_file` のバグ修正（dict形式JSON → items リストを正しく返すよう修正）
+- `load_latest_analytics_full()` / `get_ai_copy_text()` / `get_shorts_title_prompt()` / `get_long_title_prompt()` をサービスに追加
+- API に `/api/analytics/ai-copy` / `/api/analytics/shorts-title-prompt` / `/api/analytics/long-title-prompt` を追加
+- Analytics画面に「AI分析用にコピー」「Shortsタイトル案」「Longタイトル案」ボタンを追加
+- ブラックリスト候補フィルターを追加、action バッジに `badge-danger`（赤）を追加
+
 ## 2026-05-29 Analytics画面に反応計列を追加、TSV読み込み型変換を修正
 
 **対象ファイル:** `web_app/templates/analytics.html` / `web_app/services/analytics_service.py`

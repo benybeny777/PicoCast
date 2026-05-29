@@ -121,6 +121,7 @@ details.card > summary::-webkit-details-marker { display: none; }
 .badge-ng { background: #4a1a1a; color: var(--err); }
 .badge-warn { background: #4a3a0a; color: var(--warn); }
 .badge-info { background: var(--surface2); color: var(--info); }
+.badge-danger { background: #4a1a1a; color: #ff8080; }
 .badge-running { background: #1a2a4a; color: #66aaff; }
 .badge-shorts { background: #2a1a4a; color: #c084fc; }
 .badge-long { background: #1a3a4a; color: #60c8d8; }

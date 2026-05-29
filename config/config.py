@@ -322,6 +322,14 @@ ANALYTICS_CHANNEL_LEGACY_NOTE = (             # 旧チャンネル時代の登�
     "チャンネルリメイク実稼働は2026/5/15以降のため、それ以前投稿分の離脱数値は参考値扱い。"
 )
 ANALYTICS_DISLIKE_RATE_MIN_REACTIONS = int(os.environ.get("ANALYTICS_DISLIKE_RATE_MIN_REACTIONS", "10"))  # dislike_rate を参考値と見なす likes+dislikes の下限
+ANALYTICS_MIN_VIEWS_FOR_SCORE     = int(os.environ.get("ANALYTICS_MIN_VIEWS_FOR_SCORE", "1000"))    # これ未満のviewsは配布不足・判定保留扱い（スコア非対象）
+ANALYTICS_REACTION_MIN_LIKES      = int(os.environ.get("ANALYTICS_REACTION_MIN_LIKES", "5"))        # 配布不足動画の「反応あり」判定：最低いいね数
+ANALYTICS_BL_MIN_VIEWS_SHORTS     = int(os.environ.get("ANALYTICS_BL_MIN_VIEWS_SHORTS", "3000"))   # Shorts/ShortLong ブラックリスト判定の最低視聴数
+ANALYTICS_BL_MAX_AVG_PCT_SHORTS   = float(os.environ.get("ANALYTICS_BL_MAX_AVG_PCT_SHORTS", "45")) # Shorts ブラックリスト判定の最大平均視聴率
+ANALYTICS_BL_MIN_VIEWS_LONG       = int(os.environ.get("ANALYTICS_BL_MIN_VIEWS_LONG", "1000"))     # Long ブラックリスト判定の最低視聴数
+ANALYTICS_BL_MAX_AVG_PCT_LONG     = float(os.environ.get("ANALYTICS_BL_MAX_AVG_PCT_LONG", "30"))   # Long ブラックリスト判定の最大平均視聴率
+ANALYTICS_BL_MAX_CTR_LONG         = float(os.environ.get("ANALYTICS_BL_MAX_CTR_LONG", "5.0"))      # Long ブラックリスト判定の最大CTR（None の場合は無視）
+ANALYTICS_BL_MAX_LIKE_RATE        = float(os.environ.get("ANALYTICS_BL_MAX_LIKE_RATE", "1.0"))     # ブラックリスト判定の最大高評価率
 
 # ───────────────────────────────────────────────
 # タイムライン・尺計算用定数

@@ -1096,7 +1096,7 @@ Analytics取得・画面表示・TSV出力には `dislikes`（低評価数）/ `
 
 動画別列には `登録者増`（`subscribers_gained`）と `登録者減`（`subscribers_lost`）を個別表示し、`登録者増減`（純増 = gained - lost）も並べます。サマリーバーにはチャンネル全体の登録者増減（dimension なし API 取得）を `+gained -lost 純増net` 形式で表示します。AI分析コピーの実績サマリーにもチャンネル全体の登録者増減と旧チャンネル注記（`ANALYTICS_CHANNEL_LEGACY_NOTE`）を含めます。Analytics画面下部には固定の注記ラベルとして旧チャンネル時代の文脈（インド広告・リメイク開始日 `ANALYTICS_CHANNEL_REMAKE_DATE`）を常時表示します。
 
-Analytics一覧は各列のヘッダークリックで昇順/降順ソートできます。数値列は数値として、公開日時は日時として、評価列は `S > A > B > C > D > 未計測 > 対象外` の順で並び替えます。
+Analytics一覧は各列のヘッダークリックで昇順/降順ソートできます。数値列は数値として、公開日時は日時として、評価列は `A > B > C > D > E > 未計測 > 対象外` の順で並び替えます。
 
 Analytics APIは期間内に再生のある動画しか返さないため、YouTube Data API でチャンネルのアップロード済み全動画を取得してマージします。Analytics APIにまだ出ていない動画は、Data APIの `statistics` から現在の再生数・いいね数・コメント数を補完しつつ、平均視聴率などがないため `data_wait` としてスコア判定は保留します。200件を超える場合は `startIndex` によるページネーションで全件取得します。
 
@@ -1121,7 +1121,8 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 
 | analysis_status | score | action | 重複除外対象 |
 |---|---|---|---|
-| analyzable | S〜D | 通常判定 | ✅ |
+| analyzable | A〜E | 通常判定 | ✅ |
+| underdistributed | 未計測 | 配布不足・判定保留[・反応あり] | ❌ |
 | data_wait | 未計測 | データ待ち | ✅ |
 | scheduled | 未計測 | 予約中 | ✅ |
 | excluded | 対象外 | 対象外 | ❌ |
@@ -1129,12 +1130,13 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 - 公開予約中・データ待ちは **分析（横展開判定）には使わない** が、タイトル案生成の重複除外には使う
 - `build_performance_summary` は `analysis_status == "analyzable"` の動画のみ対象
 - `published_at` が 2026-05-16 以前の動画は `audio_cutoff_risk = true` として、音声末尾切れの可能性がある動画として扱う
+- **views < `ANALYTICS_MIN_VIEWS_FOR_SCORE`（デフォルト1000）の動画は配布不足とし、スコア判定対象外**（`analysis_status = "underdistributed"`）。ネタ失敗と誤判定しないこと。likes>=`ANALYTICS_REACTION_MIN_LIKES` または comments>=1 または subscribers_net>=1 の場合は action に `・反応あり` を補足する。
 
-スコアは `S / A / B / C / D / 未計測 / 対象外` の7段階です。
+スコアは `A / B / C / D / E / 未計測 / 対象外` の7段階です。Shorts改善の主KPIは**平均視聴率（維持率）**。スワイプ率は入口の診断補助指標であり、主KPIではない。
 
-- **Shorts**: 平均視聴率・平均視聴時間でS〜D判定
-- **ShortLong**: Shortsより緩いしきい値でS〜D判定（Long扱いを避ける）
-- **Long**: CTR + 平均視聴率でS〜D判定
+- **Shorts**: 平均視聴率・平均視聴時間でA〜E判定
+- **ShortLong**: Shortsより緩いしきい値でA〜E判定（Long扱いを避ける）
+- **Long**: CTR + 平均視聴率でA〜E判定
 
 補正ルール（ベーススコア算出後に適用）：
 
@@ -1142,15 +1144,28 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 |---|---|
 | Shorts `avg_percent < 45` / ShortLong `avg_percent < 50` | `横展開` に昇格させず `テーマ有望・構成改善` にする |
 | Long `ctr < 8` または `avg_percent < 40` | 登録者増だけでは `横展開` にしない |
-| `subscribers_net >= 2` かつスコアが B 未満 | スコアを B に引き上げ・action `登録者増・改善候補` |
+| `subscribers_net >= 2` かつスコアが C 未満 | スコアを C に引き上げ・action `登録者増・改善候補` |
 | `subscribers_net >= 2` かつ最低視聴率ライン以上 | Shorts / ShortLong は action `横展開` |
 | `subscribers_net >= 2` かつ Long の横展開条件未達 | action `登録者増・構成改善` |
 | `subscribers_net >= 1` かつ弱いスコア | action に `登録導線あり` を補足 |
 | `like_rate >= 1.5%` かつ最低視聴率ライン未達 | action `テーマ有望・構成改善` |
-| `like_rate >= 1.5%` かつ `score in (C, D)` | action `テーマ有望・冒頭/構成改善` |
+| `like_rate >= 1.5%` かつ `score in (D, E)` | action `テーマ有望・冒頭/構成改善` |
 | `comments >= 1` かつ弱いスコア | action に `反応あり` を補足 |
 | `views < 500` かつ公開後24時間未満 | `is_provisional = true`。横展開系actionには `(判定保留)` を付ける |
 | `audio_cutoff_risk = true` かつ公開済み・分析可能な Shorts / ShortLong で `views >= 1000`、`average_percentage_viewed >= 55`、`like_rate >= 1.0`、`comments >= 1`、`subscribers_net >= 1` のいずれか | score は変えず、既存 action に `音切れ改善候補` を補足 |
+
+ブラックリスト候補判定（`_mark_blacklist_candidate`）：
+
+| 種別 | 条件 |
+|---|---|
+| Shorts/ShortLong | views >= `ANALYTICS_BL_MIN_VIEWS_SHORTS`(3000) かつ avg_pct < `ANALYTICS_BL_MAX_AVG_PCT_SHORTS`(45) かつ subscribers_net<=0 かつ like_rate < `ANALYTICS_BL_MAX_LIKE_RATE`(1.0) かつ comments==0 |
+| Long | views >= `ANALYTICS_BL_MIN_VIEWS_LONG`(1000) かつ avg_pct < `ANALYTICS_BL_MAX_AVG_PCT_LONG`(30) かつ (ctr取得不可 or ctr < `ANALYTICS_BL_MAX_CTR_LONG`(5)) かつ subscribers_net<=0 かつ like_rate < 1.0 |
+
+- ブラックリスト判定は視聴維持率・反応指標で行う。スワイプ率だけでは判定しない。
+- `avoid_pattern` フィールドにタイトルから推定したネタ型パターン（歴史・由来説明型、有名ネタ消耗型、抽象理由型、驚き不足型）を付与する。
+- スワイプ率データ（Viewed vs Swiped Away）は現状取得不能のため、入口診断はスキップする。
+
+`AI分析用にコピー` / `Shortsタイトル案` / `Longタイトル案` ボタンでそれぞれのテキストをクリップボードにコピーできます。AI分析用コピーには弱い動画ランキング・ブラックリスト候補・避けるべきネタ型が含まれます。タイトル案プロンプトにはブラックリスト候補と横展開強い動画の実績が含まれ、同じネタ型・切り口を繰り返しにくくします。
 
 views 上位20% ルール（`score_items` でまとめて適用）：
 

@@ -135,6 +135,62 @@ def format_duration_status(status: str) -> str:
     return DURATION_STATUS_LABELS.get(str(status or ""), str(status or ""))
 
 
+def _detect_avoid_pattern(title: str) -> str:
+    """タイトルから失敗ネタ型パターンを推定する。ブラックリスト候補にのみ適用する。"""
+    t = str(title or "")
+    if any(kw in t for kw in ("歴史", "由来", "発祥", "起源")):
+        return "歴史・由来説明型"
+    if any(kw in t for kw in ("薬だった", "薬になる", "毒だった", "毒がある", "毒になる")):
+        return "有名ネタ消耗型"
+    if "本当の理由" in t and not any(kw in t for kw in ("なぜ", "実は", "嫌", "危険", "禁止", "罠", "驚")):
+        return "抽象理由型"
+    if not any(kw in t for kw in ("実は", "なぜ", "理由", "秘密", "嫌", "危険", "だった", "だけ", "勘違い", "罠", "逆転", "驚", "意外", "禁止", "怒", "苦手")):
+        return "驚き不足型"
+    return ""
+
+
+def _mark_blacklist_candidate(item: dict[str, Any]) -> dict[str, Any]:
+    """視聴数・維持率・反応指標でブラックリスト候補を判定し、フラグ・理由・避けるパターンを付与する。"""
+    from config import config as _cfg_bl
+    item.setdefault("blacklist_candidate", False)
+    item.setdefault("weak_reason", "")
+    item.setdefault("avoid_pattern", "")
+    if item.get("analysis_status") != "analyzable":
+        return item
+
+    views = _int(item.get("views"))
+    avg_pct = _num(item.get("average_percentage_viewed"))
+    subs_net = _int(item.get("subscribers_net"))
+    like_rate = _num(item.get("like_rate"))
+    comments = _int(item.get("comments"))
+    ctr_raw = item.get("ctr")
+    video_type = item.get("video_type", "Long")
+
+    is_bl = False
+    if video_type in ("Shorts", "ShortLong"):
+        if (views >= _cfg_bl.ANALYTICS_BL_MIN_VIEWS_SHORTS
+                and avg_pct < _cfg_bl.ANALYTICS_BL_MAX_AVG_PCT_SHORTS
+                and subs_net <= 0
+                and like_rate < _cfg_bl.ANALYTICS_BL_MAX_LIKE_RATE
+                and comments == 0):
+            is_bl = True
+    else:
+        ctr_ok = ctr_raw is None or _num(ctr_raw) < _cfg_bl.ANALYTICS_BL_MAX_CTR_LONG
+        if (views >= _cfg_bl.ANALYTICS_BL_MIN_VIEWS_LONG
+                and avg_pct < _cfg_bl.ANALYTICS_BL_MAX_AVG_PCT_LONG
+                and ctr_ok
+                and subs_net <= 0
+                and like_rate < _cfg_bl.ANALYTICS_BL_MAX_LIKE_RATE):
+            is_bl = True
+
+    item["blacklist_candidate"] = is_bl
+    if is_bl:
+        item["weak_reason"] = "low_retention_low_reaction"
+        item["avoid_pattern"] = _detect_avoid_pattern(item.get("title", ""))
+        item["action"] = _append_action_suffix(item.get("action", ""), "ブラックリスト候補")
+    return item
+
+
 def score_item(item: dict[str, Any]) -> dict[str, Any]:
     video_type = detect_video_type(item)
     audio_cutoff_risk = is_audio_cutoff_risk(item.get("published_at"))
@@ -187,6 +243,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "comments": comments,
             "subscribers_gained": gained, "subscribers_lost": lost, "subscribers_net": subscribers_net,
             "score": "対象外", "action": "対象外",
+            "blacklist_candidate": False, "weak_reason": "", "avoid_pattern": "",
         })
         return result
 
@@ -213,6 +270,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "comments": 0,
             "subscribers_gained": 0, "subscribers_lost": 0, "subscribers_net": 0,
             "score": "未計測", "action": "予約中",
+            "blacklist_candidate": False, "weak_reason": "", "avoid_pattern": "",
         })
         return result
 
@@ -240,6 +298,41 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             "comments": comments,
             "subscribers_gained": gained, "subscribers_lost": lost, "subscribers_net": subscribers_net,
             "score": "未計測", "action": "データ待ち",
+            "blacklist_candidate": False, "weak_reason": "", "avoid_pattern": "",
+        })
+        return result
+
+    # ルール2: views < ANALYTICS_MIN_VIEWS_FOR_SCORE → 配布不足・判定保留
+    from config import config as _cfg_score
+    if views < _cfg_score.ANALYTICS_MIN_VIEWS_FOR_SCORE:
+        has_reaction = (
+            likes >= _cfg_score.ANALYTICS_REACTION_MIN_LIKES
+            or comments >= 1
+            or subscribers_net >= 1
+        )
+        ud_action = "配布不足・判定保留" + ("・反応あり" if has_reaction else "")
+        result = dict(item)
+        result.update({
+            "title": item.get("title") or "",
+            "video_id": item.get("video_id") or "",
+            "published_at": item.get("published_at"),
+            "duration": _num(item.get("duration") or item.get("duration_sec"), None),
+            "duration_status": duration_status(item),
+            "video_type": video_type,
+            "publish_status": publish_status,
+            "analysis_status": "underdistributed",
+            "audio_cutoff_risk": audio_cutoff_risk,
+            "is_topic_exclusion_target": False,
+            "is_provisional": False,
+            "views": views, "impressions": impressions, "ctr": None,
+            "average_view_duration": avg_duration, "average_percentage_viewed": avg_percent,
+            "likes": likes, "like_rate": like_rate,
+            "dislikes": dislikes, "like_dislike_total": like_dislike_total,
+            "dislike_rate": dislike_rate, "dislike_rate_provisional": dislike_rate_provisional,
+            "comments": comments,
+            "subscribers_gained": gained, "subscribers_lost": lost, "subscribers_net": subscribers_net,
+            "score": "未計測", "action": ud_action,
+            "blacklist_candidate": False, "weak_reason": "", "avoid_pattern": "",
         })
         return result
 
@@ -371,6 +464,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "subscribers_net": subscribers_net,
         "score": score,
         "action": action,
+        "blacklist_candidate": False, "weak_reason": "", "avoid_pattern": "",
     })
     return apply_audio_cutoff_improvement_action(result)
 
@@ -402,6 +496,7 @@ def score_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
     for item in scored:
         apply_audio_cutoff_improvement_action(item)
+        _mark_blacklist_candidate(item)
 
     scored.sort(key=lambda x: (SCORE_ORDER.get(x.get("score"), 0), _int(x.get("views"))), reverse=True)
     return scored
@@ -428,6 +523,7 @@ def to_tsv(items: list[dict[str, Any]]) -> str:
         "likes", "like_rate",
         "dislikes", "like_dislike_total", "dislike_rate", "dislike_rate_provisional",
         "comments", "subscribers_net", "score", "action",
+        "blacklist_candidate", "weak_reason", "avoid_pattern",
     ]
     lines = ["\t".join(cols)]
     for item in items:
@@ -532,7 +628,106 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
         ))
     lines.append("・viewsだけで判断せず、平均視聴率、平均視聴時間、登録者増減、高評価率を合わせて横展開する。")
     lines.append("・data_waitは平均視聴率未取得のため暫定扱いにし、views / likes / like_rate / comments が強い動画には必ず短いコメントを付ける。")
+    lines.append("・views 1000未満は配布不足扱いで評価対象外。ネタ失敗と誤判定しないこと。")
+
+    # 弱い動画ランキング（views>=1000、analyzable）
+    weak_candidates = sorted(
+        [item for item in scored if not item.get("is_provisional")],
+        key=lambda x: (
+            _num(x.get("average_percentage_viewed")),
+            _num(x.get("average_view_duration")),
+            _num(x.get("like_rate")),
+        ),
+    )[:limit]
+    if weak_candidates:
+        lines.append("\n【弱い動画ランキング（平均視聴率昇順）】")
+        for item in weak_candidates:
+            lines.append(
+                f"・{_fmt_title(item)} "
+                f"views{_int(item.get('views'))} "
+                f"avg_pct{_num(item.get('average_percentage_viewed')):.1f}% "
+                f"avg_dur{_num(item.get('average_view_duration')):.0f}s "
+                f"like_rate{_num(item.get('like_rate')):.2f}% "
+                f"subs{_int(item.get('subscribers_net')):+d} "
+                f"[{item.get('video_type','')}]"
+            )
+
+    # ブラックリスト候補と避けるべきネタ型
+    blacklist = [item for item in scored if item.get("blacklist_candidate")]
+    if blacklist:
+        lines.append("\n【避けるべきネタ型候補（ブラックリスト）】")
+        for item in blacklist:
+            pattern = item.get("avoid_pattern") or "パターン不明"
+            lines.append(
+                f"・{_fmt_title(item)} "
+                f"views{_int(item.get('views'))} "
+                f"avg_pct{_num(item.get('average_percentage_viewed')):.1f}% "
+                f"→ 型: {pattern}"
+            )
+        lines.append("※ スワイプ率データ未取得のため入口診断はスキップ（視聴維持率・反応指標で判定）")
+
     return "\n".join(lines)
+
+
+def _build_title_prompt_base(items: list[dict[str, Any]], video_type_filter: str | None = None) -> str:
+    """Shorts/Longタイトル案プロンプトの共通ベース部分を生成する。"""
+    scored = [
+        item for item in items
+        if item.get("analysis_status") == "analyzable"
+        and (video_type_filter is None or item.get("video_type") == video_type_filter)
+    ]
+
+    def _fmt(item):
+        title = str(item.get("title") or "").strip()
+        return title[:50] + ("..." if len(title) > 50 else "")
+
+    strong = sorted(
+        [item for item in scored if item.get("score") in ("A", "B")],
+        key=lambda x: _num(x.get("average_percentage_viewed")),
+        reverse=True,
+    )[:5]
+    blacklist = [item for item in scored if item.get("blacklist_candidate")]
+
+    lines = []
+    if strong:
+        lines.append("【横展開できる強い動画】")
+        for item in strong:
+            lines.append(
+                f"・{_fmt(item)} "
+                f"avg_pct{_num(item.get('average_percentage_viewed')):.1f}% "
+                f"views{_int(item.get('views'))}"
+            )
+    if blacklist:
+        lines.append("\n【避けるべきネタ型（ブラックリスト）】")
+        for item in blacklist:
+            pattern = item.get("avoid_pattern") or "パターン不明"
+            lines.append(f"・{_fmt(item)} → 型: {pattern}")
+        lines.append("\n【タイトル生成NG例】")
+        lines.append("NG: 「○○の歴史」「○○の由来」「○○の秘密」「○○だった」（有名事実の繰り返し）")
+        lines.append("改善: 「○○は昔、嫌われていた」「○○が実は日本生まれの理由」「○○の袋だけパンパンな理由」")
+        lines.append("   → 常識逆転・具体物の違和感・冒頭1秒で結論断言 を入れること")
+    return "\n".join(lines)
+
+
+def build_shorts_title_prompt(items: list[dict[str, Any]]) -> str:
+    """Shortsタイトル案生成用コピー用テキストを生成する。"""
+    base = _build_title_prompt_base(items, video_type_filter="Shorts")
+    header = (
+        "以下の実績データをもとに、ずんだもんとめたんの食べ物雑学ショート動画タイトル案を5〜10個考えてください。\n"
+        "主KPI: 平均視聴率（維持率）。ブラックリスト候補と同じネタ型・切り口は原則NGです。\n"
+        "改善再挑戦は切り口を明確に変える場合のみ最大2案まで許可。\n\n"
+    )
+    return header + (base if base else "（実績データなし）")
+
+
+def build_long_title_prompt(items: list[dict[str, Any]]) -> str:
+    """Longタイトル案生成用コピー用テキストを生成する。"""
+    base = _build_title_prompt_base(items, video_type_filter="Long")
+    header = (
+        "以下の実績データをもとに、ずんだもんとめたんの食べ物雑学Long動画タイトル案を3〜5個考えてください。\n"
+        "主KPI: CTR × 平均視聴率。ブラックリスト候補と同じネタ型・切り口は原則NGです。\n\n"
+    )
+    return header + (base if base else "（実績データなし）")
 
 
 def save_score_files(items: list[dict[str, Any]], days: int, output_dir=ANALYTICS_DIR, summary: dict[str, Any] | None = None) -> tuple[str, str]:
