@@ -18,51 +18,55 @@ _slot_lock = threading.Lock()  # スロット割り当ての同時実行を防�
 
 
 def list_upload_candidates() -> list[dict[str, Any]]:
-    """MP4がある未アップロード履歴を返す。"""
+    """MP4がある動画履歴を返す（000_uploaded/配下も含む）。"""
     candidates = []
-    try:
-        names = sorted(os.listdir(OUTPUT_DIR), reverse=True)
-    except OSError:
-        return candidates
+    seen: set[str] = set()
 
-    for name in names:
-        if not is_video_folder(name):
-            continue
+    # output/ 直下のみ走査（000_uploaded/ は表示しない）
+    search_dirs = [
+        (OUTPUT_DIR, ""),
+    ]
+
+    for search_dir, prefix in search_dirs:
         try:
-            theme_dir = safe_output_path(name, output_base=OUTPUT_DIR)
-        except Exception:
-            continue
-        if not os.path.isdir(theme_dir):
+            names = sorted(os.listdir(search_dir), reverse=True)
+        except OSError:
             continue
 
-        mp4_path = _find_mp4(theme_dir)
-        if not mp4_path:
-            continue
+        for name in names:
+            if not is_video_folder(name):
+                continue
+            if name in seen:
+                continue
+            seen.add(name)
+            rel = prefix + name
+            try:
+                theme_dir = safe_output_path(rel, output_base=OUTPUT_DIR)
+            except Exception:
+                continue
+            if not os.path.isdir(theme_dir):
+                continue
 
-        upload_record = _safe_json(os.path.join(theme_dir, "_meta", "upload_record.json"))
-        render_info = _safe_json(os.path.join(theme_dir, "_meta", "render_info.json"))
+            mp4_path = _find_mp4(theme_dir)
+            if not mp4_path:
+                continue
 
-        # 二重アップロード防止チェック
-        video_id = upload_record.get("video_id", "")
-        publish_status = upload_record.get("publish_status", "")
-        already_uploaded = bool(video_id) and publish_status not in ("", None)
+            upload_record = _safe_json(os.path.join(theme_dir, "_meta", "upload_record.json"))
+            render_info = _safe_json(os.path.join(theme_dir, "_meta", "render_info.json"))
 
-        candidates.append({
-            "name": name,
-            "mp4_path": mp4_path,
-            "mp4_filename": os.path.basename(mp4_path),
-            "title": render_info.get("video_title") or name,
-            "video_format": render_info.get("video_format", ""),
-            "video_id": video_id,
-            "publish_status": publish_status,
-            "publish_at": upload_record.get("publish_at", ""),
-            "already_uploaded": already_uploaded,
-        })
+            candidates.append({
+                "name": rel,
+                "mp4_path": mp4_path,
+                "mp4_filename": os.path.basename(mp4_path),
+                "title": render_info.get("video_title") or name,
+                "video_format": render_info.get("video_format", ""),
+                "publish_at": upload_record.get("publish_at", ""),
+            })
     return candidates
 
 
 def submit_upload_job(history_name: str) -> str:
-    if ".." in history_name or "/" in history_name or "\\" in history_name:
+    if ".." in history_name:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")
     theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
@@ -86,10 +90,6 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
     mp4_path = _find_mp4(theme_dir)
     if not mp4_path:
         raise FileNotFoundError(f"MP4ファイルが見つかりません: {history_name}")
-
-    upload_record = _safe_json(os.path.join(theme_dir, "_meta", "upload_record.json"))
-    if upload_record.get("video_id"):
-        raise ValueError(f"既にアップロード済みです (video_id={upload_record['video_id']})")
 
     render_info = _safe_json(os.path.join(theme_dir, "_meta", "render_info.json"))
     _log(job, f"アップロード開始: {mp4_path}", "info")
@@ -180,12 +180,16 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
         json.dump(record, f, ensure_ascii=False, indent=2)
     _log(job, "upload_record.json を保存しました", "info")
 
-    # 000_uploaded/ へフォルダ移動
+    # 000_uploaded/ へフォルダ移動（既に移動済みの場合はスキップ）
     folder_name = os.path.basename(theme_dir)
     uploaded_dir = os.path.join(OUTPUT_DIR, "000_uploaded")
-    os.makedirs(uploaded_dir, exist_ok=True)
-    shutil.move(theme_dir, os.path.join(uploaded_dir, folder_name))
-    _log(job, f"フォルダを移動しました → 000_uploaded/{folder_name}", "info")
+    dest = os.path.join(uploaded_dir, folder_name)
+    if os.path.realpath(theme_dir) != os.path.realpath(dest):
+        os.makedirs(uploaded_dir, exist_ok=True)
+        shutil.move(theme_dir, dest)
+        _log(job, f"フォルダを移動しました → 000_uploaded/{folder_name}", "info")
+    else:
+        _log(job, f"フォルダは既に 000_uploaded/{folder_name} にあります", "info")
 
     # 000_backups/ から同テーマのバックアップを削除
     backups_dir = os.path.join(OUTPUT_DIR, "000_backups")

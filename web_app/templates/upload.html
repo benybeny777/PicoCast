@@ -10,7 +10,7 @@
     <button class="btn btn-secondary" onclick="selectAll(true)">全選択</button>
     <button class="btn btn-secondary" onclick="selectAll(false)">全解除</button>
   </div>
-  <p class="hint mt-sm">MP4がある未アップロード動画のみチェックできます。二重アップロード防止チェック済み。</p>
+  <p class="hint mt-sm">MP4がある動画を選択してアップロードできます。</p>
 </div>
 
 <div class="card mt">
@@ -27,11 +27,9 @@
     </thead>
     <tbody>
       {% for c in candidates %}
-      <tr class="upload-row {% if c.already_uploaded %}uploaded-row{% endif %}" data-name="{{ c.name }}">
+      <tr class="upload-row" data-name="{{ c.name }}">
         <td>
-          {% if not c.already_uploaded %}
           <input type="checkbox" class="upload-check" value="{{ c.name }}" onchange="updateBtn()">
-          {% endif %}
         </td>
         <td>{{ c.title[:40] }}</td>
         <td>
@@ -42,12 +40,7 @@
         <td><small>{{ c.mp4_filename }}</small></td>
         <td>{{ (c.publish_at or "—")[:16].replace("T", " ") }}</td>
         <td>
-          {% if c.already_uploaded %}
-            <span class="badge badge-ok">アップ済み</span>
-            <a href="https://youtu.be/{{ c.video_id }}" target="_blank" class="btn btn-secondary btn-sm">YouTubeを開く</a>
-          {% else %}
-            <span class="badge badge-warn" id="status-{{ loop.index }}">未アップロード</span>
-          {% endif %}
+          <span class="badge badge-warn" id="status-{{ loop.index }}">未アップロード</span>
         </td>
       </tr>
       {% endfor %}
