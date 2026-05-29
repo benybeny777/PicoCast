@@ -374,11 +374,18 @@ class ImageGenerator:
                 for ref_path in all_refs:
                     with open(ref_path, "rb") as f:
                         parts.append(types.Part.from_bytes(data=f.read(), mime_type="image/png"))
-                parts.append(types.Part.from_text(text=(
-                    "上記の画像はキャラクターの立ち絵です。これらのキャラクターが自然に映えるよう、"
-                    "背景・構図・色調を設計してください。\n\n"
-                    + full_prompt
-                )))
+                if is_thumbnail:
+                    char_instruction = (
+                        "上記はキャラクターの参照画像です。"
+                        "これらのキャラクターを必ずサムネイルに登場させてください。"
+                        "以下の台本と参照画像をもとに、YouTubeサムネイルを生成してください。\n\n"
+                    )
+                else:
+                    char_instruction = (
+                        "上記の画像はキャラクターの立ち絵です。これらのキャラクターが自然に映えるよう、"
+                        "背景・構図・色調を設計してください。\n\n"
+                    )
+                parts.append(types.Part.from_text(text=(char_instruction + full_prompt)))
                 contents = parts
             else:
                 contents = full_prompt
