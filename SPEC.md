@@ -776,7 +776,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
 | `JOB_LOG_DIR` | `output/000_data/job_logs` | ジョブログ永続化ファイルの保存ディレクトリ |
-| `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数 |
+| `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`jobs.json` 1ファイルに全ジョブを保存し、超過分は古い順に切り捨て（ファイルローテーションなし）。デバッグログ（`app_debug.log`）は別途 `TimedRotatingFileHandler` で毎日0時にローテートし `DEBUG_LOG_RETENTION_DAYS` 日分を保持する |
 
 ---
 
