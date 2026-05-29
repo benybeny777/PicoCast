@@ -14,40 +14,44 @@ def list_schedule(
     video_type_filter: str = "all",
     include_published: bool = False,
 ) -> list[dict[str, Any]]:
+    """YouTube API から直接スケジュールを取得して返す。"""
     from datetime import datetime, timezone
-    from core.upload_records import load_upload_records
+    from core.youtube_uploader import get_channel_upload_video_statuses
 
     now_utc = datetime.now(timezone.utc)
-    records = load_upload_records()
-    result = []
-    for r in records:
-        status = str(r.get("publish_status") or "").lower()
-        publish_at = r.get("publish_at") or ""
+    try:
+        statuses = get_channel_upload_video_statuses()
+    except Exception as e:
+        raise RuntimeError(f"YouTube からスケジュール取得に失敗しました: {e}") from e
 
-        # "scheduled" かつ publish_at が未来のものだけ「予約中」とみなす
-        is_scheduled = status == "scheduled" and _is_future(publish_at, now_utc)
-        # unlisted も公開済みとして扱う
-        is_published = status in ("published", "public", "manual_published", "unlisted")
+    result = []
+    for video_id, s in statuses.items():
+        privacy = str(s.get("privacyStatus") or "").lower()
+        publish_at = str(s.get("publishAt") or "").strip()
+        video_type = str(s.get("video_type") or "").lower()
+        title = str(s.get("title") or "")
+
+        is_published = privacy == "public"
+        is_scheduled = privacy in ("private", "unlisted") and bool(publish_at) and _is_future(publish_at, now_utc)
 
         if not is_scheduled and not (include_published and is_published):
             continue
 
-        vtype = str(r.get("video_type") or "").lower()
-        if video_type_filter == "shorts" and vtype not in ("shorts", "short"):
+        if video_type_filter == "shorts" and video_type not in ("shorts", "short"):
             continue
-        if video_type_filter == "long" and vtype != "long":
+        if video_type_filter == "long" and video_type != "long":
             continue
 
         result.append({
-            "video_id": r.get("video_id", ""),
-            "title": r.get("title", ""),
-            "video_type": r.get("video_type", ""),
-            "publish_at": r.get("publish_at", ""),
-            "publish_status": status,
-            "privacy_status": r.get("privacy_status", ""),
+            "video_id": video_id,
+            "title": title,
+            "video_type": s.get("video_type", ""),
+            "publish_at": publish_at,
+            "publish_status": "published" if is_published else "scheduled",
+            "privacy_status": privacy,
             "is_scheduled": is_scheduled,
             "is_published": is_published,
-            "_local_path": r.get("_local_path", ""),
+            "_local_path": "",
         })
 
     result.sort(key=lambda x: x.get("publish_at") or "")

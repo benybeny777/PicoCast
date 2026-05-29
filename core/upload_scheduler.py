@@ -497,8 +497,18 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
             changed_records += 1
 
     if changed_records:
-        save_upload_records(records)
-    if changed_records:
+        # 各動画の _meta/upload_record.json へ書き戻す
+        import json as _json
+        for rec in records:
+            local_path = rec.get("_local_path")
+            if not local_path or not os.path.isfile(local_path):
+                continue
+            rec_to_save = {k: v for k, v in rec.items() if k != "_local_path"}
+            try:
+                with open(local_path, "w", encoding="utf-8") as _f:
+                    _json.dump(rec_to_save, _f, ensure_ascii=False, indent=2)
+            except OSError as _e:
+                _log(f"レコード保存失敗: {local_path}: {_e}")
         _log(f"YouTube sync: records={changed_records}")
     return {
         "checked": len(statuses),

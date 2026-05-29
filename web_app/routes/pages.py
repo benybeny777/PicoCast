@@ -151,8 +151,13 @@ def page_analytics(request: Request):
 
 @router.get("/schedule", response_class=HTMLResponse)
 def page_schedule(request: Request):
-    scheduled = schedule_service.list_schedule(include_published=False)
-    return _render(request, "schedule.html", {"schedule_items": scheduled})
+    try:
+        scheduled = schedule_service.list_schedule(include_published=False)
+        schedule_error = None
+    except Exception as e:
+        scheduled = []
+        schedule_error = str(e)
+    return _render(request, "schedule.html", {"schedule_items": scheduled, "schedule_error": schedule_error})
 
 
 @router.get("/upload", response_class=HTMLResponse)
