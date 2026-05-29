@@ -770,12 +770,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # Step 3: パス設定（台本のvideo_titleを優先してフォルダ名に使う）
     folder_base = _early_title if _early_title else topic
     safe_topic = re.sub(r'[\\/:*?"<>|]', '_', folder_base)
-    if is_shorts and not safe_topic.startswith("[Shorts]"):
-        safe_topic = f"[Shorts]{safe_topic}"
-    elif is_netakaigi and not safe_topic.startswith("[ネタ会議]"):
-        safe_topic = f"[ネタ会議]{safe_topic}"
-    elif not is_shorts and not is_netakaigi and not safe_topic.startswith("[Long]"):
-        safe_topic = f"[Long]{safe_topic}"
+    from config import config as _cfg
+    _pfx_s, _pfx_l, _pfx_m = _cfg.FOLDER_PREFIX_SHORTS, _cfg.FOLDER_PREFIX_LONG, _cfg.FOLDER_PREFIX_MEETING
+    if is_shorts and not safe_topic.startswith((_pfx_s, "[Shorts]")):
+        safe_topic = f"{_pfx_s}{safe_topic}"
+    elif is_netakaigi and not safe_topic.startswith((_pfx_m, "[ネタ会議]")):
+        safe_topic = f"{_pfx_m}{safe_topic}"
+    elif not is_shorts and not is_netakaigi and not safe_topic.startswith((_pfx_l, "[Long]")):
+        safe_topic = f"{_pfx_l}{safe_topic}"
 
     theme_dir = os.path.join("output", safe_topic)
 

@@ -345,6 +345,13 @@ OUTPUT_LEGACY_DIR     = os.environ.get("OUTPUT_LEGACY_DIR",     os.path.join(OUT
 UPLOAD_RECORDS_FILE   = os.environ.get("UPLOAD_RECORDS_FILE",   os.path.join(OUTPUT_DATA_DIR, "upload_records.json"))
 UPLOADED_TITLES_FILE  = os.environ.get("UPLOADED_TITLES_FILE",  os.path.join(OUTPUT_DATA_DIR, "uploaded_titles.txt"))
 
+# 動画フォルダのプレフィックス（Windows/Mac 両対応：[] を使わない）
+FOLDER_PREFIX_SHORTS  = os.environ.get("FOLDER_PREFIX_SHORTS",  "Shorts_")   # 短動画フォルダプレフィックス
+FOLDER_PREFIX_LONG    = os.environ.get("FOLDER_PREFIX_LONG",    "Long_")     # 長動画フォルダプレフィックス
+FOLDER_PREFIX_MEETING = os.environ.get("FOLDER_PREFIX_MEETING", "ネタ会議_") # ネタ会議フォルダプレフィックス
+# 旧プレフィックス（移行後も strip に使う）
+_LEGACY_FOLDER_PREFIXES = ("Shorts_", "Long_", "ネタ会議_", "[Shorts]", "[Long]", "[SHORT]", "[LONG]", "[ネタ会議]")
+
 # ───────────────────────────────────────────────
 # YouTube / アップロード設定
 # ───────────────────────────────────────────────

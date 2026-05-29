@@ -166,15 +166,15 @@ def test_safe_path_accepted():
 
 # ── 履歴一覧が管理フォルダを適切に扱う ────────────────────────────────────
 def test_history_excludes_management_dirs(tmp_path, monkeypatch):
-    """[Shorts]/[Long] プレフィックスがないフォルダは管理フォルダとして除外される。"""
+    """Shorts_/Long_ プレフィックスがないフォルダは管理フォルダとして除外される。"""
     import web_app.services.history_service as hs
 
     fake_output = tmp_path / "output"
     (fake_output / "000_analytics").mkdir(parents=True)
     (fake_output / "000_data").mkdir(parents=True)
     (fake_output / "random_folder").mkdir(parents=True)
-    (fake_output / "[Shorts]テスト動画").mkdir(parents=True)
-    (fake_output / "[Long]テスト動画").mkdir(parents=True)
+    (fake_output / "Shorts_テスト動画").mkdir(parents=True)
+    (fake_output / "Long_テスト動画").mkdir(parents=True)
 
     monkeypatch.setattr(hs, "OUTPUT_DIR", str(fake_output))
 
@@ -183,8 +183,8 @@ def test_history_excludes_management_dirs(tmp_path, monkeypatch):
     assert "000_analytics" not in names
     assert "000_data" not in names
     assert "random_folder" not in names
-    assert "[Shorts]テスト動画" in names
-    assert "[Long]テスト動画" in names
+    assert "Shorts_テスト動画" in names
+    assert "Long_テスト動画" in names
 
 
 def test_history_includes_management_when_requested(tmp_path, monkeypatch):
@@ -192,14 +192,14 @@ def test_history_includes_management_when_requested(tmp_path, monkeypatch):
 
     fake_output = tmp_path / "output"
     (fake_output / "000_analytics").mkdir(parents=True)
-    (fake_output / "[Shorts]テスト動画").mkdir(parents=True)
+    (fake_output / "Shorts_テスト動画").mkdir(parents=True)
 
     monkeypatch.setattr(hs, "OUTPUT_DIR", str(fake_output))
 
     result = hs.list_histories(include_management=True)
     names = [r["name"] for r in result]
     assert "000_analytics" in names
-    assert "[Shorts]テスト動画" in names
+    assert "Shorts_テスト動画" in names
 
 
 def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, monkeypatch):
@@ -207,7 +207,7 @@ def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, 
     import web_app.services.history_service as hs
 
     fake_output = tmp_path / "output"
-    history_name = "[Shorts]Bob's 100%"
+    history_name = "Shorts_Bob's 100%"
     theme_dir = fake_output / history_name
     theme_dir.mkdir(parents=True)
     (theme_dir / "script.txt").write_text(
@@ -344,7 +344,7 @@ def test_fixed_comment_post_button_uses_data_attributes(client, monkeypatch):
         pages.fixed_comment_service,
         "list_fixed_comment_candidates",
         lambda only_unposted=True: [{
-            "name": os.path.join("000_uploaded", "[Shorts]引用符'テスト"),
+            "name": os.path.join("000_uploaded", "Shorts_引用符'テスト"),
             "location": "アップロード済み",
             "title": "引用符'と\"を含むタイトル",
             "video_id": "abc123",
@@ -375,7 +375,7 @@ def test_fixed_comment_page_loads_posted_rows_for_toggle(client, monkeypatch):
     def fake_candidates(only_unposted=True):
         called["only_unposted"] = only_unposted
         return [{
-            "name": os.path.join("000_uploaded", "[Shorts]投稿済みテスト"),
+            "name": os.path.join("000_uploaded", "Shorts_投稿済みテスト"),
             "location": "アップロード済み",
             "title": "投稿済みテスト",
             "video_id": "posted123",
@@ -417,7 +417,7 @@ def test_fixed_comment_candidates_include_uploaded_metadata(tmp_path, monkeypatc
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
-    theme_dir = fake_output / "000_uploaded" / "[Shorts]固定コメントテスト"
+    theme_dir = fake_output / "000_uploaded" / "Shorts_固定コメントテスト"
     meta_dir = theme_dir / "_meta"
     meta_dir.mkdir(parents=True)
     (meta_dir / "metadata.txt").write_text(
@@ -434,7 +434,7 @@ def test_fixed_comment_candidates_include_uploaded_metadata(tmp_path, monkeypatc
 
     candidates = fcs.list_fixed_comment_candidates()
     assert len(candidates) == 1
-    assert candidates[0]["name"] == os.path.join("000_uploaded", "[Shorts]固定コメントテスト")
+    assert candidates[0]["name"] == os.path.join("000_uploaded", "Shorts_固定コメントテスト")
     assert candidates[0]["fixed_comment"] == "投稿するコメントです"
     assert candidates[0]["title"] == "固定コメントのテスト"
 
@@ -444,7 +444,7 @@ def test_fixed_comment_candidates_filter_scheduled_locally(tmp_path, monkeypatch
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
-    theme_dir = fake_output / "000_uploaded" / "[Shorts]予約中テスト"
+    theme_dir = fake_output / "000_uploaded" / "Shorts_予約中テスト"
     meta_dir = theme_dir / "_meta"
     meta_dir.mkdir(parents=True)
     (meta_dir / "metadata.txt").write_text(
@@ -472,9 +472,9 @@ def test_fixed_comment_candidates_filter_missing_and_non_public_youtube(tmp_path
 
     fake_output = tmp_path / "output"
     for name, video_id in [
-        ("[Shorts]公開テスト", "public123"),
-        ("[Shorts]非公開テスト", "private123"),
-        ("[Shorts]存在しないテスト", "missing123"),
+        ("Shorts_公開テスト", "public123"),
+        ("Shorts_非公開テスト", "private123"),
+        ("Shorts_存在しないテスト", "missing123"),
     ]:
         meta_dir = fake_output / "000_uploaded" / name / "_meta"
         meta_dir.mkdir(parents=True)
@@ -506,7 +506,7 @@ def test_fixed_comment_mark_posted_writes_record(tmp_path, monkeypatch):
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
-    theme_dir = fake_output / "000_uploaded" / "[Shorts]手動投稿済みテスト"
+    theme_dir = fake_output / "000_uploaded" / "Shorts_手動投稿済みテスト"
     meta_dir = theme_dir / "_meta"
     meta_dir.mkdir(parents=True)
     (meta_dir / "metadata.txt").write_text(
@@ -522,7 +522,7 @@ def test_fixed_comment_mark_posted_writes_record(tmp_path, monkeypatch):
     monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
     monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
 
-    result = fcs.mark_fixed_comment_posted(os.path.join("000_uploaded", "[Shorts]手動投稿済みテスト"))
+    result = fcs.mark_fixed_comment_posted(os.path.join("000_uploaded", "Shorts_手動投稿済みテスト"))
     assert result["video_id"] == "abc123"
 
     record = json.loads(record_path.read_text(encoding="utf-8"))
@@ -537,7 +537,7 @@ def test_fixed_comment_candidates_treat_pinned_as_posted(tmp_path, monkeypatch):
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
-    theme_dir = fake_output / "000_uploaded" / "[Shorts]ピン留め済みテスト"
+    theme_dir = fake_output / "000_uploaded" / "Shorts_ピン留め済みテスト"
     meta_dir = theme_dir / "_meta"
     meta_dir.mkdir(parents=True)
     (meta_dir / "metadata.txt").write_text(

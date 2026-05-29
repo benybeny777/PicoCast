@@ -12,6 +12,20 @@
 
 ---
 
+## 2026-05-29 フォルダプレフィックスを [] から _ 形式に変更（Windows/Mac 両対応）
+
+**対象ファイル:** `config/config.py` ほか全域 / `scripts/migrate_folder_prefixes.py`（新規）
+
+**変更内容:**
+- 動画フォルダのプレフィックスを `[Shorts]`/`[Long]`/`[ネタ会議]` から
+  `Shorts_`/`Long_`/`ネタ会議_` に変更。PowerShell の glob で `[]` が文字クラスとして
+  解釈されてしまう問題を解消し、Windows・Mac 両環境で安全に扱えるようにした
+- `config.py` に `FOLDER_PREFIX_SHORTS` / `FOLDER_PREFIX_LONG` / `FOLDER_PREFIX_MEETING` を定数化。
+  `.env` での上書きも可能
+- 旧プレフィックスは読み取り時に引き続き認識する（移行期間の後方互換）
+- `scripts/migrate_folder_prefixes.py` を追加。既存フォルダを一括リネームできる
+  （`--apply` なしはドライラン）
+
 ## 2026-05-29 バグ修正: ネタ会議動画の解像度誤判定・import整理・呆れアイコン明示
 
 **対象ファイル:** `core/native_renderer.py` / `core/youtube_analytics.py` / `core/parser.py`

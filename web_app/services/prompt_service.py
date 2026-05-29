@@ -26,7 +26,8 @@ _FOOD_KEYWORDS = (
 
 
 def _folder_name_to_title(name: str) -> str:
-    for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+    from config import config as _cfg
+    for prefix in _cfg._LEGACY_FOLDER_PREFIXES:
         if name.startswith(prefix):
             return name[len(prefix):].strip()
     return name

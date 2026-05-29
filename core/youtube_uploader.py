@@ -20,7 +20,8 @@ THUMB_MAX_BYTES = 2 * 1024 * 1024  # YouTube 上限 2MB
 
 def _strip_video_type_prefix(title):
     title = str(title or "").strip()
-    for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+    from config import config as _cfg
+    for prefix in _cfg._LEGACY_FOLDER_PREFIXES:
         if title.startswith(prefix):
             return title[len(prefix):].strip()
     return title
@@ -156,9 +157,10 @@ def _duration_seconds(duration: str | None) -> int | None:
 
 def infer_video_type(title: str | None = None, duration: str | None = None) -> str:
     text = str(title or "").strip()
-    if text.startswith(("[Long]", "[LONG]")):
+    from config import config as _cfg
+    if text.startswith((_cfg.FOLDER_PREFIX_LONG, "[Long]", "[LONG]")):
         return "long"
-    if text.startswith(("[Shorts]", "[SHORT]")):
+    if text.startswith((_cfg.FOLDER_PREFIX_SHORTS, "[Shorts]", "[SHORT]")):
         return "shorts"
     seconds = _duration_seconds(duration)
     if seconds is not None and seconds <= 60:
@@ -432,7 +434,9 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
     from core.cta_policy import append_long_youtube_chapters, probe_duration_sec, read_policy_file
 
     title = _strip_video_type_prefix(title)
-    is_shorts = "[Shorts]" in str(mp4_path) or "[Shorts]" in str(title)
+    from config import config as _cfg
+    _s_pfx = _cfg.FOLDER_PREFIX_SHORTS
+    is_shorts = _s_pfx in str(mp4_path) or "[Shorts]" in str(mp4_path) or _s_pfx in str(title) or "[Shorts]" in str(title)
     script_text = _read_script_text_for_tags(mp4_path)
     title, description, tags = optimize_upload_metadata(
         title,

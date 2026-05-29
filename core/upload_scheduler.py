@@ -381,7 +381,8 @@ def list_schedule() -> dict:
 
 def _title_key(value: str) -> str:
     value = str(value or "").split("\n")[0].strip()
-    for prefix in ("[Shorts]", "[Long]", "[SHORT]", "[LONG]"):
+    from config import config as _cfg
+    for prefix in _cfg._LEGACY_FOLDER_PREFIXES:
         if value.startswith(prefix):
             return value[len(prefix):].strip().lower()
     return value.lower()

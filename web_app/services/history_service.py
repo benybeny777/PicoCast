@@ -59,11 +59,12 @@ def _video_format(name: str, render_info: dict, script_meta: dict[str, str]) -> 
         if low in ("long", "ロング"):
             return "Long"
         return value
-    if name.startswith("[Shorts]"):
+    from config import config
+    if name.startswith((config.FOLDER_PREFIX_SHORTS, "[Shorts]")):
         return "Shorts"
-    if name.startswith("[Long]"):
+    if name.startswith((config.FOLDER_PREFIX_LONG, "[Long]")):
         return "Long"
-    if name.startswith("[ネタ会議]"):
+    if name.startswith((config.FOLDER_PREFIX_MEETING, "[ネタ会議]")):
         return "ネタ会議"
     return ""
 
