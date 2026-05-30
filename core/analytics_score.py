@@ -539,7 +539,9 @@ def to_tsv(items: list[dict[str, Any]]) -> str:
         values = []
         for col in cols:
             value = item.get(col)
-            if isinstance(value, float):
+            if col == "published_at" and value is not None:
+                value = str(value)[:16].replace("T", " ")
+            elif isinstance(value, float):
                 value = f"{value:.2f}"
             values.append("" if value is None else str(value).replace("\t", " "))
         lines.append("\t".join(values))
