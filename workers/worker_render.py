@@ -61,7 +61,7 @@ def main() -> None:
         else:
             render_result = render_native_test(
                 output_dir=theme_dir,
-                progress_callback=lambda msg: _emit("info", msg),
+                progress_callback=lambda msg, tag="info": _emit(tag or "info", msg),
             )
             output_path = (
                 render_result.output_path

@@ -614,7 +614,7 @@ def _encode_thumbnail_frame_segment(
                 "-shortest", segment_path,
             ])
             if enc_idx > 0 and progress_callback:
-                progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました")
+                progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました", "warning")
             return
         except Exception as e:
             last_error = e
@@ -1061,8 +1061,10 @@ def render_native_test(
     durations = [_wav_duration(path) for path in audio_files]
     total_audio = sum(durations)
 
+    _encoder_name = str(NATIVE_FFMPEG_ENCODER or "h264_nvenc").strip() or "h264_nvenc"
     if progress_callback:
         progress_callback(f"🎞 native MP4: 音声{len(audio_files)}件 / 背景{len(bg_files)}枚を結合します")
+        progress_callback(f"   🎬 エンコーダ: {_encoder_name}")
 
     width, height = _video_size(output_dir, script_path)
     characters = _character_inputs(width, height)
@@ -1153,7 +1155,7 @@ def render_native_test(
                         "-shortest", segment_path,
                     ])
                     if enc_idx > 0 and progress_callback:
-                        progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました")
+                        progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました", "warning")
                     last_error = None
                     break
                 except Exception as e:
@@ -1194,7 +1196,7 @@ def render_native_test(
                         "-shortest", segment_path,
                     ])
                     if enc_idx > 0 and progress_callback:
-                        progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました")
+                        progress_callback("⚠ GPUエンコードに失敗したため libx264 で続行しました", "warning")
                     last_error = None
                     break
                 except Exception as e:
