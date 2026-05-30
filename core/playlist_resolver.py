@@ -1,9 +1,14 @@
 """
 台本の「再生リスト」カテゴリ名と動画形式から
 YouTube上の実際の再生リスト名を解決するモジュール。
+
+再生リストカテゴリは active channel profile の genre_profile に応じた
+config/prompt_profiles/genres/{genre_profile}/playlist_categories.md から読み込む。
+profile 未設定の場合は食べ物チャンネル用カテゴリにフォールバック（後方互換）。
 """
 
-STANDARD_CATEGORIES = (
+# 食べ物チャンネル用デフォルトカテゴリ（後方互換）
+_DEFAULT_CATEGORIES = (
     "なんで？食べ物の形・容器・袋の秘密",
     "昔は捨ててたのに今は高級品！食べ物の大逆転",
     "実は薬・毒扱いだった！食べ物の黒歴史",
@@ -13,10 +18,49 @@ STANDARD_CATEGORIES = (
     "コンビニ・スナック・チェーンの開発秘話",
 )
 
-_SHORTS_SUFFIX = " Shorts"
-_LONG_SUFFIX = "【じっくり解説】"
 _NETA_KAIGI_SHORTS = "ずんだもんとめたんのネタ会議 Shorts"
 _NETA_KAIGI_LONG = "ずんだもんとめたんのネタ会議【じっくり版】"
+
+
+def _get_standard_categories() -> tuple[str, ...]:
+    """active profile の genre_profile に応じた再生リストカテゴリを返す。"""
+    try:
+        from core.channel_profile import get_active_profile
+        profile = get_active_profile()
+        if profile:
+            from core.prompt_profile_loader import get_playlist_categories
+            cats = get_playlist_categories(profile.genre_profile)
+            if cats:
+                return cats
+    except Exception:
+        pass
+    return _DEFAULT_CATEGORIES
+
+
+def _get_suffix_shorts() -> str:
+    try:
+        from core.channel_profile import get_active_profile
+        from core.prompt_profile_loader import load_genre_profile_config
+        profile = get_active_profile()
+        if profile:
+            cfg = load_genre_profile_config(profile.genre_profile)
+            return cfg.get("playlist_suffix_shorts", " Shorts")
+    except Exception:
+        pass
+    return " Shorts"
+
+
+def _get_suffix_long() -> str:
+    try:
+        from core.channel_profile import get_active_profile
+        from core.prompt_profile_loader import load_genre_profile_config
+        profile = get_active_profile()
+        if profile:
+            cfg = load_genre_profile_config(profile.genre_profile)
+            return cfg.get("playlist_suffix_long", "【じっくり解説】")
+    except Exception:
+        pass
+    return "【じっくり解説】"
 
 
 def normalize_category(name: str) -> str:
@@ -76,7 +120,12 @@ def resolve_playlist_title(
     is_long = "long" in vf_lower or sf in ("横", "landscape")
 
     if is_shorts:
-        return f"{cat}{_SHORTS_SUFFIX}"
+        return f"{cat}{_get_suffix_shorts()}"
     if is_long:
-        return f"{cat}{_LONG_SUFFIX}"
+        return f"{cat}{_get_suffix_long()}"
     return None
+
+
+def get_standard_categories() -> tuple[str, ...]:
+    """active profile の genre_profile に応じた標準カテゴリ一覧を返す。"""
+    return _get_standard_categories()

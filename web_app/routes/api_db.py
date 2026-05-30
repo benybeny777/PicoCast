@@ -58,12 +58,12 @@ def api_db_sync(history_name: str):
     if ".." in history_name or "/" in history_name or "\\" in history_name:
         raise HTTPException(status_code=400, detail="無効な履歴名です")
     _ensure_init()
-    from core.output_paths import OUTPUT_DIR
+    from core.output_paths import get_output_videos_dir
     from core.metadata_db import sync_folder_to_db
     import os
-    folder = os.path.join(OUTPUT_DIR, history_name)
+    folder = os.path.join(get_output_videos_dir(), history_name)
     if not os.path.isdir(folder):
-        folder = os.path.join(OUTPUT_DIR, "000_uploaded", history_name)
+        folder = os.path.join(get_output_videos_dir(), "000_uploaded", history_name)
     if not os.path.isdir(folder):
         raise HTTPException(status_code=404, detail="フォルダが見つかりません")
     sync_folder_to_db(folder)
@@ -119,12 +119,12 @@ def api_db_import_all():
     from web_app.job_manager import Job
 
     def _run(job: Job):
-        from core.output_paths import OUTPUT_DIR
+        from core.output_paths import get_output_videos_dir
         from core.metadata_db import sync_folder_to_db, initialize_db
         import os
         initialize_db()
         ok = fail = 0
-        for root, dirs, _ in os.walk(OUTPUT_DIR):
+        for root, dirs, _ in os.walk(get_output_videos_dir()):
             dirs[:] = [d for d in dirs if not d.startswith(".")]
             meta = os.path.join(root, "_meta")
             if os.path.isdir(meta):

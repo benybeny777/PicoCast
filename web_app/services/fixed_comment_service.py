@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
-from core.output_paths import OUTPUT_DIR
+from core.output_paths import get_output_videos_dir, get_uploaded_dir
 from core.parser import ScriptParser
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import is_video_folder, safe_output_path
@@ -20,7 +20,7 @@ def list_fixed_comment_candidates(only_unposted: bool = True) -> list[dict[str, 
         name = os.path.basename(theme_dir)
         is_uploaded_archive = relative_name.startswith("000_uploaded" + os.sep)
         try:
-            safe_output_path(relative_name, output_base=OUTPUT_DIR)
+            safe_output_path(relative_name, output_base=get_output_videos_dir())
         except Exception:
             continue
         if not os.path.isdir(theme_dir):
@@ -75,7 +75,7 @@ def submit_fixed_comment_job(history_name: str, auto_posted: bool = False) -> st
     if _is_unsafe_history_name(history_name):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")
-    theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
+    theme_dir = safe_output_path(history_name, output_base=get_output_videos_dir())
     if not os.path.isdir(theme_dir) or not _is_fixed_comment_folder(theme_dir):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
@@ -92,7 +92,7 @@ def mark_fixed_comment_posted(history_name: str) -> dict[str, Any]:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")
 
-    theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
+    theme_dir = safe_output_path(history_name, output_base=get_output_videos_dir())
     if not os.path.isdir(theme_dir) or not _is_fixed_comment_folder(theme_dir):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
@@ -132,7 +132,7 @@ def mark_fixed_comment_posted(history_name: str) -> dict[str, Any]:
 
 
 def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False) -> dict[str, Any]:
-    theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
+    theme_dir = safe_output_path(history_name, output_base=get_output_videos_dir())
     if not os.path.isdir(theme_dir):
         raise FileNotFoundError(f"履歴フォルダが見つかりません: {history_name}")
 
@@ -207,17 +207,17 @@ def _safe_json(path: str) -> dict:
 
 def _iter_candidate_dirs() -> Iterable[tuple[str, str]]:
     try:
-        names = sorted(os.listdir(OUTPUT_DIR), reverse=True)
+        names = sorted(os.listdir(get_output_videos_dir()), reverse=True)
     except OSError:
         return
 
     for name in names:
         if is_video_folder(name):
-            path = os.path.join(OUTPUT_DIR, name)
+            path = os.path.join(get_output_videos_dir(), name)
             if os.path.isdir(path):
                 yield name, path
 
-    uploaded_dir = os.path.join(OUTPUT_DIR, "000_uploaded")
+    uploaded_dir = get_uploaded_dir()
     try:
         uploaded_names = sorted(os.listdir(uploaded_dir), reverse=True)
     except OSError:

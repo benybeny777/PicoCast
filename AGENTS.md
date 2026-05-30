@@ -19,11 +19,26 @@
 - ファイル編集は `Edit` ツール（Claude Code）または `apply_patch`（Codex）を使う。検索はまず `rg` / `rg --files` を使う。
 - **エラーはすべてそのまま例外として上位に伝播させる。`except Exception: pass` / `except Exception: return default` のようなサイレントスキップ・無言フォールバック・無言デフォルト降格は禁止。** 失敗時は原因が分かるエラーとして即中止する。フォールバック処理はユーザーが明示的に許可した場合のみ実装し、その箇所に `# フォールバック許可: 理由` コメントを付ける。
 - ファイルポインタ、ネットワーク接続、画像/動画オブジェクト、subprocess、ブラウザ/GUIハンドルなどのリソースは明示的に解放する。`with`、`close()`、`terminate()`、一時ファイル削除などを使い、長時間処理では不要な大きい参照を手放してメモリも解放する。
-- このリポジトリは開発環境として扱うため、`config/prompt_parts/local/` を更新したら常に対応する `config/samples/prompt_parts/` へコピーして同期する。localだけに残さない。
+- プロンプトは `config/prompt_profiles/` の3層構成で管理する。
+  - `common/` — 全ジャンル共通ルール（Git 管理）
+  - `genres/{genre_profile}/` — ジャンル固有ルール（Git 管理）
+  - `local/{genre_profile}/` — 個人環境上書き（Git 管理外）
+- `local/` を `samples/` へ同期する旧運用は廃止。ジャンル固有ルールは `genres/{genre_profile}/` に正式追加すること。
+- ジャンル固有の文言を `core/script_prompts.py` に直書きしない。`config/prompt_profiles/genres/*/` に置き、`core/prompt_profile_loader.py` 経由で読み込む。
+- `config/prompt_parts/local/` の変更は旧互換として残すが、新規追加は `prompt_profiles/` 側に行うこと。
 - 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。必ず `config/config.py` に `os.environ.get(...)` 付きで定数として定義する。ループインデックスや内部カウンタなど実装上の定数は対象外。
 - `config/config.py` の各定数には必ず末尾コメント（`# 説明`）を付ける。新規追加・変更時もコメントを省略しない。
 - native立ち絵に表情PNG（`expression` 指定）を使用している場合、口パク・まばたきの差分オーバーレイを同セグメントで無効化する。表情PNGはPSDから合成した専用口・目レイヤーを含むため、base.pngとの差分オーバーレイと重ねると二重口・二重目が生じる。
 詳細仕様は [SPEC.md](SPEC.md) を参照。ここには作業上の注意点だけを書く。
+
+## チャンネルプロファイル管理
+
+- 複数チャンネル・ジャンルは `channel_profiles` テーブル（`data/settings.db`）で管理する。is_active=1 が active profile。
+- すべての出力パス・metadata.db・プロンプト・Analytics・再生リストは active profile を基準に解決する。
+- `require_active_profile()` は未設定なら例外。`get_active_profile()` なら None。フォールバックで food_trivia や default を使わない。
+- 別 profile の output_root へのアクセスは `safe_output_path()` が 403 で拒否する。profile 間で output が混ざることを防ぐ。
+- genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
+- OAuth token（`youtube_upload_token` / `youtube_analytics_token`）は profile_id 単位で encrypted_secrets に保存する。
 
 ## Web UI 作業時の注意点
 

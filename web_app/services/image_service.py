@@ -6,7 +6,7 @@ output/{history_name}/backgrounds/ および thumbnails/ を走査する。
 import os
 from typing import Any
 
-from core.output_paths import OUTPUT_DIR
+from core.output_paths import get_output_videos_dir
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import safe_output_path
 

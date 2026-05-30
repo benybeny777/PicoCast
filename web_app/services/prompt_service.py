@@ -1,28 +1,32 @@
 """
 台本生成プロンプト・タイトル案プロンプトを組み立てて返すサービス。
 Web UIのプロンプト生成ボタンから呼び出す。
+
+active channel profile の genre_profile に応じてプロンプトを切り替える。
+profile 未設定の場合は旧来の食べ物チャンネル動作にフォールバックする（後方互換）。
 """
 import os
 from typing import Optional
 
-from core.output_paths import OUTPUT_DIR
+
+def _get_genre_profile() -> str | None:
+    """active profile の genre_profile を返す。未設定なら None。"""
+    try:
+        from core.channel_profile import get_active_profile
+        profile = get_active_profile()
+        return profile.genre_profile if profile else None
+    except Exception:
+        return None
 
 
-_NON_FOOD_KEYWORDS = (
-    "鬼滅", "ワンピ", "呪術", "スカッと", "こめお", "大喧嘩", "喧嘩", "激論",
-    "アニメ", "漫画", "伏線", "考察",
-)
-_FOOD_KEYWORDS = (
-    "食", "飲", "料理", "飯", "味", "お菓子", "菓子", "野菜", "肉", "魚", "寿司", "外食",
-    "保存食", "発酵", "調味料", "薬", "毒扱い", "無毒", "給料",
-    "人参", "にんじん", "ハチミツ", "蜂蜜", "タピオカ", "フグ", "ふぐ",
-    "クロワッサン", "かき氷", "シロップ", "カレー", "コンニャク", "こんにゃく",
-    "メロンパン", "マック", "ポテト", "ケチャップ", "トマト", "サーモン",
-    "鮭", "ロブスター", "オマール海老", "コーラ", "コカ・コーラ", "ポップコーン",
-    "チョコ", "チョコレート", "塩", "フライドポテト", "ポテトフライ",
-    "ポテチ", "ポテトチップス",
-    "オレンジ", "ミイラ", "カエル", "海のゴキブリ",
-)
+def _get_output_videos_dir() -> str:
+    from core.output_paths import get_output_videos_dir
+    return get_output_videos_dir()
+
+
+def _get_uploaded_dir() -> str:
+    from core.output_paths import get_uploaded_dir
+    return get_uploaded_dir()
 
 
 def _folder_name_to_title(name: str) -> str:
@@ -33,31 +37,26 @@ def _folder_name_to_title(name: str) -> str:
     return name
 
 
-def _is_food_title(title: str) -> bool:
-    if any(kw in title for kw in _NON_FOOD_KEYWORDS):
-        return False
-    return any(kw in title for kw in _FOOD_KEYWORDS)
-
-
 def _collect_active_titles() -> list[str]:
-    """outputフォルダ内の未アップロードフォルダ名からタイトルを収集。"""
-    skip = {"000_uploaded", "000_backups"}
-    if not os.path.isdir(OUTPUT_DIR):
+    """active profile の videos/ フォルダ内の未アップロードフォルダ名からタイトルを収集。"""
+    output_dir = _get_output_videos_dir()
+    skip = {"000_uploaded", "000_backups", "000_data", "000_analytics", "000_legacy"}
+    if not os.path.isdir(output_dir):
         return []
     names = sorted(
         (
-            d for d in os.listdir(OUTPUT_DIR)
-            if os.path.isdir(os.path.join(OUTPUT_DIR, d)) and d not in skip
+            d for d in os.listdir(output_dir)
+            if os.path.isdir(os.path.join(output_dir, d)) and d not in skip
         ),
-        key=lambda d: os.path.getmtime(os.path.join(OUTPUT_DIR, d)),
+        key=lambda d: os.path.getmtime(os.path.join(output_dir, d)),
         reverse=True,
     )
     return [_folder_name_to_title(n) for n in names]
 
 
 def _collect_uploaded_titles() -> list[str]:
-    """000_uploaded フォルダからアップロード済みタイトルを収集。"""
-    uploaded_dir = os.path.join(OUTPUT_DIR, "000_uploaded")
+    """active profile の 000_uploaded フォルダからアップロード済みタイトルを収集。"""
+    uploaded_dir = _get_uploaded_dir()
     if not os.path.isdir(uploaded_dir):
         return []
     folder_names = sorted(
@@ -68,11 +67,9 @@ def _collect_uploaded_titles() -> list[str]:
     return [_folder_name_to_title(n) for n in folder_names]
 
 
-def _collect_food_titles() -> list[str]:
-    active = _collect_active_titles()
-    uploaded = _collect_uploaded_titles()
-    all_titles = active + uploaded
-    return [t for t in all_titles if _is_food_title(t)]
+def _collect_all_titles() -> list[str]:
+    """active profile の videos/ + 000_uploaded/ からタイトルを収集。"""
+    return _collect_active_titles() + _collect_uploaded_titles()
 
 
 def _read_latest_analytics_tsv(max_rows: int = 80) -> tuple[str, int]:
@@ -84,7 +81,7 @@ def _read_latest_analytics_tsv(max_rows: int = 80) -> tuple[str, int]:
     lines = to_tsv(items[:max_rows]).splitlines()
     if len(lines) < 2:
         return "", 0
-    return "\n".join(lines), len(lines) - 1  # header + data rows
+    return "\n".join(lines), len(lines) - 1
 
 
 def _read_latest_analytics_summary() -> str:
@@ -102,15 +99,20 @@ def _read_latest_analytics_summary() -> str:
 
 
 def get_script_generation_prompt() -> dict:
+    genre_profile = _get_genre_profile()
+    all_titles = _collect_all_titles()
     from core.script_prompts import build_script_generation_prompt
-    food_titles = _collect_food_titles()
-    prompt = build_script_generation_prompt(food_titles)
-    return {"prompt": prompt, "title_count": len(food_titles)}
+    prompt = build_script_generation_prompt(all_titles, genre_profile=genre_profile)
+    return {
+        "prompt": prompt,
+        "title_count": len(all_titles),
+        "genre_profile": genre_profile,
+    }
 
 
 def get_meeting_prompt() -> dict:
-    from core.script_prompts import build_meeting_script_prompt
-    food_titles = _collect_food_titles()
+    genre_profile = _get_genre_profile()
+    all_titles = _collect_all_titles()
     tsv, tsv_count = _read_latest_analytics_tsv()
     summary = _read_latest_analytics_summary()
     analytics_tsv = None
@@ -118,13 +120,20 @@ def get_meeting_prompt() -> dict:
         analytics_tsv = f"{summary}\n\n【動画別TSV】\n{tsv}"
     elif tsv:
         analytics_tsv = tsv
-    prompt = build_meeting_script_prompt(food_titles, analytics_tsv=analytics_tsv)
-    return {"prompt": prompt, "title_count": len(food_titles)}
+    from core.script_prompts import build_meeting_script_prompt
+    prompt = build_meeting_script_prompt(
+        all_titles, analytics_tsv=analytics_tsv, genre_profile=genre_profile
+    )
+    return {
+        "prompt": prompt,
+        "title_count": len(all_titles),
+        "genre_profile": genre_profile,
+    }
 
 
 def get_title_prompt(long_only: bool = False) -> dict:
-    from core.script_prompts import build_title_prompt
-    food_titles = _collect_food_titles()
+    genre_profile = _get_genre_profile()
+    all_titles = _collect_all_titles()
     tsv, tsv_count = _read_latest_analytics_tsv()
     summary = _read_latest_analytics_summary()
     analytics_tsv: Optional[str] = None
@@ -132,7 +141,10 @@ def get_title_prompt(long_only: bool = False) -> dict:
         analytics_tsv = f"{summary}\n\n【動画別TSV】\n{tsv}"
     elif tsv:
         analytics_tsv = tsv
-    prompt = build_title_prompt(food_titles, analytics_tsv=analytics_tsv)
+    from core.script_prompts import build_title_prompt
+    prompt = build_title_prompt(
+        all_titles, analytics_tsv=analytics_tsv, genre_profile=genre_profile
+    )
     if long_only:
         prompt += (
             "\n\n今回の生成条件:\n"
@@ -143,7 +155,8 @@ def get_title_prompt(long_only: bool = False) -> dict:
         )
     return {
         "prompt": prompt,
-        "title_count": len(food_titles),
+        "title_count": len(all_titles),
         "analytics_count": tsv_count,
         "long_only": long_only,
+        "genre_profile": genre_profile,
     }

@@ -12,7 +12,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from config import config as _cfg
-from core.output_paths import OUTPUT_DIR
+from core.output_paths import get_output_videos_dir
 from core.upload_scheduler import JST, SLOTS, LONG_SLOTS_WEEKDAY, LONG_SLOTS_WEEKEND
 from web_app.security import safe_output_path
 
@@ -127,7 +127,7 @@ def _mark_auto_submitted(history_name: str) -> None:
     """upload_record.json に auto_submitted_at を記録して二重送信を防ぐ。"""
     from web_app.services.fixed_comment_service import _first_existing, _safe_json
     try:
-        theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
+        theme_dir = safe_output_path(history_name, output_base=get_output_videos_dir())
         record_path = _first_existing(theme_dir, ("_meta/upload_record.json", "upload_record.json"))
         record = _safe_json(record_path)
         if record.get("fixed_comment_auto_submitted_at"):

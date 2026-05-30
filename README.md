@@ -1,6 +1,6 @@
 <div align="center">
   <h1>🎥 Native Video Factory</h1>
-  <p><strong>「ずんだもんとめたんの食べ物雑学堂」向け、台本からの全自動動画生成・投稿システム</strong></p>
+  <p><strong>複数チャンネル対応の台本→動画全自動生成・投稿システム（食べ物雑学 / 都市伝説 他）</strong></p>
 
   ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
   ![VOICEVOX](https://img.shields.io/badge/VOICEVOX-Supported-green?style=for-the-badge)

@@ -1577,21 +1577,81 @@ TOPIC_REQUEST_CTA_EVERY_N=5
 > ~~- Web UIから半自動ダウンロードおよび充足チェックが可能。不足時は自動フォールバックせずに停止する。~~
 
 
-## チャンネル識別情報（複数チャンネル運用対応）
+## チャンネルプロファイル管理（複数チャンネル対応）
 
-Web UI 上部のチャンネルバナーと、アップロード誤爆防止のための設定項目。
-`.env` に記述し、`core/channel_info.py` で読み込む。
+チャンネル単位の設定を `channel_profiles` テーブル（`data/settings.db`）で管理する。
+active profile によってすべての出力パス・DB・プロンプト・Analytics・再生リストが切り替わる。
 
-### 環境変数
+### `channel_profiles` テーブル
 
-| 変数名 | 必須 | 説明 |
+| カラム | 型 | 説明 |
 |---|---|---|
-| `CHANNEL_NAME` | アップロード時必須 | チャンネル表示名。未設定時はアップロード禁止。 |
-| `CHANNEL_HANDLE` | アップロード時必須 | `@` から始まるハンドル。未設定時はアップロード禁止。 |
-| `CHANNEL_PROFILE` | 任意 | チャンネル識別子（任意文字列）。未設定でも動作するが警告表示。 |
-| `CHANNEL_THEME` | 任意 | テーマ説明。バナーに表示するのみ。 |
-| `CHANNEL_ACCENT_COLOR` | 任意 | UI アクセント色（`#RRGGBB`）。不正値は警告を出してデフォルト色 `#4a5568` を使用。 |
-| `DEFAULT_HASHTAGS` | 任意 | デフォルトハッシュタグ文字列。 |
+| `profile_id` | TEXT PK | 英小文字・数字・アンダースコア・ハイフン（例: `food_trivia`） |
+| `channel_name` | TEXT | チャンネル表示名（必須） |
+| `channel_handle` | TEXT | `@` で始まるハンドル |
+| `genre_profile` | TEXT | プロンプトプロファイル識別子（例: `food_trivia` / `urban_legend`） |
+| `output_root` | TEXT | 出力ルートパス（例: `output/food_trivia`） |
+| `default_hashtags` | TEXT | デフォルトハッシュタグ |
+| `channel_theme` | TEXT | テーマ説明（UI バナー表示用） |
+| `channel_accent_color` | TEXT | UI アクセント色（#RRGGBB） |
+| `is_active` | INTEGER | 1 のプロファイルが active（必ず1件のみ） |
+| `created_at` / `updated_at` | TEXT | ISO8601 UTC |
+
+### 出力ディレクトリ構造（profile 別）
+
+```
+output/{profile_id}/
+  videos/        ← 動画テーマフォルダ（Shorts_xxx / Long_xxx）
+  000_uploaded/  ← アップロード済みアーカイブ
+  000_backups/   ← バックアップ
+  000_data/      ← metadata.db / uploaded_titles.txt
+  000_analytics/ ← Analytics TSV / JSON
+```
+
+### API
+
+- `GET /api/channels` — プロファイル一覧
+- `GET /api/channels/current` — アクティブプロファイル
+- `POST /api/channels` — 作成
+- `PUT /api/channels/{id}` — 更新
+- `POST /api/channels/{id}/activate` — アクティブ化
+- `DELETE /api/channels/{id}` — 削除（confirmed=true 必須）
+
+### プロンプトプロファイル構成
+
+```
+config/prompt_profiles/
+  genres/
+    food_trivia/
+      profile.yaml          ← genre_profile 設定（hashtag / playlist suffix 等）
+      script_context.md     ← チャンネルコンテキスト・方針・タグルール
+      title_context.md      ← タイトル案生成プロンプト
+      meeting_context.md    ← ネタ会議プロンプト
+      playlist_categories.md← 再生リストカテゴリ名
+      used_topics.txt       ← 使用済みトピック
+    urban_legend/           ← 同構成
+  local/
+    food_trivia/            ← git管理外・個人上書き（任意）
+    urban_legend/
+```
+
+読み込み優先順位: `local/{genre_profile}/` > `genres/{genre_profile}/`
+genre_profile が存在しない場合はエラー停止（別ジャンルへのフォールバック禁止）。
+
+### 初回移行
+
+アプリ起動時の lifespan で `ensure_initial_profile_from_env()` を実行し、
+`channel_profiles` が0件の場合のみ環境変数（CHANNEL_NAME / CHANNEL_HANDLE 等）から初期 profile を自動作成する。
+
+### 環境変数（後方互換）
+
+| 変数名 | 説明 |
+|---|---|
+| `CHANNEL_NAME` | 初回移行時に使用。移行後は channel_profiles が正本 |
+| `CHANNEL_HANDLE` | 同上 |
+| `CHANNEL_THEME` | 同上 |
+| `CHANNEL_ACCENT_COLOR` | 同上 |
+| `DEFAULT_HASHTAGS` | 同上 |
 
 ### 設定例（.env）
 

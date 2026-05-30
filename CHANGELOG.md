@@ -10,6 +10,26 @@
 
 ---
 
+## 2026-05-31 複数チャンネルプロファイルとプロンプトプロファイルを追加
+
+**対象ファイル:** `core/channel_profile.py`（新規） / `core/prompt_profile_loader.py`（新規） / `core/output_paths.py` / `core/script_prompts.py` / `core/metadata_db.py` / `core/channel_info.py` / `core/playlist_resolver.py` / `web_app/security.py` / `web_app/services/prompt_service.py` / 他サービス多数 / `web_app/routes/api_channels.py`（新規） / `web_app/app.py` / `workers/main.py` / `config/prompt_profiles/`（新規ディレクトリ）
+
+**変更内容:**
+- `channel_profiles` テーブルを `data/settings.db` に追加し、active profile によってすべての出力パス・DB・プロンプトが切り替わる設計を導入
+- `core/channel_profile.py` を新規追加（profile CRUD + `require_active_profile` / `ensure_initial_profile_from_env`）
+- `config/prompt_profiles/genres/food_trivia/` と `genres/urban_legend/` を新規追加（ジャンル別プロンプトファイル群）
+- `core/prompt_profile_loader.py` を新規追加（common→genres→local の優先順位でプロンプトを読み込む）
+- `core/script_prompts.py` からジャンル固有文言を除去し、`genre_profile` パラメータで切り替え可能に
+- `core/output_paths.py` を全面書き換え（`get_output_videos_dir()` 等の関数を提供、profile 別にパスを解決）
+- `core/metadata_db.py` の DB パスを active profile の `000_data/metadata.db` に変更
+- `web_app/security.py` の `safe_output_path()` を active profile の output_root 配下のみ許可に変更
+- `core/playlist_resolver.py` を genre 別 `playlist_categories.md` から動的読み込みに変更
+- `web_app/routes/api_channels.py` を新規追加（チャンネルプロファイル管理 API）
+- 起動時 lifespan で `ensure_initial_profile_from_env()` を実行し初回に自動プロファイル作成
+- テスト4ファイル追加（45件）
+
+---
+
 ## 2026-05-31 旧フォルダプレフィックス互換コードを削除
 
 **対象ファイル:** `config/config.py` / `web_app/security.py` / `web_app/services/history_service.py` / `core/native_renderer.py` / `core/youtube_uploader.py` / `core/analytics_score.py` / `core/parser.py` / `workers/main.py` / `web_app/app.py` / `scripts/migrate_folder_prefixes.py`（削除） / `MAINTENANCE.md`（削除）

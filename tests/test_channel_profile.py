@@ -1,0 +1,210 @@
+"""
+core/channel_profile.py のユニットテスト。
+外部API実通信なし。data/settings.db は tmp_path に分離。
+"""
+from __future__ import annotations
+
+import os
+import sys
+
+import pytest
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
+
+# ── フィクスチャ ──────────────────────────────────────────────────────────────
+
+@pytest.fixture()
+def profile_db(tmp_path, monkeypatch):
+    import core.channel_profile as cp
+    monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
+    yield cp
+
+
+def _make_profile(
+    profile_id="test_ch", genre="food_trivia", output_root=None,
+    channel_handle="@test", **kw
+):
+    from core.channel_profile import ChannelProfile
+    return ChannelProfile(
+        profile_id=profile_id,
+        channel_name="テストチャンネル",
+        channel_handle=channel_handle,
+        genre_profile=genre,
+        output_root=output_root or f"output/{profile_id}",
+        **kw,
+    )
+
+
+# ── 基本 CRUD ─────────────────────────────────────────────────────────────────
+
+def test_save_and_get(profile_db):
+    cp = profile_db
+    p = _make_profile()
+    cp.save_profile(p)
+    got = cp.get_profile("test_ch")
+    assert got is not None
+    assert got.channel_name == "テストチャンネル"
+    assert got.genre_profile == "food_trivia"
+
+
+def test_list_profiles_empty(profile_db):
+    cp = profile_db
+    assert cp.list_profiles() == []
+
+
+def test_list_profiles_active_first(profile_db):
+    cp = profile_db
+    p1 = _make_profile("ch1")
+    p2 = _make_profile("ch2")
+    cp.save_profile(p1)
+    cp.save_profile(p2)
+    cp.activate_profile("ch2")
+    profiles = cp.list_profiles()
+    assert profiles[0].profile_id == "ch2"
+    assert profiles[0].is_active is True
+
+
+def test_activate_profile(profile_db):
+    cp = profile_db
+    p1 = _make_profile("ch1")
+    p2 = _make_profile("ch2")
+    cp.save_profile(p1)
+    cp.save_profile(p2)
+    cp.activate_profile("ch1")
+    active = cp.get_active_profile()
+    assert active is not None
+    assert active.profile_id == "ch1"
+
+    # ch2 に切り替え → ch1 は非アクティブになる
+    cp.activate_profile("ch2")
+    active = cp.get_active_profile()
+    assert active.profile_id == "ch2"
+
+    p1_fresh = cp.get_profile("ch1")
+    assert p1_fresh.is_active is False
+
+
+def test_get_active_profile_none_when_empty(profile_db):
+    cp = profile_db
+    assert cp.get_active_profile() is None
+
+
+def test_require_active_profile_raises_when_none(profile_db):
+    cp = profile_db
+    with pytest.raises(cp.NoActiveProfileError):
+        cp.require_active_profile()
+
+
+def test_delete_profile_ok(profile_db):
+    cp = profile_db
+    p1 = _make_profile("ch1")
+    p2 = _make_profile("ch2")
+    cp.save_profile(p1)
+    cp.save_profile(p2)
+    cp.activate_profile("ch1")
+    cp.delete_profile("ch2", confirmed=True)
+    assert cp.get_profile("ch2") is None
+
+
+def test_delete_active_profile_raises(profile_db):
+    cp = profile_db
+    p = _make_profile("ch1")
+    cp.save_profile(p)
+    cp.activate_profile("ch1")
+    with pytest.raises(cp.ChannelProfileError):
+        cp.delete_profile("ch1", confirmed=True)
+
+
+def test_delete_without_confirmed_raises(profile_db):
+    cp = profile_db
+    p = _make_profile("ch1")
+    cp.save_profile(p)
+    with pytest.raises(cp.ChannelProfileError):
+        cp.delete_profile("ch1", confirmed=False)
+
+
+# ── バリデーション ────────────────────────────────────────────────────────────
+
+def test_validate_invalid_profile_id(profile_db):
+    from core.channel_profile import ChannelProfile, ProfileValidationError
+    p = ChannelProfile(
+        profile_id="INVALID ID!",  # 大文字・スペースは不可
+        channel_name="テスト",
+        channel_handle="",
+        genre_profile="food_trivia",
+        output_root="output/test",
+    )
+    with pytest.raises(ProfileValidationError):
+        profile_db.validate_profile(p)
+
+
+def test_validate_invalid_accent_color(profile_db):
+    from core.channel_profile import ChannelProfile, ProfileValidationError
+    p = ChannelProfile(
+        profile_id="ch1",
+        channel_name="テスト",
+        channel_handle="",
+        genre_profile="food_trivia",
+        output_root="output/ch1",
+        channel_accent_color="not_a_color",
+    )
+    with pytest.raises(ProfileValidationError):
+        profile_db.validate_profile(p)
+
+
+# ── handle_normalized ─────────────────────────────────────────────────────────
+
+def test_handle_normalized_adds_at(profile_db):
+    p = _make_profile(channel_handle="zunkami")
+    assert p.handle_normalized == "@zunkami"
+
+
+def test_handle_normalized_keeps_at(profile_db):
+    p = _make_profile(channel_handle="@zunkami")
+    assert p.handle_normalized == "@zunkami"
+
+
+# ── output_root_abs ───────────────────────────────────────────────────────────
+
+def test_output_root_abs_relative(profile_db):
+    p = _make_profile(output_root="output/food_trivia")
+    assert os.path.isabs(p.output_root_abs)
+    # Windows/Unix どちらでも動くようにパス正規化して比較
+    assert os.path.normpath("output/food_trivia") in os.path.normpath(p.output_root_abs)
+
+
+# ── 初期プロファイル自動作成 ────────────────────────────────────────────────
+
+def test_ensure_initial_profile_from_env(profile_db, monkeypatch):
+    cp = profile_db
+    import config.config as cfg
+    monkeypatch.setattr(cfg, "CHANNEL_NAME", "食べ物雑学堂")
+    monkeypatch.setattr(cfg, "CHANNEL_HANDLE", "@zunkami")
+    monkeypatch.setattr(cfg, "CHANNEL_THEME", "食べ物")
+    monkeypatch.setattr(cfg, "CHANNEL_ACCENT_COLOR", "")
+    monkeypatch.setattr(cfg, "DEFAULT_HASHTAGS", "#ずんだもん")
+
+    result = cp.ensure_initial_profile_from_env()
+    assert result is not None
+    assert result.genre_profile == "food_trivia"
+    active = cp.get_active_profile()
+    assert active is not None
+    assert active.channel_name == "食べ物雑学堂"
+
+
+def test_ensure_initial_profile_skips_if_exists(profile_db, monkeypatch):
+    cp = profile_db
+    p = _make_profile("existing")
+    cp.save_profile(p)
+    import config.config as cfg
+    monkeypatch.setattr(cfg, "CHANNEL_NAME", "別チャンネル")
+    monkeypatch.setattr(cfg, "CHANNEL_HANDLE", "@other")
+    monkeypatch.setattr(cfg, "CHANNEL_THEME", "")
+    monkeypatch.setattr(cfg, "CHANNEL_ACCENT_COLOR", "")
+    monkeypatch.setattr(cfg, "DEFAULT_HASHTAGS", "")
+
+    result = cp.ensure_initial_profile_from_env()
+    assert result is None  # 既存があるのでスキップ

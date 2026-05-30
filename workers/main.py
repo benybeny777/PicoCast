@@ -792,7 +792,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     elif not is_shorts and not is_netakaigi and not safe_topic.startswith(_pfx_l):
         safe_topic = f"{_pfx_l}{safe_topic}"
 
-    theme_dir = os.path.join("output", safe_topic)
+    from core.output_paths import get_output_videos_dir
+    theme_dir = os.path.join(get_output_videos_dir(), safe_topic)
 
     width = 1080 if is_shorts else 1920
     height = 1920 if is_shorts else 1080

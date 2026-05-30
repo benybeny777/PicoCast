@@ -1,13 +1,11 @@
 """
 セキュリティユーティリティ。
-- output/ 配下のみアクセス許可
+- active profile の output_root 配下のみアクセス許可
 - パストラバーサル対策
 - 秘密ファイルの読み取り禁止
 """
 import os
 from fastapi import HTTPException
-
-from core.output_paths import OUTPUT_DIR
 
 # 絶対に読み取り・返却してはならないファイル名
 _SECRET_FILES = frozenset({
@@ -18,12 +16,22 @@ _SECRET_FILES = frozenset({
 })
 
 
+def _get_output_base() -> str:
+    """active profile の output_root を返す。未設定なら config フォールバック。"""
+    from core.output_paths import get_output_root
+    return os.path.realpath(get_output_root())
+
+
 def safe_output_path(relative_or_name: str, output_base: str | None = None) -> str:
     """
-    output/ 配下に限定した安全なパスを返す。
-    パストラバーサルや秘密ファイルアクセスを拒否する。
+    active profile の output_root 配下に限定した安全なパスを返す。
+    別 profile の output_root へのアクセスは拒否する。
+    パストラバーサルや秘密ファイルアクセスも拒否する。
     """
-    output_base = os.path.realpath(output_base or OUTPUT_DIR)
+    if output_base is None:
+        output_base = _get_output_base()
+    else:
+        output_base = os.path.realpath(output_base)
 
     # 絶対パスが渡された場合はそのまま検証
     if os.path.isabs(relative_or_name):
@@ -42,7 +50,7 @@ def safe_output_path(relative_or_name: str, output_base: str | None = None) -> s
 
 
 def is_safe_output_path(path: str) -> bool:
-    """パスが output/ 配下かつ秘密ファイルでないか判定する（例外を投げない版）。"""
+    """パスが output_root 配下かつ秘密ファイルでないか判定する（例外を投げない版）。"""
     try:
         safe_output_path(path)
         return True

@@ -8,7 +8,7 @@ from typing import Any
 
 from core.cta_policy import apply_topic_request_cta_policy_to_scripts
 from core.gui_support import split_input_scripts
-from core.output_paths import OUTPUT_DIR
+from core.output_paths import get_output_videos_dir
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import safe_output_path
 from web_app.worker_runner import run_in_worker
@@ -148,7 +148,7 @@ def _run_generate(
     if str(msg).lstrip().startswith("❌"):
         raise RuntimeError(msg)
     history_name = worker_result.get("history_name") or _safe_dirname(topic)
-    theme_dir = os.path.join(OUTPUT_DIR, history_name)
+    theme_dir = os.path.join(get_output_videos_dir(), history_name)
     result = {
         "topic": topic,
         "message": msg,

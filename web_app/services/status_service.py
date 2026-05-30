@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from config import config
-from core.output_paths import OUTPUT_DIR, ANALYTICS_DIR
+from core.output_paths import get_output_videos_dir, get_analytics_dir
 
 # 起動時にウォームアップし、以降はキャッシュを返す
 _settings_status_cache: dict | None = None
@@ -154,8 +154,8 @@ def get_settings_status() -> dict[str, Any]:
         "legacy_client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),
         "legacy_token_json": os.path.isfile(os.path.join(root, "token.json")),
         "legacy_token_analytics_json": os.path.isfile(os.path.join(root, "token_analytics.json")),
-        "output_dir": OUTPUT_DIR,
-        "output_dir_exists": os.path.isdir(OUTPUT_DIR),
+        "output_dir": get_output_videos_dir(),
+        "output_dir_exists": os.path.isdir(get_output_videos_dir()),
         "render_engine": "native",
         "native_shorts_body_voice_speed": config.NATIVE_SHORTS_BODY_VOICE_SPEED,
         "native_shorts_intro_voice_speed": config.NATIVE_SHORTS_INTRO_VOICE_SPEED,
@@ -176,7 +176,7 @@ def get_dashboard_summary() -> dict[str, Any]:
     latest_analytics = None
     try:
         files = sorted(
-            [f for f in os.listdir(ANALYTICS_DIR) if f.startswith("analytics_score_")],
+            [f for f in os.listdir(get_analytics_dir()) if f.startswith("analytics_score_")],
             reverse=True,
         )
         latest_analytics = files[0] if files else None
@@ -188,10 +188,10 @@ def get_dashboard_summary() -> dict[str, Any]:
     history_count = 0
     mp4_count = 0
     try:
-        for name in os.listdir(OUTPUT_DIR):
+        for name in os.listdir(get_output_videos_dir()):
             if not is_video_folder(name):
                 continue
-            d = os.path.join(OUTPUT_DIR, name)
+            d = os.path.join(get_output_videos_dir(), name)
             if not os.path.isdir(d):
                 continue
             history_count += 1

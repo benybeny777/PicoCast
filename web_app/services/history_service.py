@@ -6,7 +6,7 @@ import json
 import os
 from typing import Any
 
-from core.output_paths import OUTPUT_DIR
+from core.output_paths import get_output_videos_dir, get_uploaded_dir
 from web_app.security import is_video_folder, safe_output_path
 
 def _is_management(name: str) -> bool:
@@ -73,7 +73,7 @@ def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
     results = []
     try:
         # scandir はエントリの stat をキャッシュするため listdir + isdir より I/O が少ない
-        entries = sorted(os.scandir(OUTPUT_DIR), key=lambda e: e.name, reverse=True)
+        entries = sorted(os.scandir(get_output_videos_dir()), key=lambda e: e.name, reverse=True)
     except OSError:
         return results
 
@@ -87,7 +87,7 @@ def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
         if is_mgmt and not include_management:
             continue
         try:
-            theme_dir = safe_output_path(name, output_base=OUTPUT_DIR)
+            theme_dir = safe_output_path(name, output_base=get_output_videos_dir())
         except Exception:
             continue
 
@@ -128,13 +128,13 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         return None
 
     try:
-        theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
+        theme_dir = safe_output_path(history_name, output_base=get_output_videos_dir())
     except Exception:
         return None
     if not os.path.isdir(theme_dir):
         # アップロード後に 000_uploaded/ へ移動済みの場合のフォールバック
-        alt_dir = os.path.join(OUTPUT_DIR, "000_uploaded", history_name)
-        if os.path.isdir(alt_dir) and os.path.realpath(alt_dir).startswith(os.path.realpath(OUTPUT_DIR)):
+        alt_dir = os.path.join(get_uploaded_dir(), history_name)
+        if os.path.isdir(alt_dir) and os.path.realpath(alt_dir).startswith(os.path.realpath(get_output_videos_dir())):
             theme_dir = alt_dir
         else:
             return None

@@ -44,6 +44,14 @@ async def _lifespan(app):
     initialize_db()  # 起動時に DB を確実に初期化しログを残す
     register_shutdown_hook("metadata_db", close_all_connections)
 
+    # 既存環境変数から初期 channel profile を自動作成（profile が0件の場合のみ）
+    try:
+        from core.channel_profile import ensure_initial_profile_from_env
+        ensure_initial_profile_from_env()
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning("[ChannelProfile] 初期プロファイル作成エラー: %s", _e)
+
     # 既存認証ファイル（.env / OAuth JSON）を DB へ自動移行
     try:
         from core.secret_migration import migrate_existing_secret_files
@@ -88,6 +96,7 @@ from web_app.routes.api_sd_models import router as sd_models_router
 from web_app.routes.api_shutdown import router as shutdown_router
 from web_app.routes.api_db import router as db_router
 from web_app.routes.api_channel import router as channel_router
+from web_app.routes.api_channels import router as channels_router
 
 app.include_router(pages_router)
 app.include_router(status_router)
@@ -106,6 +115,7 @@ app.include_router(sd_models_router)
 app.include_router(shutdown_router)
 app.include_router(db_router)
 app.include_router(channel_router)
+app.include_router(channels_router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():

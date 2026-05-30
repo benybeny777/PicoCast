@@ -9,7 +9,7 @@ import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from core.output_paths import OUTPUT_DIR
+from core.output_paths import get_output_videos_dir, get_uploaded_dir, get_backups_dir
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import is_video_folder, safe_output_path
 
@@ -24,7 +24,7 @@ def list_upload_candidates() -> list[dict[str, Any]]:
 
     # output/ 直下のみ走査（000_uploaded/ は表示しない）
     search_dirs = [
-        (OUTPUT_DIR, ""),
+        (get_output_videos_dir(), ""),
     ]
 
     for search_dir, prefix in search_dirs:
@@ -41,7 +41,7 @@ def list_upload_candidates() -> list[dict[str, Any]]:
             seen.add(name)
             rel = prefix + name
             try:
-                theme_dir = safe_output_path(rel, output_base=OUTPUT_DIR)
+                theme_dir = safe_output_path(rel, output_base=get_output_videos_dir())
             except Exception:
                 continue
             if not os.path.isdir(theme_dir):
@@ -77,7 +77,7 @@ def submit_upload_job(history_name: str) -> str:
     if ".." in history_name:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")
-    theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
+    theme_dir = safe_output_path(history_name, output_base=get_output_videos_dir())
     if not os.path.isdir(theme_dir) or not is_video_folder(os.path.basename(theme_dir)):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
@@ -103,7 +103,7 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
         missing = [w["message"] for w in ch["warnings"] if w["level"] == "error"]
         raise RuntimeError("チャンネル設定不足のためアップロード中止: " + "、".join(missing))
 
-    theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
+    theme_dir = safe_output_path(history_name, output_base=get_output_videos_dir())
     if not os.path.isdir(theme_dir):
         raise FileNotFoundError(f"履歴フォルダが見つかりません: {history_name}")
 
@@ -260,7 +260,7 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
 
     # 000_uploaded/ へフォルダ移動（既に移動済みの場合はスキップ）
     folder_name = os.path.basename(theme_dir)
-    uploaded_dir = os.path.join(OUTPUT_DIR, "000_uploaded")
+    uploaded_dir = get_uploaded_dir()
     dest = os.path.join(uploaded_dir, folder_name)
     if os.path.realpath(theme_dir) != os.path.realpath(dest):
         os.makedirs(uploaded_dir, exist_ok=True)
@@ -270,7 +270,7 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
         _log(job, f"フォルダは既に 000_uploaded/{folder_name} にあります", "info")
 
     # 000_backups/ から同テーマのバックアップを削除
-    backups_dir = os.path.join(OUTPUT_DIR, "000_backups")
+    backups_dir = get_backups_dir()
     prefix = f"{folder_name}_"
     removed = 0
     if os.path.isdir(backups_dir):

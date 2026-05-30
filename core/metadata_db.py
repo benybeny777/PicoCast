@@ -36,7 +36,8 @@ _logger = logging.getLogger(__name__)
 # 接続追跡（shutdown hook 用）
 _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
-_db_path_cache: str | None = None
+# キャッシュは廃止（profile が変わるとパスが変わるため）
+_db_path_cache: str | None = None  # 後方互換のため変数は残す（使用しない）
 
 SCHEMA_VERSION = 4
 
@@ -44,11 +45,17 @@ SCHEMA_VERSION = 4
 # ── パス ────────────────────────────────────────────────────────────────────
 
 def get_db_path() -> str:
-    global _db_path_cache
-    if _db_path_cache is None:
+    """
+    active profile の output_root 配下の metadata.db パスを返す。
+    profile 未設定なら config の OUTPUT_DATA_DIR にフォールバック（後方互換）。
+    profile が変わるとパスが変わるため、キャッシュしない。
+    """
+    try:
+        from core.output_paths import get_db_path as _op_get_db_path
+        return _op_get_db_path()
+    except Exception:
         from config.config import OUTPUT_DATA_DIR
-        _db_path_cache = os.path.join(OUTPUT_DATA_DIR, "metadata.db")
-    return _db_path_cache
+        return os.path.join(OUTPUT_DATA_DIR, "metadata.db")
 
 
 # ── 接続 ────────────────────────────────────────────────────────────────────
@@ -1227,8 +1234,8 @@ def import_output_dir(output_dir_root: str | None = None) -> None:
 
     py -3 -m core.metadata_db import-output
     """
-    from core.output_paths import OUTPUT_DIR
-    root = output_dir_root or OUTPUT_DIR
+    from core.output_paths import get_output_videos_dir
+    root = output_dir_root or get_output_videos_dir()
 
     initialize_db()
 
