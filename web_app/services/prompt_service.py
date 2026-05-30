@@ -40,7 +40,7 @@ def _folder_name_to_title(name: str) -> str:
 def _collect_active_titles() -> list[str]:
     """active profile の videos/ フォルダ内の未アップロードフォルダ名からタイトルを収集。"""
     output_dir = _get_output_videos_dir()
-    skip = {"000_uploaded", "000_backups", "000_data", "000_analytics", "000_legacy"}
+    skip = {"000_uploaded", "000_backups", "000_data", "000_legacy"}
     if not os.path.isdir(output_dir):
         return []
     names = sorted(

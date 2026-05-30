@@ -3,7 +3,6 @@
 
 旧構造:
   output/000_data/       ← metadata.db など
-  output/000_analytics/  ← Analytics ファイル
   output/000_uploaded/   ← アップロード済みアーカイブ
   output/000_backups/    ← バックアップ
   output/Shorts_xxx/     ← 動画フォルダ（あれば）
@@ -11,7 +10,6 @@
 
 新構造（profile 別）:
   output/{profile_id}/000_data/
-  output/{profile_id}/000_analytics/
   output/{profile_id}/000_uploaded/
   output/{profile_id}/000_backups/
   output/{profile_id}/videos/Shorts_xxx/
@@ -35,7 +33,7 @@ _logger = logging.getLogger(__name__)
 
 # 旧構造のシステムディレクトリ（動画フォルダではないもの）
 _OLD_SYSTEM_DIRS = {
-    "000_data", "000_analytics", "000_uploaded",
+    "000_data", "000_uploaded",
     "000_backups", "000_legacy", "000_debug",
 }
 
@@ -135,7 +133,6 @@ def migrate_output_to_profile(
     # ── システムディレクトリの移行 ─────────────────────────────────────────
     dir_map = {
         "000_data":      os.path.join(profile_output_root, "000_data"),
-        "000_analytics": os.path.join(profile_output_root, "000_analytics"),
         "000_uploaded":  os.path.join(profile_output_root, "000_uploaded"),
         "000_backups":   os.path.join(profile_output_root, "000_backups"),
         "000_legacy":    os.path.join(profile_output_root, "000_legacy"),

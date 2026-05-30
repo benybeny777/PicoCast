@@ -9,14 +9,13 @@ profile が未設定でも動作するよう、フォールバックとして co
     videos/        ← 動画生成フォルダ（テーマ別サブディレクトリ）
     000_uploaded/  ← アップロード済みアーカイブ
     000_backups/   ← バックアップ
-    000_data/      ← metadata.db / uploaded_titles.txt など
-    000_analytics/ ← Analytics TSV/JSON
+    000_data/      ← metadata.db など
 
 別 profile の output_root へのアクセスは web_app/security.py で拒否される。
 
 使い方:
   from core.output_paths import (
-      get_output_videos_dir, get_data_dir, get_analytics_dir,
+      get_output_videos_dir, get_data_dir,
       get_uploaded_dir, get_backups_dir, get_db_path,
   )
 """
@@ -68,11 +67,6 @@ def get_data_dir() -> str:
     return os.path.join(_get_output_root(), "000_data")
 
 
-def get_analytics_dir() -> str:
-    """Analytics TSV / JSON を置くディレクトリ。output/{profile_id}/000_analytics/"""
-    return os.path.join(_get_output_root(), "000_analytics")
-
-
 def get_uploaded_dir() -> str:
     """アップロード済みアーカイブ。output/{profile_id}/000_uploaded/"""
     return os.path.join(_get_output_root(), "000_uploaded")
@@ -88,11 +82,6 @@ def get_db_path() -> str:
     return os.path.join(get_data_dir(), "metadata.db")
 
 
-def get_legacy_dir() -> str:
-    """旧 output/000_legacy/ に相当するパス（後方互換）。"""
-    return os.path.join(_get_output_root(), "000_legacy")
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # ユーティリティ
 # ─────────────────────────────────────────────────────────────────────────────
@@ -102,26 +91,10 @@ def ensure_output_dirs() -> None:
     for path in (
         get_output_videos_dir(),
         get_data_dir(),
-        get_analytics_dir(),
         get_uploaded_dir(),
         get_backups_dir(),
     ):
         os.makedirs(path, exist_ok=True)
-
-
-def analytics_paths(pattern_suffix: str) -> list[str]:
-    """Analytics ファイルのパスリストを返す。"""
-    paths: list[str] = []
-    for directory in (get_analytics_dir(), get_output_videos_dir()):
-        try:
-            paths.extend(
-                os.path.join(directory, name)
-                for name in os.listdir(directory)
-                if name.startswith("analytics_score_") and name.endswith(pattern_suffix)
-            )
-        except OSError:
-            continue
-    return paths
 
 
 def migrate_root_file(
@@ -137,18 +110,14 @@ def migrate_root_file(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 旧互換シム（他モジュールが module 属性アクセスした場合に動的解決）
-# Python 3.7+ の module-level __getattr__ を利用する。
-# from core.output_paths import OUTPUT_DIR のような既存コードは変更済みだが、
-# 万が一残っている場合の安全弁として定義する。
+# 旧互換シム
 # ─────────────────────────────────────────────────────────────────────────────
 
 def __getattr__(name: str):
     _compat = {
-        "OUTPUT_DIR":    get_output_videos_dir,
-        "DATA_DIR":      get_data_dir,
-        "ANALYTICS_DIR": get_analytics_dir,
-        "LEGACY_DIR":    get_uploaded_dir,
+        "OUTPUT_DIR": get_output_videos_dir,
+        "DATA_DIR":   get_data_dir,
+        "LEGACY_DIR": get_uploaded_dir,
     }
     if name in _compat:
         return _compat[name]()

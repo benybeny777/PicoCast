@@ -123,7 +123,7 @@ def count_existing_topic_request_candidates(output_dir: str | None = None) -> in
     if not os.path.isdir(base_dir):
         return 0
     count = 0
-    skip_root_dirs = {"000_analytics", "000_backups", "000_data", "000_debug", "000_legacy"}
+    skip_root_dirs = {"000_backups", "000_data", "000_debug", "000_legacy"}
     for root, dirs, files in os.walk(base_dir):
         if os.path.abspath(root) == base_dir:
             dirs[:] = [name for name in dirs if name not in skip_root_dirs]

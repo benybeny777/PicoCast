@@ -11,7 +11,7 @@ from typing import Any
 import httpx
 
 from config import config
-from core.output_paths import get_output_videos_dir, get_analytics_dir
+from core.output_paths import get_output_videos_dir
 
 # 起動時にウォームアップし、以降はキャッシュを返す
 _settings_status_cache: dict | None = None
@@ -172,15 +172,16 @@ def get_settings_status() -> dict[str, Any]:
 def get_dashboard_summary() -> dict[str, Any]:
     status = get_cached_settings_status()
 
-    # 直近分析ファイル
+    # 直近 Analytics 取得日（DB から）
     latest_analytics = None
     try:
-        files = sorted(
-            [f for f in os.listdir(get_analytics_dir()) if f.startswith("analytics_score_")],
-            reverse=True,
-        )
-        latest_analytics = files[0] if files else None
-    except OSError:
+        from core.metadata_db import ManagedConnection
+        with ManagedConnection() as _conn:
+            row = _conn.execute(
+                "SELECT collected_at FROM analytics_snapshots ORDER BY collected_at DESC LIMIT 1"
+            ).fetchone()
+        latest_analytics = row["collected_at"] if row else None
+    except Exception:
         pass
 
     # output/ 配下の履歴数とMP4有無カウント

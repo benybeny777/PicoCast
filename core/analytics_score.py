@@ -3,8 +3,6 @@ import os
 from datetime import date, datetime, timezone, timedelta
 from typing import Any
 
-from core.output_paths import get_analytics_dir
-
 
 SCORE_ORDER = {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1, "未計測": 0, "対象外": -1}
 AUDIO_CUTOFF_RISK_DATE = date(2026, 5, 16)
