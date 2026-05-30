@@ -87,12 +87,6 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "FFMPEG_BIN",                  "type": "str",   "label": "ffmpeg バイナリパス",           "default": str(cfg.FFMPEG_BIN),                                           "group": "ffmpeg"},
     {"key": "NATIVE_FFMPEG_TIMEOUT_SEC",   "type": "float", "label": "ffmpegタイムアウト(秒)",        "default": str(cfg.NATIVE_FFMPEG_TIMEOUT_SEC),  "min": 30,  "max": 7200,  "group": "ffmpeg"},
     {"key": "NATIVE_FFPROBE_TIMEOUT_SEC",  "type": "float", "label": "ffprobeタイムアウト(秒)",       "default": str(cfg.NATIVE_FFPROBE_TIMEOUT_SEC), "min": 5,   "max": 300,   "group": "ffmpeg"},
-    # ── チャンネル ──
-    {"key": "CHANNEL_NAME",         "type": "str",       "label": "チャンネル表示名（アップロード必須）",  "default": str(cfg.CHANNEL_NAME),         "allow_empty": True, "group": "チャンネル"},
-    {"key": "CHANNEL_HANDLE",       "type": "str",       "label": "@ハンドル（アップロード必須・@ 省略可）",         "default": str(cfg.CHANNEL_HANDLE),       "allow_empty": True, "group": "チャンネル"},
-    {"key": "CHANNEL_THEME",        "type": "str",       "label": "テーマ説明（任意）",                    "default": str(cfg.CHANNEL_THEME),        "allow_empty": True, "group": "チャンネル"},
-    {"key": "CHANNEL_ACCENT_COLOR", "type": "hex_color", "label": "UIアクセント色（任意）",               "default": str(cfg.CHANNEL_ACCENT_COLOR), "allow_empty": True, "group": "チャンネル"},
-    {"key": "DEFAULT_HASHTAGS",     "type": "str",       "label": "デフォルトハッシュタグ（任意）",        "default": str(cfg.DEFAULT_HASHTAGS),     "allow_empty": True, "group": "チャンネル"},
 ]
 
 _ALLOWED_KEYS = {item["key"] for item in EDITABLE_CONFIG}
