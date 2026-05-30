@@ -162,6 +162,7 @@ def _run_generate(
         from web_app.services.render_service import submit_render_job
         try:
             render_job_id = submit_render_job(history_name)
+            result["render_job_id"] = render_job_id
             _log(job, f"🎬 レンダージョブを登録しました (job_id={render_job_id[:8]}…)", "info")
         except Exception as _re:
             _log(job, f"⚠ レンダージョブの登録に失敗: {_re}", "warning")

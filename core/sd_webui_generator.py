@@ -56,6 +56,17 @@ class StableDiffusionWebUIGenerator:
         self.negative_prompt = (
             negative_prompt if negative_prompt is not None else config.SD_WEBUI_NEGATIVE_PROMPT
         )
+        self._client = httpx.Client()
+
+    def close(self) -> None:
+        """httpx クライアントを明示的に閉じる。with 文を使うか、呼び出し後に必ず呼ぶこと。"""
+        self._client.close()
+
+    def __enter__(self) -> "StableDiffusionWebUIGenerator":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
 
     # ─────────────────────────────────────────
     # 公開API
@@ -64,7 +75,7 @@ class StableDiffusionWebUIGenerator:
     def _check_connection(self) -> bool:
         """疎通確認のみ。成功時 True、失敗時 False を返す（例外を外に出さない）。"""
         try:
-            r = httpx.get(f"{self.base_url}/sdapi/v1/options", timeout=5)
+            r = self._client.get(f"{self.base_url}/sdapi/v1/options", timeout=5)
             return r.status_code == 200
         except Exception:
             return False
@@ -80,7 +91,7 @@ class StableDiffusionWebUIGenerator:
         """
         url = f"{self.base_url}/sdapi/v1/options"
         try:
-            r = httpx.get(url, timeout=10)
+            r = self._client.get(url, timeout=10)
         except httpx.ConnectError as e:
             raise RuntimeError(
                 f"SD WebUI API に接続できません ({self.base_url})。"
@@ -167,7 +178,7 @@ class StableDiffusionWebUIGenerator:
         )
 
         try:
-            r = httpx.post(url, json=payload, timeout=self.timeout)
+            r = self._client.post(url, json=payload, timeout=self.timeout)
         except httpx.ConnectError as e:
             raise RuntimeError(
                 f"SD WebUI API に接続できません ({self.base_url})。"
@@ -231,7 +242,7 @@ class StableDiffusionWebUIGenerator:
         """
         url = f"{self.base_url}/sdapi/v1/options"
         try:
-            r = httpx.get(url, timeout=10)
+            r = self._client.get(url, timeout=10)
         except httpx.ConnectError as e:
             raise RuntimeError(
                 f"SD WebUI API に接続できません ({self.base_url}): {e}"
@@ -266,7 +277,7 @@ class StableDiffusionWebUIGenerator:
         """
         url = f"{self.base_url}/sdapi/v1/sd-models"
         try:
-            r = httpx.get(url, timeout=30)
+            r = self._client.get(url, timeout=30)
         except httpx.ConnectError as e:
             raise RuntimeError(
                 f"SD WebUI API に接続できません ({self.base_url}): {e}"
@@ -301,7 +312,7 @@ class StableDiffusionWebUIGenerator:
         url = f"{self.base_url}/sdapi/v1/options"
         payload = {"sd_model_checkpoint": matched_title}
         try:
-            r = httpx.post(url, json=payload, timeout=60)
+            r = self._client.post(url, json=payload, timeout=60)
         except httpx.ConnectError as e:
             raise RuntimeError(
                 f"SD WebUI API に接続できません ({self.base_url}): {e}"
@@ -321,7 +332,7 @@ class StableDiffusionWebUIGenerator:
         """
         url = f"{self.base_url}/sdapi/v1/refresh-checkpoints"
         try:
-            r = httpx.post(url, timeout=60)
+            r = self._client.post(url, timeout=60)
         except httpx.ConnectError as e:
             raise RuntimeError(
                 f"SD WebUI API に接続できません ({self.base_url}): {e}"

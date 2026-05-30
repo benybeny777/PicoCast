@@ -265,7 +265,8 @@ class ImageGenerator:
                 print(f"  [Stable Diffusion] モデルをダウンロードします: {matched['filename']}")
                 manager.download_model(matched["id"], progress_callback=_progress)
                 # ダウンロード後に Stable Diffusion WebUI へ再スキャンを依頼
-                StableDiffusionWebUIGenerator().rescan_models()
+                with StableDiffusionWebUIGenerator() as _gen:
+                    _gen.rescan_models()
             else:
                 raise RuntimeError(
                     f"Stable Diffusion WebUI モデル '{matched['filename']}' が未導入です。\n"
@@ -274,8 +275,8 @@ class ImageGenerator:
                 )
 
         # モデル切り替え（SD WebUI API 経由）
-        gen = StableDiffusionWebUIGenerator()
-        gen.set_active_model(model_name)
+        with StableDiffusionWebUIGenerator() as gen:
+            gen.set_active_model(model_name)
 
     def _generate_background_sd_webui(self, description, save_dir, fname, *, is_thumbnail=False):
         """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API で背景画像を生成する。"""
@@ -311,8 +312,6 @@ class ImageGenerator:
 
         prompt_suffix = _THUMB_PROMPT_SUFFIX if is_thumbnail else _BG_PROMPT_SUFFIX
 
-        gen = StableDiffusionWebUIGenerator(width=gen_width, height=gen_height)
-
         # 日本語プロンプトを Ollama で英語に翻訳してから SD WebUI に渡す
         en_prompt = _translate_to_english_for_sd(description, debug=self.debug)
 
@@ -322,12 +321,13 @@ class ImageGenerator:
                 f"{gen_width}x{gen_height} で生成開始: {en_prompt[:60]}..."
             )
 
-        try:
-            gen.generate_image(en_prompt, output_path, prompt_suffix=prompt_suffix)
-        except Exception as e:
-            print(f"❌ SD WebUI 背景生成に失敗しました。自動フォールバックは行いません。")
-            print(f"❌ エラー詳細: {e}")
-            raise
+        with StableDiffusionWebUIGenerator(width=gen_width, height=gen_height) as gen:
+            try:
+                gen.generate_image(en_prompt, output_path, prompt_suffix=prompt_suffix)
+            except Exception as e:
+                print(f"❌ SD WebUI 背景生成に失敗しました。自動フォールバックは行いません。")
+                print(f"❌ エラー詳細: {e}")
+                raise
 
         if self.debug:
             print(f"  [AI] SD WebUI 完了: {fname}")

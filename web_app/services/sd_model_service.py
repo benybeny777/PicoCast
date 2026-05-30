@@ -28,8 +28,8 @@ def get_installed_models_from_webui() -> list[dict]:
         RuntimeError: API 未起動・HTTPエラー。
     """
     from core.sd_webui_generator import StableDiffusionWebUIGenerator
-    gen = StableDiffusionWebUIGenerator()
-    return gen.get_models()
+    with StableDiffusionWebUIGenerator() as gen:
+        return gen.get_models()
 
 
 def get_current_model_from_webui() -> str:
@@ -39,8 +39,8 @@ def get_current_model_from_webui() -> str:
         RuntimeError: API 未起動・HTTPエラー。
     """
     from core.sd_webui_generator import StableDiffusionWebUIGenerator
-    gen = StableDiffusionWebUIGenerator()
-    return gen.get_current_model()
+    with StableDiffusionWebUIGenerator() as gen:
+        return gen.get_current_model()
 
 
 def set_active_model(model_name: str) -> None:
@@ -50,8 +50,8 @@ def set_active_model(model_name: str) -> None:
         RuntimeError: モデルが見つからない・API 未起動・HTTPエラー。
     """
     from core.sd_webui_generator import StableDiffusionWebUIGenerator
-    gen = StableDiffusionWebUIGenerator()
-    gen.set_active_model(model_name)
+    with StableDiffusionWebUIGenerator() as gen:
+        gen.set_active_model(model_name)
 
 
 def rescan_models() -> None:
@@ -61,8 +61,8 @@ def rescan_models() -> None:
         RuntimeError: API 未起動・HTTPエラー。
     """
     from core.sd_webui_generator import StableDiffusionWebUIGenerator
-    gen = StableDiffusionWebUIGenerator()
-    gen.rescan_models()
+    with StableDiffusionWebUIGenerator() as gen:
+        gen.rescan_models()
 
 
 def download_model(

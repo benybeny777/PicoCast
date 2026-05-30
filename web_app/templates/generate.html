@@ -303,12 +303,22 @@ function pollJobs(tab) {
     _polling = true;
     try {
       let allDone = true;
-      for (const jobId of activeJobIds) {
+      for (const jobId of [...activeJobIds]) {
         try {
           const res = await fetch(`/api/jobs/${jobId}`);
           const job = await res.json();
           updateJobCard(container, job);
-          if (!['success', 'failed', 'cancelled'].includes(job.status)) allDone = false;
+          if (['success', 'failed', 'cancelled'].includes(job.status)) {
+            // 生成成功後にレンダージョブが登録されている場合は追跡リストに追加
+            if (job.status === 'success' && job.result?.render_job_id) {
+              const rid = job.result.render_job_id;
+              if (!activeJobIds.includes(rid)) {
+                activeJobIds.push(rid);
+              }
+            }
+          } else {
+            allDone = false;
+          }
         } catch { allDone = false; }
       }
       if (allDone) { clearInterval(pollTimer); finishGenerate(tab); }
