@@ -74,13 +74,23 @@
 
 <!-- 公開予定変更ダイアログ -->
 <div id="update-dialog" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;">
-  <div class="card" style="width:420px; margin:0 auto;">
+  <div class="card" style="width:440px; margin:0 auto;">
     <h3>公開予定変更</h3>
-    <p id="update-dialog-title" style="color:var(--text-muted); margin-bottom:0.5rem"></p>
+    <p id="update-dialog-title" style="color:var(--text-muted); margin-bottom:0.75rem"></p>
     <div class="form-group">
-      <label for="new-publish-at">新しい公開予定日時 (JST)</label>
-      <input type="datetime-local" id="new-publish-at" class="form-input" style="width:100%">
+      <label>日付 (JST)</label>
+      <select id="new-publish-date" class="form-input" style="width:100%"></select>
     </div>
+    <div class="form-group">
+      <label>時刻 (JST)</label>
+      <select id="new-publish-time" class="form-input" style="width:100%">
+        <option value="07:00">07:00（朝）</option>
+        <option value="12:00">12:00（昼）</option>
+        <option value="19:00">19:00（夜）</option>
+        <option value="21:00">21:00（夜・Long向け）</option>
+      </select>
+    </div>
+    <p id="update-dialog-current" class="hint" style="margin-top:-0.25rem"></p>
     <p class="hint">※ YouTube APIを使って公開予定を変更します。変更後は元に戻せません。</p>
     <div class="action-row">
       <button class="btn btn-primary" onclick="confirmUpdateSchedule()">変更する</button>
@@ -169,11 +179,49 @@ function pollJob(jobId, statusBox, reloadOnSuccess) {
   }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
+function _buildDateOptions(selectEl, selectedDate) {
+  const DOW = ['日','月','火','水','木','金','土'];
+  const now = new Date();
+  selectEl.innerHTML = '';
+  for (let i = 0; i < 31; i++) {
+    const d = new Date(now);
+    d.setDate(now.getDate() + i);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const dow = DOW[d.getDay()];
+    const val = `${yyyy}-${mm}-${dd}`;
+    const label = `${yyyy}/${mm}/${dd} (${dow})`;
+    const opt = new Option(label, val);
+    if (val === selectedDate) opt.selected = true;
+    selectEl.appendChild(opt);
+  }
+}
+
 function openUpdateDialog(videoId, currentPublishAt, title) {
   _updateVideoId = videoId;
   document.getElementById('update-dialog-title').textContent = title;
-  document.getElementById('new-publish-at').value = currentPublishAt;
   document.getElementById('update-status').style.display = 'none';
+
+  // 現在値を解析してプルダウン初期化
+  const curDate = currentPublishAt ? currentPublishAt.substring(0, 10) : '';
+  const curTime = currentPublishAt ? currentPublishAt.substring(11, 16) : '19:00';
+  _buildDateOptions(document.getElementById('new-publish-date'), curDate);
+
+  const timeEl = document.getElementById('new-publish-time');
+  const stdTimes = ['07:00', '12:00', '19:00', '21:00'];
+  timeEl.value = stdTimes.includes(curTime) ? curTime : '19:00';
+  // 標準外の時刻が設定されていた場合は選択肢に追加
+  if (!stdTimes.includes(curTime) && curTime) {
+    const opt = new Option(`${curTime}（現在値）`, curTime, true, true);
+    timeEl.insertBefore(opt, timeEl.firstChild);
+  }
+
+  const curLabel = currentPublishAt
+    ? `現在の設定: ${currentPublishAt.replace('T', ' ').substring(0, 16)} JST`
+    : '現在の設定: なし';
+  document.getElementById('update-dialog-current').textContent = curLabel;
+
   document.getElementById('update-dialog').style.display = 'flex';
 }
 
@@ -182,9 +230,11 @@ function closeUpdateDialog() {
 }
 
 async function confirmUpdateSchedule() {
-  const publishAt = document.getElementById('new-publish-at').value;
-  if (!publishAt) { alert('公開予定日時を入力してください'); return; }
-  if (!confirm(`公開予定を ${publishAt} に変更してよろしいですか？\nYouTube APIを使って変更します。`)) return;
+  const date = document.getElementById('new-publish-date').value;
+  const time = document.getElementById('new-publish-time').value;
+  if (!date || !time) { alert('日付と時刻を選択してください'); return; }
+  const publishAt = `${date}T${time}`;
+  if (!confirm(`公開予定を ${date} ${time} に変更してよろしいですか？\nYouTube APIを使って変更します。`)) return;
 
   const statusBox = document.getElementById('update-status');
   statusBox.style.display = 'block';
