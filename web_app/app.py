@@ -42,6 +42,8 @@ async def _lifespan(app):
     from core.metadata_db import close_all_connections
 
     auto_migrate()  # 旧 [] プレフィックスフォルダを起動時に自動リネーム
+    from core.metadata_db import initialize_db
+    initialize_db()  # 起動時に DB を確実に初期化しログを残す
     register_shutdown_hook("metadata_db", close_all_connections)
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()

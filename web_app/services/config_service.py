@@ -89,6 +89,13 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "FFMPEG_BIN",                  "type": "str",   "label": "ffmpeg バイナリパス",           "default": str(cfg.FFMPEG_BIN),                                           "group": "ffmpeg"},
     {"key": "NATIVE_FFMPEG_TIMEOUT_SEC",   "type": "float", "label": "ffmpegタイムアウト(秒)",        "default": str(cfg.NATIVE_FFMPEG_TIMEOUT_SEC),  "min": 30,  "max": 7200,  "group": "ffmpeg"},
     {"key": "NATIVE_FFPROBE_TIMEOUT_SEC",  "type": "float", "label": "ffprobeタイムアウト(秒)",       "default": str(cfg.NATIVE_FFPROBE_TIMEOUT_SEC), "min": 5,   "max": 300,   "group": "ffmpeg"},
+    # ── チャンネル ──
+    {"key": "CHANNEL_NAME",         "type": "str",       "label": "チャンネル表示名（アップロード必須）",  "default": str(cfg.CHANNEL_NAME),         "allow_empty": True, "group": "チャンネル"},
+    {"key": "CHANNEL_HANDLE",       "type": "str",       "label": "@ハンドル（アップロード必須）",         "default": str(cfg.CHANNEL_HANDLE),       "allow_empty": True, "group": "チャンネル"},
+    {"key": "CHANNEL_PROFILE",      "type": "str",       "label": "チャンネル識別子（任意）",              "default": str(cfg.CHANNEL_PROFILE),      "allow_empty": True, "group": "チャンネル"},
+    {"key": "CHANNEL_THEME",        "type": "str",       "label": "テーマ説明（任意）",                    "default": str(cfg.CHANNEL_THEME),        "allow_empty": True, "group": "チャンネル"},
+    {"key": "CHANNEL_ACCENT_COLOR", "type": "hex_color", "label": "UIアクセント色（任意）",               "default": str(cfg.CHANNEL_ACCENT_COLOR), "allow_empty": True, "group": "チャンネル"},
+    {"key": "DEFAULT_HASHTAGS",     "type": "str",       "label": "デフォルトハッシュタグ（任意）",        "default": str(cfg.DEFAULT_HASHTAGS),     "allow_empty": True, "group": "チャンネル"},
 ]
 
 _ALLOWED_KEYS = {item["key"] for item in EDITABLE_CONFIG}
@@ -164,6 +171,10 @@ def _validate(updates: dict[str, str]) -> list[str]:
             elif spec["type"] == "bool":
                 if raw_val not in ("0", "1"):
                     errors.append(f"{key}: '0' か '1' で指定してください")
+            elif spec["type"] == "hex_color":
+                import re as _re
+                if raw_val and not _re.match(r'^#[0-9a-fA-F]{6}$', raw_val):
+                    errors.append(f"{key}: '#RRGGBB' 形式で指定してください（例: #7c2d12）。空欄にするとデフォルト色になります")
             elif spec["type"] in ("str", "ollama_model", "bgm_file"):
                 if not raw_val.strip() and not spec.get("allow_empty"):
                     errors.append(f"{key}: 空文字は不正です")
@@ -249,6 +260,8 @@ def _apply_runtime_updates(updates: dict[str, str]) -> None:
                 value = cfg._split_env_choices(raw_val)
             elif key == "WEB_DEFAULT_IMAGE_STYLE":
                 value = cfg._clean_env_choice(raw_val)
+            elif spec["type"] == "hex_color":
+                value = str(raw_val).strip()
             else:
                 value = str(raw_val)
         except (ValueError, TypeError):

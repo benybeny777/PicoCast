@@ -82,14 +82,15 @@ def close_all_connections() -> None:
     """shutdown hook として登録される。全接続をクローズする。"""
     with _conn_lock:
         targets = list(_connections)
+    count = len(targets)
     for conn in targets:
         try:
             conn.close()
         except Exception as e:
-            _logger.warning("DB接続close失敗: %s", e)
+            _logger.warning("[SQLite] DB接続close失敗: %s", e)
     with _conn_lock:
         _connections.clear()
-    _logger.info("全DB接続をクローズしました")
+    _logger.info("[SQLite] DB 終了: %d 接続をクローズしました", count)
 
 
 def is_initialized() -> bool:
@@ -233,13 +234,18 @@ CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at);
 
 def initialize_db() -> None:
     """DB を初期化する。既存 DB が存在する場合は何もしない（テーブルがなければ作る）。"""
+    path = get_db_path()
+    existed = os.path.isfile(path)
     with ManagedConnection() as conn:
         conn.executescript(_DDL)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         if row is None:
             conn.execute("INSERT INTO schema_version(version) VALUES(?)", (SCHEMA_VERSION,))
         conn.commit()
-    _logger.info("DB初期化完了: %s", get_db_path())
+    if existed:
+        _logger.info("[SQLite] DB 起動（既存）: %s", path)
+    else:
+        _logger.info("[SQLite] DB 起動（新規作成）: %s", path)
 
 
 # ── ヘルパー ─────────────────────────────────────────────────────────────────
