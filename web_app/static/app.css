@@ -68,6 +68,12 @@ body {
 .ch-name {
   font-weight: bold;
   color: var(--text);
+  text-decoration: none;
+}
+
+a.ch-name:hover {
+  text-decoration: underline;
+  opacity: 0.85;
 }
 
 .ch-handle {

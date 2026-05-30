@@ -111,7 +111,7 @@ window.WEB_TOAST_HIDE_DELAY_MS = {{ web_toast_hide_delay_ms }};
   }
   if (info.name || info.handle) {
     html += `<span class="ch-label">現在のチャンネル:</span>`;
-    html += `<span class="ch-name">${info.name || '（未設定）'}</span>`;
+    html += `<a class="ch-name" href="https://studio.youtube.com/" target="_blank" rel="noopener" title="YouTube Studio を開く">${info.name || '（未設定）'}</a>`;
     if (info.handle) html += `<span class="ch-handle">${info.handle}</span>`;
     if (info.theme) html += `<span class="ch-theme">— ${info.theme}</span>`;
   } else if (!info.warnings || !info.warnings.some(w => w.level === 'error')) {
