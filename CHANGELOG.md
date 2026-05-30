@@ -10,6 +10,20 @@
 
 ---
 
+## 2026-05-31 旧フォルダプレフィックス互換コードを削除
+
+**対象ファイル:** `config/config.py` / `web_app/security.py` / `web_app/services/history_service.py` / `core/native_renderer.py` / `core/youtube_uploader.py` / `core/analytics_score.py` / `core/parser.py` / `workers/main.py` / `web_app/app.py` / `scripts/migrate_folder_prefixes.py`（削除） / `MAINTENANCE.md`（削除）
+
+**変更内容:**
+- `[Shorts]` / `[Long]` / `[SHORT]` / `[LONG]` / `[ネタ会議]` 旧プレフィックス互換コードを全廃
+- `_LEGACY_FOLDER_PREFIXES` から旧形式を除去（新形式 `Shorts_`/`Long_`/`ネタ会議_` のみ残す）
+- `is_video_folder` / `_video_format_from_name` / `infer_video_type` / `_video_size` 等から旧プレフィックス分岐を削除
+- `scripts/migrate_folder_prefixes.py` を削除（移行完了のため不要）
+- `web_app/app.py` lifespan から `auto_migrate()` 呼び出しを削除
+- `MAINTENANCE.md` を廃止（期限付きメンテナンス管理は GitHub PR で行う）
+
+---
+
 ## 2026-05-31 認証情報のDB暗号化保存に対応
 
 **対象ファイル:** `core/secret_store.py`（新規） / `core/secret_migration.py`（新規） / `core/youtube_uploader.py` / `core/youtube_analytics.py` / `core/ai_generator.py` / `core/image_generator.py` / `core/opening_quality.py` / `core/sd_model_manager.py` / `core/debug_logging.py` / `web_app/app.py` / `web_app/services/secrets_service.py` / `web_app/services/status_service.py` / `web_app/routes/api_settings.py` / `web_app/routes/pages.py` / `config/config.py` / `config/requirements.txt` / `tests/test_secret_store.py`（新規） / `tests/test_secret_migration.py`（新規） / `tests/test_encrypted_oauth_store.py`（新規） / `tests/test_secret_status_api.py`（新規） / `README.md` / `SPEC.md` / `AGENTS.md`

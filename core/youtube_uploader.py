@@ -174,9 +174,9 @@ def _duration_seconds(duration: str | None) -> int | None:
 def infer_video_type(title: str | None = None, duration: str | None = None) -> str:
     text = str(title or "").strip()
     from config import config as _cfg
-    if text.startswith((_cfg.FOLDER_PREFIX_LONG, "[Long]", "[LONG]")):
+    if text.startswith(_cfg.FOLDER_PREFIX_LONG):
         return "long"
-    if text.startswith((_cfg.FOLDER_PREFIX_SHORTS, "[Shorts]", "[SHORT]")):
+    if text.startswith(_cfg.FOLDER_PREFIX_SHORTS):
         return "shorts"
     seconds = _duration_seconds(duration)
     if seconds is not None and seconds <= 60:
@@ -480,7 +480,7 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
     title = _strip_video_type_prefix(title)
     from config import config as _cfg
     _s_pfx = _cfg.FOLDER_PREFIX_SHORTS
-    is_shorts = _s_pfx in str(mp4_path) or "[Shorts]" in str(mp4_path) or _s_pfx in str(title) or "[Shorts]" in str(title)
+    is_shorts = _s_pfx in str(mp4_path) or _s_pfx in str(title)
     script_text = _read_script_text_for_tags(mp4_path)
     title, description, tags = optimize_upload_metadata(
         title,

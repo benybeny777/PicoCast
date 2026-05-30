@@ -785,11 +785,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     safe_topic = re.sub(r'[\\/:*?"<>|]', '_', folder_base)
     from config import config as _cfg
     _pfx_s, _pfx_l, _pfx_m = _cfg.FOLDER_PREFIX_SHORTS, _cfg.FOLDER_PREFIX_LONG, _cfg.FOLDER_PREFIX_MEETING
-    if is_shorts and not safe_topic.startswith((_pfx_s, "[Shorts]")):
+    if is_shorts and not safe_topic.startswith(_pfx_s):
         safe_topic = f"{_pfx_s}{safe_topic}"
-    elif is_netakaigi and not safe_topic.startswith((_pfx_m, "[ネタ会議]")):
+    elif is_netakaigi and not safe_topic.startswith(_pfx_m):
         safe_topic = f"{_pfx_m}{safe_topic}"
-    elif not is_shorts and not is_netakaigi and not safe_topic.startswith((_pfx_l, "[Long]")):
+    elif not is_shorts and not is_netakaigi and not safe_topic.startswith(_pfx_l):
         safe_topic = f"{_pfx_l}{safe_topic}"
 
     theme_dir = os.path.join("output", safe_topic)
