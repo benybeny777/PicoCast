@@ -70,6 +70,28 @@ def api_db_sync(history_name: str):
     return {"ok": True, "synced": history_name}
 
 
+@router.get("/analytics/{local_id:path}")
+def api_db_analytics(local_id: str):
+    """指定動画の analytics_snapshots を全件返す（新しい順）。"""
+    if ".." in local_id:
+        raise HTTPException(status_code=400, detail="無効な local_id です")
+    _ensure_init()
+    from core.metadata_db import ManagedConnection
+    with ManagedConnection() as conn:
+        rows = conn.execute("""
+            SELECT
+                a.collected_at, a.window_days,
+                a.views, a.average_view_duration, a.average_percentage_viewed,
+                a.likes, a.like_rate, a.comments, a.subscribers_net,
+                a.score, a.action, a.analysis_status
+            FROM analytics_snapshots a
+            JOIN youtube_status ys ON ys.youtube_video_id = a.youtube_video_id
+            WHERE ys.local_id = ?
+            ORDER BY a.collected_at DESC
+        """, (local_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
 @router.delete("/videos/{local_id:path}")
 def api_db_delete_video(local_id: str):
     """DB から指定レコードを削除する。ファイルは削除しない。"""

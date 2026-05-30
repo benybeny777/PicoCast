@@ -70,6 +70,15 @@
   </table>
 </div>
 
+<!-- アナリティクス モーダル -->
+<div id="analytics-modal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);overflow-y:auto" onclick="if(event.target===this)closeAnalyticsModal()">
+  <div style="background:var(--surface);border-radius:var(--radius);max-width:720px;margin:40px auto;padding:20px;position:relative">
+    <button onclick="closeAnalyticsModal()" style="position:absolute;top:10px;right:14px;background:none;border:none;color:var(--text-dim);font-size:20px;cursor:pointer">✕</button>
+    <h2 id="analytics-modal-title" style="margin-bottom:12px;font-size:1rem"></h2>
+    <div id="analytics-modal-body"></div>
+  </div>
+</div>
+
 <div id="dup-card" class="card mt" style="display:none">
   <h2>重複トピック</h2>
   <table class="data-table" id="dup-table">
@@ -124,6 +133,7 @@ async function loadVideos() {
       ? `<a href="https://youtu.be/${v.youtube_video_id}" target="_blank" class="btn btn-xs btn-secondary">YT</a>`
       : '';
     const histLink = `<a href="/history/${encodeURIComponent(v.local_id)}" class="btn btn-xs btn-secondary">詳細</a>`;
+    const anBtn = `<button class="btn btn-xs btn-secondary" onclick="showAnalytics(${JSON.stringify(v.local_id)},${JSON.stringify(v.title||v.local_id)})" title="Analytics履歴を表示">Analytics</button>`;
     const delBtn = `<button class="btn btn-xs btn-danger" onclick="deleteVideo(${JSON.stringify(v.local_id)})" title="DBからレコードを削除">削除</button>`;
     return `<tr>
       <td title="${v.local_id}">${(v.title||'—').slice(0,30)}</td>
@@ -136,7 +146,7 @@ async function loadVideos() {
       <td style="text-align:right">${pct}</td>
       <td style="text-align:center">${score}</td>
       <td style="text-align:center">${pl}</td>
-      <td style="white-space:nowrap">${histLink} ${ytLink} ${delBtn}</td>
+      <td style="white-space:nowrap">${histLink} ${anBtn} ${ytLink} ${delBtn}</td>
     </tr>`;
   }).join('');
 
@@ -152,6 +162,54 @@ async function loadDuplicates() {
   document.getElementById('dup-tbody').innerHTML = rows.map(d =>
     `<tr><td>${d.topic_key||d.food_name||'—'}</td><td>${d.cnt}</td><td style="font-size:12px">${(d.titles||'').replaceAll('|','<br>')}</td></tr>`
   ).join('');
+}
+
+function closeAnalyticsModal() {
+  document.getElementById('analytics-modal').style.display = 'none';
+}
+
+async function showAnalytics(localId, title) {
+  const modal = document.getElementById('analytics-modal');
+  const body  = document.getElementById('analytics-modal-body');
+  document.getElementById('analytics-modal-title').textContent = title;
+  body.innerHTML = '<p style="color:var(--text-dim)">読み込み中...</p>';
+  modal.style.display = 'block';
+
+  try {
+    const r = await fetch('/api/db/analytics/' + encodeURIComponent(localId));
+    const rows = await r.json();
+    if (!rows.length) {
+      body.innerHTML = '<p style="color:var(--text-dim)">Analytics データがありません（未取得）</p>';
+      return;
+    }
+    const fmt = v => v == null ? '—' : (typeof v === 'number' ? v.toLocaleString() : v);
+    const fmtPct = v => v == null ? '—' : v.toFixed(1) + '%';
+    const fmtSec = v => v == null ? '—' : Math.floor(v/60) + 'm' + (v%60|0) + 's';
+    body.innerHTML = `
+      <table class="data-table" style="width:100%;font-size:12px">
+        <thead><tr>
+          <th>取得日</th><th>期間</th><th>再生数</th><th>平均視聴時間</th>
+          <th>平均視聴率</th><th>いいね</th><th>コメント</th>
+          <th>登録者増減</th><th>スコア</th><th>Action</th>
+        </tr></thead>
+        <tbody>
+          ${rows.map(a => `<tr>
+            <td style="white-space:nowrap">${(a.collected_at||'').slice(0,16).replace('T',' ')}</td>
+            <td>${a.window_days != null ? a.window_days+'日' : '—'}</td>
+            <td style="text-align:right">${fmt(a.views)}</td>
+            <td style="text-align:right">${fmtSec(a.average_view_duration)}</td>
+            <td style="text-align:right">${fmtPct(a.average_percentage_viewed)}</td>
+            <td style="text-align:right">${fmt(a.likes)}</td>
+            <td style="text-align:right">${fmt(a.comments)}</td>
+            <td style="text-align:right">${fmt(a.subscribers_net)}</td>
+            <td style="text-align:center">${a.score||'—'}</td>
+            <td style="text-align:center">${a.action||'—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+  } catch(e) {
+    body.innerHTML = `<p style="color:var(--err)">取得エラー: ${e}</p>`;
+  }
 }
 
 async function deleteVideo(localId) {
