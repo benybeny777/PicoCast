@@ -3,6 +3,10 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+# .env の非認証設定を DB へ移行し、DB の設定を環境変数に反映する
+from core.settings_store import initialize as _init_settings
+_init_settings()
+
 _ENV_VALUE_QUOTES = "\"'`´‘’“”＇＂"
 
 
