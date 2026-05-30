@@ -65,6 +65,7 @@ from config import (
     VOICEVOX_PATH,
     VOICEVOX_QUERY_WORKERS,
     VOICEVOX_SYNTH_WORKERS,
+    NANOBANANA_BG_WORKERS,
     VOICE_TAIL_SAFETY_SEC,
 )
 from core.comment_templates import build_fixed_comment
@@ -1656,6 +1657,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # パス2: 全背景生成（Gemini / SD WebUI）
     # ══════════════════════════════════════════════════════════════════════════
     update_status(f"🖼  背景生成フェーズ（{total_bgs}件）...")
+
+    # フェーズ2a: 各背景の処理方針を決定し、実生成が必要なものだけタスクリストに積む
+    _bg_gen_tasks: list[dict] = []
     for item in items:
         if is_cancelled():
             return cancel_result()
@@ -1672,7 +1676,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 上限({max_backgrounds})超過 — 前の背景を継続使用")
             continue
 
-        bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
+        bg_name = _bg_raw or "default_background"
 
         if _has_saved_bgs:
             existing_bgs = sorted(
@@ -1695,37 +1699,56 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 update_status(f"  ⚠ 背景 [{bg_num}/{total_bgs}] バッチ結果なし — スキップ")
             continue
 
-        update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 生成中: {bg_name[:30]}...")
+        # 実生成が必要 — プロンプトを保存してタスクリストに追加
+        bg_description = (
+            f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
+            f"【台本】\n{script_content}"
+        )
+        prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:04d}.txt")
         try:
+            with open(prompt_file, "w", encoding="utf-8") as _pf:
+                _pf.write(bg_description)
+        except Exception:
+            raise
+        if debug_mode:
+            update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
+        _bg_gen_tasks.append({
+            "bg_num": bg_num,
+            "bg_name": bg_name,
+            "bg_description": bg_description,
+            "fname": f"bg_{bg_num:03d}_001.png",
+        })
+
+    if is_cancelled():
+        return cancel_result()
+
+    # フェーズ2b: 並列生成
+    _BG_WORKERS = min(NANOBANANA_BG_WORKERS, len(_bg_gen_tasks)) if _bg_gen_tasks else 1
+    if _bg_gen_tasks:
+        update_status(f"🖼  背景並列生成開始（{len(_bg_gen_tasks)}件、{_BG_WORKERS}並列）...")
+
+    def _do_generate_bg(task: dict) -> str | None:
+        return img_gen.generate_background(
+            task["bg_description"], target_dir=theme_bg_dir, fname=task["fname"],
+        )
+
+    with ThreadPoolExecutor(max_workers=_BG_WORKERS) as _bgex:
+        _bgfuts = {_bgex.submit(_do_generate_bg, t): t for t in _bg_gen_tasks}
+        for _bgfut in as_completed(_bgfuts):
             if is_cancelled():
-                return cancel_result()
-            bg_description = (
-                f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
-                f"【台本】\n{script_content}"
-            )
-            prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:04d}.txt")
+                break
+            _bt = _bgfuts[_bgfut]
             try:
-                with open(prompt_file, "w", encoding="utf-8") as _pf:
-                    _pf.write(bg_description)
-            except Exception:
-                raise
-            if debug_mode:
-                update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
-            generated_file = img_gen.generate_background(
-                bg_description, target_dir=theme_bg_dir,
-                fname=f"bg_{bg_num:03d}_001.png",
-            )
-            if is_cancelled():
-                return cancel_result()
-        except Exception as e:
-            update_status(f"  ❌ 背景生成失敗: {e}", "error")
-            generated_file = None
-        if generated_file:
-            report.backgrounds_generated += 1
-            update_status(f"  ✅ 背景生成完了")
-        else:
-            report.backgrounds_failed += 1
-            update_status(f"  ⚠ 背景生成スキップ")
+                _gen_file = _bgfut.result()
+                if _gen_file:
+                    report.backgrounds_generated += 1
+                    update_status(f"  ✅ 背景生成完了 [{_bt['bg_num']}/{total_bgs}] {_bt['bg_name'][:30]}")
+                else:
+                    report.backgrounds_failed += 1
+                    update_status(f"  ⚠ 背景生成スキップ [{_bt['bg_num']}/{total_bgs}]")
+            except Exception as _be:
+                report.backgrounds_failed += 1
+                update_status(f"  ❌ 背景生成失敗 [{_bt['bg_num']}/{total_bgs}]: {_be}", "error")
 
     if is_cancelled():
         return cancel_result()

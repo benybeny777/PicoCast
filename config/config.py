@@ -35,6 +35,7 @@ VOICEVOX_URL = os.environ.get("VOICEVOX_URL", "http://localhost:50021")  # VOICE
 VOICEVOX_PATH = os.environ.get("VOICEVOX_PATH", "")                     # VOICEVOX 自動起動用パス（空=手動起動）
 VOICEVOX_QUERY_WORKERS  = int(os.environ.get("VOICEVOX_QUERY_WORKERS",  "4"))  # audio_query 並列数
 VOICEVOX_SYNTH_WORKERS  = int(os.environ.get("VOICEVOX_SYNTH_WORKERS",  "2"))  # synthesis 並列数
+NANOBANANA_BG_WORKERS   = int(os.environ.get("NANOBANANA_BG_WORKERS",   "3"))  # Nano Banana 背景生成並列数
 
 # ───────────────────────────────────────────────
 # 音声速度 — native レンダラー用（字幕追従ズレ対策でやや遅め）
