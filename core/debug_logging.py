@@ -56,7 +56,11 @@ def setup_debug_logging() -> str | None:
         _CONFIGURED = True
 
     cleanup_old_debug_logs()
-    logging.getLogger(__name__).debug("デバッグログ初期化: %s", log_path)
+    _logger = logging.getLogger(__name__)
+    sep = "=" * 72
+    _logger.warning(sep)
+    _logger.warning("  ★ APP STARTUP  PID=%s  LOG=%s", os.getpid(), log_path)
+    _logger.warning(sep)
     return log_path
 
 

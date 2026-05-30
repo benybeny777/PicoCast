@@ -14,7 +14,7 @@ function escapeHtml(str) {
   }[tag] || tag));
 }
 
-function buildLogLine(msg, tag) {
+function buildLogLine(msg, tag, time) {
   let resolvedTag = tag || 'info';
   if (msg.includes('スコア') && msg.includes('点')) {
     const scoreMatch = msg.match(/(\d+)点/);
@@ -25,10 +25,12 @@ function buildLogLine(msg, tag) {
       else resolvedTag = 'score';
     }
   }
+  const t = time ? String(time).slice(11, 19) || String(time).slice(0, 8) : '';
+  const prefix = t ? `${escapeHtml(t)} [${escapeHtml(resolvedTag)}] ` : `[${escapeHtml(resolvedTag)}] `;
   let displayMsg = escapeHtml(msg);
   displayMsg = displayMsg.replace(/(\d+点)/g, '<strong style="font-size: 1.15em; text-decoration: underline; color: #fff;">$1</strong>');
   displayMsg = displayMsg.replace(/(スコア)/g, '<strong style="color: #fff;">$1</strong>');
-  return `<div class="log-line log-${resolvedTag}">${displayMsg}</div>`;
+  return `<div class="log-line log-${resolvedTag}">${prefix}${displayMsg}</div>`;
 }
 
 /**
@@ -51,7 +53,7 @@ async function updateJobLogs(activeJobIds, logBox, options = {}) {
       htmlContent += `<div class="log-job-header">[${escapeHtml(job.type)}] ${escapeHtml(job.status)}</div>`;
 
       for (const entry of (job.logs || [])) {
-        htmlContent += buildLogLine(entry.message, entry.tag);
+        htmlContent += buildLogLine(entry.message, entry.tag, entry.time);
       }
       if (!['success', 'failed', 'cancelled'].includes(job.status)) allDone = false;
       if (['failed', 'cancelled'].includes(job.status)) hasFailed = true;

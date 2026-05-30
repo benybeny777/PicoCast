@@ -319,10 +319,8 @@ function finishGenerate(tab) {
 
 function appendLog(msg, tag) {
   const logBox = document.getElementById('log-container');
-  const div = document.createElement('div');
-  div.className = `log-line log-${tag || 'info'}`;
-  div.textContent = msg;
-  logBox.appendChild(div);
+  const t = new Date().toTimeString().slice(0, 8);
+  logBox.insertAdjacentHTML('beforeend', buildLogLine(msg, tag, t));
   logBox.scrollTop = logBox.scrollHeight;
 }
 

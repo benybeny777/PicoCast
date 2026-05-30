@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}LLM/尺チェック{% endblock %}
+{% block title %}ChatGPTチェック{% endblock %}
 {% block content %}
-<h1>LLM/尺チェック</h1>
+<h1>ChatGPTチェック</h1>
 <p class="hint">台本を貼り付けてチェックします。複数台本は <code>---</code> で区切ってください。</p>
 
 <div class="card">
@@ -15,7 +15,7 @@
 </div>
 
 <div id="check-status" class="card mt" style="display:none">
-  <h2>チェック進行中...</h2>
+  <h2 id="check-status-title">ChatGPTチェック 実行中...</h2>
   <div id="check-log" class="log-box"></div>
 </div>
 
@@ -51,19 +51,19 @@ async function startCheck() {
 }
 
 async function pollCheckJob(jobId) {
+  const logBox = document.getElementById('check-log');
   const interval = setInterval(async () => {
     try {
-      const res = await fetch(`/api/jobs/${jobId}`);
-      const job = await res.json();
-      const logBox = document.getElementById('check-log');
-      logBox.innerHTML = '';
-      appendCheckLog(`[${job.status}] ${job.progress_text}`, job.status);
-      for (const entry of (job.logs || [])) {
-        appendCheckLog(entry.message, entry.tag);
-      }
-      if (['success','failed','cancelled'].includes(job.status)) {
+      const { allDone, hasFailed } = await updateJobLogs([jobId], logBox, {
+        resultLabel: r => r.message || '',
+      });
+      if (allDone) {
         clearInterval(interval);
-        document.getElementById('check-status').querySelector('h2').textContent = `チェック ${job.status}`;
+        // 完了ステータスを確認してタイトル更新
+        const res = await fetch(`/api/jobs/${jobId}`);
+        const job = await res.json();
+        document.getElementById('check-status-title').textContent =
+          `ChatGPTチェック: ${job.status}`;
         if (job.status === 'success' && Array.isArray(job.result)) {
           renderResults(job.result);
         }
@@ -106,10 +106,8 @@ function esc(s) {
 
 function appendCheckLog(msg, tag) {
   const logBox = document.getElementById('check-log');
-  const div = document.createElement('div');
-  div.className = `log-line log-${tag || 'info'}`;
-  div.textContent = msg;
-  logBox.appendChild(div);
+  const t = new Date().toTimeString().slice(0, 8);
+  logBox.insertAdjacentHTML('beforeend', buildLogLine(msg, tag, t));
   logBox.scrollTop = logBox.scrollHeight;
 }
 </script>
