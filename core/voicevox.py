@@ -20,13 +20,10 @@ class VoicevoxAPI:
         except Exception:
             return False
 
-    def generate_audio(self, text, speaker_id, output_path, volume_scale=2.0, speed_scale=VOICE_SPEED_SCALE,
-                       post_phoneme_length=VOICE_POST_PHONEME_LENGTH):
-        # 1. Audio Query
-        params = (
-            ('text', text),
-            ('speaker', speaker_id),
-        )
+    def audio_query_only(self, text, speaker_id, volume_scale=2.0, speed_scale=VOICE_SPEED_SCALE,
+                         post_phoneme_length=VOICE_POST_PHONEME_LENGTH):
+        """audio_query のみ実行してクエリ辞書を返す（並列化用）。"""
+        params = (('text', text), ('speaker', speaker_id))
         with requests.post(f"{self.base_url}/audio_query", params=params, timeout=VOICEVOX_QUERY_TIMEOUT_SEC) as response:
             if response.status_code != 200:
                 raise Exception(f"Failed to generate audio query: {response.text}")
@@ -35,15 +32,14 @@ class VoicevoxAPI:
         query["volumeScale"] = volume_scale
         query["speedScale"] = speed_scale
         query["postPhonemeLength"] = post_phoneme_length
+        return query, kana
 
-        # 2. Synthesis
-        params = (
-            ('speaker', speaker_id),
-        )
+    def synthesis_only(self, query, speaker_id, output_path):
+        """synthesis のみ実行（audio_query_only の結果を使う）。"""
+        params = (('speaker', speaker_id),)
         parent = os.path.dirname(output_path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-
         with requests.post(
             f"{self.base_url}/synthesis",
             headers={'Content-Type': 'application/json'},
@@ -58,5 +54,9 @@ class VoicevoxAPI:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
-        
+
+    def generate_audio(self, text, speaker_id, output_path, volume_scale=2.0, speed_scale=VOICE_SPEED_SCALE,
+                       post_phoneme_length=VOICE_POST_PHONEME_LENGTH):
+        query, kana = self.audio_query_only(text, speaker_id, volume_scale, speed_scale, post_phoneme_length)
+        self.synthesis_only(query, speaker_id, output_path)
         return output_path, kana

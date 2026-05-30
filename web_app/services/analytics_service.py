@@ -9,6 +9,16 @@ from typing import Any
 from core.output_paths import ANALYTICS_DIR
 from web_app.job_manager import Job, _log, get_job_manager
 
+# ── インメモリキャッシュ（ファイル名+更新時刻をキーにする） ──────────────
+_analytics_full_cache_key: str = ""
+_analytics_full_cache_data: dict[str, Any] | None = None
+
+
+def _invalidate_analytics_cache() -> None:
+    global _analytics_full_cache_key, _analytics_full_cache_data
+    _analytics_full_cache_key = ""
+    _analytics_full_cache_data = None
+
 
 def list_analytics_files() -> list[str]:
     try:
@@ -32,13 +42,27 @@ def load_latest_analytics() -> list[dict[str, Any]]:
 
 
 def load_latest_analytics_full() -> dict[str, Any]:
-    """items + summary を含む完全データを返す。JSON優先、なければ TSV の items のみ。"""
+    """items + summary を含む完全データを返す。JSON優先、なければ TSV の items のみ。
+    ファイル名＋更新時刻が変わらない限りキャッシュを返す。"""
+    global _analytics_full_cache_key, _analytics_full_cache_data
     files = list_analytics_files()
     for fname in files:
-        if fname.endswith(".json"):
-            return _load_json_file_full(os.path.join(ANALYTICS_DIR, fname))
-        if fname.endswith(".tsv"):
-            return {"items": _load_tsv_file(os.path.join(ANALYTICS_DIR, fname)), "summary": {}}
+        if fname.endswith(".json") or fname.endswith(".tsv"):
+            path = os.path.join(ANALYTICS_DIR, fname)
+            try:
+                mtime = f"{os.path.getmtime(path):.0f}"
+            except OSError:
+                mtime = "0"
+            cache_key = f"{fname}:{mtime}"
+            if cache_key == _analytics_full_cache_key and _analytics_full_cache_data is not None:
+                return _analytics_full_cache_data
+            if fname.endswith(".json"):
+                data = _load_json_file_full(path)
+            else:
+                data = {"items": _load_tsv_file(path), "summary": {}}
+            _analytics_full_cache_key = cache_key
+            _analytics_full_cache_data = data
+            return data
     return {"items": [], "summary": {}}
 
 
@@ -178,6 +202,7 @@ def _run_refresh(job: Job) -> dict[str, Any]:
         summary = data.get("summary", {})
         days = summary.get("days", 28)
         json_path, tsv_path = save_score_files(items, days, summary=summary)
+        _invalidate_analytics_cache()
         _log(job, f"Analytics保存完了: {json_path}", "success")
         return {"json_path": json_path, "tsv_path": tsv_path, "count": len(items)}
     except Exception as e:

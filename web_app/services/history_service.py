@@ -73,12 +73,16 @@ def _video_format(name: str, render_info: dict, script_meta: dict[str, str]) -> 
 def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
     results = []
     try:
-        names = sorted(os.listdir(OUTPUT_DIR), reverse=True)
+        # scandir はエントリの stat をキャッシュするため listdir + isdir より I/O が少ない
+        entries = sorted(os.scandir(OUTPUT_DIR), key=lambda e: e.name, reverse=True)
     except OSError:
         return results
 
-    for name in names:
+    for entry in entries:
+        name = entry.name
         if name.startswith("."):
+            continue
+        if not entry.is_dir():
             continue
         is_mgmt = _is_management(name)
         if is_mgmt and not include_management:
@@ -86,8 +90,6 @@ def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
         try:
             theme_dir = safe_output_path(name, output_base=OUTPUT_DIR)
         except Exception:
-            continue
-        if not os.path.isdir(theme_dir):
             continue
 
         meta_d = os.path.join(theme_dir, "_meta")

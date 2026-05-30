@@ -294,10 +294,10 @@ async function cancelGenerate() {
 }
 
 function pollJobs(tab) {
-  if (pollTimer) clearInterval(pollTimer);
+  if (pollTimer) pollTimer.stop();
   let _polling = false;
   const container = document.getElementById('job-card-log-container');
-  pollTimer = setInterval(async () => {
+  pollTimer = createBackoffPoller(async () => {
     if (!activeJobIds.length) { clearInterval(pollTimer); return; }
     if (_polling) return;
     _polling = true;
@@ -321,12 +321,14 @@ function pollJobs(tab) {
           }
         } catch { allDone = false; }
       }
-      if (allDone) { clearInterval(pollTimer); finishGenerate(tab); }
+      if (allDone) { finishGenerate(tab); return true; }
+      return false;
     } finally { _polling = false; }
-  }, window.WEB_JOB_POLL_INTERVAL_MS);
+  }, window.WEB_JOB_POLL_INTERVAL_MS, 10000);
 }
 
 function finishGenerate(tab) {
+  if (pollTimer) { pollTimer.stop(); pollTimer = null; }
   document.getElementById(`generate-btn-${tab}`).disabled = false;
   document.getElementById('cancel-btn').style.display = 'none';
 }

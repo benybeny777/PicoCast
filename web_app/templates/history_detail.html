@@ -292,12 +292,12 @@ function reloadWithLogs() {
 
 function pollJobs(onSuccess) {
   const handleSuccess = onSuccess || reloadWithLogs;
-  if (pollTimer) clearInterval(pollTimer);
+  if (pollTimer) pollTimer.stop();
   let _polling = false;
   const container = document.getElementById('job-card-log-container');
-  pollTimer = setInterval(async () => {
-    if (!activeJobIds.length) { clearInterval(pollTimer); return; }
-    if (_polling) return;
+  pollTimer = createBackoffPoller(async () => {
+    if (!activeJobIds.length) return true;
+    if (_polling) return false;
     _polling = true;
     try {
       let allDone = true;
@@ -312,16 +312,17 @@ function pollJobs(onSuccess) {
         } catch(e) { allDone = false; }
       }
       if (allDone) {
-        clearInterval(pollTimer);
         if (hasFailed) {
           appendLog('一部の処理が失敗またはキャンセルされました。', 'error');
           finishGenerate();
         } else {
           handleSuccess();
         }
+        return true;
       }
+      return false;
     } finally { _polling = false; }
-  }, window.WEB_JOB_POLL_INTERVAL_MS);
+  }, window.WEB_JOB_POLL_INTERVAL_MS, 10000);
 }
 
 async function renderVideo() {

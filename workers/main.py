@@ -8,6 +8,7 @@ import uuid
 import json
 import shutil
 import gc
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.voicevox import VoicevoxAPI
 from core.reading_normalizer import ReadingNormalizer
 from core.parser import ScriptParser
@@ -1480,86 +1481,132 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # ══════════════════════════════════════════════════════════════════════════
     # パス1: 全音声生成（VOICEVOX）
+    # フェーズ1a: チャンクリスト収集
+    # フェーズ1b: audio_query を並列取得（ネットワークバウンド部分を高速化）
+    # フェーズ1c: synthesis を逐次実行（VOICEVOXのCPU処理はシリアルが安全）
     # ══════════════════════════════════════════════════════════════════════════
     update_status(f"🎤 音声生成フェーズ（{total_voices}行）...")
+
+    # フェーズ1a: チャンクリストを事前収集
+    _voice_chunks = []
+    _v = 0
+    _a = 0
     for item in items:
-        if is_cancelled():
-            return cancel_result()
         if item["type"] != "dialogue":
             continue
-
         char_key = item["character"]
         text = item["text"]
         emotion = item.get("emotion", "ノーマル")
-        voice_num += 1
-
+        _v += 1
         speaker_id = 3
         for k, v in CHARACTERS.items():
             if v["name"] == char_key:
                 speaker_id = v.get("styles", {}).get(emotion, v["speaker_id"])
                 break
-
-        chunks = _split_at_punctuation(text)
-
-        for chunk_text in chunks:
-            if is_cancelled():
-                return cancel_result()
-            audio_num += 1
+        speed_scale = intro_voice_speed if _v <= VOICE_INTRO_FAST_LINES else body_voice_speed
+        for chunk_text in _split_at_punctuation(text):
+            _a += 1
             _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
-            audio_filename = f"{item['_bg_num']:03d}_{audio_num:03d}_{_safe_text}.wav"
-            audio_path = os.path.join(theme_audio_dir, audio_filename)
-            speed_scale = intro_voice_speed if voice_num <= VOICE_INTRO_FAST_LINES else body_voice_speed
+            audio_filename = f"{item['_bg_num']:03d}_{_a:03d}_{_safe_text}.wav"
+            _voice_chunks.append({
+                "voice_num": _v, "audio_num": _a,
+                "char_key": char_key, "emotion": emotion,
+                "speaker_id": speaker_id, "speed_scale": speed_scale,
+                "speech_text": reading_map.get(chunk_text, chunk_text),
+                "chunk_text": chunk_text,
+                "audio_path": os.path.join(theme_audio_dir, audio_filename),
+            })
 
-            speech_text = reading_map.get(chunk_text, chunk_text)
-            preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
-            update_status(f"🎤 音声 [{voice_num}/{total_voices}] コマ{item['_bg_num']} {char_key}({emotion}) x{speed_scale:g}「{preview}」")
-            try:
-                vv.generate_audio(speech_text, speaker_id, audio_path, speed_scale=speed_scale)
-                report.voices_generated += 1
-            except Exception as e:
-                report.voices_failed += 1
-                report.elapsed_sec = time.time() - pipeline_start
-                msg = (
-                    f"❌ 音声合成失敗のため処理を中止しました\n"
-                    f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
-                    f"理由: {e}"
-                )
-                update_status(msg, "error")
-                return finish_result(msg)
-            if is_cancelled():
-                return cancel_result()
+    # フェーズ1b: audio_query を並列取得
+    _QUERY_WORKERS = min(4, len(_voice_chunks)) if _voice_chunks else 1
+    update_status(f"🎤 音声クエリ並列取得中（{len(_voice_chunks)}件、{_QUERY_WORKERS}並列）...")
+    _queries: dict[int, tuple] = {}
+    _query_error: str | None = None
 
-            # VOICEVOXのpostPhonemeが効かない場合があるため、生成後に無音を直接追加
-            # 速度が高いほど末尾フォネームが詰まるので比例して余白を増やす
-            _TAIL_SILENCE_SEC = max(0.1, 0.1 * speed_scale)
-            try:
-                with wave.open(audio_path, 'rb') as wr:
-                    sr = wr.getframerate()
-                    ch = wr.getnchannels()
-                    sw = wr.getsampwidth()
-                    orig_frames = wr.readframes(wr.getnframes())
-                silence = b'\x00' * (int(sr * _TAIL_SILENCE_SEC) * ch * sw)
-                with wave.open(audio_path, 'wb') as ww:
-                    ww.setframerate(sr)
-                    ww.setnchannels(ch)
-                    ww.setsampwidth(sw)
-                    ww.writeframes(orig_frames + silence)
-            except Exception as e:
-                update_status(f"  ⚠ 無音追加失敗(無視): {e}")
+    def _do_query(idx: int, c: dict):
+        q, kana = vv.audio_query_only(c["speech_text"], c["speaker_id"], speed_scale=c["speed_scale"])
+        return idx, q, kana
 
-            try:
-                with wave.open(audio_path, 'rb') as wr:
-                    wr.getnframes()
-            except Exception as e:
-                report.voices_failed += 1
-                report.elapsed_sec = time.time() - pipeline_start
-                msg = (
-                    f"❌ WAV読み込み失敗のため処理を中止しました\n"
-                    f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
-                    f"理由: {e}"
-                )
-                update_status(msg, "error")
-                return finish_result(msg)
+    if _voice_chunks:
+        with ThreadPoolExecutor(max_workers=_QUERY_WORKERS) as _ex:
+            _futs = {_ex.submit(_do_query, i, c): i for i, c in enumerate(_voice_chunks)}
+            for _fut in as_completed(_futs):
+                if is_cancelled():
+                    break
+                try:
+                    idx, q, kana = _fut.result()
+                    _queries[idx] = (q, kana)
+                except Exception as _e:
+                    _query_error = str(_e)
+                    break
+
+    if is_cancelled():
+        return cancel_result()
+    if _query_error:
+        return finish_result(f"❌ 音声クエリ失敗のため処理を中止しました\n理由: {_query_error}")
+
+    # フェーズ1c: synthesis を逐次実行
+    for i, c in enumerate(_voice_chunks):
+        if is_cancelled():
+            return cancel_result()
+        voice_num = c["voice_num"]
+        audio_num = c["audio_num"]
+        char_key = c["char_key"]
+        emotion = c["emotion"]
+        speaker_id = c["speaker_id"]
+        speed_scale = c["speed_scale"]
+        audio_path = c["audio_path"]
+        chunk_text = c["chunk_text"]
+        preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
+        q, _ = _queries[i]
+        update_status(f"🎤 音声合成 [{voice_num}/{total_voices}] コマ{c['audio_path'].split(os.sep)[-1][:3]} {char_key}({emotion}) x{speed_scale:g}「{preview}」")
+        try:
+            vv.synthesis_only(q, speaker_id, audio_path)
+            report.voices_generated += 1
+        except Exception as e:
+            report.voices_failed += 1
+            report.elapsed_sec = time.time() - pipeline_start
+            msg = (
+                f"❌ 音声合成失敗のため処理を中止しました\n"
+                f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
+                f"理由: {e}"
+            )
+            update_status(msg, "error")
+            return finish_result(msg)
+        if is_cancelled():
+            return cancel_result()
+
+        # VOICEVOXのpostPhonemeが効かない場合があるため、生成後に無音を直接追加
+        # 速度が高いほど末尾フォネームが詰まるので比例して余白を増やす
+        _TAIL_SILENCE_SEC = max(0.1, 0.1 * speed_scale)
+        try:
+            with wave.open(audio_path, 'rb') as wr:
+                sr = wr.getframerate()
+                ch = wr.getnchannels()
+                sw = wr.getsampwidth()
+                orig_frames = wr.readframes(wr.getnframes())
+            silence = b'\x00' * (int(sr * _TAIL_SILENCE_SEC) * ch * sw)
+            with wave.open(audio_path, 'wb') as ww:
+                ww.setframerate(sr)
+                ww.setnchannels(ch)
+                ww.setsampwidth(sw)
+                ww.writeframes(orig_frames + silence)
+        except Exception as e:
+            update_status(f"  ⚠ 無音追加失敗(無視): {e}")
+
+        try:
+            with wave.open(audio_path, 'rb') as wr:
+                wr.getnframes()
+        except Exception as e:
+            report.voices_failed += 1
+            report.elapsed_sec = time.time() - pipeline_start
+            msg = (
+                f"❌ WAV読み込み失敗のため処理を中止しました\n"
+                f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
+                f"理由: {e}"
+            )
+            update_status(msg, "error")
+            return finish_result(msg)
 
     # ══════════════════════════════════════════════════════════════════════════
     # パス2: 全背景生成（Gemini / SD WebUI）

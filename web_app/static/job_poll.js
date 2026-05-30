@@ -106,6 +106,39 @@ function updateJobCard(container, job) {
 }
 
 /**
+ * 指数バックオフ付きポーラー。setInterval の代わりに使う。
+ * @param {Function} fn  非同期関数。true を返したらポーリング停止。
+ * @param {number} initialMs  初期間隔(ms)
+ * @param {number} maxMs      最大間隔(ms)
+ * @returns {{ stop: Function }}
+ */
+function createBackoffPoller(fn, initialMs, maxMs) {
+  let currentMs = initialMs;
+  let elapsed = 0;
+  let timer = null;
+  let _running = false;
+
+  function _schedule() {
+    timer = setTimeout(async () => {
+      if (_running) { _schedule(); return; }
+      _running = true;
+      let done = false;
+      try { done = await fn(); } finally { _running = false; }
+      if (done) return;
+      elapsed += currentMs;
+      // 30秒経過後、上限に達するまで1.5倍ずつ伸ばす
+      if (elapsed >= 30000 && currentMs < maxMs) {
+        currentMs = Math.min(Math.round(currentMs * 1.5), maxMs);
+      }
+      _schedule();
+    }, currentMs);
+  }
+
+  _schedule();
+  return { stop: () => { if (timer) { clearTimeout(timer); timer = null; } } };
+}
+
+/**
  * @param {string[]} activeJobIds
  * @param {HTMLElement} logBox
  * @param {{ resultLabel?: (result: object) => string }} [options]
