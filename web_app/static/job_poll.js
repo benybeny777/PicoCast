@@ -33,6 +33,78 @@ function buildLogLine(msg, tag, time) {
   return `<div class="log-line log-${resolvedTag}">${prefix}${displayMsg}</div>`;
 }
 
+/** ジョブカードHTMLを生成する（generate.html / history_detail.html 共通） */
+function buildJobCardHtml(job) {
+  const statusCls = job.status === 'success' ? 'badge-ok' :
+                    job.status === 'failed'  ? 'badge-ng' :
+                    job.status === 'running' ? 'badge-running' : 'badge-warn';
+  const t = (job.started_at || '').slice(0, 16).replace('T', ' ');
+  const idShort = (job.job_id || '').slice(0, 8) + '…';
+  return `<div class="card mt job-card status-${escapeHtml(job.status)}"
+               data-status="${escapeHtml(job.status)}"
+               data-type="${escapeHtml(job.type || '')}"
+               data-job-id="${escapeHtml(job.job_id)}">
+    <div class="job-header">
+      <span class="job-type-badge">${escapeHtml(job.type || '')}</span>
+      <span class="badge ${statusCls}">${escapeHtml(job.status)}</span>
+      <span class="job-id-small">${escapeHtml(idShort)}</span>
+      <span class="job-time">${escapeHtml(t)}</span>
+    </div>
+    <div class="job-progress">${escapeHtml(job.progress_text || '')}</div>
+  </div>`;
+}
+
+/** ジョブカードを追加または更新する（generate.html / history_detail.html 共通） */
+function updateJobCard(container, job) {
+  let card = container.querySelector(`.job-card[data-job-id="${CSS.escape(job.job_id)}"]`);
+  if (!card) {
+    container.insertAdjacentHTML('beforeend', buildJobCardHtml(job));
+    card = container.querySelector(`.job-card[data-job-id="${CSS.escape(job.job_id)}"]`);
+  }
+
+  card.className = card.className.replace(/\bstatus-\S+/, `status-${job.status}`);
+  card.dataset.status = job.status;
+
+  const badge = card.querySelector('.badge');
+  if (badge) {
+    badge.textContent = job.status;
+    badge.className = 'badge ' + (
+      job.status === 'success' ? 'badge-ok' :
+      job.status === 'failed'  ? 'badge-ng' :
+      job.status === 'running' ? 'badge-running' : 'badge-warn'
+    );
+  }
+
+  const prog = card.querySelector('.job-progress');
+  if (prog) prog.textContent = job.progress_text || '';
+
+  let errEl = card.querySelector('.error-text');
+  if (job.error) {
+    if (!errEl) { errEl = document.createElement('div'); errEl.className = 'error-text'; prog && prog.after(errEl); }
+    errEl.textContent = 'エラー: ' + job.error;
+  } else if (errEl) errEl.remove();
+
+  const logs = job.logs || [];
+  if (logs.length > 0) {
+    let details = card.querySelector('details');
+    if (!details) {
+      details = document.createElement('details');
+      details.open = true;
+      card.appendChild(details);
+    }
+    let summary = details.querySelector('summary');
+    if (!summary) { summary = document.createElement('summary'); details.prepend(summary); }
+    summary.textContent = `ログ詳細 (${logs.length}件)`;
+
+    let logBox = details.querySelector('.log-box');
+    if (!logBox) { logBox = document.createElement('div'); logBox.className = 'log-box'; details.appendChild(logBox); }
+
+    const atBottom = details.open && (logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80);
+    logBox.innerHTML = logs.map(e => buildLogLine(e.message, e.tag, e.time)).join('');
+    if (atBottom) logBox.scrollTop = logBox.scrollHeight;
+  }
+}
+
 /**
  * @param {string[]} activeJobIds
  * @param {HTMLElement} logBox

@@ -69,7 +69,6 @@
     </div>
     <div class="action-row">
       <button id="generate-btn-normal" class="btn btn-primary" onclick="startGenerate('normal')">生成開始</button>
-      <button id="cancel-btn-normal"   class="btn btn-danger"  style="display:none" onclick="cancelGenerate()">中止</button>
     </div>
   </div>
 
@@ -120,7 +119,6 @@
     </div>
     <div class="action-row">
       <button id="generate-btn-meeting" class="btn btn-primary" onclick="startGenerate('meeting')">生成開始</button>
-      <button id="cancel-btn-meeting"   class="btn btn-danger"  style="display:none" onclick="cancelGenerate()">中止</button>
     </div>
   </div>
 
@@ -128,9 +126,11 @@
 
 <!-- 生成ログ（共通） -->
 <div id="generate-status" class="card mt" style="display:none">
-  <h2>生成ログ</h2>
-  <div id="job-ids-info" class="hint"></div>
-  <div id="log-container" class="log-box"></div>
+  <div class="action-row" style="margin-bottom:0.5rem; align-items:center">
+    <span id="job-status-msg" class="hint" style="flex:1"></span>
+    <button id="cancel-btn" class="btn btn-danger" style="display:none" onclick="cancelGenerate()">中止</button>
+  </div>
+  <div id="job-card-log-container"></div>
 </div>
 
 <!-- 直近ジョブ -->
@@ -254,10 +254,9 @@ async function startGenerate(tab) {
   const sdSizeMode       = document.getElementById(`sd-size-mode-${tab}`).checked;
 
   document.getElementById(`generate-btn-${tab}`).disabled = true;
-  document.getElementById(`cancel-btn-${tab}`).style.display = 'inline-block';
   document.getElementById('generate-status').style.display = 'block';
-  const logBox = document.getElementById('log-container');
-  logBox.innerHTML = '';
+  document.getElementById('cancel-btn').style.display = 'inline-block';
+  document.getElementById('job-card-log-container').innerHTML = '';
   appendLog('生成リクエストを送信中...', 'info');
 
   try {
@@ -278,8 +277,7 @@ async function startGenerate(tab) {
     if (!res.ok) { appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error'); finishGenerate(tab); return; }
 
     activeJobIds = data.job_ids;
-    document.getElementById('job-ids-info').textContent = `ジョブ: ${activeJobIds.join(', ')} (${data.count}本)`;
-    appendLog(`生成ジョブを登録しました (${data.count}本)`, 'info');
+    appendLog(`ジョブ登録: ${data.count}本`, 'info');
     pollJobs(tab);
   } catch(e) {
     appendLog('通信エラー: ' + e, 'error');
@@ -298,15 +296,21 @@ async function cancelGenerate() {
 function pollJobs(tab) {
   if (pollTimer) clearInterval(pollTimer);
   let _polling = false;
-  const logBox = document.getElementById('log-container');
+  const container = document.getElementById('job-card-log-container');
   pollTimer = setInterval(async () => {
     if (!activeJobIds.length) { clearInterval(pollTimer); return; }
     if (_polling) return;
     _polling = true;
     try {
-      const { allDone } = await updateJobLogs(activeJobIds, logBox, {
-        resultLabel: r => `${r.topic || ''} — ${r.message || ''}`,
-      });
+      let allDone = true;
+      for (const jobId of activeJobIds) {
+        try {
+          const res = await fetch(`/api/jobs/${jobId}`);
+          const job = await res.json();
+          updateJobCard(container, job);
+          if (!['success', 'failed', 'cancelled'].includes(job.status)) allDone = false;
+        } catch { allDone = false; }
+      }
       if (allDone) { clearInterval(pollTimer); finishGenerate(tab); }
     } finally { _polling = false; }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
@@ -314,14 +318,14 @@ function pollJobs(tab) {
 
 function finishGenerate(tab) {
   document.getElementById(`generate-btn-${tab}`).disabled = false;
-  document.getElementById(`cancel-btn-${tab}`).style.display = 'none';
+  document.getElementById('cancel-btn').style.display = 'none';
 }
 
 function appendLog(msg, tag) {
-  const logBox = document.getElementById('log-container');
-  const t = new Date().toTimeString().slice(0, 8);
-  logBox.insertAdjacentHTML('beforeend', buildLogLine(msg, tag, t));
-  logBox.scrollTop = logBox.scrollHeight;
+  const el = document.getElementById('job-status-msg');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = tag === 'error' ? 'var(--err)' : tag === 'warning' ? 'var(--warning)' : tag === 'success' ? 'var(--ok)' : '';
 }
 
 // ─── URLパラメータでタブ初期化（?tab=meeting 対応）───
