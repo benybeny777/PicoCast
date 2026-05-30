@@ -4,48 +4,48 @@
     "name": "え、これも毒だったの？身近な食べ物の怖い黒歴史",
     "description": "昔は薬や毒として扱われていた意外な食べ物の歴史を解説。「えっ、これも？」と思わず声が出る食の怖い事実を紹介します。",
     "priority": 1,
-    "youtube_id": null
+    "youtube_id": "PLRpZq0gJDL49dT5zdEeP2fpZzBbNsAhqz"
   },
   {
     "key": "daigyakuten",
     "name": "誰も食べなかった食材が高級品に！食べ物の大逆転史",
     "description": "かつては捨てられたり嫌われたりしていたのに、今では高級食材として扱われる食べ物の逆転ストーリーを紹介。",
     "priority": 2,
-    "youtube_id": null
+    "youtube_id": "PLRpZq0gJDL49sYz075QU9pNG39RfUY6tQ"
   },
   {
     "key": "nihon_umare",
     "name": "外国料理だと思ってた？実は日本生まれだった食べ物",
     "description": "ナポリタン・ドリア・シュークリームなど、外国発と思い込んでいたのに実は日本で生まれた料理の真実を解説。",
     "priority": 3,
-    "youtube_id": null
+    "youtube_id": "PLRpZq0gJDL48SrtQf4iCjiYzlb6zJV2-3"
   },
   {
     "key": "katachi_himitsu",
     "name": "なんでこの形？知ると納得する食べ物の設計の秘密",
     "description": "ポテチの袋・ちくわの穴・プリン容器など、食べ物の形・容器・包装に隠された「なぜ？」の答えを徹底解説。",
     "priority": 4,
-    "youtube_id": null
+    "youtube_id": "PLRpZq0gJDL4-fTGCm1UgbNsnhuGMZDpDt"
   },
   {
     "key": "kaigai_gap",
     "name": "海外では通じない！日本の食の常識、外国ではNG",
     "description": "生卵・海苔・タコなど、日本では当たり前なのに海外では驚かれる食文化のギャップを紹介します。",
     "priority": 5,
-    "youtube_id": null
+    "youtube_id": "PLRpZq0gJDL4-ovNYkKoBITpJP7y-ABE3x"
   },
   {
     "key": "chomiryo",
     "name": "毎日使ってるのに知らなかった！調味料の意外な真実",
     "description": "醤油・砂糖・マヨネーズなど毎日使う調味料に隠された、知られざる歴史や驚きの事実をわかりやすく解説。",
     "priority": 6,
-    "youtube_id": null
+    "youtube_id": "PLRpZq0gJDL4_MSlbW48ALYrPUyXY5r00_"
   },
   {
     "key": "convenience",
     "name": "実は計算されてた！コンビニ・チェーン飯の開発秘話",
     "description": "コンビニや外食チェーンの商品が売れる理由、開発の裏側にある巧みな設計と戦略を解説します。",
     "priority": 7,
-    "youtube_id": null
+    "youtube_id": "PLRpZq0gJDL48X4BjcaGMYDZDyw0z1GVzy"
   }
 ]

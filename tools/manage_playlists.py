@@ -99,10 +99,12 @@ def cmd_assign(dry_run: bool) -> None:
                 print(f"  - {n}")
             sys.exit(1)
 
-    ok = skip = fail = 0
+    ok = skip = fail = not_found = 0
+    not_found_videos: list[str] = []
     for entry in assignments:
         video_id = entry["video_id"]
         title = entry.get("title", video_id)
+        entry_not_found = False
         for role, key in [("メイン", entry["main"]), ("補助", entry.get("supplementary"))]:
             if not key:
                 continue
@@ -111,18 +113,29 @@ def cmd_assign(dry_run: bool) -> None:
                 print(f"  [dry-run] {role}: {title[:40]}  →  {playlist_name}")
                 continue
             result = add_video_to_playlist_by_name(video_id, playlist_name)
+            if result.get("not_found") and not entry_not_found:
+                entry_not_found = True
+                not_found += 1
+                not_found_videos.append(f"{video_id}  {title}")
             if result["ok"] and not result["skipped"]:
                 print(f"  [✅ {role}追加] {title[:40]}  →  {playlist_name}")
                 ok += 1
             elif result["skipped"]:
                 print(f"  [skip {role}] {title[:40]}  →  {playlist_name}  ({result['reason']})")
                 skip += 1
+            elif result.get("not_found"):
+                print(f"  [🗑 削除済み] {title[:40]}  ({video_id})")
+                break
             else:
                 print(f"  [❌ {role}失敗] {title[:40]}  →  {playlist_name}  ({result['reason']})")
                 fail += 1
 
     if not dry_run:
-        print(f"\n完了: ✅{ok}件追加 / ⏭{skip}件スキップ / ❌{fail}件失敗")
+        print(f"\n完了: ✅{ok}件追加 / ⏭{skip}件スキップ / 🗑{not_found}件削除済み / ❌{fail}件失敗")
+        if not_found_videos:
+            print("\n削除済み動画一覧（playlist_assignments.json から除外を推奨）:")
+            for v in not_found_videos:
+                print(f"  {v}")
 
 
 def cmd_status() -> None:

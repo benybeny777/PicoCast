@@ -374,10 +374,16 @@ def add_video_to_playlist_by_name(video_id: str, playlist_name: str, progress_ca
         _log(f"  ✅ 再生リストへ追加: {playlist_name}")
         return result
     except Exception as e:
-        result["reason"] = str(e)
-        _log(f"  ⚠ 再生リスト追加エラー: {e}")
-        if "forbidden" in str(e).lower() or "403" in str(e):
-            _log("  💡 token.json を削除して再認証すると解決する場合があります。")
+        err_str = str(e)
+        if "videoNotFound" in err_str or "Video not found" in err_str:
+            result["reason"] = "動画がYouTubeに存在しません（削除済みの可能性）"
+            result["not_found"] = True
+            _log(f"  ⚠ 動画が見つかりません（削除済み?）: {video_id}")
+        else:
+            result["reason"] = err_str
+            _log(f"  ⚠ 再生リスト追加エラー: {e}")
+            if "forbidden" in err_str.lower() or "403" in err_str:
+                _log("  💡 token.json を削除して再認証すると解決する場合があります。")
         return result
     finally:
         _close_youtube_client(youtube)
