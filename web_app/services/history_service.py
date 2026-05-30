@@ -133,7 +133,12 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
     except Exception:
         return None
     if not os.path.isdir(theme_dir):
-        return None
+        # アップロード後に 000_uploaded/ へ移動済みの場合のフォールバック
+        alt_dir = os.path.join(OUTPUT_DIR, "000_uploaded", history_name)
+        if os.path.isdir(alt_dir) and os.path.realpath(alt_dir).startswith(os.path.realpath(OUTPUT_DIR)):
+            theme_dir = alt_dir
+        else:
+            return None
 
     meta_d = os.path.join(theme_dir, "_meta")
 

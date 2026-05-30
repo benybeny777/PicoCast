@@ -41,6 +41,18 @@ def _is_neta_kaigi_long(video_format: str, screen_format: str) -> bool:
     return False
 
 
+def resolve_video_type(video_format: str, screen_format: str) -> str:
+    """動画形式・画面形式から "shorts" または "long" を返す。"""
+    vf = (video_format or "").strip()
+    sf = (screen_format or "").strip()
+    vf_lower = vf.lower()
+    if "short" in vf_lower:
+        return "shorts"
+    if "ネタ会議" in vf:
+        return "long" if ("long" in vf_lower or sf in ("横", "landscape")) else "shorts"
+    return "shorts" if not vf_lower or "long" not in vf_lower else "long"
+
+
 def resolve_playlist_title(
     category: str,
     video_format: str,

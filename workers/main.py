@@ -8,6 +8,7 @@ import uuid
 import json
 import shutil
 import gc
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.voicevox import VoicevoxAPI
 from core.reading_normalizer import ReadingNormalizer
@@ -1618,6 +1619,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     _synth_first_err: Exception | None = None
     _synth_first_err_chunk: dict | None = None
+    _report_lock = threading.Lock()
 
     with ThreadPoolExecutor(max_workers=_SYNTH_WORKERS) as _sex:
         _sfuts = {_sex.submit(_do_synthesis, i, c): i for i, c in enumerate(_voice_chunks)}
@@ -1628,17 +1630,19 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             _sc = _voice_chunks[_si]
             try:
                 _sfut.result()
-                report.voices_generated += 1
+                with _report_lock:
+                    report.voices_generated += 1
                 _pv = _sc["chunk_text"][:20] + ("…" if len(_sc["chunk_text"]) > 20 else "")
                 update_status(
                     f"🎤 音声合成完了 [{_sc['voice_num']}/{total_voices}]"
                     f" {_sc['char_key']}({_sc['emotion']}) x{_sc['speed_scale']:g}「{_pv}」"
                 )
             except Exception as _se:
-                report.voices_failed += 1
-                if _synth_first_err is None:
-                    _synth_first_err = _se
-                    _synth_first_err_chunk = _sc
+                with _report_lock:
+                    report.voices_failed += 1
+                    if _synth_first_err is None:
+                        _synth_first_err = _se
+                        _synth_first_err_chunk = _sc
 
     if is_cancelled():
         return cancel_result()
@@ -1732,6 +1736,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             task["bg_description"], target_dir=theme_bg_dir, fname=task["fname"],
         )
 
+    _bg_lock = threading.Lock()
     with ThreadPoolExecutor(max_workers=_BG_WORKERS) as _bgex:
         _bgfuts = {_bgex.submit(_do_generate_bg, t): t for t in _bg_gen_tasks}
         for _bgfut in as_completed(_bgfuts):
@@ -1741,13 +1746,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             try:
                 _gen_file = _bgfut.result()
                 if _gen_file:
-                    report.backgrounds_generated += 1
+                    with _bg_lock:
+                        report.backgrounds_generated += 1
                     update_status(f"  ✅ 背景生成完了 [{_bt['bg_num']}/{total_bgs}] {_bt['bg_name'][:30]}")
                 else:
-                    report.backgrounds_failed += 1
+                    with _bg_lock:
+                        report.backgrounds_failed += 1
                     update_status(f"  ⚠ 背景生成スキップ [{_bt['bg_num']}/{total_bgs}]")
             except Exception as _be:
-                report.backgrounds_failed += 1
+                with _bg_lock:
+                    report.backgrounds_failed += 1
                 update_status(f"  ❌ 背景生成失敗 [{_bt['bg_num']}/{total_bgs}]: {_be}", "error")
 
     if is_cancelled():

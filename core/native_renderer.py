@@ -365,12 +365,13 @@ def _wrap_subtitle(text: str, max_chars: int) -> str:
     """
     if max_chars <= 0 or len(text) <= max_chars:
         return text
+    min_tail = max(2, max_chars // 3)  # 折り返し後の2行目が短すぎる場合は句読点折り返しを使わない
     lines: list[str] = []
     while len(text) > max_chars:
         break_pos = max_chars
         for punct in "、。！？…":
             pos = text.rfind(punct, 0, max_chars + 1)
-            if pos > max_chars // 2:
+            if pos > max_chars // 2 and len(text) - (pos + 1) >= min_tail:
                 break_pos = pos + 1
                 break
         lines.append(text[:break_pos])
