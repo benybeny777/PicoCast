@@ -383,6 +383,28 @@ def add_video_to_playlist_by_name(video_id: str, playlist_name: str, progress_ca
         _close_youtube_client(youtube)
 
 
+def create_playlist(name: str, description: str = "", privacy: str = "public") -> dict:
+    """再生リストを作成する。同名が既に存在する場合はIDを返してスキップする。"""
+    youtube = None
+    try:
+        youtube = get_youtube_client()
+        existing_id = _find_playlist_id_by_name(youtube, name)
+        if existing_id:
+            return {"ok": True, "created": False, "id": existing_id, "name": name, "reason": "既存の再生リストを使用"}
+        resp = youtube.playlists().insert(
+            part="snippet,status",
+            body={
+                "snippet": {"title": name, "description": description},
+                "status": {"privacyStatus": privacy},
+            },
+        ).execute()
+        return {"ok": True, "created": True, "id": resp.get("id"), "name": name, "reason": "作成しました"}
+    except Exception as e:
+        return {"ok": False, "created": False, "id": None, "name": name, "reason": str(e)}
+    finally:
+        _close_youtube_client(youtube)
+
+
 def _read_script_text_for_tags(mp4_path: str) -> str:
     output_dir = os.path.dirname(os.path.abspath(mp4_path))
     script_path = os.path.join(output_dir, "script.txt")
