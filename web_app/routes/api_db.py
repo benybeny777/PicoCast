@@ -70,6 +70,21 @@ def api_db_sync(history_name: str):
     return {"ok": True, "synced": history_name}
 
 
+@router.delete("/videos/{local_id:path}")
+def api_db_delete_video(local_id: str):
+    """DB から指定レコードを削除する。ファイルは削除しない。"""
+    if ".." in local_id:
+        raise HTTPException(status_code=400, detail="無効な local_id です")
+    _ensure_init()
+    from core.metadata_db import delete_video, ManagedConnection
+    with ManagedConnection() as conn:
+        row = conn.execute("SELECT local_id FROM videos WHERE local_id=?", (local_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="レコードが見つかりません")
+    delete_video(local_id)
+    return {"ok": True, "deleted": local_id}
+
+
 @router.post("/import-all")
 def api_db_import_all():
     """output/ 配下の全フォルダを DB に取り込む（非同期ジョブ）。"""

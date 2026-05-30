@@ -38,7 +38,7 @@ _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
 _db_path_cache: str | None = None
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 # ── パス ────────────────────────────────────────────────────────────────────
@@ -135,7 +135,8 @@ CREATE TABLE IF NOT EXISTS videos (
     updated_at     TEXT,
     script_path    TEXT,
     mp4_path       TEXT,
-    thumbnail_path TEXT
+    thumbnail_path TEXT,
+    script_content TEXT
 );
 
 CREATE TABLE IF NOT EXISTS video_metadata (
@@ -232,20 +233,36 @@ CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at);
 """
 
 
+def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
+    """スキーマバージョンに応じてマイグレーションを実行する。"""
+    if current_ver < 2:
+        try:
+            conn.execute("ALTER TABLE videos ADD COLUMN script_content TEXT")
+            _logger.info("[SQLite] スキーマ v1→v2: videos.script_content を追加しました")
+        except Exception as e:
+            if "duplicate column" not in str(e).lower():
+                raise
+
+
 def initialize_db() -> None:
-    """DB を初期化する。既存 DB が存在する場合は何もしない（テーブルがなければ作る）。"""
+    """DB を初期化する。既存 DB が存在する場合はスキーマ移行のみ行う。"""
     path = get_db_path()
     existed = os.path.isfile(path)
     with ManagedConnection() as conn:
         conn.executescript(_DDL)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
-        if row is None:
-            conn.execute("INSERT INTO schema_version(version) VALUES(?)", (SCHEMA_VERSION,))
+        current_ver = row[0] if row else 0
+        if current_ver < SCHEMA_VERSION:
+            _migrate(conn, current_ver)
+            if row is None:
+                conn.execute("INSERT INTO schema_version(version) VALUES(?)", (SCHEMA_VERSION,))
+            else:
+                conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
         conn.commit()
     if existed:
-        _logger.info("[SQLite] DB 起動（既存）: %s", path)
+        _logger.info("[SQLite] DB 起動（既存 v%s）: %s", SCHEMA_VERSION, path)
     else:
-        _logger.info("[SQLite] DB 起動（新規作成）: %s", path)
+        _logger.info("[SQLite] DB 起動（新規作成 v%s）: %s", SCHEMA_VERSION, path)
 
 
 # ── ヘルパー ─────────────────────────────────────────────────────────────────
@@ -304,17 +321,27 @@ def upsert_video(conn: sqlite3.Connection, local_id: str, output_dir: str,
                   or "")
     mp4 = _find_mp4(output_dir)
     thumb = _find_thumbnail(output_dir)
-    script = os.path.join(output_dir, "script.txt") if os.path.isfile(os.path.join(output_dir, "script.txt")) else None
+    script_path_val = os.path.join(output_dir, "script.txt")
+    script = script_path_val if os.path.isfile(script_path_val) else None
+    script_content: str | None = None
+    if script:
+        try:
+            with open(script, encoding="utf-8") as f:
+                script_content = f.read()
+        except Exception as e:
+            _logger.warning("script.txt 読み込み失敗 %s: %s", local_id, e)
     now = _now_jst()
     conn.execute("""
         INSERT INTO videos(local_id, output_dir, title, video_type,
-                           created_at, updated_at, script_path, mp4_path, thumbnail_path)
-        VALUES(?,?,?,?,?,?,?,?,?)
+                           created_at, updated_at, script_path, mp4_path, thumbnail_path,
+                           script_content)
+        VALUES(?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(local_id) DO UPDATE SET
             title=excluded.title, video_type=excluded.video_type,
             updated_at=excluded.updated_at, mp4_path=excluded.mp4_path,
-            thumbnail_path=excluded.thumbnail_path, script_path=excluded.script_path
-    """, (local_id, output_dir, title, video_type, now, now, script, mp4, thumb))
+            thumbnail_path=excluded.thumbnail_path, script_path=excluded.script_path,
+            script_content=COALESCE(excluded.script_content, script_content)
+    """, (local_id, output_dir, title, video_type, now, now, script, mp4, thumb, script_content))
 
 
 def upsert_video_metadata(conn: sqlite3.Connection, local_id: str,
@@ -462,6 +489,29 @@ def upsert_playlist_registration(local_id: str, youtube_video_id: str,
             conn.execute(
                 "UPDATE youtube_status SET playlist_registered=1 WHERE local_id=?", (local_id,))
         conn.commit()
+
+
+def delete_video(local_id: str) -> None:
+    """
+    local_id に紐づく全テーブルのレコードを削除する。
+    analytics_snapshots は youtube_video_id 経由で削除する。
+    """
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT youtube_video_id FROM youtube_status WHERE local_id=?", (local_id,)
+        ).fetchone()
+        yt_id = row[0] if row else None
+
+        conn.execute("DELETE FROM script_quality   WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM playlists         WHERE local_id=?", (local_id,))
+        if yt_id:
+            conn.execute("DELETE FROM analytics_snapshots WHERE youtube_video_id=?", (yt_id,))
+        conn.execute("DELETE FROM youtube_status   WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM video_metadata   WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM topic_history    WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM videos           WHERE local_id=?", (local_id,))
+        conn.commit()
+    _logger.info("[SQLite] レコード削除: local_id=%s", local_id)
 
 
 # ── フォルダ同期 ─────────────────────────────────────────────────────────────

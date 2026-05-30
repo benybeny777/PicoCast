@@ -124,6 +124,7 @@ async function loadVideos() {
       ? `<a href="https://youtu.be/${v.youtube_video_id}" target="_blank" class="btn btn-xs btn-secondary">YT</a>`
       : '';
     const histLink = `<a href="/history/${encodeURIComponent(v.local_id)}" class="btn btn-xs btn-secondary">詳細</a>`;
+    const delBtn = `<button class="btn btn-xs btn-danger" onclick="deleteVideo(${JSON.stringify(v.local_id)})" title="DBからレコードを削除">削除</button>`;
     return `<tr>
       <td title="${v.local_id}">${(v.title||'—').slice(0,30)}</td>
       <td>${v.video_type||'—'}</td>
@@ -135,7 +136,7 @@ async function loadVideos() {
       <td style="text-align:right">${pct}</td>
       <td style="text-align:center">${score}</td>
       <td style="text-align:center">${pl}</td>
-      <td style="white-space:nowrap">${histLink} ${ytLink}</td>
+      <td style="white-space:nowrap">${histLink} ${ytLink} ${delBtn}</td>
     </tr>`;
   }).join('');
 
@@ -151,6 +152,19 @@ async function loadDuplicates() {
   document.getElementById('dup-tbody').innerHTML = rows.map(d =>
     `<tr><td>${d.topic_key||d.food_name||'—'}</td><td>${d.cnt}</td><td style="font-size:12px">${(d.titles||'').replaceAll('|','<br>')}</td></tr>`
   ).join('');
+}
+
+async function deleteVideo(localId) {
+  if (!confirm(`DBからレコードを削除しますか？\n\n「${localId}」\n\nファイルは削除されません。`)) return;
+  try {
+    const r = await fetch('/api/db/videos/' + encodeURIComponent(localId), {method: 'DELETE'});
+    const d = await r.json();
+    if (!r.ok) { alert('削除失敗: ' + (d.detail || JSON.stringify(d))); return; }
+    await loadStats();
+    await loadVideos();
+  } catch(e) {
+    alert('通信エラー: ' + e);
+  }
 }
 
 async function importAll() {
