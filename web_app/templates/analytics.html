@@ -88,35 +88,35 @@
     <tbody id="analytics-tbody">
       {% for row in analytics_data %}
       <tr class="ana-row"
-          data-title="{{ row.get('title','') | lower }}"
-          data-score="{{ row.get('score','') }}"
-          data-action="{{ row.get('action','') }}"
-          data-type="{{ row.get('video_type','') }}"
-          data-topic-request-cta="{{ row.get('topic_request_cta','') }}"
-          data-status="{{ row.get('publish_status','') | lower }}"
-          data-published_at="{{ row.get('published_at','') }}"
+          data-title="{{ (row.get('title') or '') | lower }}"
+          data-score="{{ (row.get('score') or '') }}"
+          data-action="{{ (row.get('action') or '') }}"
+          data-type="{{ (row.get('video_type') or '') }}"
+          data-topic-request-cta="{{ (row.get('topic_request_cta') or '') }}"
+          data-status="{{ (row.get('publish_status') or '') | lower }}"
+          data-published_at="{{ (row.get('published_at') or '') }}"
           data-views="{{ row.get('views','0') or 0 }}"
           data-average_percentage_viewed="{{ row.get('average_percentage_viewed','0') or 0 }}"
           data-likes="{{ row.get('likes','0') or 0 }}"
           data-dislikes="{{ row.get('dislikes','0') or 0 }}"
           data-like_dislike_total="{{ row.get('like_dislike_total','0') or 0 }}"
-          data-dislike_rate="{{ row.get('dislike_rate','') or '' }}"
+          data-dislike_rate="{{ (row.get('dislike_rate') or '') or '' }}"
           data-comments="{{ row.get('comments','0') or 0 }}"
           data-subscribers_net="{{ row.get('subscribers_net','0') or 0 }}"
-          data-video-id="{{ row.get('video_id','') }}"
+          data-video-id="{{ (row.get('video_id') or '') }}"
           data-duration="{{ row.get('duration','0') or 0 }}"
-          data-full-title="{{ row.get('title','') }}"
+          data-full-title="{{ (row.get('title') or '') }}"
           data-blacklist="{{ 'true' if row.get('blacklist_candidate') else '' }}"
           onclick="selectRow(this)" style="cursor:pointer">
-        <td title="{{ row.get('title','') }}">{{ (row.get('title','') or '')[:32] }}</td>
-        <td style="white-space:nowrap; font-size:11px">{{ (row.get('published_at','') or '')[:16] | replace('T', ' ') }}</td>
+        <td title="{{ (row.get('title') or '') }}">{{ ((row.get('title') or '') or '')[:32] }}</td>
+        <td style="white-space:nowrap; font-size:11px">{{ ((row.get('published_at') or '') or '')[:16] | replace('T', ' ') }}</td>
         <td>
-          <span class="badge {% if 'Short' in (row.get('video_type','')) %}badge-shorts{% else %}badge-long{% endif %}">
+          <span class="badge {% if 'Short' in ((row.get('video_type') or '')) %}badge-shorts{% else %}badge-long{% endif %}">
             {{ row.get('video_type','—') }}
           </span>
         </td>
         <td>
-          {% set score = row.get('score','') %}
+          {% set score = (row.get('score') or '') %}
           {% if score %}<span class="score-badge score-letter-{{ score }}">{{ score }}</span>{% else %}—{% endif %}
         </td>
         <td>{{ row.get('views','—') }}</td>
@@ -132,8 +132,8 @@
         </td>
         <td>{{ row.get('comments','—') }}</td>
         <td>{{ row.get('subscribers_net','—') }}</td>
-        <td title="{{ row.get('topic_request_cta_reason','') }}">
-          {% set topic_cta = row.get('topic_request_cta','') %}
+        <td title="{{ (row.get('topic_request_cta_reason') or '') }}">
+          {% set topic_cta = (row.get('topic_request_cta') or '') %}
           {% if topic_cta == '許可' %}
           <span class="badge badge-ok">対象</span>
           {% elif topic_cta == '禁止' %}
@@ -142,8 +142,8 @@
           —
           {% endif %}
         </td>
-        <td title="{{ row.get('avoid_pattern','') }}">
-          {% set action = row.get('action','') %}
+        <td title="{{ (row.get('avoid_pattern') or '') }}">
+          {% set action = (row.get('action') or '') %}
           {% if action %}
           <span class="badge {% if 'ブラックリスト' in action %}badge-danger{% elif '横展開' in action %}badge-ok{% elif '改善' in action or '配布不足' in action %}badge-warn{% else %}badge-info{% endif %}">
             {{ action[:15] }}
