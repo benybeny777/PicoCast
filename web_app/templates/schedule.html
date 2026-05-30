@@ -84,10 +84,10 @@
     <div class="form-group">
       <label>時刻 (JST)</label>
       <select id="new-publish-time" class="form-input" style="width:100%">
-        <option value="07:00">07:00（朝）</option>
-        <option value="12:00">12:00（昼）</option>
-        <option value="19:00">19:00（夜）</option>
-        <option value="21:00">21:00（夜・Long向け）</option>
+        <option value="07:00">07:00（Shorts 朝枠）</option>
+        <option value="12:00">12:00（Shorts 昼枠 / Long 週末）</option>
+        <option value="19:00">19:00（Shorts 夜枠）</option>
+        <option value="21:00">21:00（Long 平日・週末）</option>
       </select>
     </div>
     <p id="update-dialog-current" class="hint" style="margin-top:-0.25rem"></p>
@@ -209,7 +209,7 @@ function openUpdateDialog(videoId, currentPublishAt, title) {
   _buildDateOptions(document.getElementById('new-publish-date'), curDate);
 
   const timeEl = document.getElementById('new-publish-time');
-  const stdTimes = ['07:00', '12:00', '19:00', '21:00'];
+  const stdTimes = ['07:00', '12:00', '19:00', '21:00']; // Shorts: 7/12/19, Long: 21 (週末は12も)
   timeEl.value = stdTimes.includes(curTime) ? curTime : '19:00';
   // 標準外の時刻が設定されていた場合は選択肢に追加
   if (!stdTimes.includes(curTime) && curTime) {
