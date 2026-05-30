@@ -354,6 +354,17 @@ def probe_duration_sec(media_path: str) -> int | None:
 
 
 def read_policy_file(output_dir: str) -> dict:
+    local_id = os.path.basename(os.path.abspath(output_dir))
+    try:
+        from core.metadata_db import get_cta_policy, is_initialized, initialize_db
+        if not is_initialized():
+            initialize_db()
+        result = get_cta_policy(local_id)
+        if result:
+            return result
+    except Exception:
+        pass
+    # 後方互換: DB になければ旧 JSON を参照
     path = os.path.join(output_dir, "_meta", "cta_policy.json")
     if not os.path.exists(path):
         return {}
@@ -365,9 +376,9 @@ def read_policy_file(output_dir: str) -> dict:
 
 
 def write_policy_file(output_dir: str, policy: dict) -> str:
-    meta_dir = os.path.join(output_dir, "_meta")
-    os.makedirs(meta_dir, exist_ok=True)
-    path = os.path.join(meta_dir, "cta_policy.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(policy, f, ensure_ascii=False, indent=2)
-    return path
+    local_id = os.path.basename(os.path.abspath(output_dir))
+    from core.metadata_db import upsert_cta_policy, is_initialized, initialize_db
+    if not is_initialized():
+        initialize_db()
+    upsert_cta_policy(local_id, policy)
+    return local_id

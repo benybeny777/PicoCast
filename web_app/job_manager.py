@@ -70,18 +70,11 @@ class Job:
 class JobManager:
     _PERSIST_FILE = "jobs.json"
 
-    def __init__(self, max_workers: int = 4, persist_dir: str | None = None):
+    def __init__(self, max_workers: int = 4):
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
-        self._persist_path: pathlib.Path | None = None
-
-        if persist_dir:
-            p = pathlib.Path(persist_dir)
-            p.mkdir(parents=True, exist_ok=True)
-            self._persist_path = p / self._PERSIST_FILE
-            self._load_jobs()
-
+        self._load_jobs()
         atexit.register(lambda: self._executor.shutdown(wait=False))
 
     # ──────────────────────────────────────────
@@ -89,15 +82,15 @@ class JobManager:
     # ──────────────────────────────────────────
 
     def _load_jobs(self) -> None:
-        """起動時にジョブ履歴をファイルから復元する。"""
-        if not self._persist_path or not self._persist_path.exists():
-            return
+        """起動時にジョブ履歴を DB から復元する。"""
         try:
-            raw = self._persist_path.read_text(encoding="utf-8")
-            data: list[dict] = json.loads(raw)
+            from core.metadata_db import load_jobs_from_db, initialize_db, is_initialized
+            if not is_initialized():
+                initialize_db()
+            from config import JOB_LOG_MAX_JOBS
+            data = load_jobs_from_db(max_n=JOB_LOG_MAX_JOBS)
             for d in data:
                 job = Job.from_dict(d)
-                # 実行中・キュー中だったジョブは再起動で中断済みとしてマーク
                 if job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
                     job.status = JobStatus.FAILED
                     job.error = "アプリ再起動により中断"
@@ -107,31 +100,27 @@ class JobManager:
                     _log(job, "⚠ アプリ再起動により中断されました", "warning")
                 self._jobs[job.job_id] = job
         except Exception as e:
-            # フォールバック許可: 永続化ファイルの読み込み失敗はアプリ起動を妨げない
+            # フォールバック許可: DB読み込み失敗はアプリ起動を妨げない
             print(f"[job_manager] ジョブ履歴の読み込みに失敗しました（無視して続行）: {e}")
 
     def _save_jobs(self, notify_job: "Job | None" = None) -> None:
-        """ジョブ一覧をファイルへ書き出す。成功・失敗・キャンセルを問わずジョブ確定時に呼ぶ。"""
-        if not self._persist_path:
-            return
+        """ジョブ確定時に DB へ保存する。"""
         try:
-            from config import JOB_LOG_MAX_JOBS  # 循環インポート回避のため遅延ロード
-            with self._lock:
-                jobs_sorted = sorted(
-                    self._jobs.values(),
-                    key=lambda j: j.started_at or datetime.min.replace(tzinfo=_JST),
-                    reverse=True,
-                )[:JOB_LOG_MAX_JOBS]
-                data = [j.to_dict() for j in jobs_sorted]
-            self._persist_path.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            from core.metadata_db import upsert_job, delete_old_jobs, initialize_db, is_initialized
+            if not is_initialized():
+                initialize_db()
+            from config import JOB_LOG_MAX_JOBS
+            if notify_job is not None:
+                upsert_job(notify_job.to_dict())
+            else:
+                with self._lock:
+                    for job in self._jobs.values():
+                        upsert_job(job.to_dict())
+            delete_old_jobs(JOB_LOG_MAX_JOBS)
         except Exception as e:
-            msg = f"[ジョブログ] 永続化ファイルの書き込みに失敗しました: {e}"
+            msg = f"[ジョブログ] DB書き込みに失敗しました: {e}"
             print(msg, flush=True)
             if notify_job is not None:
-                # 保存失敗をジョブ自身のログに記録する
                 try:
                     _log(notify_job, msg, "warning")
                 except Exception:
@@ -222,6 +211,5 @@ _manager: JobManager | None = None
 def get_job_manager() -> JobManager:
     global _manager
     if _manager is None:
-        from config import JOB_LOG_DIR  # 循環インポート回避のため遅延ロード
-        _manager = JobManager(persist_dir=JOB_LOG_DIR)
+        _manager = JobManager()
     return _manager

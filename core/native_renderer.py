@@ -250,19 +250,11 @@ def _duration_status(sec: float) -> tuple[str, str]:
 
 
 def _save_render_info(output_dir: str, info: dict) -> None:
-    meta_dir = os.path.join(output_dir, "_meta")
-    os.makedirs(meta_dir, exist_ok=True)
-    path = os.path.join(meta_dir, "render_info.json")
-    existing: dict = {}
-    if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                existing = json.load(f)
-        except Exception as _e:
-            raise RuntimeError(f"Error: {_e}") from _e
-    existing.update(info)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(existing, f, ensure_ascii=False, indent=2)
+    from core.metadata_db import upsert_render_info, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    local_id = os.path.basename(os.path.abspath(output_dir))
+    upsert_render_info(local_id, info)
 
 
 def _audio_analysis_summary(path: str) -> str:

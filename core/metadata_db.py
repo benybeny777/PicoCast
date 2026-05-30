@@ -38,7 +38,7 @@ _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
 _db_path_cache: str | None = None
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 # ── パス ────────────────────────────────────────────────────────────────────
@@ -230,9 +230,49 @@ CREATE TABLE IF NOT EXISTS script_quality (
     actual_duration        REAL,
     actual_duration_status TEXT,
     opening_score          REAL,
+    opening_score_status   TEXT,
+    opening_rewrite_needed INTEGER,
     final_review_score     REAL,
     validation_status      TEXT,
-    validation_errors_json TEXT
+    validation_errors_json TEXT,
+    final_review_skipped   INTEGER,
+    final_review_reason    TEXT,
+    final_review_stage     TEXT,
+    final_review_model     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS render_info (
+    local_id                      TEXT PRIMARY KEY,
+    render_engine                 TEXT,
+    video_title                   TEXT,
+    description                   TEXT,
+    tags                          TEXT,
+    video_format                  TEXT,
+    screen_format                 TEXT,
+    playlist_categories           TEXT,
+    native_renderer_json          TEXT,
+    estimated_duration_sec        REAL,
+    actual_duration_sec           REAL,
+    actual_duration_status        TEXT,
+    loudnorm_enabled              INTEGER,
+    loudnorm_i                    REAL,
+    loudnorm_tp                   REAL,
+    loudnorm_lra                  REAL,
+    motion_effects_enabled        INTEGER,
+    motion_effects_fallback_count INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id        TEXT PRIMARY KEY,
+    job_type      TEXT,
+    status        TEXT,
+    progress_text TEXT DEFAULT '',
+    started_at    TEXT,
+    finished_at   TEXT,
+    logs_json     TEXT DEFAULT '[]',
+    result_json   TEXT,
+    error         TEXT,
+    created_at    TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_youtube_status_vid ON youtube_status(youtube_video_id);
@@ -241,6 +281,8 @@ CREATE INDEX IF NOT EXISTS idx_topic_key ON topic_history(topic_key);
 CREATE INDEX IF NOT EXISTS idx_food_name ON topic_history(food_name);
 CREATE INDEX IF NOT EXISTS idx_videos_type ON videos(video_type);
 CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_started ON jobs(started_at);
 """
 
 
@@ -274,6 +316,28 @@ def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
         ]:
             _add_column(conn, "analytics_snapshots", col, typedef)
         _logger.info("[SQLite] スキーマ v2→v3: analytics_snapshots に列を追加しました")
+    if current_ver < 4:
+        # video_metadata: CTA 列
+        for col, typedef in [
+            ("cta_shorts_loop_priority",    "INTEGER"),
+            ("cta_direct_next_video_allowed","INTEGER"),
+            ("cta_topic_request",           "TEXT"),
+            ("cta_topic_request_reason",    "TEXT"),
+            ("cta_final_type",              "TEXT"),
+        ]:
+            _add_column(conn, "video_metadata", col, typedef)
+        # script_quality: final_review / opening 追加列
+        for col, typedef in [
+            ("opening_score_status",  "TEXT"),
+            ("opening_rewrite_needed","INTEGER"),
+            ("final_review_skipped",  "INTEGER"),
+            ("final_review_reason",   "TEXT"),
+            ("final_review_stage",    "TEXT"),
+            ("final_review_model",    "TEXT"),
+        ]:
+            _add_column(conn, "script_quality", col, typedef)
+        # render_info / jobs テーブルは DDL の CREATE TABLE IF NOT EXISTS で作成済み
+        _logger.info("[SQLite] スキーマ v3→v4: video_metadata/script_quality に列追加、render_info/jobs テーブル作成")
 
 
 def initialize_db() -> None:
@@ -593,6 +657,249 @@ def upsert_playlist_registration(local_id: str, youtube_video_id: str,
         conn.commit()
 
 
+def upsert_render_info(local_id: str, data: dict) -> None:
+    """render_info データを DB に upsert する。"""
+    import json as _json
+    tags = data.get("tags")
+    cats = data.get("playlist_categories")
+    nr   = data.get("native_renderer")
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO render_info(
+                local_id, render_engine, video_title, description,
+                tags, video_format, screen_format, playlist_categories,
+                native_renderer_json,
+                estimated_duration_sec, actual_duration_sec, actual_duration_status,
+                loudnorm_enabled, loudnorm_i, loudnorm_tp, loudnorm_lra,
+                motion_effects_enabled, motion_effects_fallback_count)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                render_engine=COALESCE(excluded.render_engine, render_engine),
+                video_title=COALESCE(excluded.video_title, video_title),
+                description=COALESCE(excluded.description, description),
+                tags=COALESCE(excluded.tags, tags),
+                video_format=COALESCE(excluded.video_format, video_format),
+                screen_format=COALESCE(excluded.screen_format, screen_format),
+                playlist_categories=COALESCE(excluded.playlist_categories, playlist_categories),
+                native_renderer_json=COALESCE(excluded.native_renderer_json, native_renderer_json),
+                estimated_duration_sec=COALESCE(excluded.estimated_duration_sec, estimated_duration_sec),
+                actual_duration_sec=COALESCE(excluded.actual_duration_sec, actual_duration_sec),
+                actual_duration_status=COALESCE(excluded.actual_duration_status, actual_duration_status),
+                loudnorm_enabled=COALESCE(excluded.loudnorm_enabled, loudnorm_enabled),
+                loudnorm_i=COALESCE(excluded.loudnorm_i, loudnorm_i),
+                loudnorm_tp=COALESCE(excluded.loudnorm_tp, loudnorm_tp),
+                loudnorm_lra=COALESCE(excluded.loudnorm_lra, loudnorm_lra),
+                motion_effects_enabled=COALESCE(excluded.motion_effects_enabled, motion_effects_enabled),
+                motion_effects_fallback_count=COALESCE(excluded.motion_effects_fallback_count, motion_effects_fallback_count)
+        """, (
+            local_id,
+            data.get("render_engine"),
+            data.get("video_title"),
+            data.get("description"),
+            _json.dumps(tags, ensure_ascii=False) if isinstance(tags, (list, dict)) else tags,
+            data.get("video_format"),
+            data.get("screen_format"),
+            _json.dumps(cats, ensure_ascii=False) if isinstance(cats, (list, dict)) else cats,
+            _json.dumps(nr, ensure_ascii=False) if isinstance(nr, dict) else None,
+            data.get("estimated_duration_sec"),
+            data.get("actual_duration_sec"),
+            data.get("actual_duration_status"),
+            int(bool(data.get("loudnorm_enabled"))) if "loudnorm_enabled" in data else None,
+            data.get("loudnorm_i"),
+            data.get("loudnorm_tp"),
+            data.get("loudnorm_lra"),
+            int(bool(data.get("motion_effects_enabled"))) if "motion_effects_enabled" in data else None,
+            data.get("motion_effects_fallback_segments"),
+        ))
+        conn.commit()
+
+
+def get_render_info(local_id: str) -> dict:
+    """render_info を DB から取得する。"""
+    import json as _json
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT * FROM render_info WHERE local_id=?", (local_id,)
+        ).fetchone()
+    if row is None:
+        return {}
+    d = dict(row)
+    for key in ("tags", "playlist_categories"):
+        val = d.get(key)
+        if val:
+            try:
+                d[key] = _json.loads(val)
+            except Exception:
+                pass
+    nr = d.pop("native_renderer_json", None)
+    if nr:
+        try:
+            d["native_renderer"] = _json.loads(nr)
+        except Exception:
+            pass
+    return d
+
+
+def upsert_cta_policy(local_id: str, policy: dict) -> None:
+    """cta_policy を video_metadata の CTA 列に upsert する。"""
+    p = policy.get("cta_policy", policy)
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO video_metadata(local_id,
+                cta_shorts_loop_priority, cta_direct_next_video_allowed,
+                cta_topic_request, cta_topic_request_reason, cta_final_type)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                cta_shorts_loop_priority=excluded.cta_shorts_loop_priority,
+                cta_direct_next_video_allowed=excluded.cta_direct_next_video_allowed,
+                cta_topic_request=excluded.cta_topic_request,
+                cta_topic_request_reason=excluded.cta_topic_request_reason,
+                cta_final_type=excluded.cta_final_type
+        """, (
+            local_id,
+            int(bool(p.get("shorts_loop_priority"))),
+            int(bool(p.get("direct_next_video_promo_allowed"))),
+            p.get("topic_request_cta"),
+            p.get("topic_request_cta_reason"),
+            p.get("final_cta_type"),
+        ))
+        conn.commit()
+
+
+def get_cta_policy(local_id: str) -> dict:
+    """video_metadata から CTA ポリシーを取得する。"""
+    with ManagedConnection() as conn:
+        row = conn.execute("""
+            SELECT cta_shorts_loop_priority, cta_direct_next_video_allowed,
+                   cta_topic_request, cta_topic_request_reason, cta_final_type
+            FROM video_metadata WHERE local_id=?
+        """, (local_id,)).fetchone()
+    if row is None:
+        return {}
+    return {
+        "cta_policy": {
+            "shorts_loop_priority": bool(row["cta_shorts_loop_priority"]),
+            "direct_next_video_promo_allowed": bool(row["cta_direct_next_video_allowed"]),
+            "topic_request_cta": row["cta_topic_request"],
+            "topic_request_cta_reason": row["cta_topic_request_reason"],
+            "final_cta_type": row["cta_final_type"],
+        }
+    }
+
+
+def upsert_opening_review(local_id: str, data: dict) -> None:
+    """opening_review データを script_quality に upsert する。"""
+    final = data.get("local_review", {}) if not data.get("llm_review") else data.get("llm_review", {})
+    score = data.get("final_score") or final.get("score")
+    status = data.get("final_status") or final.get("status")
+    rewrite = int(bool(data.get("rewrite_needed")))
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO script_quality(local_id, opening_score, opening_score_status, opening_rewrite_needed)
+            VALUES(?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                opening_score=COALESCE(excluded.opening_score, opening_score),
+                opening_score_status=excluded.opening_score_status,
+                opening_rewrite_needed=excluded.opening_rewrite_needed
+        """, (local_id, score, status, rewrite))
+        conn.commit()
+
+
+def upsert_final_review(local_id: str, review: dict | None) -> None:
+    """final_review データを script_quality に upsert する。"""
+    r = review or {"skipped": True}
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO script_quality(local_id,
+                final_review_skipped, final_review_reason, final_review_stage, final_review_model)
+            VALUES(?,?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                final_review_skipped=excluded.final_review_skipped,
+                final_review_reason=excluded.final_review_reason,
+                final_review_stage=excluded.final_review_stage,
+                final_review_model=excluded.final_review_model
+        """, (
+            local_id,
+            int(bool(r.get("skipped"))),
+            r.get("reason"),
+            r.get("stage"),
+            r.get("model"),
+        ))
+        conn.commit()
+
+
+def upsert_job(job_dict: dict) -> None:
+    """ジョブを jobs テーブルに upsert する。"""
+    import json as _json
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO jobs(job_id, job_type, status, progress_text,
+                             started_at, finished_at, logs_json, result_json, error, created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(job_id) DO UPDATE SET
+                status=excluded.status,
+                progress_text=excluded.progress_text,
+                started_at=excluded.started_at,
+                finished_at=excluded.finished_at,
+                logs_json=excluded.logs_json,
+                result_json=excluded.result_json,
+                error=excluded.error
+        """, (
+            job_dict["job_id"],
+            job_dict.get("type"),
+            job_dict.get("status"),
+            job_dict.get("progress_text", ""),
+            job_dict.get("started_at"),
+            job_dict.get("finished_at"),
+            _json.dumps(job_dict.get("logs") or [], ensure_ascii=False),
+            _json.dumps(job_dict.get("result"), ensure_ascii=False) if job_dict.get("result") is not None else None,
+            job_dict.get("error"),
+            job_dict.get("started_at") or _now_jst(),
+        ))
+        conn.commit()
+
+
+def load_jobs_from_db(max_n: int = 500) -> list[dict]:
+    """jobs テーブルから最新 N 件を返す。"""
+    import json as _json
+    with ManagedConnection() as conn:
+        rows = conn.execute("""
+            SELECT job_id, job_type, status, progress_text,
+                   started_at, finished_at, logs_json, result_json, error
+            FROM jobs
+            ORDER BY COALESCE(started_at, created_at) DESC
+            LIMIT ?
+        """, (max_n,)).fetchall()
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["type"] = d.pop("job_type", None)
+        try:
+            d["logs"] = _json.loads(d.pop("logs_json") or "[]")
+        except Exception:
+            d["logs"] = []
+        try:
+            result_raw = d.pop("result_json", None)
+            d["result"] = _json.loads(result_raw) if result_raw else None
+        except Exception:
+            d["result"] = None
+        result.append(d)
+    return result
+
+
+def delete_old_jobs(keep_n: int) -> None:
+    """古いジョブを削除して keep_n 件だけ残す。"""
+    with ManagedConnection() as conn:
+        conn.execute("""
+            DELETE FROM jobs WHERE job_id NOT IN (
+                SELECT job_id FROM jobs
+                ORDER BY COALESCE(started_at, created_at) DESC
+                LIMIT ?
+            )
+        """, (keep_n,))
+        conn.commit()
+
+
 def delete_video(local_id: str) -> None:
     """
     local_id に紐づく全テーブルのレコードを削除する。
@@ -604,6 +911,7 @@ def delete_video(local_id: str) -> None:
         ).fetchone()
         yt_id = row[0] if row else None
 
+        conn.execute("DELETE FROM render_info      WHERE local_id=?", (local_id,))
         conn.execute("DELETE FROM script_quality   WHERE local_id=?", (local_id,))
         conn.execute("DELETE FROM playlists         WHERE local_id=?", (local_id,))
         if yt_id:
@@ -620,15 +928,53 @@ def delete_video(local_id: str) -> None:
 
 def sync_folder_to_db(output_dir: str) -> None:
     """
-    output_dir 配下のメタファイルを読んで DB に upsert する。
+    output_dir 配下を DB に同期する。
+    新規フォルダ: DB が正本なので JSON は参照しない。
+    既存フォルダ(旧形式): JSON が残っていれば fallback として読む。
     失敗時はログに出して例外を伝播させる（サイレントスキップ禁止）。
     """
     local_id = _local_id_from_dir(output_dir)
     meta_dir = os.path.join(output_dir, "_meta")
 
-    render_info  = _safe_json(os.path.join(meta_dir, "render_info.json"))
-    upload_rec   = _safe_json(os.path.join(meta_dir, "upload_record.json"))
-    opening_rev  = _safe_json(os.path.join(meta_dir, "opening_review.json"))
+    # render_info: DB を正本とし、DB に無ければ旧 JSON から取り込む
+    render_info = get_render_info(local_id)
+    if not render_info:
+        ri_json = _safe_json(os.path.join(meta_dir, "render_info.json"))
+        if ri_json:
+            upsert_render_info(local_id, ri_json)
+            render_info = ri_json
+
+    # upload_record: DB(youtube_status)を正本とし、無ければ旧 JSON から取り込む
+    upload_rec: dict = {}
+    with ManagedConnection() as _c:
+        _row = _c.execute(
+            "SELECT youtube_video_id FROM youtube_status WHERE local_id=?", (local_id,)
+        ).fetchone()
+        if _row and _row[0]:
+            upload_rec = {"video_id": _row[0]}
+    if not upload_rec:
+        upload_rec = _safe_json(os.path.join(meta_dir, "upload_record.json"))
+
+    # opening_review: DB を正本とし、無ければ旧 JSON から取り込む
+    opening_rev: dict = {}
+    with ManagedConnection() as _c:
+        _row2 = _c.execute(
+            "SELECT opening_score FROM script_quality WHERE local_id=?", (local_id,)
+        ).fetchone()
+        if _row2 and _row2[0] is not None:
+            opening_rev = {"final_score": _row2[0]}
+    if not opening_rev:
+        opening_rev_json = _safe_json(os.path.join(meta_dir, "opening_review.json"))
+        if opening_rev_json:
+            upsert_opening_review(local_id, opening_rev_json)
+            opening_rev = opening_rev_json
+
+    # cta_policy: DB を正本とし、無ければ旧 JSON から取り込む
+    cta_from_db = get_cta_policy(local_id)
+    if not cta_from_db.get("cta_policy"):
+        cta_json = _safe_json(os.path.join(meta_dir, "cta_policy.json"))
+        if cta_json:
+            upsert_cta_policy(local_id, cta_json)
 
     # 台本メタを ScriptParser で取得
     script_meta: dict = {}

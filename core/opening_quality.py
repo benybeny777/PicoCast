@@ -556,8 +556,6 @@ def _meta_dir(theme_dir: str) -> str:
 
 
 def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review: dict[str, Any] | None = None, rewrite_text: str | None = None) -> str:
-    meta = _meta_dir(theme_dir)
-    path = os.path.join(meta, "opening_review.json")
     final_review = local_review if rewrite_text else (llm_review or local_review)
     data = {
         "local_review": local_review,
@@ -567,12 +565,17 @@ def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review
         "final_status": final_review.get("status"),
         "rewrite_needed": final_review.get("rewrite_needed", False),
     }
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    local_id = os.path.basename(os.path.abspath(theme_dir))
+    from core.metadata_db import upsert_opening_review, is_initialized, initialize_db
+    if not is_initialized():
+        initialize_db()
+    upsert_opening_review(local_id, data)
     if rewrite_text:
+        meta = _meta_dir(theme_dir)
+        os.makedirs(meta, exist_ok=True)
         with open(os.path.join(meta, "opening_rewrite_suggestion.txt"), "w", encoding="utf-8") as f:
             f.write(rewrite_text)
-    return path
+    return local_id
 
 
 def duration_review(total_sec: float, is_shorts: bool, estimated: bool = True) -> dict[str, Any]:
@@ -846,7 +849,9 @@ def final_chatgpt_review(
 
 
 def save_final_review(theme_dir: str, review: dict[str, Any] | None) -> str:
-    path = os.path.join(_meta_dir(theme_dir), "final_review.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(review or {"skipped": True}, f, ensure_ascii=False, indent=2)
-    return path
+    local_id = os.path.basename(os.path.abspath(theme_dir))
+    from core.metadata_db import upsert_final_review, is_initialized, initialize_db
+    if not is_initialized():
+        initialize_db()
+    upsert_final_review(local_id, review)
+    return local_id

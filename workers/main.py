@@ -1827,11 +1827,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "screen_format": meta.get("screen_format", ""),
             "playlist_categories": _parse_playlist_categories_meta(meta.get("playlist_categories", "")),
         }
-        render_info_path = os.path.join(_meta_dir(theme_dir), "render_info.json")
-        with open(render_info_path, "w", encoding="utf-8") as f:
-            json.dump(render_info, f, ensure_ascii=False, indent=2)
+        from core.metadata_db import upsert_render_info, initialize_db, is_initialized
+        if not is_initialized():
+            initialize_db()
+        local_id = os.path.basename(theme_dir)
+        upsert_render_info(local_id, render_info)
     except Exception as e:
-        update_status(f"⚠ render_info.json保存に失敗: {e}", "warning")
+        update_status(f"⚠ render_info DB保存に失敗: {e}", "warning")
 
     # メタデータDB に同期（失敗しても生成結果は捨てない）
     try:
