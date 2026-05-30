@@ -114,7 +114,7 @@
     {% endif %}
     {% if detail.final_review %}
     <div>
-      <h3>最終レビュー</h3>
+      <h3>ChatGPTチェック</h3>
       <p>スコア: <span class="score-badge" data-score="{{ detail.final_review.get('final_score', 0) }}">{{ detail.final_review.get('final_score', '—') }}</span></p>
       {% if detail.final_review.get('must_fix') %}
       <p class="error-text">must_fix: {{ detail.final_review.must_fix | join(', ') }}</p>

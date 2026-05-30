@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}ChatGPTチェック{% endblock %}
+{% block title %}LLM/尺チェック{% endblock %}
 {% block content %}
-<h1>ChatGPTチェック</h1>
+<h1>LLM/尺チェック</h1>
 <p class="hint">台本を貼り付けてチェックします。複数台本は <code>---</code> で区切ってください。</p>
 
 <div class="card">
@@ -15,7 +15,7 @@
 </div>
 
 <div id="check-status" class="card mt" style="display:none">
-  <h2 id="check-status-title">ChatGPTチェック 実行中...</h2>
+  <h2 id="check-status-title">チェック実行中...</h2>
   <div id="check-log" class="log-box"></div>
 </div>
 
@@ -63,7 +63,7 @@ async function pollCheckJob(jobId) {
         const res = await fetch(`/api/jobs/${jobId}`);
         const job = await res.json();
         document.getElementById('check-status-title').textContent =
-          `ChatGPTチェック: ${job.status}`;
+          `チェック: ${job.status}`;
         if (job.status === 'success' && Array.isArray(job.result)) {
           renderResults(job.result);
         }
