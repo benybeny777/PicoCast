@@ -296,48 +296,53 @@ def _add_column(conn: sqlite3.Connection, table: str, col: str, typedef: str) ->
 
 
 def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
-    """スキーマバージョンに応じてマイグレーションを実行する。"""
-    if current_ver < 2:
-        _add_column(conn, "videos", "script_content", "TEXT")
-        _logger.info("[SQLite] スキーマ v1→v2: videos.script_content を追加しました")
-    if current_ver < 3:
-        for col, typedef in [
-            ("dislikes",        "INTEGER"),
-            ("subscribers_gained", "INTEGER"),
-            ("subscribers_lost",   "INTEGER"),
-            ("impressions",     "INTEGER"),
-            ("ctr",             "REAL"),
-            ("dislike_rate",    "REAL"),
-            ("is_provisional",  "INTEGER"),
-            ("audio_cutoff_risk", "INTEGER"),
-            ("blacklist_candidate", "INTEGER"),
-            ("weak_reason",     "TEXT"),
-            ("avoid_pattern",   "TEXT"),
-        ]:
-            _add_column(conn, "analytics_snapshots", col, typedef)
-        _logger.info("[SQLite] スキーマ v2→v3: analytics_snapshots に列を追加しました")
-    if current_ver < 4:
-        # video_metadata: CTA 列
-        for col, typedef in [
-            ("cta_shorts_loop_priority",    "INTEGER"),
-            ("cta_direct_next_video_allowed","INTEGER"),
-            ("cta_topic_request",           "TEXT"),
-            ("cta_topic_request_reason",    "TEXT"),
-            ("cta_final_type",              "TEXT"),
-        ]:
-            _add_column(conn, "video_metadata", col, typedef)
-        # script_quality: final_review / opening 追加列
-        for col, typedef in [
-            ("opening_score_status",  "TEXT"),
-            ("opening_rewrite_needed","INTEGER"),
-            ("final_review_skipped",  "INTEGER"),
-            ("final_review_reason",   "TEXT"),
-            ("final_review_stage",    "TEXT"),
-            ("final_review_model",    "TEXT"),
-        ]:
-            _add_column(conn, "script_quality", col, typedef)
-        # render_info / jobs テーブルは DDL の CREATE TABLE IF NOT EXISTS で作成済み
-        _logger.info("[SQLite] スキーマ v3→v4: video_metadata/script_quality に列追加、render_info/jobs テーブル作成")
+    """
+    スキーマを最新版に揃える。
+    _add_column は「既に存在する列」を無視するため全列を無条件に適用しても安全。
+    schema_version の値にかかわらず不足列を確実に補完する。
+    """
+    # v2: videos.script_content
+    _add_column(conn, "videos", "script_content", "TEXT")
+
+    # v3: analytics_snapshots 追加列
+    for col, typedef in [
+        ("dislikes",           "INTEGER"),
+        ("subscribers_gained", "INTEGER"),
+        ("subscribers_lost",   "INTEGER"),
+        ("impressions",        "INTEGER"),
+        ("ctr",                "REAL"),
+        ("dislike_rate",       "REAL"),
+        ("is_provisional",     "INTEGER"),
+        ("audio_cutoff_risk",  "INTEGER"),
+        ("blacklist_candidate","INTEGER"),
+        ("weak_reason",        "TEXT"),
+        ("avoid_pattern",      "TEXT"),
+    ]:
+        _add_column(conn, "analytics_snapshots", col, typedef)
+
+    # v4: video_metadata CTA 列
+    for col, typedef in [
+        ("cta_shorts_loop_priority",     "INTEGER"),
+        ("cta_direct_next_video_allowed","INTEGER"),
+        ("cta_topic_request",            "TEXT"),
+        ("cta_topic_request_reason",     "TEXT"),
+        ("cta_final_type",               "TEXT"),
+    ]:
+        _add_column(conn, "video_metadata", col, typedef)
+
+    # v4: script_quality final_review / opening 列
+    for col, typedef in [
+        ("opening_score_status",  "TEXT"),
+        ("opening_rewrite_needed","INTEGER"),
+        ("final_review_skipped",  "INTEGER"),
+        ("final_review_reason",   "TEXT"),
+        ("final_review_stage",    "TEXT"),
+        ("final_review_model",    "TEXT"),
+    ]:
+        _add_column(conn, "script_quality", col, typedef)
+
+    # render_info / jobs テーブルは DDL の CREATE TABLE IF NOT EXISTS で作成済み
+    _logger.debug("[SQLite] スキーマ補完完了 (v%s → v%s)", current_ver, SCHEMA_VERSION)
 
 
 def initialize_db() -> None:
@@ -348,12 +353,13 @@ def initialize_db() -> None:
         conn.executescript(_DDL)
         row = conn.execute("SELECT version FROM schema_version").fetchone()
         current_ver = row[0] if row else 0
-        if current_ver < SCHEMA_VERSION:
-            _migrate(conn, current_ver)
-            if row is None:
-                conn.execute("INSERT INTO schema_version(version) VALUES(?)", (SCHEMA_VERSION,))
-            else:
-                conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
+        # バージョンにかかわらず常に補完マイグレーションを実行する
+        # (_add_column は冪等なので既存列があっても安全)
+        _migrate(conn, current_ver)
+        if row is None:
+            conn.execute("INSERT INTO schema_version(version) VALUES(?)", (SCHEMA_VERSION,))
+        elif current_ver != SCHEMA_VERSION:
+            conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
         conn.commit()
     if existed:
         _logger.info("[SQLite] DB 起動（既存 v%s）: %s", SCHEMA_VERSION, path)
