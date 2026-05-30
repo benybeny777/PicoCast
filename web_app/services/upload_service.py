@@ -119,8 +119,15 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
 
     # スロットを取得して YouTube でスケジュール設定
     # 複数本同時アップロード時の競合を防ぐためロックで直列化する
-    video_format = str(render_info.get("video_format") or "").strip().lower()
-    video_type = "shorts" if "short" in video_format else "long"
+    video_format = str(render_info.get("video_format") or "").strip()
+    screen_format = str(render_info.get("screen_format") or "").strip()
+    _vf_lower = video_format.lower()
+    if "short" in _vf_lower:
+        video_type = "shorts"
+    elif "ネタ会議" in video_format:
+        video_type = "long" if ("long" in _vf_lower or screen_format in ("横", "landscape")) else "shorts"
+    else:
+        video_type = "shorts" if not _vf_lower or "long" not in _vf_lower else "long"
     publish_at_iso: str | None = None
     with _slot_lock:
         try:
