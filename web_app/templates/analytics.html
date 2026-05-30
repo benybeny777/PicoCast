@@ -119,19 +119,19 @@
           {% set score = (row.get('score') or '') %}
           {% if score %}<span class="score-badge score-letter-{{ score }}">{{ score }}</span>{% else %}—{% endif %}
         </td>
-        <td>{{ (row.get('views') or '—') }}</td>
-        <td>{{ (row.get('average_percentage_viewed') or '—') }}</td>
-        <td>{{ (row.get('likes') or '—') }}</td>
-        <td>{{ row.get('dislikes') if row.get('dislikes') is not none else '—' }}</td>
-        <td>{{ row.get('like_dislike_total') if row.get('like_dislike_total') is not none else '—' }}</td>
-        <td>
+        <td style="text-align:right">{{ (row.get('views') or '—') }}</td>
+        <td style="text-align:right">{% set _apv=row.get('average_percentage_viewed') %}{% if _apv is not none %}{{ '%.1f'|format(_apv) }}%{% else %}—{% endif %}</td>
+        <td style="text-align:right">{{ (row.get('likes') or '—') }}</td>
+        <td style="text-align:right">{{ row.get('dislikes') if row.get('dislikes') is not none else '—' }}</td>
+        <td style="text-align:right">{{ row.get('like_dislike_total') if row.get('like_dislike_total') is not none else '—' }}</td>
+        <td style="text-align:right">
           {% set dr = row.get('dislike_rate') %}
           {% if dr is not none %}
             {{ "%.1f"|format(dr) }}%{% if row.get('dislike_rate_provisional') %}<span title="likes+dislikesが少ないため参考値">*</span>{% endif %}
           {% else %}—{% endif %}
         </td>
-        <td>{{ (row.get('comments') or '—') }}</td>
-        <td>{{ (row.get('subscribers_net') or '—') }}</td>
+        <td style="text-align:right">{{ (row.get('comments') or '—') }}</td>
+        <td style="text-align:right">{{ (row.get('subscribers_net') or '—') }}</td>
         <td title="{{ (row.get('topic_request_cta_reason') or '') }}">
           {% set topic_cta = (row.get('topic_request_cta') or '') %}
           {% if topic_cta == '許可' %}
