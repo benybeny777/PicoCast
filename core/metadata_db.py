@@ -1082,6 +1082,93 @@ def get_duplicate_topics() -> list[dict]:
         return [dict(r) for r in conn.execute(sql).fetchall()]
 
 
+def load_latest_analytics_items() -> list[dict]:
+    """
+    analytics_snapshots の最新バッチを関連テーブルと JOIN して返す。
+    返却フィールドは analytics_score.to_tsv() / build_performance_summary() が期待する形式に合わせる。
+    """
+    with ManagedConnection() as conn:
+        meta_row = conn.execute(
+            "SELECT collected_at, window_days FROM analytics_snapshots ORDER BY collected_at DESC LIMIT 1"
+        ).fetchone()
+        if meta_row is None:
+            return []
+        latest_at = meta_row["collected_at"]
+        rows = conn.execute("""
+            SELECT
+                a.youtube_video_id        AS video_id,
+                a.collected_at,
+                a.window_days,
+                a.views,
+                a.average_view_duration,
+                a.average_percentage_viewed,
+                a.likes,
+                a.dislikes,
+                a.comments,
+                a.subscribers_gained,
+                a.subscribers_lost,
+                a.subscribers_net,
+                a.impressions,
+                a.ctr,
+                a.like_rate,
+                a.dislike_rate,
+                a.score,
+                a.action,
+                a.analysis_status,
+                a.is_provisional,
+                a.audio_cutoff_risk,
+                a.blacklist_candidate,
+                a.weak_reason,
+                a.avoid_pattern,
+                ri.video_title            AS title,
+                ri.video_format           AS video_type,
+                ri.actual_duration_sec    AS duration,
+                ri.actual_duration_status AS duration_status,
+                ri.render_engine,
+                vm.genre                  AS genre_group,
+                vm.generation_type        AS generation_kind,
+                vm.source_video_title,
+                vm.purpose                AS generation_purpose,
+                vm.character_pattern,
+                vm.cta_topic_request      AS topic_request_cta,
+                vm.cta_topic_request_reason AS topic_request_cta_reason,
+                vm.cta_final_type         AS final_cta_type,
+                ys.publish_status,
+                ys.published_at,
+                ys.privacy_status
+            FROM analytics_snapshots a
+            LEFT JOIN youtube_status ys ON ys.youtube_video_id = a.youtube_video_id
+            LEFT JOIN render_info ri    ON ri.local_id = ys.local_id
+            LEFT JOIN video_metadata vm ON vm.local_id = ys.local_id
+            WHERE a.collected_at = ?
+            ORDER BY a.views DESC
+        """, (latest_at,)).fetchall()
+
+    items = []
+    for row in rows:
+        d = dict(row)
+        d["analytics_available"] = True
+        likes = d.get("likes") or 0
+        dislikes = d.get("dislikes") or 0
+        d["like_dislike_total"] = likes + dislikes
+        d["is_provisional"] = bool(d.get("is_provisional"))
+        d["audio_cutoff_risk"] = bool(d.get("audio_cutoff_risk"))
+        d["blacklist_candidate"] = bool(d.get("blacklist_candidate"))
+        items.append(d)
+    return items
+
+
+def get_latest_analytics_meta() -> dict:
+    """最新バッチの collected_at / window_days を返す。"""
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT collected_at, window_days FROM analytics_snapshots ORDER BY collected_at DESC LIMIT 1"
+        ).fetchone()
+    if row is None:
+        return {}
+    return {"generated_at": row["collected_at"], "window_days": row["window_days"]}
+
+
 def get_stats() -> dict:
     """DB の概要統計を返す。"""
     with ManagedConnection() as conn:

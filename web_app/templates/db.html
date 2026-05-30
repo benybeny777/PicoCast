@@ -41,7 +41,6 @@
     </div>
     <button class="btn btn-secondary" onclick="loadVideos()">更新</button>
     <button class="btn btn-secondary" onclick="importAll()">動画DB全件取り込み</button>
-    <button class="btn btn-secondary" onclick="importAnalytics()">Analytics JSON取込</button>
   </div>
   <div id="db-stats" class="hint mt-sm"></div>
 </div>
@@ -235,22 +234,6 @@ async function deleteVideo(localId) {
     await loadVideos();
   } catch(e) {
     alert('通信エラー: ' + e);
-  }
-}
-
-async function importAnalytics() {
-  if (!confirm('output/000_analytics/ の全 JSON を DB に取り込みます。')) return;
-  const log = document.getElementById('import-log');
-  log.style.display = 'block';
-  log.textContent = 'Analytics 取り込みジョブを登録中...';
-  try {
-    const r = await fetch('/api/db/import-analytics', {method: 'POST'});
-    const d = await r.json();
-    if (!d.job_id) { log.textContent = 'エラー: ' + JSON.stringify(d); return; }
-    log.textContent = `ジョブ登録: ${d.job_id}\n`;
-    pollImportJob(d.job_id, log);
-  } catch(e) {
-    log.textContent = 'エラー: ' + e;
   }
 }
 

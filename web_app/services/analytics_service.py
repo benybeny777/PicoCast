@@ -1,156 +1,53 @@
 """
 アナリティクスデータ取得・表示サービス。
+データは analytics_snapshots テーブル（metadata.db）から取得する。
 """
-import csv
-import json
-import os
 from typing import Any
 
-from core.output_paths import ANALYTICS_DIR
 from web_app.job_manager import Job, _log, get_job_manager
-
-# ── インメモリキャッシュ（ファイル名+更新時刻をキーにする） ──────────────
-_analytics_full_cache_key: str = ""
-_analytics_full_cache_data: dict[str, Any] | None = None
-
-
-def _invalidate_analytics_cache() -> None:
-    global _analytics_full_cache_key, _analytics_full_cache_data
-    _analytics_full_cache_key = ""
-    _analytics_full_cache_data = None
-
-
-def list_analytics_files() -> list[str]:
-    try:
-        files = sorted(
-            [f for f in os.listdir(ANALYTICS_DIR) if f.startswith("analytics_score_")],
-            reverse=True,
-        )
-        return files
-    except OSError:
-        return []
 
 
 def load_latest_analytics() -> list[dict[str, Any]]:
-    files = list_analytics_files()
-    for fname in files:
-        if fname.endswith(".json"):
-            return _load_json_file(os.path.join(ANALYTICS_DIR, fname))
-        if fname.endswith(".tsv"):
-            return _load_tsv_file(os.path.join(ANALYTICS_DIR, fname))
-    return []
+    from core.metadata_db import load_latest_analytics_items, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    return load_latest_analytics_items()
 
 
 def load_latest_analytics_full() -> dict[str, Any]:
-    """items + summary を含む完全データを返す。JSON優先、なければ TSV の items のみ。
-    ファイル名＋更新時刻が変わらない限りキャッシュを返す。"""
-    global _analytics_full_cache_key, _analytics_full_cache_data
-    files = list_analytics_files()
-    for fname in files:
-        if fname.endswith(".json") or fname.endswith(".tsv"):
-            path = os.path.join(ANALYTICS_DIR, fname)
-            try:
-                mtime = f"{os.path.getmtime(path):.0f}"
-            except OSError:
-                mtime = "0"
-            cache_key = f"{fname}:{mtime}"
-            if cache_key == _analytics_full_cache_key and _analytics_full_cache_data is not None:
-                return _analytics_full_cache_data
-            if fname.endswith(".json"):
-                data = _load_json_file_full(path)
-            else:
-                data = {"items": _load_tsv_file(path), "summary": {}}
-            _analytics_full_cache_key = cache_key
-            _analytics_full_cache_data = data
-            return data
-    return {"items": [], "summary": {}}
-
-
-def _load_json_file(path: str) -> list[dict[str, Any]]:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return data
-        if isinstance(data, dict):
-            return data.get("items", [])
-        return []
-    except Exception:
-        return []
-
-
-def _load_json_file_full(path: str) -> dict[str, Any]:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            return {
-                "items": data.get("items", []),
-                "summary": data.get("summary", {}),
-                "days": data.get("days"),
-                "start_date": data.get("start_date"),
-                "end_date": data.get("end_date"),
-                "generated_at": data.get("generated_at"),
-            }
-        if isinstance(data, list):
-            return {"items": data, "summary": {}}
-        return {"items": [], "summary": {}}
-    except Exception:
-        return {"items": [], "summary": {}}
-
-
-def _coerce_tsv_value(value: str) -> Any:
-    if value == "" or value == "None":
-        return None
-    if value in ("True", "False"):
-        return value == "True"
-    try:
-        return int(value)
-    except ValueError:
-        pass
-    try:
-        return float(value)
-    except ValueError:
-        return value
-
-
-def _load_tsv_file(path: str) -> list[dict[str, Any]]:
-    try:
-        rows = []
-        with open(path, "r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f, delimiter="\t")
-            for row in reader:
-                rows.append({k: _coerce_tsv_value(v) for k, v in row.items()})
-        return rows
-    except Exception:
-        return []
-
-
-def _build_meta(full: dict[str, Any]) -> dict[str, Any]:
-    summary = full.get("summary", {})
+    """items + meta を含む完全データを返す。"""
+    from core.metadata_db import load_latest_analytics_items, get_latest_analytics_meta, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    items = load_latest_analytics_items()
+    meta = get_latest_analytics_meta()
+    # start_date / end_date を computed_at + window_days から算出
+    start_date = end_date = None
+    if meta.get("generated_at") and meta.get("window_days"):
+        from core.analytics_score import _analytics_date_range
+        start_date, end_date = _analytics_date_range(meta["window_days"], meta.get("generated_at"))
     return {
-        "days": full.get("days") or summary.get("days"),
-        "start_date": full.get("start_date") or summary.get("start_date"),
-        "end_date": full.get("end_date") or summary.get("end_date"),
-        "generated_at": full.get("generated_at"),
-        **summary,
+        "items": items,
+        "summary": {},
+        "days": meta.get("window_days"),
+        "start_date": start_date,
+        "end_date": end_date,
+        "generated_at": meta.get("generated_at"),
     }
 
 
 def get_ai_copy_text() -> str:
-    """AI分析用コピーテキストを生成する。"""
     full = load_latest_analytics_full()
     items = full.get("items", [])
     if not items:
         return "Analyticsデータがありません。"
     from core.analytics_score import build_performance_summary
-    return build_performance_summary(items, meta=_build_meta(full))
+    meta = {k: full.get(k) for k in ("days", "start_date", "end_date", "generated_at")}
+    return build_performance_summary(items, meta=meta)
 
 
 def get_shorts_title_prompt() -> str:
-    """Shortsタイトル案プロンプトを生成する。"""
-    full = load_latest_analytics_full()
-    items = full.get("items", [])
+    items = load_latest_analytics()
     if not items:
         return "Analyticsデータがありません。"
     from core.analytics_score import build_shorts_title_prompt
@@ -158,13 +55,20 @@ def get_shorts_title_prompt() -> str:
 
 
 def get_long_title_prompt() -> str:
-    """Longタイトル案プロンプトを生成する。"""
-    full = load_latest_analytics_full()
-    items = full.get("items", [])
+    items = load_latest_analytics()
     if not items:
         return "Analyticsデータがありません。"
     from core.analytics_score import build_long_title_prompt
     return build_long_title_prompt(items)
+
+
+def get_tsv_text() -> str:
+    """DB の最新データから TSV テキストを生成して返す（コピー用）。"""
+    items = load_latest_analytics()
+    if not items:
+        return ""
+    from core.analytics_score import to_tsv
+    return to_tsv(items)
 
 
 def submit_refresh_job() -> str:
@@ -196,28 +100,14 @@ def _run_refresh(job: Job) -> dict[str, Any]:
     if job.cancel_event.is_set():
         return {"cancelled": True}
 
-    _log(job, "スコアを計算して保存中...", "info")
+    _log(job, "スコアを計算してDBに保存中...", "info")
     try:
         items = score_items(data.get("items", []))
         summary = data.get("summary", {})
         days = summary.get("days", 28)
-        json_path, tsv_path = save_score_files(items, days, summary=summary)
-        _invalidate_analytics_cache()
-        _log(job, f"Analytics保存完了: {json_path}", "success")
-        return {"json_path": json_path, "tsv_path": tsv_path, "count": len(items)}
+        count = save_score_files(items, days, summary=summary)
+        _log(job, f"Analytics DB保存完了: {count}件", "success")
+        return {"count": count}
     except Exception as e:
         _log(job, f"スコア保存エラー: {e}", "error")
         raise
-
-
-def get_tsv_text() -> str:
-    """TSVテキストをそのまま返す（コピー用）。"""
-    files = [f for f in list_analytics_files() if f.endswith(".tsv")]
-    if not files:
-        return ""
-    path = os.path.join(ANALYTICS_DIR, files[0])
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except OSError:
-        return ""

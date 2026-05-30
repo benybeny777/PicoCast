@@ -5,7 +5,7 @@ Web UIのプロンプト生成ボタンから呼び出す。
 import os
 from typing import Optional
 
-from core.output_paths import OUTPUT_DIR, analytics_paths
+from core.output_paths import OUTPUT_DIR
 
 
 _NON_FOOD_KEYWORDS = (
@@ -76,40 +76,26 @@ def _collect_food_titles() -> list[str]:
 
 
 def _read_latest_analytics_tsv(max_rows: int = 80) -> tuple[str, int]:
-    paths = analytics_paths(".tsv")
-    if not paths:
+    from core.analytics_score import to_tsv
+    from web_app.services.analytics_service import load_latest_analytics
+    items = load_latest_analytics()
+    if not items:
         return "", 0
-    latest = max(paths, key=os.path.getmtime)
-    try:
-        with open(latest, "r", encoding="utf-8") as f:
-            lines = [line.rstrip("\n") for line in f if line.strip()]
-    except OSError:
+    lines = to_tsv(items[:max_rows]).splitlines()
+    if len(lines) < 2:
         return "", 0
-    if not lines:
-        return "", 0
-    header, rows = lines[0], lines[1:max_rows + 1]
-    return "\n".join([header] + rows), len(rows)
+    return "\n".join(lines), len(lines) - 1  # header + data rows
 
 
 def _read_latest_analytics_summary() -> str:
     try:
-        import json
         from core.analytics_score import build_performance_summary
-        paths = analytics_paths(".json")
-        if not paths:
-            return ""
-        latest = max(paths, key=os.path.getmtime)
-        with open(latest, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        items = data.get("items") or []
+        from web_app.services.analytics_service import load_latest_analytics_full
+        full = load_latest_analytics_full()
+        items = full.get("items") or []
         if not items:
             return ""
-        meta = {
-            "generated_at": data.get("generated_at"),
-            "days": data.get("days"),
-            "start_date": data.get("start_date") or (data.get("summary") or {}).get("start_date"),
-            "end_date": data.get("end_date") or (data.get("summary") or {}).get("end_date"),
-        }
+        meta = {k: full.get(k) for k in ("generated_at", "days", "start_date", "end_date")}
         return build_performance_summary(items, meta=meta)
     except Exception:
         return ""
