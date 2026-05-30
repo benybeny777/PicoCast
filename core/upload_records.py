@@ -1,43 +1,36 @@
-import glob as _glob
-import json
-import os
 from datetime import datetime
 from typing import Any
 
-from core.output_paths import UPLOAD_RECORDS_FILE
-
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-
 
 def load_upload_records() -> list[dict[str, Any]]:
-    """出力ツリー内の各動画 _meta/upload_record.json を走査して返す。
-    中央集約ファイルは廃止済み。各レコードに '_local_path' キーを付与する。
-    """
-    output_dir = os.path.join(ROOT_DIR, "output")
-    seen: dict[str, dict] = {}
-    for path in sorted(_glob.glob(
-        os.path.join(output_dir, "**", "_meta", "upload_record.json"), recursive=True
-    )):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                record = json.load(f)
-        except Exception:
-            continue
-        vid = str(record.get("video_id") or "").strip()
-        if vid and vid not in seen:
-            record["_local_path"] = path
-            seen[vid] = record
-    return list(seen.values())
+    """youtube_status + render_info テーブルから upload records を返す。"""
+    from core.metadata_db import ManagedConnection, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        rows = conn.execute("""
+            SELECT ys.youtube_video_id AS video_id,
+                   ys.publish_status,
+                   ys.publish_at,
+                   ys.uploaded_at,
+                   ys.local_id,
+                   ri.video_title   AS title,
+                   ri.video_format  AS video_type
+            FROM youtube_status ys
+            LEFT JOIN render_info ri ON ri.local_id = ys.local_id
+            WHERE ys.youtube_video_id IS NOT NULL
+        """).fetchall()
+    return [dict(r) for r in rows]
 
 
 def save_upload_records(records: list[dict[str, Any]]) -> str:
-    """No-op: 中央集約ファイルは廃止済み。"""
-    return UPLOAD_RECORDS_FILE
+    """No-op: upload records は DB（youtube_status）で管理。"""
+    return ""
 
 
 def upsert_upload_record(record: dict[str, Any]) -> str:
-    """No-op: レコードは各動画の _meta/upload_record.json で管理。"""
-    return UPLOAD_RECORDS_FILE
+    """No-op: youtube_status に直接書き込むため不要。"""
+    return ""
 
 
 def _norm_title(value: str) -> str:
@@ -102,5 +95,5 @@ def find_upload_record(title: str | None = None, video_type: str | None = None, 
 
 
 def migrate_from_uploaded_dir() -> int:
-    """No-op: 中央ファイルへの移行は廃止済み。"""
+    """No-op: DB 管理に移行済み。"""
     return 0

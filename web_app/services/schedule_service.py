@@ -241,21 +241,16 @@ def _run_update_schedule(job: Job, video_id: str, publish_at: str) -> dict[str, 
 
 
 def _update_local_record(video_id: str, new_publish_at: str) -> None:
-    """各動画の _meta/upload_record.json の publish_at を更新する。"""
-    from core.upload_records import load_upload_records
-
-    for rec in load_upload_records():
-        if rec.get("video_id") == video_id:
-            local_path = rec.get("_local_path")
-            if local_path and os.path.isfile(local_path):
-                rec["publish_at"] = new_publish_at
-                rec_to_save = {k: v for k, v in rec.items() if k != "_local_path"}
-                try:
-                    with open(local_path, "w", encoding="utf-8") as f:
-                        json.dump(rec_to_save, f, ensure_ascii=False, indent=2)
-                except Exception as _e:
-                    raise RuntimeError(f"Error: {_e}") from _e
-            break
+    """youtube_status の publish_at を更新する。"""
+    from core.metadata_db import ManagedConnection, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        conn.execute(
+            "UPDATE youtube_status SET publish_at=? WHERE youtube_video_id=?",
+            (new_publish_at, video_id),
+        )
+        conn.commit()
 
 
 def update_schedule(video_id: str, publish_at: str) -> dict[str, Any]:

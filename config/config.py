@@ -371,9 +371,6 @@ OUTPUT_DIR            = os.environ.get("OUTPUT_DIR",            "output")
 OUTPUT_DATA_DIR       = os.environ.get("OUTPUT_DATA_DIR",       os.path.join(OUTPUT_DIR, "000_data"))
 OUTPUT_ANALYTICS_DIR  = os.environ.get("OUTPUT_ANALYTICS_DIR",  os.path.join(OUTPUT_DIR, "000_analytics"))
 OUTPUT_LEGACY_DIR     = os.environ.get("OUTPUT_LEGACY_DIR",     os.path.join(OUTPUT_DIR, "000_legacy"))
-UPLOAD_RECORDS_FILE   = os.environ.get("UPLOAD_RECORDS_FILE",   os.path.join(OUTPUT_DATA_DIR, "upload_records.json"))
-UPLOADED_TITLES_FILE  = os.environ.get("UPLOADED_TITLES_FILE",  os.path.join(OUTPUT_DATA_DIR, "uploaded_titles.txt"))
-
 # 動画フォルダのプレフィックス（Windows/Mac 両対応：[] を使わない）
 FOLDER_PREFIX_SHORTS  = os.environ.get("FOLDER_PREFIX_SHORTS",  "Shorts_")   # 短動画フォルダプレフィックス
 FOLDER_PREFIX_LONG    = os.environ.get("FOLDER_PREFIX_LONG",    "Long_")     # 長動画フォルダプレフィックス
@@ -451,5 +448,4 @@ AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_C
 # ───────────────────────────────────────────────
 # ジョブログ永続化
 # ───────────────────────────────────────────────
-JOB_LOG_DIR      = os.environ.get("JOB_LOG_DIR",      os.path.join(OUTPUT_DATA_DIR, "job_logs"))  # ジョブログ保存ディレクトリ
-JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))                                  # 保持する最大ジョブ件数
+JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))  # 保持する最大ジョブ件数

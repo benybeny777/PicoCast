@@ -6,8 +6,6 @@ from config import (
     OUTPUT_DATA_DIR,
     OUTPUT_DIR as CONFIG_OUTPUT_DIR,
     OUTPUT_LEGACY_DIR,
-    UPLOAD_RECORDS_FILE as CONFIG_UPLOAD_RECORDS_FILE,
-    UPLOADED_TITLES_FILE as CONFIG_UPLOADED_TITLES_FILE,
 )
 
 
@@ -23,19 +21,9 @@ DATA_DIR = _abs_path(OUTPUT_DATA_DIR)
 ANALYTICS_DIR = _abs_path(OUTPUT_ANALYTICS_DIR)
 LEGACY_DIR = _abs_path(OUTPUT_LEGACY_DIR)
 
-UPLOAD_RECORDS_FILE = _abs_path(CONFIG_UPLOAD_RECORDS_FILE)
-UPLOADED_TITLES_FILE = _abs_path(CONFIG_UPLOADED_TITLES_FILE)
-
 
 def ensure_output_dirs() -> None:
-    for path in (
-        OUTPUT_DIR,
-        DATA_DIR,
-        ANALYTICS_DIR,
-        LEGACY_DIR,
-        os.path.dirname(UPLOAD_RECORDS_FILE),
-        os.path.dirname(UPLOADED_TITLES_FILE),
-    ):
+    for path in (OUTPUT_DIR, DATA_DIR, ANALYTICS_DIR, LEGACY_DIR):
         os.makedirs(path, exist_ok=True)
 
 
