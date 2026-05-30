@@ -52,6 +52,24 @@ async def _lifespan(app):
         import logging
         logging.getLogger(__name__).warning("[ChannelProfile] 初期プロファイル作成エラー: %s", _e)
 
+    # 旧 output/ 直下のデータを active profile の output_root 配下へ自動移行
+    try:
+        from core.output_migration import auto_migrate_output
+        _mig = auto_migrate_output()
+        if _mig is not None:
+            import logging as _log
+            _log.getLogger(__name__).info(
+                "[OutputMigration] 移行完了: moved=%d skipped=%d errors=%d",
+                len(_mig.moved_dirs), len(_mig.skipped_dirs), len(_mig.errors),
+            )
+            if _mig.errors:
+                _log.getLogger(__name__).warning(
+                    "[OutputMigration] エラーあり: %s", _mig.errors
+                )
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning("[OutputMigration] 自動移行エラー: %s", _e)
+
     # 既存認証ファイル（.env / OAuth JSON）を DB へ自動移行
     try:
         from core.secret_migration import migrate_existing_secret_files
