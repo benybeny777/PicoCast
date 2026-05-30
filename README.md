@@ -18,12 +18,16 @@
 
 - [🔄 システム処理フロー](#-システム処理フロー)
 - [🚀 クイックスタート](#-クイックスタート)
-- [🛠 前提条件 (Prerequisites)](#-前提条件-prerequisites)
+- [🛠 前提条件](#-前提条件-prerequisites)
 - [📦 セットアップ手順](#-セットアップ手順)
 - [💻 起動方法と起動オプション](#-起動方法と起動オプション)
+- [🖥️ Web UI 画面一覧](#️-web-ui-画面一覧)
 - [📝 基本のワークフロー](#-基本のワークフロー)
 - [📜 台本フォーマット](#-台本フォーマット)
-- [⚙️ 主な設定値 (config.py)](#️-主な設定値-configpy)
+- [▶️ YouTube 再生リスト自動登録](#️-youtube-再生リスト自動登録)
+- [⚙️ 主な設定値](#️-主な設定値)
+- [📁 フォルダ構成](#-フォルダ構成)
+- [🛟 トラブルシューティング](#-トラブルシューティング)
 - [⚠️ 注意・制約事項](#️-注意制約事項)
 - [📢 CTA/Long動画の運用ポリシー](#-ctalong動画の運用ポリシー)
 - [🖥 開発環境](#-開発環境)
@@ -39,28 +43,27 @@ graph TD
     A[台本入力・一括処理] --> B[品質レビュー・チェック<br/>ローカル & Ollama & ChatGPT]
     B -->|修正必要/Must Fix| A
     B -->|品質クリア| C[よみがな正規化<br/>SudachiPy + 自前辞書]
-    C --> D[音声生成 WAV<br/>VOICEVOX]
-    C --> E[背景生成 PNG<br/>Gemini / Stable Diffusion WebUI]
+    C --> D[音声生成 WAV<br/>VOICEVOX 並列合成]
+    C --> E[背景生成 PNG<br/>Gemini / Stable Diffusion WebUI 並列生成]
     C --> T[サムネ生成 PNG<br/>Gemini / Stable Diffusion WebUI]
-    D --> F[ネイティブレンダリング<br/>ffmpeg]
+    D --> F[ネイティブレンダリング<br/>ffmpeg GPU/CPU]
     E --> F
     T --> F
     F --> G[実尺評価 & 実績保存<br/>native MP4 / _meta]
     G --> H[YouTube予約アップロード<br/>OAuth / スロット管理]
-    H --> I[固定コメント投稿]
-    I --> J[Analytics スコアリング<br/>S/A/B/C/D 評価]
-    J -->|実績データをタイトル案プロンプトへフィードバック| A
+    H --> I[再生リスト自動追加<br/>playlist_resolver]
+    I --> J[固定コメント投稿]
+    J --> K[Analytics スコアリング<br/>S/A/B/C/D 評価]
+    K -->|実績データをタイトル案プロンプトへフィードバック| A
 ```
 
 ---
 
 ## 🚀 クイックスタート
 
-通常運用では、リポジトリ直下の起動スクリプトから起動する方法を推奨します。仮想環境の Python を直接指定して Web UI を起動し、ブラウザも自動で開きます。
-
 1. **VOICEVOX を起動**しておきます（デフォルトポート: `50021`）。
 2. リポジトリ直下の起動スクリプトをダブルクリック、またはターミナルから起動します。
-   
+
    **Windows:**
    ```powershell
    .\start.ps1
@@ -74,27 +77,23 @@ graph TD
 > [!NOTE]
 > 開発時（ソースコード変更を自動反映したい場合）は `start-dev.ps1` / `start-dev.command` を使ってください（`--reload` 付き）。
 
-> [!NOTE]
-> 普段の操作入口はローカル Web UI です。
-
 ---
 
 ## 🛠 前提条件 (Prerequisites)
 
-本ツールを使用するには、以下の外部ソフトウェアがローカル環境に導入されている必要があります。
-
-- 🐍 **Python 3.10 以上** (本プロジェクトでは `.venv` 仮想環境を使用します)
-- 🗣️ **VOICEVOX** ([公式ホームページ](https://voicevox.nero.ne.jp/)からダウンロード)
-- 🎬 **ffmpeg** (パスを通しておくか、環境変数 `FFMPEG_BIN` にバイナリパスを指定してください)
-- 🧠 **Ollama** (冒頭品質レビューに利用。デフォルトモデル: `qwen3:8b`)
+| ソフトウェア | 用途 | 備考 |
+|:---|:---|:---|
+| **Python 3.10+** | 実行環境 | `.venv` 仮想環境を使用 |
+| **VOICEVOX** | 音声合成 | デフォルトポート `50021` |
+| **ffmpeg** | 動画レンダリング | `h264_nvenc`（GPU）または `libx264`（CPU）|
+| **Ollama** | 台本品質レビュー | デフォルトモデル: `qwen3:8b` |
+| **Google AI Studio** | 背景・台本生成 | `GOOGLE_API_KEY` 必須 |
 
 ---
 
 ## 📦 セットアップ手順
 
 ### Step 1. 仮想環境と依存パッケージの準備
-
-システムの Python ではなく、プロジェクト専用の `.venv` を使います。既に `.venv` が用意済みなら作成手順は不要です。
 
 <details>
 <summary><b>仮想環境の作成方法 (クリックして展開)</b></summary>
@@ -111,111 +110,121 @@ python3 -m venv .venv
 </details>
 
 **依存関係のインストール:**
-- **PowerShell:**
-  ```powershell
-  .venv\Scripts\Activate.ps1
-  pip install --upgrade -r config/requirements.txt
-  ```
-- **cmd:**
-  ```cmd
-  .venv\Scripts\activate.bat
-  pip install --upgrade -r config/requirements.txt
-  ```
-- **macOS:**
-  ```bash
-  .venv/bin/python -m pip install --upgrade -r config/requirements.txt
-  ```
 
-### Step 2. APIキーとOAuth設定ファイルの配置
+```powershell
+# Windows (PowerShell)
+.venv\Scripts\Activate.ps1
+pip install --upgrade -r config/requirements.txt
+```
+```bash
+# macOS
+.venv/bin/python -m pip install --upgrade -r config/requirements.txt
+```
 
-リポジトリ直下に環境設定ファイル `.env` を作成し、各種APIキーを設定します。
+### Step 2. `.env` ファイルの作成
+
+リポジトリ直下に `.env` を作成し、各種APIキーを設定します。
 
 ```env
+# 必須
 GOOGLE_API_KEY=your_gemini_api_key
-OPENAI_API_KEY=your_openai_api_key
-HF_TOKEN=your_huggingface_token
+
+# 任意
+OPENAI_API_KEY=your_openai_api_key   # ChatGPT台本レビュー用
+HF_TOKEN=your_huggingface_token      # SD WebUIモデル自動DL用
 ```
 
 | キー | 用途 |
 |:---|:---|
-| `GOOGLE_API_KEY` | Google AI Studio (Gemini API)。台本や背景画像の生成に使用。 |
-| `OPENAI_API_KEY` | OpenAI Platform。ChatGPT による台本の生成前最終レビューに使用。 |
-| `HF_TOKEN` | Hugging Face トークン。Stable Diffusion WebUI モデルの自動ダウンロード時に使用（任意）。 |
+| `GOOGLE_API_KEY` | Gemini API（台本・背景画像・サムネイル生成） |
+| `OPENAI_API_KEY` | ChatGPT（台本の生成前最終レビュー） |
+| `HF_TOKEN` | Hugging Face（Stable Diffusion WebUI モデル自動DL） |
 
-- **`client_secrets.json`:** YouTube API 利用のための OAuth 2.0 クライアント認証情報。Google Cloud Console からダウンロードし、**リポジトリ直下**に配置してください。
+### Step 3. YouTube OAuth 設定
+
+1. Google Cloud Console でOAuth 2.0クライアントを作成し、`client_secrets.json` をリポジトリ直下に配置。
+2. 初回アップロード時にブラウザが開き認証が完了すると `token.json` が生成されます。
+3. Analytics 利用時は別途 `token_analytics.json` が生成されます。
 
 > [!IMPORTANT]
-> `client_secrets.json`, `.env`, `token.json`, `token_analytics.json` は個人情報やAPIキーを含むため、**絶対に Git にコミットしないでください**。
+> `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` は**絶対に Git にコミットしないでください**（`.gitignore` 設定済み）。
 
-### Step 3. プロンプト設定の確認
+### Step 4. Stable Diffusion WebUI を使う場合（任意）
 
-初期状態では、「食べ物雑学」用の設定が適用されます。別ジャンルで運用する場合は、`config/prompt_parts/local/` ディレクトリを作成し、そこに個人用プロンプト部品を配置してください。
+Gemini の代わりにローカルで画像生成したい場合のみ設定します。
 
-### Step 4. Stable Diffusion WebUI で画像生成する場合
-
-Gemini / Nano Banana の代替として、APIキーなしでローカルに画像生成したい場合に使用します。
-
-- Stable Diffusion WebUI を `--api` オプション付きで起動してください（例: `webui.bat --api`）。
-- APIが `http://127.0.0.1:7860` で応答している必要があります。
-
-**.env 設定例:**
 ```env
 IMAGE_BACKEND=sd_webui
 SD_WEBUI_BASE_URL=http://127.0.0.1:7860
-SD_WEBUI_MODEL=
-SD_WEBUI_SAMPLER=DPM++ 2M Karras
-SD_WEBUI_STEPS=24
-SD_WEBUI_WIDTH=1024
-SD_WEBUI_HEIGHT=576
 ```
 
-> [!TIP]
-> `IMAGE_BACKEND=sd_webui` のとき、Stable Diffusion WebUI が未起動であれば画像生成は**停止**します。自動切替は行われません。
+Stable Diffusion WebUI を `--api` オプション付きで起動してください。
 
 ---
 
 ## 💻 起動方法と起動オプション
 
-### 手動起動（トラブル対応・開発用）
-
-ポート変更やリロード設定を自分で指定したい場合だけ、仮想環境の Python を直接実行します。
+### 通常起動（推奨）
 
 ```powershell
-# 自動でブラウザを開く場合
-.\.venv\Scripts\python.exe -m web_app.app --open-browser
+.\start.ps1         # Windows
+./start.command     # macOS
+```
 
-# 開発用（自動リロード有効）
-.\.venv\Scripts\python.exe -m web_app.app --reload --open-browser
+### 手動起動（開発・デバッグ用）
+
+```powershell
+.\.venv\Scripts\python.exe -m web_app.app --open-browser
+.\.venv\Scripts\python.exe -m web_app.app --reload --open-browser  # 自動リロード付き
 ```
 
 ### 主要な起動引数
 
 | オプション | 説明 |
-| :--- | :--- |
-| `--port N` | ポートを指定して起動（デフォルト: `58080`） |
-| `--auto-port` | 競合時、自動的に次の空きポートを探して起動 |
-| `--open-browser` | サーバー起動後、自動的にウェブブラウザを開く |
-| `--reload` | ソースコード変更検知で自動再起動（開発向け） |
+|:---|:---|
+| `--port N` | ポートを指定（デフォルト: `58080`） |
+| `--auto-port` | 競合時、自動的に次の空きポートを探す |
+| `--open-browser` | 起動後に自動でブラウザを開く |
+| `--reload` | ソース変更で自動再起動（開発向け） |
+
+---
+
+## 🖥️ Web UI 画面一覧
+
+| URL | 画面名 | 主な用途 |
+|:---|:---|:---|
+| `/` | ホーム | 外部サービス（ffmpeg / VOICEVOX / SD WebUI）の起動状態確認 |
+| `/generate` | 動画生成 | 台本貼り付け → 音声・画像・動画を一括生成 |
+| `/history` | 履歴一覧 | 生成済み動画の一覧・品質スコア確認 |
+| `/history/{name}` | 履歴詳細 | 個別の動画確認・再生成・レンダー・アップロード |
+| `/images` | 画像確認・再生成 | 背景画像・サムネイルの確認と個別再生成 |
+| `/upload` | アップロード | 生成済み動画のYouTube一括アップロード |
+| `/fixed-comment` | 固定コメント | 公開済み動画へのコメント投稿 |
+| `/schedule` | スケジュール管理 | YouTube予約状態の確認・同期 |
+| `/analytics` | Analytics | 視聴データ取得・スコアリング・実績参照 |
+| `/settings` | 設定 | 各種パラメータのGUI変更（再起動不要で即時反映） |
 
 ---
 
 ## 📝 基本のワークフロー
 
-1. **起動:** VOICEVOXを起動し、起動スクリプトでWeb UIを開く。
-2. **実績同期:** `Analytics` 画面で YouTube 実績データを取得（低評価などの参考指標も確認可能）。
-3. **タイトル作成:** 実績を基に AI にタイトル案を出させる。
-4. **台本作成:** 採用したタイトルから AI に台本を作成させる。
-5. **生成:** 台本を貼り付け、`生成開始` を押す。
-6. **確認:** `履歴` または `画像確認・再生成` 画面でサムネイルと背景画像を確認・調整。
-7. **アップロード:** 履歴詳細画面の「YouTubeにアップロード」ボタン、または `/upload` 画面（一括）から YouTube 予約スロットへ投稿。台本に `再生リスト:` が指定されている場合、アップロード後に対応する再生リストへ自動追加される。
-8. **コメント投稿:** `固定コメント` 画面で公開済み動画にコメント。
-9. **スケジュール:** YouTube 側の予約状態を同期。
+1. **起動:** VOICEVOXを起動 → 起動スクリプトでWeb UIを開く
+2. **実績同期:** `Analytics` で YouTube 視聴データを取得
+3. **台本作成:** 実績を基に AI にタイトル案・台本を作成させる
+4. **生成:** `/generate` で台本を貼り付け → `生成開始`
+5. **確認:** `/images` で背景・サムネイルを確認・調整
+6. **レンダー:** 履歴詳細の「動画再作成（レンダーのみ）」で確認後、MP4化
+7. **アップロード:** 履歴詳細の「YouTubeにアップロード」または `/upload`（一括）
+8. **コメント投稿:** `/fixed-comment` で固定コメントを投稿
+9. **スケジュール確認:** `/schedule` でYouTube予約状態を同期
 
 ---
 
 ## 📜 台本フォーマット
 
-台本テキストの先頭に動画のメタ情報を定義し、空行を挟んでセリフや演出を記述します。
+台本テキストの先頭にメタ情報を定義し、空行を挟んでセリフ・演出を記述します。
+
+### Shorts
 
 ```text
 動画形式: Shorts
@@ -223,39 +232,228 @@ SD_WEBUI_HEIGHT=576
 サムネ文字: 飲み物
 説明文: チョコレートの驚きの歴史を解説！
 タグ: ずんだもん,ゆっくり解説,VOICEVOX,食べ物 雑学,雑学 ショート
-生成区分: 横展開
 再生リスト: 実は薬・毒扱いだった！食べ物の黒歴史
 
-背景: 漫画風イラスト調。ヨーロッパの古い街並み。
+背景: 漫画風。中世ヨーロッパの薬草店。
 ずんだもん(ノーマル): チョコは昔、薬の飲み物だったのだ！
 四国めたん(ツンツン): えーっ！薬ですの！？
 テロップ: 薬だった！
 ```
 
-- **`()`**: VOICEVOX のスタイル指定
-- **`[]`**: ネイティブ立ち絵の表情指定
-- **`再生リスト:`**: アップロード時に自動登録する YouTube 再生リストのカテゴリ名。動画形式（Shorts/Long/ネタ会議）に応じて実際の再生リスト名に解決される（例: Shorts → `{カテゴリ} Shorts`、Long → `{カテゴリ}【じっくり解説】`）。カンマ区切りで複数指定可。
-- **複数処理**: `━━ 動画1 ━━` で区切ることで一括処理可能。
+### Long（じっくり解説）
+
+```text
+動画形式: Long
+動画タイトル: トマトが毒だと思われた黒歴史【じっくり解説】
+説明文: なぜトマトは長年「毒」と信じられていたのか？
+タグ: ずんだもん,ゆっくり解説,食べ物 雑学,長編
+再生リスト: 実は薬・毒扱いだった！食べ物の黒歴史
+
+チャプター:
+00:00 イントロ
+00:30 トマトの原産地
+...
+
+背景: 広大な農場。夕日。
+ずんだもん(ノーマル): 今日のテーマはトマトの意外な歴史なのだ！
+```
+
+### ネタ会議
+
+```text
+動画形式: ネタ会議
+画面形式: 縦
+動画タイトル: 次に伸びる食べ物雑学ネタ会議
+再生リスト: ずんだもんとめたんのネタ会議
+
+候補番号: 1
+候補タイトル: オイスターが昔は労働者の食べ物だった
+
+背景: 漫画風会議室。
+テロップ: ネタ会議スタート
+ずんだもん(あまあま): さっそく候補ネタを発表するのだ！
+```
+
+### 記法一覧
+
+| 記法 | 説明 |
+|:---|:---|
+| `(スタイル名)` | VOICEVOX のスタイル（例: `(ノーマル)` `(あまあま)` `(ツンツン)`） |
+| `[表情名]` | native立ち絵の表情 PNG 指定（例: `[笑い]`） |
+| `テロップ:` | セグメント冒頭にポップアップ表示するテキスト |
+| `サムネイル:` | サムネイルに使う背景の指定 |
+| `サムネ文字:` | サムネイルに表示する大きなテキスト |
+| `再生リスト:` | アップロード先の再生リストカテゴリ名（カンマ区切りで複数可） |
+| `━━ タイトル ━━` | 複数動画を1つのテキストで一括処理する区切り |
 
 ---
 
-## ⚙️ 主な設定値 (config.py)
+## ▶️ YouTube 再生リスト自動登録
 
-優先順位は **`.env` / 環境変数 > `config.py` の既定値** です。
+台本に `再生リスト:` を記述するとアップロード時に自動登録されます。指定するのは**カテゴリ名**で、動画形式に応じて実際の YouTube 再生リスト名に解決されます。
+
+| 動画形式 | カテゴリ名の例 | 解決後のYouTube再生リスト名 |
+|:---|:---|:---|
+| Shorts | 実は薬・毒扱いだった！食べ物の黒歴史 | `実は薬・毒扱いだった！食べ物の黒歴史 Shorts` |
+| Long | 実は薬・毒扱いだった！食べ物の黒歴史 | `実は薬・毒扱いだった！食べ物の黒歴史【じっくり解説】` |
+| ネタ会議（縦） | 任意 | `ずんだもんとめたんのネタ会議 Shorts` |
+| ネタ会議（横） | 任意 | `ずんだもんとめたんのネタ会議【じっくり版】` |
+
+再生リストが YouTube 上に存在しない場合は**自動作成**してから追加します。
+
+**標準カテゴリ（7種）:**
+
+1. なんで？食べ物の形・容器・袋の秘密
+2. 昔は捨ててたのに今は高級品！食べ物の大逆転
+3. 実は薬・毒扱いだった！食べ物の黒歴史
+4. 実は日本生まれ！その名前、騙されてます
+5. 海外では信じられない！ニッポン食のギャップ
+6. 毎日使うのに知らない！調味料の意外すぎる秘密
+7. コンビニ・スナック・チェーンの開発秘話
+
+---
+
+## ⚙️ 主な設定値
+
+優先順位: **`.env` / 環境変数 > `config.py` の既定値**
+
+設定は `/settings` 画面からも変更可能です（再起動不要で即時反映）。
+
+### AI モデル
 
 | 設定項目 | 既定値 | 説明 |
-| :--- | :--- | :--- |
-| `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成用のAIモデル |
-| `NANOBANANA_PRO_MODEL` | `gemini-3-pro-image-preview` | 背景・サムネの高品質モデル |
-| `NATIVE_AUDIO_LOUDNORM_ENABLED`| `True` | ラウドネス正規化の適用 |
+|:---|:---|:---|
+| `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
+| `NANOBANANA_PRO_MODEL` | `gemini-3-pro-image-preview` | 背景・サムネ高品質モデル |
+| `NANOBANANA_FLASH_MODEL` | `gemini-3.1-flash-image-preview` | 背景・サムネ高速モデル |
+| `IMAGE_BACKEND` | `gemini` | 画像生成バックエンド（`gemini` / `sd_webui`） |
+
+### VOICEVOX・音声
+
+| 設定項目 | 既定値 | 説明 |
+|:---|:---|:---|
+| `VOICEVOX_URL` | `http://localhost:50021` | VOICEVOX API エンドポイント |
+| `VOICEVOX_QUERY_WORKERS` | `4` | audio_query の並列数 |
+| `VOICEVOX_SYNTH_WORKERS` | `2` | 音声合成の並列数 |
+| `NATIVE_SHORTS_BODY_VOICE_SPEED` | `1.35` | Shorts 本編音声速度 |
+| `NATIVE_LONG_BODY_VOICE_SPEED` | `1.2` | Long 本編音声速度 |
+
+### 画像生成
+
+| 設定項目 | 既定値 | 説明 |
+|:---|:---|:---|
+| `NANOBANANA_BG_WORKERS` | `3` | Nano Banana 背景生成並列数 |
 | `MAX_BACKGROUNDS_SHORTS` | `9` | Shorts 1本あたりの最大背景枚数 |
+| `MAX_BACKGROUNDS_LONG` | `16` | Long 1本あたりの最大背景枚数 |
+| `WEB_DEFAULT_SD_SIZE_MODE` | `true` | 縮小生成をデフォルトにする（ONで縮小・OFFでFHD） |
+| `SD_SIZE_IMAGE_SCALE` | `0.5` | 縮小生成時の倍率（0.5 = 50%サイズで生成後にffmpegで拡大） |
+
+### 動画・字幕
+
+| 設定項目 | 既定値 | 説明 |
+|:---|:---|:---|
+| `NATIVE_FFMPEG_ENCODER` | `h264_nvenc` | ffmpegエンコーダ（GPU: `h264_nvenc` / CPU: `libx264`） |
+| `NATIVE_SUBTITLE_FONT` | `ラノベPOP v2` | 字幕フォント名 |
+| `NATIVE_SUBTITLE_FONT_SIZE_SHORTS` | `64` | Shorts 字幕基本フォントサイズ (px) |
+| `NATIVE_SUBTITLE_FONT_SCALE` | `1.4` | フォントサイズ倍率 |
+| `NATIVE_SUBTITLE_WRAP_CHARS_SHORTS` | `13` | Shorts 字幕の1行最大文字数（超えると自動折り返し） |
+| `NATIVE_SUBTITLE_WRAP_CHARS_LONG` | `24` | Long 字幕の1行最大文字数 |
+
+### Web UI 既定値
+
+| 設定項目 | 既定値 | 説明 |
+|:---|:---|:---|
+| `WEB_UI_PORT` | `58080` | Web UI ポート番号 |
+| `WEB_DEFAULT_REUSE_BACKGROUNDS` | `false` | 「背景を再利用する」チェックの既定 |
+| `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `false` | Long サムネ A/B テストの既定 |
+| `LONG_UPLOAD_PLAYLIST_NAME` | `` | `再生リスト:` 未指定時のLong動画デフォルト再生リスト名（空=無効） |
+
+---
+
+## 📁 フォルダ構成
+
+```
+.
+├── config/
+│   ├── config.py              # 全設定値の定義
+│   ├── requirements.txt       # Python依存パッケージ
+│   └── prompt_parts/          # 台本生成プロンプト部品
+│       ├── local/             # 個人用（.gitignore 対象）
+│       └── samples/           # サンプル（リポジトリ管理）
+├── core/
+│   ├── native_renderer.py     # ffmpeg MP4レンダラー
+│   ├── voicevox.py            # VOICEVOX音声生成
+│   ├── image_generator.py     # 背景・サムネイル生成
+│   ├── parser.py              # 台本パーサー
+│   ├── playlist_resolver.py   # 再生リスト名解決・動画形式判定
+│   ├── youtube_uploader.py    # YouTubeアップロード・再生リスト操作
+│   └── youtube_analytics.py  # Analytics データ取得
+├── workers/
+│   └── main.py                # 動画生成パイプライン本体
+├── web_app/
+│   ├── app.py                 # FastAPI エントリポイント
+│   ├── routes/                # APIルーター
+│   ├── services/              # ビジネスロジック
+│   └── templates/             # Jinja2 HTMLテンプレート
+├── data/
+│   └── reading_dictionary_base.json  # よみがな補正辞書
+├── output/                    # 生成物（.gitignore対象）
+│   ├── {テーマ名}/
+│   │   ├── script.txt
+│   │   ├── {テーマ名}_native.mp4
+│   │   ├── thumbnails/
+│   │   ├── audio/
+│   │   ├── backgrounds/
+│   │   └── _meta/             # メタデータ・レビュー結果
+│   └── 000_uploaded/          # アップロード済みフォルダの移動先
+├── start.ps1                  # Windows起動スクリプト
+├── start.command              # macOS起動スクリプト
+└── .env                       # APIキー等（.gitignore対象）
+```
+
+---
+
+## 🛟 トラブルシューティング
+
+### 音声が生成されない
+
+- VOICEVOX が起動しているか確認（`http://localhost:50021` にアクセスできるか）
+- `/settings` 画面の「VOICEVOX API URL」が正しいか確認
+
+### 画像が生成されない（Nano Banana）
+
+- `GOOGLE_API_KEY` が `.env` に設定されているか確認
+- API クォータ（レート制限）に引っかかっている場合は `NANOBANANA_BG_WORKERS` を `1` に下げる
+
+### GPU エンコードが使われない
+
+- ホーム画面でエンコーダの利用可否を確認
+- `h264_nvenc` が利用不可の場合は ffmpeg が自動で `libx264`（CPU）にフォールバックします（ログに `⚠ GPUエンコードに失敗したため libx264 で続行しました` と表示）
+- `.env` に `NATIVE_FFMPEG_ENCODER=libx264` を明示してCPUエンコードに固定することも可能
+
+### アップロード後に「履歴が見つかりません」
+
+- アップロード完了後、フォルダは `output/000_uploaded/` に移動されますが、履歴詳細ページはフォールバック検索するため自動的に表示されます。表示されない場合はページを再読み込みしてください。
+
+### `token.json` 認証エラー
+
+```
+削除して再認証する:
+del token.json
+```
+次回アップロード時にブラウザが開き、再認証されます。
+
+### 字幕が1行に収まらない・見切れる
+
+`NATIVE_SUBTITLE_WRAP_CHARS_SHORTS`（デフォルト: 13）を調整してください。`0` に設定すると折り返しなし（無効）になります。
 
 ---
 
 ## ⚠️ 注意・制約事項
 
-- **ローカル限定:** Web UI は `127.0.0.1` で使う前提です。外部公開しないでください。
-- **外部API費用:** ChatGPT API と Google API は費用が発生する場合があります。
+- **ローカル限定:** Web UI は `127.0.0.1` のみバインドします。外部公開しないでください。
+- **外部API費用:** ChatGPT API と Google Gemini API は費用が発生します。不要なAPIコールを避けるため、生成は1本ずつ確認しながら行うことを推奨します。
+- **アップロードは破壊的操作:** 公開後の動画IDは変更できません。テスト用チャンネルで動作確認してから本番運用してください。
 
 ---
 
@@ -269,17 +467,17 @@ SD_WEBUI_HEIGHT=576
 
 ## 🖥 開発環境
 
-本プロジェクトの主開発機（Windows）の環境です。動作確認はこの構成を基準としています。
+本プロジェクトの主開発機（Windows）の環境です。
 
 | 項目 | 詳細 |
-| :--- | :--- |
+|:---|:---|
 | OS | Windows 11 Home |
 | CPU | Intel Core 7 240H（10コア / 16スレッド） |
 | RAM | 32 GB |
 | GPU | NVIDIA GeForce RTX 5060 Laptop GPU（NVENC 対応） |
 | Python | 3.11.9（`.venv` 仮想環境） |
 | ffmpeg | 8.0.1 full build（[gyan.dev](https://www.gyan.dev/ffmpeg/builds/) 版） |
-| デフォルトエンコーダ | `h264_nvenc`（`NATIVE_FFMPEG_ENCODER` 未設定時） |
+| デフォルトエンコーダ | `h264_nvenc`（GPU） |
 
 <details>
 <summary><b>主要 Python パッケージ・連携アプリのバージョン</b></summary>
@@ -287,7 +485,7 @@ SD_WEBUI_HEIGHT=576
 **Python パッケージ（`.venv` 内）**
 
 | パッケージ | バージョン |
-| :--- | :--- |
+|:---|:---|
 | FastAPI | 0.136.3 |
 | Starlette | 1.1.0 |
 | Uvicorn | 0.48.0 |
@@ -299,7 +497,7 @@ SD_WEBUI_HEIGHT=576
 **連携アプリ**（別プロセスとして起動）
 
 | アプリ | バージョン | エンドポイント |
-| :--- | :--- | :--- |
+|:---|:---|:---|
 | VOICEVOX | 0.25.2 | `http://localhost:50021` |
 | Ollama | 0.24.0 | `http://localhost:11434` |
 | Stable Diffusion WebUI | v1.10.1 | `http://localhost:7860`（任意） |
@@ -307,7 +505,7 @@ SD_WEBUI_HEIGHT=576
 **Ollama インストール済みモデル**
 
 | モデル | サイズ |
-| :--- | ---: |
+|:---|---:|
 | qwen3:8b（デフォルト） | 4.9 GB |
 | qwen2.5:7b-instruct | 4.4 GB |
 | llama3:latest | 4.3 GB |
