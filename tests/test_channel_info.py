@@ -9,7 +9,6 @@ from unittest.mock import patch
 def _make_config(**kwargs):
     """テスト用の config モジュールもどきを作る。"""
     cfg = types.SimpleNamespace(
-        CHANNEL_PROFILE=kwargs.get("CHANNEL_PROFILE", ""),
         CHANNEL_NAME=kwargs.get("CHANNEL_NAME", ""),
         CHANNEL_HANDLE=kwargs.get("CHANNEL_HANDLE", ""),
         CHANNEL_THEME=kwargs.get("CHANNEL_THEME", ""),
@@ -31,7 +30,6 @@ class TestGetChannelInfo(unittest.TestCase):
 
     def test_all_set_returns_no_warnings(self):
         info = self._call(
-            CHANNEL_PROFILE="food_trivia",
             CHANNEL_NAME="ずんだもんとめたんの食べ物雑学堂",
             CHANNEL_HANDLE="@zundamon_food",
             CHANNEL_THEME="食べ物雑学",
@@ -59,15 +57,13 @@ class TestGetChannelInfo(unittest.TestCase):
         msgs = [w["message"] for w in info["warnings"]]
         self.assertTrue(any("CHANNEL_HANDLE" in m for m in msgs))
 
-    def test_missing_profile_gives_warn_not_error(self):
+    def test_both_set_no_warnings(self):
         info = self._call(
             CHANNEL_NAME="テストチャンネル",
             CHANNEL_HANDLE="@handle",
         )
         self.assertTrue(info["upload_allowed"])
-        warn_levels = {w["level"] for w in info["warnings"]}
-        self.assertIn("warn", warn_levels)
-        self.assertNotIn("error", warn_levels)
+        self.assertEqual(info["warnings"], [])
 
     def test_invalid_accent_color_gives_warn_and_uses_default(self):
         info = self._call(
@@ -98,7 +94,6 @@ class TestGetChannelInfo(unittest.TestCase):
             CHANNEL_NAME="テストチャンネル",
             CHANNEL_HANDLE="@handle",
         )
-        self.assertIsNone(info["profile"])
         self.assertIsNone(info["theme"])
         self.assertIsNone(info["hashtags"])
 
@@ -107,7 +102,6 @@ class TestGetChannelInfo(unittest.TestCase):
         info = self._call()
         self.assertIsNone(info["name"])
         self.assertIsNone(info["handle"])
-        self.assertIsNone(info["profile"])
 
     def test_hashtags_returned_when_set(self):
         info = self._call(

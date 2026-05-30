@@ -35,7 +35,6 @@ def _split_env_choices(value: str) -> tuple[str, ...]:
 # ───────────────────────────────────────────────
 # チャンネル識別情報（.env で設定）
 # ───────────────────────────────────────────────
-CHANNEL_PROFILE      = os.environ.get("CHANNEL_PROFILE", "").strip()       # チャンネル識別子（任意）
 CHANNEL_NAME         = os.environ.get("CHANNEL_NAME", "").strip()          # チャンネル表示名（アップロード必須）
 CHANNEL_HANDLE       = os.environ.get("CHANNEL_HANDLE", "").strip()        # @ハンドル（アップロード必須）
 CHANNEL_THEME        = os.environ.get("CHANNEL_THEME", "").strip()         # テーマ説明（任意）

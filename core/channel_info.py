@@ -15,7 +15,6 @@ def get_channel_info() -> dict:
     warnings の level="error" が1件でもあれば upload_allowed=False になる。
     """
     from config import config
-    profile = config.CHANNEL_PROFILE
     name = config.CHANNEL_NAME
     handle = config.CHANNEL_HANDLE
     theme = config.CHANNEL_THEME
@@ -28,8 +27,6 @@ def get_channel_info() -> dict:
         warnings.append({"level": "error", "message": "CHANNEL_NAME が未設定です"})
     if not handle:
         warnings.append({"level": "error", "message": "CHANNEL_HANDLE が未設定です"})
-    if not profile:
-        warnings.append({"level": "warn", "message": "CHANNEL_PROFILE が未設定です"})
 
     accent_color = _DEFAULT_ACCENT
     accent_color_set = False
@@ -44,7 +41,6 @@ def get_channel_info() -> dict:
             })
 
     return {
-        "profile": profile or None,
         "name": name or None,
         "handle": handle or None,
         "theme": theme or None,
@@ -59,7 +55,6 @@ def get_channel_info() -> dict:
 def log_channel_info() -> None:
     """アップロード直前ログ用。[CHANNEL] プレフィックスで標準ログに出力する。"""
     info = get_channel_info()
-    _logger.info("[CHANNEL] profile=%s", info["profile"] or "")
     _logger.info("[CHANNEL] name=%s", info["name"] or "")
     _logger.info("[CHANNEL] handle=%s", info["handle"] or "")
     _logger.info("[CHANNEL] theme=%s", info["theme"] or "")

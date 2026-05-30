@@ -88,7 +88,6 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
     # アップロード直前チャンネル確認ログ
     log_channel_info()
     ch = get_channel_info()
-    _log(job, f"[CHANNEL] profile={ch['profile'] or ''}", "info")
     _log(job, f"[CHANNEL] name={ch['name'] or ''}", "info")
     _log(job, f"[CHANNEL] handle={ch['handle'] or ''}", "info")
     _log(job, f"[CHANNEL] theme={ch['theme'] or ''}", "info")
