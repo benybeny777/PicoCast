@@ -775,6 +775,7 @@ def upsert_cta_policy(local_id: str, policy: dict) -> None:
     """cta_policy を video_metadata の CTA 列に upsert する。"""
     p = policy.get("cta_policy", policy)
     with ManagedConnection() as conn:
+        conn.execute("INSERT OR IGNORE INTO videos(local_id, output_dir) VALUES(?, ?)", (local_id, f"output/{local_id}"))
         conn.execute("""
             INSERT INTO video_metadata(local_id,
                 cta_shorts_loop_priority, cta_direct_next_video_allowed,
@@ -825,6 +826,7 @@ def upsert_opening_review(local_id: str, data: dict) -> None:
     status = data.get("final_status") or final.get("status")
     rewrite = int(bool(data.get("rewrite_needed")))
     with ManagedConnection() as conn:
+        conn.execute("INSERT OR IGNORE INTO videos(local_id, output_dir) VALUES(?, ?)", (local_id, f"output/{local_id}"))
         conn.execute("""
             INSERT INTO script_quality(local_id, opening_score, opening_score_status, opening_rewrite_needed)
             VALUES(?,?,?,?)
@@ -840,6 +842,7 @@ def upsert_final_review(local_id: str, review: dict | None) -> None:
     """final_review データを script_quality に upsert する。"""
     r = review or {"skipped": True}
     with ManagedConnection() as conn:
+        conn.execute("INSERT OR IGNORE INTO videos(local_id, output_dir) VALUES(?, ?)", (local_id, f"output/{local_id}"))
         conn.execute("""
             INSERT INTO script_quality(local_id,
                 final_review_skipped, final_review_reason, final_review_stage, final_review_model)
