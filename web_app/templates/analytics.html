@@ -111,7 +111,10 @@
           data-blacklist="{{ 'true' if row.get('blacklist_candidate') else '' }}"
           onclick="selectRow(this)" style="cursor:pointer">
         <td title="{{ row.get('title','') }}">{{ (row.get('title','') or '')[:32] }}</td>
-        <td style="white-space:nowrap">{{ (row.get('published_at','') or '')[:10] }}</td>
+        <td style="white-space:nowrap; font-size:11px; line-height:1.4">
+          {% set _pa = (row.get('published_at','') or '')[:16] | replace('T', ' ') %}
+          {{ _pa[:10] }}<br><span style="color:var(--text-dim)">{{ _pa[11:] }}</span>
+        </td>
         <td>
           <span class="badge {% if 'Short' in (row.get('video_type','')) %}badge-shorts{% else %}badge-long{% endif %}">
             {{ row.get('video_type','—') }}
