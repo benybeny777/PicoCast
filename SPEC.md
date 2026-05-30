@@ -1,7 +1,7 @@
 # ずんかみ自動生成システム 仕様書
 
 チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
-最終更新: 2026-05-29
+最終更新: 2026-05-30
 
 ---
 
@@ -101,7 +101,7 @@ yukkurijidou/
 │   ├── upload_records.py   # アップロード台帳の読み書き・upsert
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
 │   ├── youtube_uploader.py # YouTube APIアップロード
-│   ├── playlist_resolver.py # 台本カテゴリ名＋動画形式 → YouTube再生リスト名の解決
+│   ├── playlist_resolver.py # 台本カテゴリ名＋動画形式 → YouTube再生リスト名の解決。`resolve_video_type(video_format, screen_format)` でネタ会議を含む全動画形式を "shorts"/"long" に統一判定する関数も提供
 │   └── ng_words.py         # NGワード置換
 ├── config/
 │   ├── config.py            # 定数・設定
@@ -397,7 +397,7 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
   1. `assign_slots_from_youtube()` で YouTube 予約済み一覧を正として次の空きスロットを取得
   2. `update_video_publish_time()` で YouTube API に公開予定を設定（`_slot_lock` で複数本同時アップロード時の競合を防止）
   3. `_meta/upload_record.json` を書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=scheduled` / `publish_at=JST isoformat`）。スロット取得失敗時は `publish_status=private`
-  4. フォルダを `output/000_uploaded/<フォルダ名>/` へ移動する
+  4. フォルダを `output/000_uploaded/<フォルダ名>/` へ移動する。移動後も `history_service.py` は `output/000_uploaded/` をフォールバック検索するため、履歴詳細画面で「履歴が見つかりません」にならない
   5. `output/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
 - スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。旧 `upload_schedule_*.json` と中央 `upload_records.json` は廃止
 - `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す
@@ -722,11 +722,16 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 |---|---|---|
 | `VOICEVOX_URL` | `http://localhost:50021` | VOICEVOX API URL |
 | `VOICEVOX_PATH` | 空 | VOICEVOX自動起動用パス（空の場合は手動起動） |
+| `VOICEVOX_QUERY_WORKERS` | 4 | audio_query 並列リクエスト数 |
+| `VOICEVOX_SYNTH_WORKERS` | 2 | synthesis 並列リクエスト数（並列数を増やすと VOICEVOX 側の負荷が上がるため注意） |
+| `NANOBANANA_BG_WORKERS` | 3 | Nano Banana 背景生成の並列数 |
 | `NATIVE_SHORTS_BODY_VOICE_SPEED` | 1.25 | Shorts本編再生速度（native） |
 | `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.40 | Shortsイントロ再生速度（native） |
 | `NATIVE_LONG_BODY_VOICE_SPEED` | 1.20 | Long本編再生速度（native） |
 | `NATIVE_LONG_INTRO_VOICE_SPEED` | 1.40 | Longイントロ再生速度（native） |
 | `NATIVE_SHORTS_ESTIMATE_BASE_CPS` | 5.4 | Shorts native推定の基準文字/秒 |
+| `NATIVE_SUBTITLE_WRAP_CHARS_SHORTS` | 13 | Shorts（縦画面）字幕の1行最大文字数。超えると自動折り返し（句読点優先） |
+| `NATIVE_SUBTITLE_WRAP_CHARS_LONG` | 24 | Long（横画面）字幕の1行最大文字数。超えると自動折り返し（句読点優先） |
 | `NATIVE_SHORTS_CHARS_MUST_FIX_MIN` | 260 | Shorts native文字数 must_fix 下限 |
 | `NATIVE_SHORTS_TARGET_CHARS_MIN` | 280 | Shorts native文字数 目標下限 |
 | `NATIVE_SHORTS_TARGET_CHARS_MAX` | 330 | Shorts native文字数 目標上限 |
@@ -810,6 +815,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
 - **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。
 - 字幕フチ幅は `NATIVE_SUBTITLE_STROKE_WIDTH`(内フチ, デフォルト 9) / `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(外フチ, デフォルト 13) で調整可能。字幕帯のパディングは `NATIVE_SUBTITLE_PADDING_Y` で調整。
+- **字幕自動折り返し**: セリフが `NATIVE_SUBTITLE_WRAP_CHARS_SHORTS`（Shorts 縦画面: 13文字）または `NATIVE_SUBTITLE_WRAP_CHARS_LONG`（Long 横画面: 24文字）を超えると `_wrap_subtitle()` が自動折り返しを行う。句読点（、。！？…）が直前にある場合は句読点位置を優先し、折り返し後2行目が `max(2, max_chars // 3)` 文字未満になる場合は句読点折り返しを適用しない。折り返し行数に応じて SubtitleBox の高さを自動拡張する。
 - **Shorts軽量エフェクト**: `NATIVE_ENABLE_MOTION_EFFECTS=1` のとき、背景に最大 `NATIVE_BG_ZOOM_MAX` までのKen Burns風ズーム/パン、話者キャラの0.2秒前後の軽いバウンス、`テロップ:` 行の0.8〜1.5秒ポップ表示、短いツッコミ/疑問場面の軽いシェイクと疑問/驚きアイコンを追加する。シェイクとアイコンは各 `NATIVE_MAX_SHAKE_COUNT_SHORTS` / `NATIVE_MAX_ICON_COUNT_SHORTS` 回までに制限する。感情タグ (`expression`) が付与されている場合、タグ優先でシェイク判定とアイコン選択を行う（驚き/ドン引き → "!?" or "！"、困惑/疑問 → "？"、焦り/怒り → "!" or "！"、呆れ → 揺れのみ・アイコンなし）。
 - エフェクトはセグメント単位で付与し、BGM・音声タイミングは変更しない。ffmpegフィルタが失敗したセグメントはエフェクトなしで再レンダーして生成を継続する。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。

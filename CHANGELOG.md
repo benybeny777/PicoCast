@@ -10,6 +10,44 @@
 
 ---
 
+## 2026-05-30 並列化強化・字幕自動折り返し・ネタ会議Shorts判定修正・アップロード後リダイレクトバグ修正
+
+**対象ファイル:** `config/config.py` / `core/native_renderer.py` / `core/playlist_resolver.py` / `web_app/services/upload_service.py` / `web_app/services/history_service.py` / `workers/main.py` / `web_app/services/config_service.py`
+
+**変更内容:**
+
+### VOICEVOX 合成を並列化・クエリ/合成並列数を設定化（`a9f00e7`）
+
+- `VOICEVOX_QUERY_WORKERS`（デフォルト4）・`VOICEVOX_SYNTH_WORKERS`（デフォルト2）を `config.py` に追加
+- `workers/main.py`: フェーズ1b クエリ並列数を config から取得、フェーズ1c 合成を逐次→`ThreadPoolExecutor` による並列化に変更
+- `config_service.py`: 設定画面の VOICEVOX グループに両並列数を追加
+
+### Nano Banana 背景生成を並列化・並列数を設定化（`2aa869c`）
+
+- `NANOBANANA_BG_WORKERS`（デフォルト3）を `config.py` に追加
+- `workers/main.py`: 背景生成を「収集フェーズ→並列生成フェーズ」の2段構成に変更
+- `config_service.py`: 設定画面の画像生成グループに `NANOBANANA_BG_WORKERS` を追加
+
+### 字幕の自動折り返し機能を追加（`c8b1c11`）
+
+- `NATIVE_SUBTITLE_WRAP_CHARS_SHORTS`（デフォルト13）・`NATIVE_SUBTITLE_WRAP_CHARS_LONG`（デフォルト24）を `config.py` に追加
+- `core/native_renderer.py`: `_wrap_subtitle()` を追加。句読点優先・2行目最小文字数チェック付きの折り返しロジック。Shorts（縦画面）は13文字、Long（横画面）は24文字を超えると自動折り返し
+- 折り返し行数に応じて字幕帯（SubtitleBox）の高さを自動拡張
+
+### ネタ会議Shortsがlongと判定される問題を修正（`f60bf12`）
+
+- `web_app/services/upload_service.py`: "short" 文字列一致だけの単純判定を、動画形式・画面形式を総合的に考慮した判定に修正
+
+### 4件の改善とアップロード後リダイレクトバグ修正（`424c8b2`）
+
+- `core/playlist_resolver.py`: `resolve_video_type(video_format, screen_format)` を追加。ネタ会議を含む全動画形式の "shorts"/"long" 判定を一元化
+- `web_app/services/upload_service.py`: `resolve_video_type()` を使うよう判定を置き換え
+- `workers/main.py`: 並列カウンター（`voices_generated` 等）を `threading.Lock` で保護し、競合状態を排除
+- `core/native_renderer.py`: `_wrap_subtitle()` の2行目最小文字数チェックを強化（`min_tail = max(2, max_chars // 3)`）
+- `web_app/services/history_service.py`: アップロード後フォルダ移動による「履歴が見つかりません」バグを修正（`output/000_uploaded/` フォールバック検索を追加）
+
+---
+
 ## 2026-05-30 縮小生成デフォルト化・FHD生成オプション化・履歴詳細アップロードボタン追加・再生リスト自動登録・GPUフォールバック警告改善
 
 **対象ファイル:** `config/config.py` / `core/playlist_resolver.py`（新規） / `core/parser.py` / `core/native_renderer.py` / `workers/main.py` / `workers/worker_render.py` / `web_app/services/upload_service.py` / `web_app/templates/generate.html` / `web_app/templates/history_detail.html` / `web_app/templates/images.html` / `SPEC.md` / `README.md`
