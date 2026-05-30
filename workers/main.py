@@ -794,6 +794,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # Step 4: 既存フォルダは削除せず、先にバックアップへ退避する。
     # 開きっぱなしで退避できない場合は、Web UI側で警告して同じ生成を再試行する。
+    update_status(f"🗂  既存フォルダ確認中: {theme_dir}")
     _existing_theme_backup = None
     _saved_bg_dir = None
     _saved_thumb_path = None
@@ -884,6 +885,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     _normalize_meta(meta, is_shorts, topic, update_status)
 
+    update_status("📋 台本解析完了。冒頭品質チェック中...")
     opening_title = meta.get("video_title", topic)
     opening_thumb_text = meta.get("thumbnail_text", "")
     opening_review = local_opening_review(items, opening_title, opening_thumb_text, is_shorts, render_engine=_render_engine)
