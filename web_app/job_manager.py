@@ -209,7 +209,7 @@ def _log(job: Job, message: str, tag: str = "info") -> None:
     """ジョブのログに追記する。呼び出し側からも使える。"""
     job.logs.append({
         "time": datetime.now(_JST).isoformat(),
-        "tag": tag,
+        "tag": tag or "info",  # None が渡された場合は "info" にフォールバック
         "message": message,
     })
     job.progress_text = message

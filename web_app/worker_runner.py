@@ -139,7 +139,7 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
                 continue
             try:
                 entry = json.loads(raw)
-                _log(job, entry.get("message", raw), entry.get("tag", "info"))
+                _log(job, entry.get("message", raw), entry.get("tag") or "info")
             except json.JSONDecodeError:
                 _log(job, raw, "info")
 

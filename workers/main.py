@@ -1415,6 +1415,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status("  📌 サムネイルをショート先頭に挿入予定(native)")
     # ロングの場合は theme_dir に保存済み
 
+    if sd_size_mode:
+        from config import SD_SIZE_IMAGE_SCALE
+        update_status(f"🖼  縮小生成モード: 画像を {int(float(SD_SIZE_IMAGE_SCALE or 0.5) * 100)}% サイズで生成→ffmpegで拡大")
     update_status(f"🎬 アセット生成を開始します...")
 
     voice_num = 0
@@ -1718,7 +1721,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         _ideal = actual_duration_result.get("ideal", "")
         update_status(
             f"⏱ 実尺チェック: {_actual_sec:.1f}秒 — {_dur_label}（目安: {_ideal}）　保存: {dr_path}",
-            "warning" if _dur_status in ("warning", "needs_review") else None,
+            "warning" if _dur_status in ("warning", "needs_review") else "info",
         )
         if _dur_status == "needs_review":
             msg = (

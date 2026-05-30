@@ -303,7 +303,7 @@ NATIVE_SUBTITLE_ALIGNMENT_SHORTS  = int(os.environ.get("NATIVE_SUBTITLE_ALIGNMEN
 NATIVE_SUBTITLE_ALIGNMENT_LONG    = int(os.environ.get("NATIVE_SUBTITLE_ALIGNMENT_LONG",    "2"))       # Long: ASS alignment（2=中央下段）
 NATIVE_SUBTITLE_MARGIN_V_SHORTS   = int(os.environ.get("NATIVE_SUBTITLE_MARGIN_V_SHORTS",   "520"))     # Shorts: 縦マージン (px)
 NATIVE_SUBTITLE_MARGIN_V_LONG     = int(os.environ.get("NATIVE_SUBTITLE_MARGIN_V_LONG",     "90"))      # Long: 縦マージン (px)
-NATIVE_SUBTITLE_Y_OFFSET_SHORTS   = int(os.environ.get("NATIVE_SUBTITLE_Y_OFFSET_SHORTS",   "70"))      # Shorts: 字幕 Y 追加オフセット (px)
+NATIVE_SUBTITLE_Y_OFFSET_SHORTS   = int(os.environ.get("NATIVE_SUBTITLE_Y_OFFSET_SHORTS",   "250"))     # Shorts: 字幕 Y 追加オフセット (px)。height/2 + offset がテキスト中心 Y 座標
 NATIVE_SUBTITLE_Y_OFFSET_LONG     = int(os.environ.get("NATIVE_SUBTITLE_Y_OFFSET_LONG",     "0"))       # Long: 字幕 Y 追加オフセット (px)
 NATIVE_SUBTITLE_STROKE_WIDTH      = int(os.environ.get("NATIVE_SUBTITLE_STROKE_WIDTH",      "9"))       # 内フチ幅 (px)
 NATIVE_SUBTITLE_OUTER_STROKE_WIDTH = int(os.environ.get("NATIVE_SUBTITLE_OUTER_STROKE_WIDTH", str(NATIVE_SUBTITLE_STROKE_WIDTH + 4)))  # 外フチ幅 (px)。デフォルトは内フチ+4
