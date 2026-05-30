@@ -401,24 +401,26 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 - アップロード実行後:
   1. `assign_slots_from_youtube()` で YouTube 予約済み一覧を正として次の空きスロットを取得
   2. `update_video_publish_time()` で YouTube API に公開予定を設定（`_slot_lock` で複数本同時アップロード時の競合を防止）
-  3. `_meta/upload_record.json` を書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=scheduled` / `publish_at=JST isoformat`）。スロット取得失敗時は `publish_status=private`
-  4. フォルダを `output/000_uploaded/<フォルダ名>/` へ移動する。移動後も `history_service.py` は `output/000_uploaded/` をフォールバック検索するため、履歴詳細画面で「履歴が見つかりません」にならない
-  5. `output/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
-- スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。旧 `upload_schedule_*.json` と中央 `upload_records.json` は廃止
+  3. `metadata.db` の `youtube_status` テーブルに書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=scheduled` / `publish_at=JST isoformat`）。スロット取得失敗時は `publish_status=private`。`_meta/upload_record.json` への書き込みは廃止済み。
+  4. フォルダを `output/{profile_id}/000_uploaded/<フォルダ名>/` へ移動する。履歴画面は `videos/` と `000_uploaded/` の両方を走査するため、移動後も履歴に表示される
+  5. `output/{profile_id}/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
+- スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。`upload_schedule_*.json` / `upload_records.json` / `upload_record.json` はすべて廃止済み。アップロード状態は `metadata.db` の `youtube_status` テーブルが正本
 - `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す
-- `sync_schedule_from_youtube()`: YouTube API を正として各動画の `_meta/upload_record.json` へ書き戻す。チャンネル全件取得に失敗した場合は既知 video_id のみでフォールバック
+- `sync_schedule_from_youtube()`: YouTube API を正として `youtube_status` テーブルへ書き戻す。チャンネル全件取得に失敗した場合は既知 video_id のみでフォールバック
 - すべての日時（ジョブ起動時刻・ログタイムスタンプ・`publish_at`）はJST で統一する
 - `infer_video_type()`: タイトルプレフィックス優先。タイトルなしの場合は duration ≤ 60s を shorts と推定
 
 ### 出力データディレクトリ
 
+すべてのデータは `output/{profile_id}/000_data/metadata.db`（SQLite）に格納する。ファイルベースの管理は廃止済み。
+
 | パス | 用途 |
 |---|---|
-| `output/000_data/uploaded_titles.txt` | 公開済みタイトル一覧 |
-| `output/000_analytics/` | Analytics スコア JSON / TSV |
-| `output/000_legacy/` | 旧 `upload_schedule_*.json` の退避先 |
+| `output/{profile_id}/000_data/metadata.db` | 動画メタ・youtube_status・Analytics・ジョブ履歴（正本） |
+| `output/{profile_id}/000_uploaded/` | アップロード済み動画フォルダのアーカイブ |
+| `output/{profile_id}/000_backups/` | 生成時の旧フォルダバックアップ |
 
-パスは `config.py` の `OUTPUT_DATA_DIR` / `OUTPUT_ANALYTICS_DIR` / `OUTPUT_LEGACY_DIR` で変更可能。`core/output_paths.py` がこれらを絶対パスに解決して各モジュールへ提供する。
+`core/output_paths.py` が active profile の `output_root` を基準にパスを解決して各モジュールへ提供する。
 
 ---
 
@@ -978,32 +980,35 @@ Gemini AIがロング台本からYouTube概要欄用チャプターマーカー�
 
 ## 出力ファイル構成
 
+動画フォルダは `output/{profile_id}/videos/{テーマ名}/` に生成される。アップロード後は `output/{profile_id}/000_uploaded/{テーマ名}/` へ移動する。
+
 ```
-output/{テーマ名}/
+output/{profile_id}/videos/{テーマ名}/
 ├── script.txt              # 台本
 ├── {テーマ名}_native.mp4   # native MP4
 ├── thumbnails/
-│   ├── thumbnail.png                       # サムネイル（UploadはこのA案を使用）
+│   ├── thumbnail.png                       # サムネイル（Upload はこの A 案を使用）
 │   ├── {テーマ名}_thumbnail_A.png          # Long: A案
 │   ├── {テーマ名}_thumbnail_B.png          # Long: B案
 │   └── {テーマ名}_thumbnail_C.png          # Long: C案
 ├── _meta/
 │   ├── metadata.txt                        # タイトル・説明文・タグ
+│   ├── render_info.json                    # レンダリング情報（タイトル・形式・タグ等）
 │   ├── opening_review.json                 # 冒頭レビュー結果
-│   ├── opening_rewrite_suggestion.txt      # Ollamaリライト内容（発生時のみ）
+│   ├── opening_rewrite_suggestion.txt      # Ollama リライト内容（発生時のみ）
 │   ├── duration_review.json                # 尺レビュー結果
-│   ├── reading_map.json                    # よみがな正規化マップ（チャンク→読み）
-│   ├── final_review.json                   # ChatGPT生成前レビュー結果
-│   ├── upload_record.json                  # アップロード記録（スコア含む）
-│   ├── thumbnail_ab_test.json              # Long: A/Bテスト管理
-│   └── title_ab_test.json                  # Long: タイトルA/B管理
+│   ├── reading_map.json                    # よみがな正規化マップ
+│   ├── final_review.json                   # ChatGPT 生成前レビュー結果
+│   ├── thumbnail_ab_test.json              # Long: A/B テスト管理
+│   └── title_ab_test.json                  # Long: タイトル A/B 管理
 ├── audio/
 │   └── *.wav
 └── backgrounds/
     └── bg_*.png
 ```
 
-アップロード済みの履歴は `output/000_uploaded/` に移動します。アップロード記録は各動画フォルダの `_meta/upload_record.json` に保存します。予約・公開状態の正は YouTube Data API 側で、スケジュール画面や詰め直しはYouTubeの `publishAt` / `privacyStatus` を参照します。生成時に既存フォルダを退避した `output/000_backups/` の同一テーマバックアップは最新1世代だけ残し、アップロード成功後に削除します。
+**アップロード記録は `metadata.db` の `youtube_status` テーブルが正本。`_meta/upload_record.json` への書き込みは廃止済み。**
+予約・公開状態の正は YouTube Data API 側（`publishAt` / `privacyStatus`）。生成時に退避した `000_backups/` の同一テーマバックアップは最新1世代のみ保持し、アップロード成功後に削除する。
 
 ---
 
@@ -1069,7 +1074,7 @@ Copy-Item -Path config\samples\prompt_parts\food\* -Destination config\prompt_pa
 
 `Shortsタイトル案` は、既存タイトルと直近の YouTube Analytics 実績データを使って、Shorts寄りの食べ物雑学向けタイトル案プロンプトをコピーします。`Longタイトル案` は、Long候補だけを出す条件を付けたプロンプトをコピーします。
 
-- 直近の `output/000_analytics/analytics_score_*.tsv` がある場合、最大80件をプロンプトへ自動差し込み
+- `metadata.db` の `analytics_snapshots` テーブルから直近データがある場合、最大80件をプロンプトへ自動差し込み
 - 実績データがない場合は、実績根拠のない案を `新規開拓枠` として扱う指示を追加
 - 20案の表は軽量化（13列）。詳細（選定理由・台本化理由・想定フック・冒頭1秒・注意点・事実確認ポイント）はTOP5表に集約
 - タイトル分類は A〜H。H は「名前・発祥の勘違い」（天津飯・ナポリタン・シュークリーム等）
@@ -1195,7 +1200,7 @@ Copy-Item -Path config\samples\prompt_parts\food\* -Destination config\prompt_pa
 
 ### YouTubeアップロード
 
-`YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には、`output/` 直下にある `.mp4` がある履歴フォルダだけを表示します（`000_uploaded/` 配下は表示しない）。各履歴フォルダから最新の `.mp4` を探し、`_meta/render_info.json` のタイトル・説明文・タグを使ってアップロードします。アップロードの可否判断はローカルの `upload_record.json` を参照しない（ローカルステータスでブロックしない）。アップロード成功後は、その履歴フォルダを `output/000_uploaded/` に移動し、`_meta/upload_record.json` へ結果を記録します。予約枠の空き判断はローカル台帳ではなくYouTube側の予約状態を参照します。再アップロードが必要な場合はフォルダを `output/` に手動で戻せば候補に現れます。
+`YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には `output/{profile_id}/videos/` 配下にある `.mp4` がある履歴フォルダだけを表示します（`000_uploaded/` 配下は表示しない）。各履歴フォルダから最新の `.mp4` を探し、`metadata.db` の `render_info` テーブルのタイトル・説明文・タグを使ってアップロードします。アップロードの可否判断はローカルステータスでブロックしない（YouTube Data API が正）。アップロード成功後は履歴フォルダを `output/{profile_id}/000_uploaded/` に移動し、`metadata.db` の `youtube_status` テーブルへ結果を記録します（`_meta/upload_record.json` への書き込みは廃止済み）。予約枠の空き判断はYouTube側の予約状態を参照します。再アップロードが必要な場合はフォルダを `videos/` に手動で戻せば候補に現れます。
 
 YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや `script.txt` から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。アップロード時に実際に使ったタグを `_meta/youtube_metadata.json` へ保存します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
 
@@ -1210,7 +1215,7 @@ YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タ
 - ネタ会議（縦）: `ずんだもんとめたんのネタ会議 Shorts`
 - ネタ会議Long / 横: `ずんだもんとめたんのネタ会議【じっくり版】`
 
-対象の再生リストが YouTube 上に存在しない場合は自動作成してから登録します。カンマ区切りで複数カテゴリを指定した場合はすべてに登録します。結果は `_meta/upload_record.json` の `playlist_assignments`（`{再生リスト名: {playlist_id, status}}` 形式）に保存します。
+対象の再生リストが YouTube 上に存在しない場合は自動作成してから登録します。カンマ区切りで複数カテゴリを指定した場合はすべてに登録します。結果は `metadata.db` の `playlists` テーブルに保存します。
 
 **② 台本に `再生リスト:` がない場合（後方互換）**
 
@@ -1218,9 +1223,9 @@ Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リス
 
 いずれの場合も、既に同じ動画が登録済みなら重複追加しません。再生リスト操作に失敗した場合、アップロード自体は成功扱いのまま警告ログを出します。
 
-`💬 固定コメント` は、`output/000_uploaded/` 配下のアップロード済み履歴から、固定コメントと `video_id` がある公開済み動画を選んでコメント投稿します。予約中動画は候補に表示しません。YouTube Data APIで状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は該当動画の `_meta/upload_record.json` に `fixed_comment_thread_id` を保存し、二重投稿を避けます。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted_at` を記録できます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
+`💬 固定コメント` は、`output/{profile_id}/000_uploaded/` 配下のアップロード済み履歴から、`youtube_status` テーブルに `video_id` がある公開済み動画を選んでコメント投稿します。予約中動画は候補に表示しません。YouTube Data API で状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は `youtube_status` テーブルの `fixed_comment_id` に保存します。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted_at` を記録できます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
 
-台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。アップロード時に `_meta/upload_record.json` へ保存し、Analytics一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。
+台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。`metadata.db` の `render_info` テーブルへ保存し、Analytics 一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。
 
 Analytics取得・画面表示・TSV出力には `dislikes`（低評価数）/ `like_dislike_total`（いいね+低評価合計）/ `dislike_rate`（低評価率 = dislikes / max(likes+dislikes, 1) × 100）を含める。`likes + dislikes < ANALYTICS_DISLIKE_RATE_MIN_REACTIONS`（デフォルト10）の場合は `dislike_rate_provisional=True` とし、画面では `*` を付けて参考値であることを示す。低評価はS/A/B/C/Dスコア判定には使わない。Analytics画面には `高評価率` に加えて `低評価(参考)` / `低評価率(参考)` / `生成区分` / `元動画` / `目的` を表示します。低評価はAPIから取得不能な場合は空欄扱いとなります。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、対象期間・取得日時、再生数上位・平均視聴率上位・高評価率上位・data_wait注目動画をまとめた実績サマリーを付けます。`AI分析用にコピー` では `analysis_status=data_wait` の動画にも暫定評価コメントを入れるよう指示します。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
 
@@ -1311,8 +1316,8 @@ YouTube Studio 側で予約動画を手動公開した場合:
 
 `📅 スケジュール` を開くと自動的に YouTube API でステータスを確認し、差異があれば確認ダイアログを表示します。
 
-- **手動公開済み検出**: `privacyStatus == "public"` になっていた動画を一覧表示し、確認後に予約スロットから削除・`output/000_data/uploaded_titles.txt` に追記。
-- **時刻ズレ修正**: ローカルと YouTube の `publishAt` が 1 分以上ズレている場合、ローカルスケジュールと `upload_record.json` を YouTube 側の時刻に更新。
+- **手動公開済み検出**: `privacyStatus == "public"` になっていた動画を一覧表示し、確認後に予約スロットから削除・`youtube_status` テーブルを更新。
+- **時刻ズレ修正**: ローカルと YouTube の `publishAt` が 1 分以上ズレている場合、`youtube_status` テーブルを YouTube 側の時刻に更新。
 - 差異がない場合はログに「差異なし」とだけ表示してダイアログを維持。
 
 手動で特定の動画だけを処理したい場合は、行を選択して `手動公開済みにする` ボタンを使います。
@@ -1601,12 +1606,13 @@ active profile によってすべての出力パス・DB・プロンプト・Ana
 
 ```
 output/{profile_id}/
-  videos/        ← 動画テーマフォルダ（Shorts_xxx / Long_xxx）
-  000_uploaded/  ← アップロード済みアーカイブ
+  videos/        ← 動画テーマフォルダ（Shorts_xxx / Long_xxx）。生成中・未アップロード
+  000_uploaded/  ← YouTube アップロード済みアーカイブ（履歴画面でも表示）
   000_backups/   ← バックアップ
-  000_data/      ← metadata.db / uploaded_titles.txt
-  000_analytics/ ← Analytics TSV / JSON
+  000_data/      ← metadata.db（動画メタ・Analytics・youtube_status 等すべて格納）
 ```
+
+Analytics データは `metadata.db` の `analytics_snapshots` テーブルに格納する（TSV/JSON ファイルは廃止済み）。
 
 ### API
 
@@ -1689,7 +1695,7 @@ DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
 
 | DB ファイル | 用途 |
 |---|---|
-| `output/000_data/metadata.db` | 動画メタデータ・YouTube 状態・アナリティクス・ジョブ履歴 |
+| `output/{profile_id}/000_data/metadata.db` | 動画メタデータ・YouTube 状態・Analytics・ジョブ履歴（profile 別） |
 | `data/settings.db` | アプリ設定（非認証情報）+ 認証情報（AES-GCM暗号化） |
 
 ### 認証情報管理 (`data/settings.db` — `encrypted_secrets` テーブル)
@@ -1748,23 +1754,21 @@ DB に既存値がある場合はスキップ（上書きしない）。
 
 ### 廃止したローカルファイル
 
-以下のファイルへの書き込みはすべて廃止済み。読み取りも DB に移行した。
-既存フォルダに JSON が残っていても `sync_folder_to_db()` が自動取込する。
+以下のファイルへの書き込み・読み取りはすべて廃止済み。`metadata.db` が正本。
 
-| 旧ファイル | 移行先テーブル |
-|---|---|
-| `_meta/render_info.json` | `render_info` |
-| `_meta/upload_record.json` | `youtube_status` |
-| `_meta/cta_policy.json` | `video_metadata`（CTA 列） |
-| `_meta/opening_review.json` | `script_quality` |
-| `_meta/final_review.json` | `script_quality` |
-| `output/000_data/jobs.json` | `jobs` |
-| `output/000_data/upload_records.json` | `youtube_status` + `render_info` |
-| `output/000_data/uploaded_titles.txt` | `000_uploaded/` フォルダスキャンで代替 |
-| `output/000_analytics/*.json` | `analytics_snapshots`（Analytics 取得時に自動同期） |
-| `.env`（非認証設定） | `data/settings.db`（`settings` テーブル） |
-| `.env`（認証情報） | `data/settings.db`（`encrypted_secrets` テーブル・AES-GCM暗号化） |
-| `client_secrets.json` / `token.json` / `token_analytics.json` | `data/settings.db`（`encrypted_secrets` テーブル・AES-GCM暗号化） |
+| 旧ファイル | 移行先 | 状態 |
+|---|---|---|
+| `_meta/upload_record.json` | `youtube_status` テーブル | 廃止完了 |
+| `_meta/render_info.json` | `render_info` テーブル | 廃止完了 |
+| `_meta/cta_policy.json` | `video_metadata` テーブル（CTA 列） | 廃止完了 |
+| `_meta/opening_review.json` / `final_review.json` | `script_quality` テーブル | 廃止完了 |
+| `output/000_data/jobs.json` | `jobs` テーブル | 廃止完了 |
+| `output/000_data/upload_records.json` | `youtube_status` + `render_info` | 廃止完了 |
+| `output/000_data/uploaded_titles.txt` | `000_uploaded/` フォルダスキャンで代替 | 廃止完了 |
+| `output/000_analytics/*.json` / `*.tsv` | `analytics_snapshots` テーブル | 廃止完了・ディレクトリ削除済み |
+| `.env`（非認証設定） | `data/settings.db`（`settings` テーブル） | 廃止完了 |
+| `.env`（認証情報） | `data/settings.db`（`encrypted_secrets` テーブル・AES-GCM暗号化） | 廃止完了 |
+| `client_secrets.json` / `token.json` / `token_analytics.json` | `data/settings.db`（`encrypted_secrets` テーブル） | 廃止完了 |
 
 ---
 
