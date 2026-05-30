@@ -63,6 +63,8 @@ from config import (
     VIDEO_FPS,
     VOICE_INTRO_FAST_LINES,
     VOICEVOX_PATH,
+    VOICEVOX_QUERY_WORKERS,
+    VOICEVOX_SYNTH_WORKERS,
     VOICE_TAIL_SAFETY_SEC,
 )
 from core.comment_templates import build_fixed_comment
@@ -1562,7 +1564,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             })
 
     # フェーズ1b: audio_query を並列取得
-    _QUERY_WORKERS = min(4, len(_voice_chunks)) if _voice_chunks else 1
+    _QUERY_WORKERS = min(VOICEVOX_QUERY_WORKERS, len(_voice_chunks)) if _voice_chunks else 1
     update_status(f"🎤 音声クエリ並列取得中（{len(_voice_chunks)}件、{_QUERY_WORKERS}並列）...")
     _queries: dict[int, tuple] = {}
     _query_error: str | None = None
@@ -1589,68 +1591,66 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if _query_error:
         return finish_result(f"❌ 音声クエリ失敗のため処理を中止しました\n理由: {_query_error}")
 
-    # フェーズ1c: synthesis を逐次実行
-    for i, c in enumerate(_voice_chunks):
-        if is_cancelled():
-            return cancel_result()
-        voice_num = c["voice_num"]
-        audio_num = c["audio_num"]
-        char_key = c["char_key"]
-        emotion = c["emotion"]
-        speaker_id = c["speaker_id"]
-        speed_scale = c["speed_scale"]
-        audio_path = c["audio_path"]
-        chunk_text = c["chunk_text"]
-        preview = chunk_text[:20] + ("…" if len(chunk_text) > 20 else "")
-        q, _ = _queries[i]
-        update_status(f"🎤 音声合成 [{voice_num}/{total_voices}] コマ{c['audio_path'].split(os.sep)[-1][:3]} {char_key}({emotion}) x{speed_scale:g}「{preview}」")
-        try:
-            vv.synthesis_only(q, speaker_id, audio_path)
-            report.voices_generated += 1
-        except Exception as e:
-            report.voices_failed += 1
-            report.elapsed_sec = time.time() - pipeline_start
-            msg = (
-                f"❌ 音声合成失敗のため処理を中止しました\n"
-                f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
-                f"理由: {e}"
-            )
-            update_status(msg, "error")
-            return finish_result(msg)
-        if is_cancelled():
-            return cancel_result()
+    # フェーズ1c: synthesis を並列実行
+    _SYNTH_WORKERS = min(VOICEVOX_SYNTH_WORKERS, len(_voice_chunks)) if _voice_chunks else 1
+    update_status(f"🎤 音声合成並列開始（{len(_voice_chunks)}件、{_SYNTH_WORKERS}並列）...")
 
+    def _do_synthesis(idx: int, c: dict) -> int:
+        q, _ = _queries[idx]
+        vv.synthesis_only(q, c["speaker_id"], c["audio_path"])
         # VOICEVOXのpostPhonemeが効かない場合があるため、生成後に無音を直接追加
         # 速度が高いほど末尾フォネームが詰まるので比例して余白を増やす
-        _TAIL_SILENCE_SEC = max(0.1, 0.1 * speed_scale)
+        _tail_sec = max(0.1, 0.1 * c["speed_scale"])
         try:
-            with wave.open(audio_path, 'rb') as wr:
-                sr = wr.getframerate()
-                ch = wr.getnchannels()
-                sw = wr.getsampwidth()
-                orig_frames = wr.readframes(wr.getnframes())
-            silence = b'\x00' * (int(sr * _TAIL_SILENCE_SEC) * ch * sw)
-            with wave.open(audio_path, 'wb') as ww:
-                ww.setframerate(sr)
-                ww.setnchannels(ch)
-                ww.setsampwidth(sw)
-                ww.writeframes(orig_frames + silence)
-        except Exception as e:
-            update_status(f"  ⚠ 無音追加失敗(無視): {e}")
+            with wave.open(c["audio_path"], 'rb') as wr:
+                _sr, _ch, _sw = wr.getframerate(), wr.getnchannels(), wr.getsampwidth()
+                _orig = wr.readframes(wr.getnframes())
+            _silence = b'\x00' * (int(_sr * _tail_sec) * _ch * _sw)
+            with wave.open(c["audio_path"], 'wb') as ww:
+                ww.setframerate(_sr); ww.setnchannels(_ch); ww.setsampwidth(_sw)
+                ww.writeframes(_orig + _silence)
+        except Exception as _tail_e:
+            update_status(f"  ⚠ 無音追加失敗(無視): {_tail_e}")
+        with wave.open(c["audio_path"], 'rb') as wr:
+            wr.getnframes()
+        return idx
 
-        try:
-            with wave.open(audio_path, 'rb') as wr:
-                wr.getnframes()
-        except Exception as e:
-            report.voices_failed += 1
-            report.elapsed_sec = time.time() - pipeline_start
-            msg = (
-                f"❌ WAV読み込み失敗のため処理を中止しました\n"
-                f"対象: [{voice_num}/{total_voices}] {char_key}({emotion})「{preview}」\n"
-                f"理由: {e}"
-            )
-            update_status(msg, "error")
-            return finish_result(msg)
+    _synth_first_err: Exception | None = None
+    _synth_first_err_chunk: dict | None = None
+
+    with ThreadPoolExecutor(max_workers=_SYNTH_WORKERS) as _sex:
+        _sfuts = {_sex.submit(_do_synthesis, i, c): i for i, c in enumerate(_voice_chunks)}
+        for _sfut in as_completed(_sfuts):
+            if is_cancelled():
+                break
+            _si = _sfuts[_sfut]
+            _sc = _voice_chunks[_si]
+            try:
+                _sfut.result()
+                report.voices_generated += 1
+                _pv = _sc["chunk_text"][:20] + ("…" if len(_sc["chunk_text"]) > 20 else "")
+                update_status(
+                    f"🎤 音声合成完了 [{_sc['voice_num']}/{total_voices}]"
+                    f" {_sc['char_key']}({_sc['emotion']}) x{_sc['speed_scale']:g}「{_pv}」"
+                )
+            except Exception as _se:
+                report.voices_failed += 1
+                if _synth_first_err is None:
+                    _synth_first_err = _se
+                    _synth_first_err_chunk = _sc
+
+    if is_cancelled():
+        return cancel_result()
+    if _synth_first_err is not None:
+        _ec = _synth_first_err_chunk
+        _pv = _ec["chunk_text"][:20] + ("…" if len(_ec["chunk_text"]) > 20 else "")
+        msg = (
+            f"❌ 音声合成失敗のため処理を中止しました\n"
+            f"対象: [{_ec['voice_num']}/{total_voices}] {_ec['char_key']}({_ec['emotion']})「{_pv}」\n"
+            f"理由: {_synth_first_err}"
+        )
+        update_status(msg, "error")
+        return finish_result(msg)
 
     # ══════════════════════════════════════════════════════════════════════════
     # パス2: 全背景生成（Gemini / SD WebUI）
