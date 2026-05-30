@@ -1833,6 +1833,15 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     except Exception as e:
         update_status(f"⚠ render_info.json保存に失敗: {e}", "warning")
 
+    # メタデータDB に同期（失敗しても生成結果は捨てない）
+    try:
+        from core.metadata_db import sync_folder_to_db, initialize_db, is_initialized
+        if not is_initialized():
+            initialize_db()
+        sync_folder_to_db(theme_dir)
+    except Exception as _db_e:
+        update_status(f"⚠ メタデータDB同期失敗（続行）: {_db_e}", "warning")
+
     report.elapsed_sec = time.time() - pipeline_start
     report.theme_dir = theme_dir
     msg = f"✅ 完成! 出力フォルダ: {theme_dir}"

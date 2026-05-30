@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}動画DB{% endblock %}
+{% block content %}
+<h1>動画DB</h1>
+
+<div class="card">
+  <div class="form-row" style="flex-wrap:wrap; gap:8px; align-items:flex-end">
+    <div class="form-group" style="min-width:120px">
+      <label>形式</label>
+      <select id="f-type" class="form-input" onchange="loadVideos()">
+        <option value="">すべて</option>
+        <option value="shorts">Shorts</option>
+        <option value="long">Long</option>
+        <option value="ネタ会議">ネタ会議</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:120px">
+      <label>公開状態</label>
+      <select id="f-status" class="form-input" onchange="loadVideos()">
+        <option value="">すべて</option>
+        <option value="published">公開済み</option>
+        <option value="scheduled">予約中</option>
+        <option value="private">未公開</option>
+      </select>
+    </div>
+    <div class="form-group" style="min-width:120px">
+      <label>生成区分</label>
+      <select id="f-gentype" class="form-input" onchange="loadVideos()">
+        <option value="">すべて</option>
+        <option value="新規">新規</option>
+        <option value="横展開">横展開</option>
+        <option value="品質改善版">品質改善版</option>
+        <option value="再挑戦">再挑戦</option>
+      </select>
+    </div>
+    <div class="form-group check-group" style="align-self:center">
+      <label><input type="checkbox" id="f-no-playlist" onchange="loadVideos()"> 再生リスト未登録のみ</label>
+    </div>
+    <div class="form-group check-group" style="align-self:center">
+      <label><input type="checkbox" id="f-no-upload" onchange="loadVideos()"> 未アップロードのみ</label>
+    </div>
+    <button class="btn btn-secondary" onclick="loadVideos()">更新</button>
+    <button class="btn btn-secondary" onclick="importAll()">全件取り込み</button>
+  </div>
+  <div id="db-stats" class="hint mt-sm"></div>
+</div>
+
+<div id="import-log" class="log-box mt" style="display:none;max-height:200px;overflow-y:auto"></div>
+
+<div class="card mt" id="db-table-card" style="overflow-x:auto">
+  <table class="data-table" id="db-table">
+    <thead>
+      <tr>
+        <th>タイトル</th>
+        <th>形式</th>
+        <th>生成区分</th>
+        <th>ジャンル</th>
+        <th>公開状態</th>
+        <th>予約/公開日時</th>
+        <th>再生数</th>
+        <th>平均視聴率</th>
+        <th>スコア</th>
+        <th>PL</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody id="db-tbody">
+      <tr><td colspan="11" class="empty-msg">読み込み中...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div id="dup-card" class="card mt" style="display:none">
+  <h2>重複トピック</h2>
+  <table class="data-table" id="dup-table">
+    <thead><tr><th>トピックキー/食材</th><th>件数</th><th>タイトル</th></tr></thead>
+    <tbody id="dup-tbody"></tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadStats() {
+  try {
+    const r = await fetch('/api/db/stats');
+    const d = await r.json();
+    document.getElementById('db-stats').textContent =
+      `DB: 計${d.total}本 | アップロード済み${d.uploaded}本 | 公開済み${d.published}本 | 予約中${d.scheduled}本 | PL登録${d.playlist_registered}本`;
+  } catch {}
+}
+
+async function loadVideos() {
+  const vtype  = document.getElementById('f-type').value;
+  const status = document.getElementById('f-status').value;
+  const gentype= document.getElementById('f-gentype').value;
+  const noPL   = document.getElementById('f-no-playlist').checked;
+  const noUp   = document.getElementById('f-no-upload').checked;
+
+  const params = new URLSearchParams();
+  if (vtype)   params.set('video_type', vtype);
+  if (status)  params.set('publish_status', status);
+  if (gentype) params.set('generation_type', gentype);
+  if (noPL)    params.set('playlist_unregistered', 'true');
+  if (noUp)    params.set('has_youtube_id', 'false');
+
+  const r = await fetch('/api/db/videos?' + params);
+  const rows = await r.json();
+  const tbody = document.getElementById('db-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-msg">該当なし</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(v => {
+    const dt = (v.publish_at || v.uploaded_at || '—').slice(0,16).replace('T',' ');
+    const status = v.publish_status || '—';
+    const badge = status === 'published' ? 'badge-ok'
+                : status === 'scheduled' || status === 'private' ? 'badge-warn' : '';
+    const views = v.latest_views != null ? v.latest_views.toLocaleString() : '—';
+    const pct   = v.latest_avg_pct != null ? v.latest_avg_pct.toFixed(1) + '%' : '—';
+    const score = v.latest_score || '—';
+    const pl    = v.playlist_registered ? '✅' : '—';
+    const ytLink = v.youtube_video_id
+      ? `<a href="https://youtu.be/${v.youtube_video_id}" target="_blank" class="btn btn-xs btn-secondary">YT</a>`
+      : '';
+    const histLink = `<a href="/history/${encodeURIComponent(v.local_id)}" class="btn btn-xs btn-secondary">詳細</a>`;
+    return `<tr>
+      <td title="${v.local_id}">${(v.title||'—').slice(0,30)}</td>
+      <td>${v.video_type||'—'}</td>
+      <td>${v.generation_type||'—'}</td>
+      <td>${v.genre||'—'}</td>
+      <td><span class="badge ${badge}">${status}</span></td>
+      <td style="white-space:nowrap">${dt}</td>
+      <td style="text-align:right">${views}</td>
+      <td style="text-align:right">${pct}</td>
+      <td style="text-align:center">${score}</td>
+      <td style="text-align:center">${pl}</td>
+      <td style="white-space:nowrap">${histLink} ${ytLink}</td>
+    </tr>`;
+  }).join('');
+
+  await loadDuplicates();
+}
+
+async function loadDuplicates() {
+  const r = await fetch('/api/db/duplicates');
+  const rows = await r.json();
+  const card = document.getElementById('dup-card');
+  if (!rows.length) { card.style.display='none'; return; }
+  card.style.display='';
+  document.getElementById('dup-tbody').innerHTML = rows.map(d =>
+    `<tr><td>${d.topic_key||d.food_name||'—'}</td><td>${d.cnt}</td><td style="font-size:12px">${(d.titles||'').replaceAll('|','<br>')}</td></tr>`
+  ).join('');
+}
+
+async function importAll() {
+  if (!confirm('output/ 配下の全フォルダをDBに取り込みます。時間がかかる場合があります。')) return;
+  const log = document.getElementById('import-log');
+  log.style.display = 'block';
+  log.textContent = '取り込みジョブを登録中...';
+  try {
+    const r = await fetch('/api/db/import-all', {method:'POST'});
+    const d = await r.json();
+    if (!d.job_id) { log.textContent = 'エラー: ' + JSON.stringify(d); return; }
+    log.textContent = `ジョブ登録: ${d.job_id} — ログ監視中...\n`;
+    pollImportJob(d.job_id, log);
+  } catch(e) {
+    log.textContent = 'エラー: ' + e;
+  }
+}
+
+function pollImportJob(jobId, log) {
+  const iv = setInterval(async () => {
+    try {
+      const r = await fetch(`/api/jobs/${jobId}`);
+      const job = await r.json();
+      const lines = (job.logs || []).map(l => l.message).join('\n');
+      log.textContent = lines;
+      log.scrollTop = log.scrollHeight;
+      if (job.status === 'success' || job.status === 'failed') {
+        clearInterval(iv);
+        await loadStats();
+        await loadVideos();
+      }
+    } catch {}
+  }, 2000);
+}
+
+(async () => {
+  await loadStats();
+  await loadVideos();
+})();
+</script>
+{% endblock %}

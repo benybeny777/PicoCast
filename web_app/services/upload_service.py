@@ -180,6 +180,17 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
                     _log(job, f"再生リスト登録済み: {resolved}", "info")
                 else:
                     _log(job, f"再生リスト追加: {resolved}", "success")
+                # DB に再生リスト登録状態を保存
+                try:
+                    from core.metadata_db import upsert_playlist_registration, is_initialized, initialize_db
+                    if not is_initialized():
+                        initialize_db()
+                    local_id = os.path.basename(theme_dir)
+                    upsert_playlist_registration(
+                        local_id, video_id, resolved,
+                        create_result.get("id"), status="registered")
+                except Exception as _pl_e:
+                    _log(job, f"⚠ 再生リストDB同期失敗: {_pl_e}", "warning")
             else:
                 _log(job, f"再生リスト追加失敗: {resolved} — {add_result['reason']}", "error")
             playlist_assignments.append(entry)
@@ -221,6 +232,16 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
     with open(os.path.join(meta_dir, "upload_record.json"), "w", encoding="utf-8") as f:
         json.dump(record, f, ensure_ascii=False, indent=2)
     _log(job, "upload_record.json を保存しました", "info")
+
+    # メタデータDB に youtube_status を同期（失敗しても続行）
+    try:
+        from core.metadata_db import sync_folder_to_db, initialize_db, is_initialized
+        if not is_initialized():
+            initialize_db()
+        sync_folder_to_db(theme_dir)
+        _log(job, "メタデータDB を更新しました", "info")
+    except Exception as _db_e:
+        _log(job, f"⚠ メタデータDB同期失敗（続行）: {_db_e}", "warning")
 
     # 000_uploaded/ へフォルダ移動（既に移動済みの場合はスキップ）
     folder_name = os.path.basename(theme_dir)
