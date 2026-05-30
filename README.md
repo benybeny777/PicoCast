@@ -95,8 +95,7 @@ graph TD
 
 ### Step 1. 仮想環境と依存パッケージの準備
 
-<details>
-<summary><b>仮想環境の作成方法 (クリックして展開)</b></summary>
+**仮想環境の作成:**
 
 **Windows:**
 ```powershell
@@ -107,7 +106,6 @@ py -3 -m venv .venv
 ```bash
 python3 -m venv .venv
 ```
-</details>
 
 **依存関係のインストール:**
 
@@ -121,30 +119,40 @@ pip install --upgrade -r config/requirements.txt
 .venv/bin/python -m pip install --upgrade -r config/requirements.txt
 ```
 
-### Step 2. `.env` ファイルの作成
+### Step 2. 認証情報の登録（DB暗号化保存）
 
-リポジトリ直下に `.env` を作成し、各種APIキーを設定します。
+認証情報はすべて **設定画面 `/settings` の「認証情報」セクション** から登録します。
+`.env` への直接記入は不要です（旧方式。後述の移行手順を参照）。
 
-```env
-# 必須
-GOOGLE_API_KEY=your_gemini_api_key
-
-# 任意
-OPENAI_API_KEY=your_openai_api_key   # ChatGPT台本レビュー用
-HF_TOKEN=your_huggingface_token      # SD WebUIモデル自動DL用
-```
-
-| キー | 用途 |
+| 項目 | 用途 |
 |:---|:---|
-| `GOOGLE_API_KEY` | Gemini API（台本・背景画像・サムネイル生成） |
-| `OPENAI_API_KEY` | ChatGPT（台本の生成前最終レビュー） |
-| `HF_TOKEN` | Hugging Face（Stable Diffusion WebUI モデル自動DL） |
+| Google API Key | Gemini API（台本・背景画像・サムネイル生成） |
+| OpenAI API Key | ChatGPT（台本の生成前最終レビュー） |
+| HF Token | Hugging Face（Stable Diffusion WebUI モデル自動DL） |
+| YouTube Client Secrets | OAuth 2.0 クライアント設定（JSON文字列） |
+| YouTube Upload OAuth | アップロード用トークン（認証ボタンから取得） |
+| YouTube Analytics OAuth | Analytics取得用トークン（認証ボタンから取得） |
+
+認証情報は `data/settings.db` の `encrypted_secrets` テーブルに **AES-GCM** で暗号化して保存されます。
+Windows では DPAPI によりログインユーザーのみが復号できます。
+
+#### 既存 `.env` / OAuth ファイルからの移行
+
+旧方式（`.env` に直接記入 / `client_secrets.json` 等を配置）を利用中の場合は、
+**アプリ起動時に自動移行**されます（値はそのまま DB に保存されます）。
+
+移行後は設定画面で「旧認証ファイル削除」ボタンから安全に削除できます。
 
 ### Step 3. YouTube OAuth 設定
 
-1. Google Cloud Console でOAuth 2.0クライアントを作成し、`client_secrets.json` をリポジトリ直下に配置。
-2. 初回アップロード時にブラウザが開き認証が完了すると `token.json` が生成されます。
-3. Analytics 利用時は別途 `token_analytics.json` が生成されます。
+1. Google Cloud Console で OAuth 2.0 クライアントを作成し、JSONをコピーする。
+2. 設定画面 `/settings` の「認証情報」→「YouTube Client Secrets 登録」に貼り付けて保存する。
+3. 「YouTube Upload OAuth 認証開始」ボタンでブラウザ認証を完了するとトークンが DB に保存される。
+4. Analytics 利用時は「YouTube Analytics OAuth 認証開始」ボタンで同様に認証する。
+
+> [!NOTE]
+> `token.json` / `token_analytics.json` は恒久ファイルとして新規作成されません。
+> OAuth トークンはリフレッシュのたびに DB へ自動再保存されます。
 
 > [!IMPORTANT]
 > `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` は**絶対に Git にコミットしないでください**（`.gitignore` 設定済み）。
@@ -324,7 +332,7 @@ Stable Diffusion WebUI を `--api` オプション付きで起動してくださ
 
 優先順位: **`data/settings.db`（設定画面で変更） > `config.py` の既定値**
 
-`.env` は認証情報（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）のみ記載します。
+認証情報（Google API Key / OpenAI API Key / HF Token / YouTube OAuth）は **設定画面 `/settings` の「認証情報」セクション** に登録し、`data/settings.db` の `encrypted_secrets` テーブルへ AES-GCM で暗号化保存されます。`.env` への直接記入は不要です。
 それ以外の設定は `/settings` 画面で変更でき、`data/settings.db` に保存されます（再起動不要で即時反映）。
 
 ### AI モデル
@@ -476,7 +484,7 @@ Stable Diffusion WebUI を `--api` オプション付きで起動してくださ
 
 ### 画像が生成されない（Nano Banana）
 
-- `GOOGLE_API_KEY` が `.env` に設定されているか確認
+- 設定画面 `/settings` の「認証情報」で **Google API Key が「登録済み」**になっているか確認
 - API クォータ（レート制限）に引っかかっている場合は `NANOBANANA_BG_WORKERS` を `1` に下げる
 
 ### GPU エンコードが使われない
@@ -489,13 +497,14 @@ Stable Diffusion WebUI を `--api` オプション付きで起動してくださ
 
 - アップロード完了後、フォルダは `output/000_uploaded/` に移動されますが、履歴詳細ページはフォールバック検索するため自動的に表示されます。表示されない場合はページを再読み込みしてください。
 
-### `token.json` 認証エラー
+### YouTube OAuth 認証エラー
 
-```
-削除して再認証する:
-del token.json
-```
-次回アップロード時にブラウザが開き、再認証されます。
+設定画面 `/settings` の「認証情報」で YouTube Upload OAuth または YouTube Analytics OAuth を削除し、
+「認証開始」ボタンで再認証してください。
+
+> [!NOTE]
+> `token.json` / `token_analytics.json` は使用されなくなりました。
+> 旧ファイルが残っている場合は設定画面の「旧認証ファイル削除」から削除できます。
 
 ### 字幕が1行に収まらない・見切れる
 

@@ -15,8 +15,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.force-ssl",
 ]
 ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-CLIENT_SECRETS = os.path.join(ROOT_DIR, "client_secrets.json")
-TOKEN_FILE = os.path.join(ROOT_DIR, "token_analytics.json")
+_DEFAULT_PROFILE = "default"
 
 
 def _close_google_resource(resource):
@@ -24,21 +23,43 @@ def _close_google_resource(resource):
         resource.close()
 
 
-def _get_credentials():
+def _get_credentials(profile_id: str = _DEFAULT_PROFILE):
+    """
+    YouTube Analytics 用 Credentials を取得する。
+    トークンは DB（encrypted_secrets）から読み込み、refresh 後は DB へ再保存する。
+    token_analytics.json ファイルは使用しない。
+    """
+    from core.secret_store import has_secret, load_secret, save_secret, delete_secret, SecretNotFoundError
+
     creds = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+    if has_secret("youtube_analytics_token", profile_id=profile_id):
+        token_json = load_secret("youtube_analytics_token", profile_id=profile_id)
+        creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
-            except Exception:
-                creds = None
+                save_secret("youtube_analytics_token", creds.to_json(), profile_id=profile_id)
+            except Exception as e:
+                if any(k in str(e).lower() for k in ("invalid_scope", "invalid_grant", "unauthorized")):
+                    delete_secret("youtube_analytics_token", profile_id=profile_id)
+                    creds = None
+                else:
+                    raise
         if not creds or not creds.valid:
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS, SCOPES)
+            if not has_secret("youtube_client_secrets", profile_id=profile_id):
+                raise SecretNotFoundError(
+                    "YouTube client_secrets が未登録です。"
+                    "設定画面の「認証情報」から登録してください。"
+                )
+            client_config = json.loads(
+                load_secret("youtube_client_secrets", profile_id=profile_id)
+            )
+            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(TOKEN_FILE, "w", encoding="utf-8") as f:
-            f.write(creds.to_json())
+            save_secret("youtube_analytics_token", creds.to_json(), profile_id=profile_id)
+
     return creds
 
 

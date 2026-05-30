@@ -2,7 +2,7 @@ import os
 import json
 import re
 from google import genai
-from config import GOOGLE_API_KEY, GEMINI_MODEL
+from config import GEMINI_MODEL
 from core.ng_words import apply_ng_word_replacements
 from core.script_prompts import build_gemini_system_prompt
 
@@ -12,8 +12,9 @@ class AIGenerator:
     def __init__(self, debug=False):
         self.debug = debug
         self.client = None
-        if GOOGLE_API_KEY:
-            self.client = genai.Client(api_key=GOOGLE_API_KEY)
+        from core.secret_store import has_secret, load_secret
+        if has_secret("google_api_key"):
+            self.client = genai.Client(api_key=load_secret("google_api_key"))
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):

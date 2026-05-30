@@ -8,7 +8,6 @@ from typing import Any
 import requests
 
 from config import (
-    OPENAI_API_KEY,
     OPENAI_FINAL_REVIEW_MODEL,
     OPENAI_FINAL_REVIEW_ENABLED,
     OPENING_REVIEW_USE_LLM,
@@ -756,9 +755,10 @@ def _filter_obsolete_dialogue_must_fix(must_fix: list[str], dialogue_count: int)
 
 
 def check_openai_final_review_connection(timeout: int = 10) -> dict[str, Any]:
+    from core.secret_store import has_secret, load_secret
     if not OPENAI_FINAL_REVIEW_ENABLED:
         return {"ok": True, "skipped": True, "reason": "OPENAI_FINAL_REVIEW_ENABLED is false"}
-    if not OPENAI_API_KEY:
+    if not has_secret("openai_api_key"):
         return {
             "ok": False,
             "error": "OPENAI_API_KEY is not set",
@@ -767,7 +767,7 @@ def check_openai_final_review_connection(timeout: int = 10) -> dict[str, Any]:
     try:
         with requests.get(
             "https://api.openai.com/v1/models",
-            headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+            headers={"Authorization": f"Bearer {load_secret('openai_api_key')}"},
             timeout=timeout,
         ) as response:
             response.raise_for_status()
@@ -794,18 +794,20 @@ def final_chatgpt_review(
     duration_result: dict[str, Any],
     render_engine: str = "native",
 ) -> dict[str, Any] | None:
+    from core.secret_store import has_secret, load_secret
     if not OPENAI_FINAL_REVIEW_ENABLED:
         return {
             "skipped": True,
             "reason": "OPENAI_FINAL_REVIEW_ENABLED is false",
             "model": OPENAI_FINAL_REVIEW_MODEL,
         }
-    if not OPENAI_API_KEY:
+    if not has_secret("openai_api_key"):
         return {
             "skipped": True,
             "reason": "OPENAI_API_KEY is not set",
             "model": OPENAI_FINAL_REVIEW_MODEL,
         }
+    openai_api_key = load_secret("openai_api_key")
     prompt = _build_final_review_prompt(
         title=title,
         thumbnail_text=thumbnail_text,
@@ -827,7 +829,7 @@ def final_chatgpt_review(
     with requests.post(
         "https://api.openai.com/v1/responses",
         headers={
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Authorization": f"Bearer {openai_api_key}",
             "Content-Type": "application/json",
         },
         data=json.dumps(body),

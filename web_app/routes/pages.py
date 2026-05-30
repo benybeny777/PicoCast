@@ -188,12 +188,13 @@ def page_logs(request: Request):
 @router.get("/sd-models", response_class=HTMLResponse)
 def page_sd_models(request: Request):
     from config import config as _cfg
+    from core.secret_store import has_secret
     return _render(request, "sd_models.html", {
         "sd_webui_root": _cfg.SD_WEBUI_ROOT,
         "sd_webui_model": _cfg.SD_WEBUI_MODEL,
         "auto_download_sd_models": _cfg.AUTO_DOWNLOAD_SD_MODELS,
         "sd_webui_base_url": _cfg.SD_WEBUI_BASE_URL,
-        "hf_token_set": bool(_cfg.HF_TOKEN),
+        "hf_token_set": has_secret("hf_token"),
     })
 
 

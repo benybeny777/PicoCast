@@ -363,9 +363,10 @@ def _auth_model_entry():
 class TestAuthDownload:
     def test_requires_auth_no_token_raises(self, tmp_path, monkeypatch):
         """requires_auth=true かつ HF_TOKEN 未設定でエラー（ダウンロードを試みない）"""
-        from config import config
+        import core.secret_store as ss
         from core.sd_model_manager import SDWebUIModelManager
-        monkeypatch.setattr(config, "HF_TOKEN", "")
+        monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
+        monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x05" * 32)
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
         manager = SDWebUIModelManager(sd_root=str(tmp_path / "sd_root"), manifest_path=manifest_path)
         with pytest.raises(RuntimeError, match="HF_TOKEN"):
@@ -373,11 +374,13 @@ class TestAuthDownload:
 
     def test_requires_auth_with_token_adds_authorization_header(self, tmp_path, monkeypatch):
         """requires_auth=true かつ HF_TOKEN 設定済みで Authorization ヘッダーが付く"""
-        from config import config
+        import core.secret_store as ss
         import httpx
         from core.sd_model_manager import SDWebUIModelManager
 
-        monkeypatch.setattr(config, "HF_TOKEN", "test_hf_token_xyz")
+        monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
+        monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x05" * 32)
+        ss.save_secret("hf_token", "test_hf_token_xyz")
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
         sd_root = tmp_path / "sd_root"
         manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
@@ -408,11 +411,13 @@ class TestAuthDownload:
 
     def test_requires_auth_401_raises_auth_error(self, tmp_path, monkeypatch):
         """requires_auth=true かつ 401 応答 → 認証エラーメッセージ"""
-        from config import config
+        import core.secret_store as ss
         import httpx
         from core.sd_model_manager import SDWebUIModelManager
 
-        monkeypatch.setattr(config, "HF_TOKEN", "bad_token")
+        monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
+        monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x05" * 32)
+        ss.save_secret("hf_token", "bad_token")
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
         sd_root = tmp_path / "sd_root"
         manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)
@@ -437,11 +442,13 @@ class TestAuthDownload:
 
     def test_requires_auth_403_raises_auth_error(self, tmp_path, monkeypatch):
         """requires_auth=true かつ 403 応答 → ライセンス同意エラーメッセージ"""
-        from config import config
+        import core.secret_store as ss
         import httpx
         from core.sd_model_manager import SDWebUIModelManager
 
-        monkeypatch.setattr(config, "HF_TOKEN", "valid_token")
+        monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
+        monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x05" * 32)
+        ss.save_secret("hf_token", "valid_token")
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
         sd_root = tmp_path / "sd_root"
         manager = SDWebUIModelManager(sd_root=str(sd_root), manifest_path=manifest_path)

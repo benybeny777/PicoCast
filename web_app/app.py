@@ -45,6 +45,15 @@ async def _lifespan(app):
     from core.metadata_db import initialize_db
     initialize_db()  # 起動時に DB を確実に初期化しログを残す
     register_shutdown_hook("metadata_db", close_all_connections)
+
+    # 既存認証ファイル（.env / OAuth JSON）を DB へ自動移行
+    try:
+        from core.secret_migration import migrate_existing_secret_files
+        migrate_existing_secret_files()
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning("[SecretMigration] 起動時移行でエラー: %s", _e)
+
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
     threading.Thread(target=log_external_services, daemon=True).start()

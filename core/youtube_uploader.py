@@ -11,8 +11,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.force-ssl",
 ]
-CLIENT_SECRETS = os.path.join(os.path.dirname(os.path.dirname(__file__)), "client_secrets.json")
-TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "token.json")
+_DEFAULT_PROFILE = "default"
 
 
 THUMB_MAX_BYTES = 2 * 1024 * 1024  # YouTube 上限 2MB
@@ -47,27 +46,44 @@ def _compress_thumbnail(path):
 
 
 
-def get_youtube_client():
+def get_youtube_client(profile_id: str = _DEFAULT_PROFILE):
+    """
+    YouTube Data API クライアントを取得する。
+    トークンは DB（encrypted_secrets）から読み込み、refresh 後は DB へ再保存する。
+    token.json / client_secrets.json ファイルは使用しない。
+    """
+    from core.secret_store import has_secret, load_secret, save_secret, delete_secret, SecretNotFoundError
+
     creds = None
-    if os.path.exists(TOKEN_FILE):
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
+    if has_secret("youtube_upload_token", profile_id=profile_id):
+        token_json = load_secret("youtube_upload_token", profile_id=profile_id)
+        creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
+                save_secret("youtube_upload_token", creds.to_json(), profile_id=profile_id)
             except Exception as e:
                 # スコープ変更・トークン失効などで再認証が必要な場合
                 if any(k in str(e).lower() for k in ("invalid_scope", "invalid_grant", "unauthorized")):
-                    if os.path.exists(TOKEN_FILE):
-                        os.remove(TOKEN_FILE)
+                    delete_secret("youtube_upload_token", profile_id=profile_id)
                     creds = None
                 else:
                     raise
         if not creds or not creds.valid:
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRETS, SCOPES)
+            if not has_secret("youtube_client_secrets", profile_id=profile_id):
+                raise SecretNotFoundError(
+                    "YouTube client_secrets が未登録です。"
+                    "設定画面の「認証情報」から登録してください。"
+                )
+            client_config = json.loads(
+                load_secret("youtube_client_secrets", profile_id=profile_id)
+            )
+            flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(TOKEN_FILE, "w") as f:
-            f.write(creds.to_json())
+            save_secret("youtube_upload_token", creds.to_json(), profile_id=profile_id)
+
     return build("youtube", "v3", credentials=creds)
 
 

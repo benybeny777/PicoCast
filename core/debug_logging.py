@@ -79,9 +79,7 @@ def cleanup_old_debug_logs() -> None:
 
 def _redact(message: str) -> str:
     redacted = message
-    for secret in (config.GOOGLE_API_KEY, config.OPENAI_API_KEY):
-        if secret:
-            redacted = redacted.replace(secret, "[REDACTED]")
+    # パターンベースのサニタイズのみ行う（秘密値をメモリに読まない）
     redacted = re.sub(r"sk-[A-Za-z0-9_-]{12,}", "sk-[REDACTED]", redacted)
     redacted = re.sub(r"AIza[A-Za-z0-9_-]{20,}", "AIza[REDACTED]", redacted)
     return redacted

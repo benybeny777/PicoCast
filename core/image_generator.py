@@ -4,7 +4,6 @@ import time
 from google import genai
 from config import config
 from config import (
-    GOOGLE_API_KEY,
     NANOBANANA_FLASH_MODEL,
     NANOBANANA_PRO_MODEL,
     SD_SIZE_IMAGE_SCALE,
@@ -94,12 +93,12 @@ class ImageGenerator:
 
         self.client = None
         if self.background_engine == "nanobanana":
-            if not GOOGLE_API_KEY:
+            from core.secret_store import has_secret, load_secret, SecretNotFoundError
+            if not has_secret("google_api_key"):
                 raise RuntimeError(
-                    "Google API キー (GOOGLE_API_KEY) が未設定です。"
-                    " .env に GOOGLE_API_KEY を設定してください。"
+                    "Google API キーが未登録です。設定画面の「認証情報」から登録してください。"
                 )
-            self.client = genai.Client(api_key=GOOGLE_API_KEY)
+            self.client = genai.Client(api_key=load_secret("google_api_key"))
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):
@@ -345,7 +344,7 @@ class ImageGenerator:
         if not self.client:
             raise RuntimeError(
                 "Google API クライアントが初期化されていません。"
-                " GOOGLE_API_KEY が未設定の可能性があります。"
+                " 設定画面の「認証情報」から Google API キーを登録してください。"
             )
 
         save_dir = target_dir or "output/backgrounds"

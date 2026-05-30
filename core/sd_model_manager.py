@@ -233,12 +233,13 @@ class SDWebUIModelManager:
             )
 
         # 認証チェック
-        hf_token = config.HF_TOKEN
+        from core.secret_store import has_secret, load_secret
+        hf_token = load_secret("hf_token") if has_secret("hf_token") else ""
         if entry.get("requires_auth"):
             if not hf_token:
                 raise RuntimeError(
                     f"モデル '{entry['display_name']}' のダウンロードには HF_TOKEN が必要です。\n"
-                    f"設定画面の「APIキー設定」タブで HF_TOKEN を保存し、\n"
+                    f"設定画面の「認証情報」タブで HF_TOKEN を登録し、\n"
                     f"配布元ページでライセンス同意済みか確認してください。\n"
                     f"配布元: {entry.get('source_page_url') or entry.get('source_url', '')}"
                 )

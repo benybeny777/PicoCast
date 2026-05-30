@@ -273,7 +273,10 @@ def test_config_image_style_choices_save_normalizes_quotes(tmp_path, monkeypatch
     assert env_path.read_text(encoding="utf-8").strip() == "WEB_IMAGE_STYLE_CHOICES=通常,アニメ,水彩"
 
 
-def test_secrets_reject_newline_injection():
+def test_secrets_reject_newline_injection(tmp_path, monkeypatch):
+    import core.secret_store as ss
+    monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x06" * 32)
     from web_app.services.secrets_service import save_secrets
     errors = save_secrets({"OPENAI_API_KEY": "sk-test\nGOOGLE_API_KEY=leak"})
     assert errors

@@ -28,7 +28,11 @@
 ## Web UI 作業時の注意点
 
 - Web UI は `127.0.0.1` のみバインドする。外部公開・認証なし運用は禁止。
-- `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の中身をレスポンスやログへ絶対に含めない。APIキー設定はbool（有無）のみ返す。
+- 認証情報（APIキー・OAuthトークン・client_secrets）は DB の `encrypted_secrets` テーブルに AES-GCM で暗号化保存する。`.env` / `client_secrets.json` / `token.json` / `token_analytics.json` は正本として使用しない。
+- 認証情報の読み取りは `core.secret_store.load_secret()` / `has_secret()` を使う。`os.environ.get("GOOGLE_API_KEY")` など直接参照を新規に書いてはならない（`NVF_MASTER_KEY` のみ例外）。
+- 認証情報の値をレスポンス・ログ・例外メッセージへ絶対に含めない。APIキー設定は bool（有無）のみ返す。
+- DB 復号失敗・master key 取得失敗は例外を上位に伝播させる（フォールバック禁止）。
+- OAuth refresh 後のトークンは `save_secret()` で DB へ再保存する。`token.json` / `token_analytics.json` を恒久ファイルとして新規作成しない。
 - Web UI を唯一の操作入口とする。`workers/main.py` は生成パイプラインとして使い、旧Tkinter GUI/CLI導線を復活させない。
 - 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
 - output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
@@ -127,6 +131,8 @@ output/{テーマ名}/
 - `client_secrets.json`
 - `token.json`
 - `token_analytics.json`
+- `data/secret_master.key` — DPAPI保護マスターキー（個人PC専用）
+- `data/settings.db` — 設定DB（認証情報の暗号化エントリを含む）
 - 認証情報、APIキー、OAuthトークン、秘密鍵、Cookie、個人用設定などのシークレットはファイル名に関わらずコミット禁止。ドキュメントやログにも値を記載しない。
 
 ### テスト用ファイルの置き場所

@@ -12,3 +12,4 @@ python-multipart
 httpx
 sudachipy
 sudachidict_core
+cryptography
