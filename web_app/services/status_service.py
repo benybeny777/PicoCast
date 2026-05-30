@@ -134,18 +134,26 @@ def get_settings_status() -> dict[str, Any]:
         ollama_result   = f_ollama.result()
         sd_webui_result = f_sd.result()
 
+    # 認証情報の登録状態は DB を正本とする（値は返さない）
+    from core.secret_store import list_secret_status
+    secret_status = list_secret_status()
+
     return {
         "voicevox": voicevox_result,
         "ffmpeg": ffmpeg_result,
         "ollama": ollama_result,
         "sd_webui": sd_webui_result,
-        "image_backend": config.IMAGE_BACKEND,          # 現在のバックエンド種別
-        "google_api_key": bool(config.GOOGLE_API_KEY),
-        "openai_api_key": bool(config.OPENAI_API_KEY),
-        "hf_token": bool(config.HF_TOKEN),
-        "client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),
-        "token_json": os.path.isfile(os.path.join(root, "token.json")),
-        "token_analytics_json": os.path.isfile(os.path.join(root, "token_analytics.json")),
+        "image_backend": config.IMAGE_BACKEND,                          # 現在のバックエンド種別
+        "google_api_key": secret_status["google_api_key"],              # DB登録状態のみ
+        "openai_api_key": secret_status["openai_api_key"],              # DB登録状態のみ
+        "hf_token": secret_status["hf_token"],                         # DB登録状態のみ
+        "youtube_client_secrets": secret_status["youtube_client_secrets"],
+        "youtube_upload_token": secret_status["youtube_upload_token"],
+        "youtube_analytics_token": secret_status["youtube_analytics_token"],
+        # 旧ファイルの残存状態（参考表示用）
+        "legacy_client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),
+        "legacy_token_json": os.path.isfile(os.path.join(root, "token.json")),
+        "legacy_token_analytics_json": os.path.isfile(os.path.join(root, "token_analytics.json")),
         "output_dir": OUTPUT_DIR,
         "output_dir_exists": os.path.isdir(OUTPUT_DIR),
         "render_engine": "native",

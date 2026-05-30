@@ -4,7 +4,17 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from web_app.services.status_service import get_settings_status
 from web_app.services.config_service import get_editable_config, save_config
-from web_app.services.secrets_service import save_secrets
+from web_app.services.secrets_service import (
+    save_secrets,
+    save_api_key,
+    save_client_secrets,
+    delete_api_key,
+    delete_youtube_secret,
+    get_secret_status,
+    get_legacy_file_status,
+    delete_legacy_file,
+    remigrate_from_legacy,
+)
 from config import config as cfg
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -40,11 +50,104 @@ def api_save_config(updates: dict[str, str]):
 
 @router.post("/secrets")
 def api_save_secrets(updates: dict[str, str]):
-    """APIキーを .env に書き込む。値はレスポンスに含めない。"""
+    """APIキーを DB へ暗号化保存する（後方互換エンドポイント）。値はレスポンスに含めない。"""
     errors = save_secrets(updates)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
     return {"saved": list(updates.keys())}
+
+
+# ── 認証情報管理エンドポイント ────────────────────────────────────────────────
+
+class ApiKeyRequest(BaseModel):
+    secret_type: str
+    value: str
+
+
+class ClientSecretsRequest(BaseModel):
+    json_text: str
+    profile_id: str = "default"
+
+
+class DeleteSecretRequest(BaseModel):
+    secret_type: str
+    profile_id: str = "default"
+    confirmed: bool = False
+
+
+class DeleteLegacyFileRequest(BaseModel):
+    filename: str
+    confirmed: bool = False
+
+
+@router.get("/secrets/status")
+def api_secret_status(profile_id: str = "default"):
+    """各シークレットの登録状態を返す（値は一切返さない）。"""
+    db_status = get_secret_status(profile_id=profile_id)
+    legacy_status = get_legacy_file_status()
+    return {
+        "secrets": db_status,
+        "legacy_files": legacy_status,
+    }
+
+
+@router.post("/secrets/api-key")
+def api_save_api_key(req: ApiKeyRequest):
+    """APIキー（google_api_key / openai_api_key / hf_token）を DB へ暗号化保存する。"""
+    errors = save_api_key(req.secret_type, req.value)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    return {"saved": req.secret_type}
+
+
+@router.post("/secrets/client-secrets")
+def api_save_client_secrets(req: ClientSecretsRequest):
+    """YouTube client_secrets JSON を DB へ暗号化保存する。"""
+    errors = save_client_secrets(req.json_text, profile_id=req.profile_id)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    return {"saved": "youtube_client_secrets", "profile_id": req.profile_id}
+
+
+@router.delete("/secrets/api-key")
+def api_delete_api_key(req: DeleteSecretRequest):
+    """APIキーを DB から削除する。confirmed=true 必須。"""
+    if not req.confirmed:
+        raise HTTPException(status_code=422, detail="confirmed=true が必要です")
+    errors = delete_api_key(req.secret_type)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    return {"deleted": req.secret_type}
+
+
+@router.delete("/secrets/youtube")
+def api_delete_youtube_secret(req: DeleteSecretRequest):
+    """YouTube シークレットを DB から削除する。confirmed=true 必須。"""
+    if not req.confirmed:
+        raise HTTPException(status_code=422, detail="confirmed=true が必要です")
+    errors = delete_youtube_secret(req.secret_type, profile_id=req.profile_id)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    return {"deleted": req.secret_type, "profile_id": req.profile_id}
+
+
+@router.post("/secrets/remigrate")
+def api_remigrate(profile_id: str = "default"):
+    """旧認証ファイルから DB への移行を再実行する（DB既存値は上書きしない）。"""
+    result = remigrate_from_legacy(profile_id=profile_id)
+    return {"result": result}
+
+
+@router.delete("/secrets/legacy-file")
+def api_delete_legacy_file(req: DeleteLegacyFileRequest):
+    """
+    旧認証ファイルを削除する。
+    confirmed=true 必須。DB 未移行の値がある場合は拒否する。
+    """
+    result = delete_legacy_file(req.filename, confirmed=req.confirmed)
+    if not result.get("ok"):
+        raise HTTPException(status_code=422, detail=result.get("error", "削除失敗"))
+    return result
 
 
 @router.get("/bgm-files")

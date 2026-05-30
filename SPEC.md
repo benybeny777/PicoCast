@@ -42,7 +42,7 @@ yukkurijidou/
 │   ├── services/           # ビジネスロジック層
 │   │   ├── status_service.py       # 設定診断・ダッシュボード状態
 │   │   ├── config_service.py       # Web UIから編集できる非秘密設定
-│   │   ├── secrets_service.py      # APIキーの安全な .env 書き込み
+│   │   ├── secrets_service.py      # 認証情報の DB 暗号化保存・削除・旧ファイル管理
 │   │   ├── history_service.py      # 生成履歴一覧・詳細
 │   │   ├── generation_service.py   # 動画生成ジョブ
 │   │   ├── script_check_service.py # LLM/尺チェックジョブ
@@ -105,6 +105,8 @@ yukkurijidou/
 │   ├── app_shutdown.py     # アプリ終了管理（shutdown hookの登録・実行・uvicorn.Server参照管理）
 │   ├── metadata_db.py      # SQLite メタデータDB（スキーマ定義・upsert/query 関数群）
 │   ├── settings_store.py   # SQLite 設定DB（data/settings.db の読み書き・.env 移行）
+│   ├── secret_store.py     # 認証情報の暗号化保存（AES-GCM + DPAPI/keyring マスターキー）
+│   ├── secret_migration.py # .env / OAuthファイルから encrypted_secrets テーブルへの自動移行
 │   └── ng_words.py         # NGワード置換
 ├── config/
 │   ├── config.py            # 定数・設定
@@ -1625,7 +1627,61 @@ DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
 | DB ファイル | 用途 |
 |---|---|
 | `output/000_data/metadata.db` | 動画メタデータ・YouTube 状態・アナリティクス・ジョブ履歴 |
-| `data/settings.db` | アプリ設定（非認証情報）。`.env` は認証情報のみ残す |
+| `data/settings.db` | アプリ設定（非認証情報）+ 認証情報（AES-GCM暗号化） |
+
+### 認証情報管理 (`data/settings.db` — `encrypted_secrets` テーブル)
+
+APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保存する。
+`.env` / `client_secrets.json` / `token.json` / `token_analytics.json` は正本として使用しない。
+
+#### マスターキー管理
+
+| 環境 | 方式 |
+|---|---|
+| Windows | DPAPI (`CryptProtectData`) で保護した `data/secret_master.key` |
+| macOS/Linux | `keyring` / `NVF_MASTER_KEY` 環境変数（hex 32 byte） |
+
+マスターキーが取得できない場合は fail closed（保存・読み込み不可）。
+
+#### `encrypted_secrets` テーブル
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `secret_id` | TEXT PK | `SHA256(profile_id:secret_type)[:32]` |
+| `profile_id` | TEXT | チャンネル識別子（単一チャンネルは `"default"`） |
+| `secret_type` | TEXT | `google_api_key` / `openai_api_key` / `hf_token` / `youtube_client_secrets` / `youtube_upload_token` / `youtube_analytics_token` |
+| `encrypted_value` | BLOB | AES-GCM 暗号文 |
+| `nonce` | BLOB | 12 byte ランダム nonce（保存ごとに新規生成） |
+| `salt` | BLOB | 将来の鍵導出用（現在は NULL） |
+| `key_version` | INTEGER | マスターキーバージョン（現在は 1） |
+| `created_at` | TEXT | ISO8601 UTC |
+| `updated_at` | TEXT | ISO8601 UTC |
+
+**ルール:**
+- `load_secret()` 以外では復号しない
+- 復号した値をログ・レスポンス・例外メッセージに含めない
+- OAuth/API 呼び出し直前にのみ復号する
+- `has_secret()` は DB 存在確認のみ（復号しない）
+- OAuth refresh 後のトークンは `save_secret()` で DB へ再保存する
+- `token.json` / `token_analytics.json` を恒久ファイルとして新規作成しない
+
+#### 既存ファイルからの自動移行
+
+アプリ起動時の lifespan で `core/secret_migration.py: migrate_existing_secret_files()` を実行する。
+DB に既存値がある場合はスキップ（上書きしない）。
+
+| 移行元 | 移行先 `secret_type` |
+|---|---|
+| `.env` の `GOOGLE_API_KEY` | `google_api_key` |
+| `.env` の `OPENAI_API_KEY` | `openai_api_key` |
+| `.env` の `HF_TOKEN` | `hf_token` |
+| `client_secrets.json` | `youtube_client_secrets` |
+| `token.json` | `youtube_upload_token` |
+| `token_analytics.json` | `youtube_analytics_token` |
+
+移行後、`.env` の認証キー行（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）は自動削除する。
+他の設定行は保持する。移行失敗したキーは `.env` に残す。
+`client_secrets.json` / `token.json` / `token_analytics.json` は自動削除しない。削除は設定画面の「旧認証ファイル削除」ボタンで行う。
 
 ### 廃止したローカルファイル
 
@@ -1644,6 +1700,8 @@ DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
 | `output/000_data/uploaded_titles.txt` | `000_uploaded/` フォルダスキャンで代替 |
 | `output/000_analytics/*.json` | `analytics_snapshots`（Analytics 取得時に自動同期） |
 | `.env`（非認証設定） | `data/settings.db`（`settings` テーブル） |
+| `.env`（認証情報） | `data/settings.db`（`encrypted_secrets` テーブル・AES-GCM暗号化） |
+| `client_secrets.json` / `token.json` / `token_analytics.json` | `data/settings.db`（`encrypted_secrets` テーブル・AES-GCM暗号化） |
 
 ---
 

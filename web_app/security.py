@@ -51,9 +51,8 @@ def is_safe_output_path(path: str) -> bool:
 
 
 def is_video_folder(name: str) -> bool:
-    """動画フォルダのプレフィックスがあるフォルダのみ動画フォルダとみなす。旧[]形式も認識する。"""
+    """動画フォルダのプレフィックスがあるフォルダのみ動画フォルダとみなす。"""
     from config import config
     return name.startswith((
         config.FOLDER_PREFIX_SHORTS, config.FOLDER_PREFIX_LONG, config.FOLDER_PREFIX_MEETING,
-        "[Shorts]", "[Long]", "[ネタ会議]",  # 旧形式 互換 TODO: 2026-06-29 以降に削除
     ))

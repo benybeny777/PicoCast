@@ -59,13 +59,12 @@ def _video_format(name: str, render_info: dict, script_meta: dict[str, str]) -> 
         if low in ("long", "ロング"):
             return "Long"
         return value
-    # 旧形式 互換 TODO: 2026-06-29 以降に "[Shorts]"/"[Long]"/"[ネタ会議]" の各タプル要素を削除
     from config import config
-    if name.startswith((config.FOLDER_PREFIX_SHORTS, "[Shorts]")):
+    if name.startswith(config.FOLDER_PREFIX_SHORTS):
         return "Shorts"
-    if name.startswith((config.FOLDER_PREFIX_LONG, "[Long]")):
+    if name.startswith(config.FOLDER_PREFIX_LONG):
         return "Long"
-    if name.startswith((config.FOLDER_PREFIX_MEETING, "[ネタ会議]")):
+    if name.startswith(config.FOLDER_PREFIX_MEETING):
         return "ネタ会議"
     return ""
 

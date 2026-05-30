@@ -124,8 +124,8 @@ NATIVE_SHORTS_LINES_MUST_FIX   = 31  # 31行以上: must_fix
 # ───────────────────────────────────────────────
 # API キー・外部 LLM
 # ───────────────────────────────────────────────
-GOOGLE_API_KEY  = os.environ.get("GOOGLE_API_KEY", "")   # Google AI Studio キー（Gemini / 画像生成）
-OPENAI_API_KEY  = os.environ.get("OPENAI_API_KEY", "")   # OpenAI キー（ChatGPT 台本レビュー）
+# GOOGLE_API_KEY / OPENAI_API_KEY / HF_TOKEN は DB 暗号化保存へ移行済み。
+# 参照は core.secret_store.load_secret() / has_secret() を使うこと。
 
 # 冒頭品質レビュー（Ollama）
 OPENING_REVIEW_USE_LLM      = os.environ.get("OPENING_REVIEW_USE_LLM",      "1").strip().lower() in ("1", "true", "yes", "on")  # Ollama レビュー有効/無効
@@ -164,7 +164,7 @@ SD_MODEL_MANIFEST_PATH = os.environ.get(                                        
     os.path.join(os.path.dirname(__file__), "assets", "sd_webui", "model_manifest.json"),
 )
 AUTO_DOWNLOAD_SD_MODELS = os.environ.get("AUTO_DOWNLOAD_SD_MODELS", "0").strip().lower() in ("1", "true", "yes", "on")  # 未導入モデルの自動ダウンロード許可（0=停止/手動のみ, 1=自動可）
-HF_TOKEN = os.environ.get("HF_TOKEN", "")                                           # Hugging Face アクセストークン（認証付きモデルのダウンロードに使用）
+# HF_TOKEN は DB 暗号化保存へ移行済み。core.secret_store.load_secret("hf_token") を使うこと。
 
 
 OLLAMA_REWRITE_FALLBACK_MODEL = os.environ.get("OLLAMA_REWRITE_FALLBACK_MODEL", "gemma4:e4b")           # リライト失敗時のフォールバックモデル
@@ -375,9 +375,8 @@ OUTPUT_LEGACY_DIR     = os.environ.get("OUTPUT_LEGACY_DIR",     os.path.join(OUT
 FOLDER_PREFIX_SHORTS  = os.environ.get("FOLDER_PREFIX_SHORTS",  "Shorts_")   # 短動画フォルダプレフィックス
 FOLDER_PREFIX_LONG    = os.environ.get("FOLDER_PREFIX_LONG",    "Long_")     # 長動画フォルダプレフィックス
 FOLDER_PREFIX_MEETING = os.environ.get("FOLDER_PREFIX_MEETING", "ネタ会議_") # ネタ会議フォルダプレフィックス
-# 旧プレフィックス（移行後も strip に使う）
-# TODO: 2026-06-29 以降に "[Shorts]"/"[Long]"/"[SHORT]"/"[LONG]"/"[ネタ会議]" を削除し新形式のみにする
-_LEGACY_FOLDER_PREFIXES = ("Shorts_", "Long_", "ネタ会議_", "[Shorts]", "[Long]", "[SHORT]", "[LONG]", "[ネタ会議]")
+# フォルダ名から動画種別プレフィックスを除去する際に使う
+_LEGACY_FOLDER_PREFIXES = ("Shorts_", "Long_", "ネタ会議_")
 
 # ───────────────────────────────────────────────
 # YouTube / アップロード設定

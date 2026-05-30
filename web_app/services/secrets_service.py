@@ -1,59 +1,217 @@
 """
-APIキー等の秘密値を .env へ書き込む専用サービス。
-値はメモリ上で処理し、ログ・レスポンスには一切含めない。
+認証情報管理サービス。
+
+APIキー・OAuthトークン・client_secrets を DB（encrypted_secrets テーブル）へ
+暗号化保存する。値はレスポンス・ログに一切含めない。
 """
+import json
+import logging
 import os
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_ENV_PATH = os.path.join(_ROOT, ".env")
+_logger = logging.getLogger(__name__)
 
-_ALLOWED_SECRET_KEYS = {"GOOGLE_API_KEY", "OPENAI_API_KEY", "HF_TOKEN"}
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+_ALLOWED_API_KEY_TYPES = {"google_api_key", "openai_api_key", "hf_token"}
+_ALLOWED_YOUTUBE_TYPES = {
+    "youtube_client_secrets",
+    "youtube_upload_token",
+    "youtube_analytics_token",
+}
+
+
+def save_api_key(secret_type: str, value: str) -> list[str]:
+    """
+    APIキー（google_api_key / openai_api_key / hf_token）を DB へ保存する。
+    値をレスポンスやログに含めない。
+    """
+    errors: list[str] = []
+    if secret_type not in _ALLOWED_API_KEY_TYPES:
+        errors.append(f"不正なキー種別: {secret_type}")
+    value = value.strip()
+    if not value:
+        errors.append("値が空です")
+    if "\n" in value or "\r" in value:
+        errors.append("改行は使用できません")
+    if errors:
+        return errors
+
+    from core.secret_store import save_secret
+    save_secret(secret_type, value)
+    _logger.info("[SecretsService] %s を DB に保存しました", secret_type)
+    return []
 
 
 def save_secrets(updates: dict[str, str]) -> list[str]:
     """
+    複数の APIキーをまとめて保存する（後方互換用）。
     空文字は「変更なし」として無視する。
-    不正なキーはエラーを返す。値は検証のみ行い、ログに出さない。
     """
     errors: list[str] = []
-    for key, value in updates.items():
-        if key not in _ALLOWED_SECRET_KEYS:
-            errors.append(f"不正なキー: {key}")
-        if "\n" in str(value) or "\r" in str(value):
-            errors.append(f"{key}: 改行は使用できません")
-    if errors:
+    _env_to_secret = {
+        "GOOGLE_API_KEY": "google_api_key",
+        "OPENAI_API_KEY": "openai_api_key",
+        "HF_TOKEN": "hf_token",
+    }
+    for raw_key, value in updates.items():
+        # ENV_KEY 形式でも secret_type 形式でも受け付ける
+        secret_type = _env_to_secret.get(raw_key, raw_key)
+        if not value.strip():
+            continue
+        errs = save_api_key(secret_type, value)
+        errors.extend(errs)
+    return errors
+
+
+def save_client_secrets(json_text: str, profile_id: str = "default") -> list[str]:
+    """
+    YouTube client_secrets の JSON テキストを DB へ保存する。
+    JSON 妥当性チェックしてから保存する。値をログに出さない。
+    """
+    errors: list[str] = []
+    json_text = json_text.strip()
+    if not json_text:
+        errors.append("JSON が空です")
+        return errors
+    try:
+        json.loads(json_text)
+    except json.JSONDecodeError as e:
+        errors.append(f"JSON 解析エラー: {e.msg}")
         return errors
 
-    to_write = {k: v for k, v in updates.items() if v.strip()}
-    if not to_write:
-        return []
-
-    _write_env_secrets(to_write)
+    from core.secret_store import save_secret
+    save_secret("youtube_client_secrets", json_text, profile_id=profile_id)
+    _logger.info("[SecretsService] youtube_client_secrets を DB に保存しました (profile=%s)", profile_id)
     return []
 
 
-def _write_env_secrets(updates: dict[str, str]) -> None:
+def delete_api_key(secret_type: str) -> list[str]:
+    """APIキーを DB から削除する。"""
+    errors: list[str] = []
+    if secret_type not in _ALLOWED_API_KEY_TYPES:
+        errors.append(f"不正なキー種別: {secret_type}")
+        return errors
+    from core.secret_store import delete_secret
+    delete_secret(secret_type)
+    _logger.info("[SecretsService] %s を DB から削除しました", secret_type)
+    return []
+
+
+def delete_youtube_secret(secret_type: str, profile_id: str = "default") -> list[str]:
+    """YouTube 関連シークレットを DB から削除する。"""
+    errors: list[str] = []
+    if secret_type not in _ALLOWED_YOUTUBE_TYPES:
+        errors.append(f"不正なキー種別: {secret_type}")
+        return errors
+    from core.secret_store import delete_secret
+    delete_secret(secret_type, profile_id=profile_id)
+    _logger.info("[SecretsService] %s を DB から削除しました (profile=%s)", secret_type, profile_id)
+    return []
+
+
+def get_secret_status(profile_id: str = "default") -> dict[str, bool]:
+    """
+    各シークレットの登録状態を返す（値は返さない）。
+    """
+    from core.secret_store import list_secret_status
+    return list_secret_status(profile_id=profile_id)
+
+
+def get_legacy_file_status() -> dict[str, bool]:
+    """
+    旧認証ファイルの存在状態を返す（DB 移行状態の参考情報）。
+    ファイルの中身は返さない。
+    """
+    files = [
+        (".env",                 "env"),
+        ("client_secrets.json",  "client_secrets_json"),
+        ("token.json",           "token_json"),
+        ("token_analytics.json", "token_analytics_json"),
+    ]
+    return {
+        key: os.path.isfile(os.path.join(_ROOT, filename))
+        for filename, key in files
+    }
+
+
+def delete_legacy_file(filename: str, confirmed: bool = False) -> dict:
+    """
+    旧認証ファイルを削除する。
+    条件:
+    - confirmed=True 必須
+    - DB への移行済みであること（未移行値がある場合は拒否）
+    """
+    _allowed = {".env", "client_secrets.json", "token.json", "token_analytics.json"}
+    if filename not in _allowed:
+        return {"ok": False, "error": f"削除対象外のファイルです: {filename}"}
+    if not confirmed:
+        return {"ok": False, "error": "confirmed=true が必要です"}
+
+    # 未移行チェック
+    path = os.path.join(_ROOT, filename)
+    if not os.path.isfile(path):
+        return {"ok": False, "error": "ファイルが存在しません"}
+
+    _check_result = _check_migration_before_delete(filename)
+    if not _check_result["ok"]:
+        return _check_result
+
     try:
-        with open(_ENV_PATH, encoding="utf-8") as f:
-            lines = f.readlines()
-    except FileNotFoundError:
-        lines = []
+        os.remove(path)
+        _logger.info("[SecretsService] 旧認証ファイルを削除しました: %s", filename)
+        return {"ok": True, "deleted": filename}
+    except OSError as e:
+        return {"ok": False, "error": f"削除失敗: {type(e).__name__}"}
 
-    updated: set[str] = set()
-    new_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            k = stripped.partition("=")[0].strip()
-            if k in updates:
-                new_lines.append(f"{k}={updates[k]}\n")
-                updated.add(k)
-                continue
-        new_lines.append(line)
 
-    for k, v in updates.items():
-        if k not in updated:
-            new_lines.append(f"{k}={v}\n")
+def _check_migration_before_delete(filename: str) -> dict:
+    """
+    削除前に DB への移行状態を確認する。
+    未移行の値がある場合は削除を拒否する。
+    """
+    from core.secret_store import has_secret
 
-    with open(_ENV_PATH, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
+    if filename == ".env":
+        # .env の認証キーが DB に移行済みかチェック
+        # .env から読んで比較はしない（値をメモリに持たない）
+        # has_secret で DB 側の存在だけ確認する
+        # .env に auth キーが残っているかどうかは migration.py の _read_env_auth_keys() で確認
+        from core.secret_migration import _read_env_auth_keys
+        env_keys = _read_env_auth_keys()
+        _type_map = {
+            "GOOGLE_API_KEY": "google_api_key",
+            "OPENAI_API_KEY": "openai_api_key",
+            "HF_TOKEN": "hf_token",
+        }
+        not_migrated = [
+            env_key for env_key, secret_type in _type_map.items()
+            if env_keys.get(env_key) and not has_secret(secret_type)
+        ]
+        if not_migrated:
+            return {
+                "ok": False,
+                "error": f"未移行の認証情報があります: {not_migrated}。先に設定画面で移行してください。",
+            }
+
+    elif filename == "client_secrets.json":
+        if not has_secret("youtube_client_secrets"):
+            return {"ok": False, "error": "youtube_client_secrets が DB 未移行です"}
+
+    elif filename == "token.json":
+        if not has_secret("youtube_upload_token"):
+            return {"ok": False, "error": "youtube_upload_token が DB 未移行です"}
+
+    elif filename == "token_analytics.json":
+        if not has_secret("youtube_analytics_token"):
+            return {"ok": False, "error": "youtube_analytics_token が DB 未移行です"}
+
+    return {"ok": True}
+
+
+def remigrate_from_legacy(profile_id: str = "default") -> dict:
+    """
+    旧認証ファイルから DB への移行を再実行する（上書き不可）。
+    DB に既存の値がある場合はスキップされる。
+    """
+    from core.secret_migration import migrate_existing_secret_files
+    result = migrate_existing_secret_files(profile_id=profile_id)
+    return result

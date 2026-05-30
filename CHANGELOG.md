@@ -10,6 +10,42 @@
 
 ---
 
+## 2026-05-31 旧フォルダプレフィックス互換コードを削除
+
+**対象ファイル:** `config/config.py` / `web_app/security.py` / `web_app/services/history_service.py` / `core/native_renderer.py` / `core/youtube_uploader.py` / `core/analytics_score.py` / `core/parser.py` / `workers/main.py` / `web_app/app.py` / `scripts/migrate_folder_prefixes.py`（削除） / `MAINTENANCE.md`（削除）
+
+**変更内容:**
+- `[Shorts]` / `[Long]` / `[SHORT]` / `[LONG]` / `[ネタ会議]` 旧プレフィックス互換コードを全廃
+- `_LEGACY_FOLDER_PREFIXES` から旧形式を除去（新形式 `Shorts_`/`Long_`/`ネタ会議_` のみ残す）
+- `is_video_folder` / `_video_format_from_name` / `infer_video_type` / `_video_size` 等から旧プレフィックス分岐を削除
+- `scripts/migrate_folder_prefixes.py` を削除（移行完了のため不要）
+- `web_app/app.py` lifespan から `auto_migrate()` 呼び出しを削除
+- `MAINTENANCE.md` を廃止（期限付きメンテナンス管理は GitHub PR で行う）
+
+---
+
+## 2026-05-31 認証情報のDB暗号化保存に対応
+
+**対象ファイル:** `core/secret_store.py`（新規） / `core/secret_migration.py`（新規） / `core/youtube_uploader.py` / `core/youtube_analytics.py` / `core/ai_generator.py` / `core/image_generator.py` / `core/opening_quality.py` / `core/sd_model_manager.py` / `core/debug_logging.py` / `web_app/app.py` / `web_app/services/secrets_service.py` / `web_app/services/status_service.py` / `web_app/routes/api_settings.py` / `web_app/routes/pages.py` / `config/config.py` / `config/requirements.txt` / `tests/test_secret_store.py`（新規） / `tests/test_secret_migration.py`（新規） / `tests/test_encrypted_oauth_store.py`（新規） / `tests/test_secret_status_api.py`（新規） / `README.md` / `SPEC.md` / `AGENTS.md`
+
+**変更内容:**
+- `encrypted_secrets` テーブルを `data/settings.db` に追加（AES-GCM 暗号化、profile_id 対応）
+- `core/secret_store.py` を新規追加（`save_secret` / `load_secret` / `delete_secret` / `has_secret` / `list_secret_status`）
+- マスターキー管理: Windows は DPAPI (`data/secret_master.key`)、macOS/Linux は keyring または `NVF_MASTER_KEY` 環境変数
+- `core/secret_migration.py` を新規追加（`.env` / `client_secrets.json` / `token.json` / `token_analytics.json` からの自動移行）
+- 起動時 lifespan で `migrate_existing_secret_files()` を実行（DB 既存値は上書きしない）
+- `GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` を `config.py` から削除し `load_secret()` に統一
+- `youtube_uploader.py` / `youtube_analytics.py` の OAuth フローを DB ベースに全面書き換え（refresh 後の再保存も DB）
+- `token.json` / `token_analytics.json` を恒久ファイルとして新規作成しない
+- `/api/settings/secrets/status` など認証情報管理 API エンドポイントを追加
+- status API の認証情報欄は DB の登録状態（bool）のみ返す（値は返さない）
+- 旧認証ファイル削除ボタン（`confirmed=true` 必須・DB 未移行時は拒否）を追加
+- DB 復号失敗・master key 取得失敗は例外送出（フォールバックなし）
+- `cryptography` を `config/requirements.txt` に追加
+- `.env` の認証キーは DB 移行済み（migrated / already_exists）後に行ごと自動削除する（他の設定行は保持）
+
+---
+
 ## 2026-05-30 Web UIからの安全なアプリ終了機能を追加（POST /api/shutdown）
 
 **対象ファイル:** `core/app_shutdown.py`（新規） / `core/metadata_db.py`（新規） / `web_app/app.py` / `web_app/worker_runner.py` / `web_app/routes/api_shutdown.py`（新規） / `web_app/templates/base.html` / `web_app/static/app.css` / `tests/test_app_shutdown.py`（新規）
