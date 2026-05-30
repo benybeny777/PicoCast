@@ -23,8 +23,54 @@
     <li><a href="/fixed-comment" {% if request.url.path == "/fixed-comment" %}class="active"{% endif %}>固定コメント</a></li>
     <li class="nav-right"><a href="/logs" {% if request.url.path == "/logs" %}class="active"{% endif %}>ログ</a></li>
     <li><a href="/settings" {% if request.url.path == "/settings" %}class="active"{% endif %}>設定</a></li>
+    <li><button class="btn btn-danger btn-xs nav-shutdown-btn" onclick="navShutdown()" title="アプリを終了する">⏻ 終了</button></li>
   </ul>
 </nav>
+
+<script>
+async function navShutdown() {
+  // 実行中ジョブを確認
+  let statusData = {};
+  try {
+    const r = await fetch('/api/shutdown/status');
+    statusData = await r.json();
+  } catch {}
+
+  const running = statusData.running_jobs || [];
+  let force = false;
+
+  if (running.length > 0) {
+    const proceed = confirm(
+      `動画生成中です（${running.length}件）。\n\n` +
+      `「OK」を押すと生成を停止してアプリを終了します。\n` +
+      `「キャンセル」を押すと終了を中止します。`
+    );
+    if (!proceed) return;
+    force = true;
+  } else {
+    if (!confirm('アプリを終了しますか？\n\nWebブラウザのタブはそのまま残ります。')) return;
+  }
+
+  try {
+    const res = await fetch('/api/shutdown', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirmed: true, force}),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.body.innerHTML =
+        '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;font-family:sans-serif;gap:16px">' +
+        '<p style="font-size:1.4rem">⏻ アプリを終了しています...</p>' +
+        '<p style="color:#888">このタブは閉じてください。</p></div>';
+    } else {
+      alert('終了できませんでした: ' + (data.message || JSON.stringify(data)));
+    }
+  } catch(e) {
+    alert('通信エラー: ' + e);
+  }
+}
+</script>
 
 <main class="main-content">
   {% block content %}{% endblock %}

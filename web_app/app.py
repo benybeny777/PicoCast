@@ -38,11 +38,17 @@ async def _lifespan(app):
     from web_app.services.status_service import refresh_settings_status
     from core.external_service_check import log_external_services
     from scripts.migrate_folder_prefixes import auto_migrate
+    from core.app_shutdown import register_shutdown_hook, run_lifespan_shutdown
+    from core.metadata_db import close_all_connections
+
     auto_migrate()  # 旧 [] プレフィックスフォルダを起動時に自動リネーム
+    register_shutdown_hook("metadata_db", close_all_connections)
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
     threading.Thread(target=log_external_services, daemon=True).start()
     yield
+    # ── shutdown フェーズ（Ctrl+C / SIGTERM / /api/shutdown すべてここを通る） ──
+    run_lifespan_shutdown()
 
 app = FastAPI(
     title=f"{config.WEB_APP_NAME} — Web UI",
@@ -70,6 +76,7 @@ from web_app.routes.api_fixed_comment import router as fixed_comment_router
 from web_app.routes.api_settings import router as settings_router
 from web_app.routes.api_prompt import router as prompt_router
 from web_app.routes.api_sd_models import router as sd_models_router
+from web_app.routes.api_shutdown import router as shutdown_router
 
 app.include_router(pages_router)
 app.include_router(status_router)
@@ -85,6 +92,7 @@ app.include_router(fixed_comment_router)
 app.include_router(settings_router)
 app.include_router(prompt_router)
 app.include_router(sd_models_router)
+app.include_router(shutdown_router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
@@ -188,14 +196,29 @@ def main():
         import asyncio
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
-    uvicorn.run(
-        "web_app.app:app",
-        host=host,
-        port=port,
-        reload=args.reload,
-        reload_dirs=["web_app", "core", "config", "workers"] if args.reload else None,
-        log_level="info",
-    )
+    if args.reload:
+        # --reload モードでは uvicorn.run() を使う（Server 参照は取れないが開発専用なので許容）
+        uvicorn.run(
+            "web_app.app:app",
+            host=host,
+            port=port,
+            reload=True,
+            reload_dirs=["web_app", "core", "config", "workers"],
+            log_level="info",
+        )
+    else:
+        # 通常起動: uvicorn.Server を直接使い should_exit で安全停止できるようにする
+        import asyncio
+        from core.app_shutdown import set_uvicorn_server
+        uv_config = uvicorn.Config(
+            "web_app.app:app",
+            host=host,
+            port=port,
+            log_level="info",
+        )
+        server = uvicorn.Server(uv_config)
+        set_uvicorn_server(server)
+        asyncio.run(server.serve())
 
 
 if __name__ == "__main__":

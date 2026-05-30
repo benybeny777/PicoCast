@@ -10,6 +10,35 @@
 
 ---
 
+## 2026-05-30 Web UIからの安全なアプリ終了機能を追加（POST /api/shutdown）
+
+**対象ファイル:** `core/app_shutdown.py`（新規） / `core/metadata_db.py`（新規） / `web_app/app.py` / `web_app/worker_runner.py` / `web_app/routes/api_shutdown.py`（新規） / `web_app/templates/base.html` / `web_app/static/app.css` / `tests/test_app_shutdown.py`（新規）
+
+**変更内容:**
+
+ナビゲーションバー右端に「⏻ 終了」ボタンを追加し、Web UI から安全にアプリを終了できるようにした。
+
+- `core/app_shutdown.py` を新規追加。`register_shutdown_hook()` / `request_shutdown(force=False)` / `is_shutdown_requested()` / `set_uvicorn_server()` / `run_lifespan_shutdown()` を提供する shutdown 管理モジュール
+- `core/metadata_db.py` を新規追加。SQLite 接続管理 stub。`close_all_connections()` を shutdown hook として登録。`ManagedConnection` はwith文で使える DB 接続ラッパー（将来のテーブル定義・upsert・query 拡張予定）
+- `web_app/worker_runner.py`: `cancel_all_workers(timeout)` を追加（cancel要求 → terminate → kill の順で強制終了）
+- `web_app/routes/api_shutdown.py` を新規追加。`POST /api/shutdown`（`confirmed=true` 必須・`force` オプション）/ `GET /api/shutdown/status`
+- `web_app/app.py`: `uvicorn.run()` を `uvicorn.Server` 直接使用に変更し `should_exit=True` で安全停止。lifespan の shutdown フェーズで `run_lifespan_shutdown()` を呼ぶ。`--reload` モードは開発専用のため `uvicorn.run()` のまま維持
+- `web_app/templates/base.html`: 「⏻ 終了」ボタン追加。実行中ジョブがある場合は「動画生成中（N件）。停止して終了しますか？」確認ダイアログを表示
+- `web_app/static/app.css`: `.nav-shutdown-btn` スタイルを追加
+- `tests/test_app_shutdown.py` を新規追加（7件のユニットテスト）
+
+**終了フロー:**
+1. 「⏻ 終了」ボタンをクリック → `POST /api/shutdown {confirmed:true, force?}`
+2. worker 実行中で `force=false` → 拒否・理由返却
+3. `force=true` または worker 0件 → `shutdown_requested=true`
+4. バックグラウンドで: worker に cancel 要求 → terminate → kill → hook 実行 → `server.should_exit=True`
+5. uvicorn が lifespan の shutdown フェーズを実行 → `run_lifespan_shutdown()` でフック実行
+6. アプリ終了
+
+Ctrl+C / SIGTERM でも lifespan の shutdown フェーズを通るためフックが実行される。
+
+---
+
 ## 2026-05-30 並列化強化・字幕自動折り返し・ネタ会議Shorts判定修正・アップロード後リダイレクトバグ修正
 
 **対象ファイル:** `config/config.py` / `core/native_renderer.py` / `core/playlist_resolver.py` / `web_app/services/upload_service.py` / `web_app/services/history_service.py` / `workers/main.py` / `web_app/services/config_service.py`

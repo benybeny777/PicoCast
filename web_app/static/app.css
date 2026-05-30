@@ -75,6 +75,17 @@ body {
 .nav-right {
   margin-left: auto;
 }
+.nav-shutdown-btn {
+  margin-left: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  opacity: 0.75;
+  cursor: pointer;
+  border: none;
+}
+.nav-shutdown-btn:hover {
+  opacity: 1;
+}
 
 /* ── メインコンテンツ ── */
 .main-content {

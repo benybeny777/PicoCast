@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from typing import Any
 
 from web_app.job_manager import Job, _log
@@ -40,6 +41,49 @@ def _kill_all_workers() -> None:
 
 
 atexit.register(_kill_all_workers)
+
+
+def cancel_all_workers(timeout: float = 10.0) -> None:
+    """実行中の全workerに停止要求を送り、残れば terminate → kill する。
+    shutdown処理から呼ばれる。"""
+    with _procs_lock:
+        procs = list(_running_procs)
+    if not procs:
+        return
+    print(f"[shutdown] {len(procs)}件のworkerに停止要求を送信します", file=sys.stderr)
+    # まずキャンセル要求（stdin "cancel\n"）を試みる
+    for proc in procs:
+        try:
+            proc.stdin.write("cancel\n")
+            proc.stdin.flush()
+        except OSError:
+            pass
+    # timeout 秒待って残存プロセスをterminate → kill
+    deadline = time.monotonic() + timeout
+    for proc in procs:
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            try:
+                proc.wait(timeout=max(0.1, remaining))
+                continue
+            except subprocess.TimeoutExpired:
+                pass
+        # terminate
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+        try:
+            proc.wait(timeout=3)
+            continue
+        except subprocess.TimeoutExpired:
+            pass
+        # 最終手段: kill
+        print(f"[shutdown] worker pid={proc.pid} が停止しないため強制終了します", file=sys.stderr)
+        try:
+            _kill_tree(proc)
+        except Exception as e:
+            print(f"[shutdown] worker kill失敗 pid={proc.pid}: {e}", file=sys.stderr)
 
 # Windows ではプロセスグループを新規作成して子プロセスツリーをまとめて kill できるようにする
 _POPEN_EXTRA: dict[str, Any] = (

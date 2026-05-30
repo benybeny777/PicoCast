@@ -102,6 +102,8 @@ yukkurijidou/
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
 │   ├── youtube_uploader.py # YouTube APIアップロード
 │   ├── playlist_resolver.py # 台本カテゴリ名＋動画形式 → YouTube再生リスト名の解決。`resolve_video_type(video_format, screen_format)` でネタ会議を含む全動画形式を "shorts"/"long" に統一判定する関数も提供
+│   ├── app_shutdown.py     # アプリ終了管理（shutdown hookの登録・実行・uvicorn.Server参照管理）
+│   ├── metadata_db.py      # SQLite接続管理stub（shutdown hookとしてclose登録・ManagedConnection提供）
 │   └── ng_words.py         # NGワード置換
 ├── config/
 │   ├── config.py            # 定数・設定
@@ -542,6 +544,9 @@ POST /api/sd-models/delete          # confirmed=true 必須
 POST /api/sd-models/delete-redownload  # confirmed=true 必須、バックグラウンド
 POST /api/sd-models/use
 POST /api/sd-models/rescan
+
+POST /api/shutdown                  # confirmed=true 必須。force=true でworker実行中も強制終了
+GET  /api/shutdown/status           # 終了処理中フラグを返す
 ```
 
 ### セキュリティ方針
@@ -583,6 +588,47 @@ POST /api/sd-models/rescan
 `/settings` のAPIキー設定タブ（「APIキー設定」）は画面最下部に置く。通常の設定変更欄には秘密値を含めない。APIキー設定欄には `GOOGLE_API_KEY`・`OPENAI_API_KEY`・`HF_TOKEN`（Hugging Face アクセストークン）が含まれ、いずれも有無（bool）のみ画面に表示する。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
 
 ナビゲーションバーの「設定」リンクは常にナビゲーション最右端に固定する（CSS `margin-left: auto`）。
+
+ナビゲーションバーには「設定」リンクのさらに右端に「⏻ 終了」ボタンを配置する（`.nav-shutdown-btn` スタイル）。
+
+### アプリ終了フロー (`core/app_shutdown.py`)
+
+ナビゲーションバーの「⏻ 終了」ボタンから `POST /api/shutdown` を呼び、uvicorn を安全に停止する。
+
+**通常終了（worker なし）:**
+1. 「⏻ 終了」ボタンをクリック → `POST /api/shutdown {confirmed:true}`
+2. worker が 0 件 → `shutdown_requested=true`
+3. バックグラウンドで registered hook を実行 → `server.should_exit=True`
+4. uvicorn が lifespan の shutdown フェーズを実行 → `run_lifespan_shutdown()` でフック再実行（冪等）
+
+**強制終了（worker 実行中）:**
+1. 「⏻ 終了」ボタンをクリック → `POST /api/shutdown {confirmed:true}`
+2. worker 実行中 → 拒否・理由返却（UI に確認ダイアログ再表示）
+3. ユーザーが強制終了を選択 → `POST /api/shutdown {confirmed:true, force:true}`
+4. `cancel_all_workers(timeout)` で cancel 要求 → terminate → kill の順に強制終了
+5. 以降は通常終了と同じ
+
+**Ctrl+C / SIGTERM:**
+- uvicorn が受信し lifespan の shutdown フェーズを実行 → `run_lifespan_shutdown()` でフック実行
+- `--reload` モードでは `uvicorn.Server` 参照なし（開発専用のため許容）
+
+**shutdown hook 登録:**
+
+```python
+from core.app_shutdown import register_shutdown_hook
+register_shutdown_hook("my_module", my_close_function)
+```
+
+起動時にモジュールが自分で登録する。現在の登録済み hook:
+- `metadata_db`: `close_all_connections()` — 全 SQLite 接続を close
+
+### SQLite 接続管理方針 (`core/metadata_db.py`)
+
+- 現時点では shutdown hook 登録用の stub のみ。将来テーブル定義・upsert・query を追加予定
+- DB ファイル: `output/000_data/metadata.db`
+- DB 更新は `with ManagedConnection() as conn:` または明示的 `commit()` / `close()` で短時間に完了させる
+- アプリ起動中に DB 接続を長期保持しない。処理単位で取得・コミット・closeする
+- shutdown hook `close_all_connections()` が登録済みのため、アプリ終了時に未closeの接続があっても安全に解放される
 
 画像確認・再生成（`/images`）は `/history/{name}` 詳細画面の「画像確認・再生成」リンクからも遷移できる。ナビゲーションには独立リンクを設けない。
 
