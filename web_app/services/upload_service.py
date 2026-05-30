@@ -51,16 +51,24 @@ def list_upload_candidates() -> list[dict[str, Any]]:
             if not mp4_path:
                 continue
 
-            upload_record = _safe_json(os.path.join(theme_dir, "_meta", "upload_record.json"))
-            render_info = _safe_json(os.path.join(theme_dir, "_meta", "render_info.json"))
+            local_id = os.path.basename(theme_dir)
+            from core.metadata_db import get_render_info, ManagedConnection
+            ri = get_render_info(local_id)
+            publish_at = ""
+            with ManagedConnection() as _conn:
+                _row = _conn.execute(
+                    "SELECT publish_at FROM youtube_status WHERE local_id=?", (local_id,)
+                ).fetchone()
+                if _row:
+                    publish_at = _row["publish_at"] or ""
 
             candidates.append({
                 "name": rel,
                 "mp4_path": mp4_path,
                 "mp4_filename": os.path.basename(mp4_path),
-                "title": render_info.get("video_title") or name,
-                "video_format": render_info.get("video_format", ""),
-                "publish_at": upload_record.get("publish_at", ""),
+                "title": ri.get("video_title") or name,
+                "video_format": ri.get("video_format", ""),
+                "publish_at": publish_at,
             })
     return candidates
 
@@ -82,7 +90,19 @@ def submit_upload_job(history_name: str) -> str:
 
 
 def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
+    from core.channel_info import get_channel_info, log_channel_info
     from core.youtube_uploader import upload_video
+
+    # アップロード直前チャンネル確認ログ
+    log_channel_info()
+    ch = get_channel_info()
+    _log(job, f"[CHANNEL] name={ch['name'] or ''}", "info")
+    _log(job, f"[CHANNEL] handle={ch['handle'] or ''}", "info")
+    _log(job, f"[CHANNEL] theme={ch['theme'] or ''}", "info")
+    if not ch["upload_allowed"]:
+        missing = [w["message"] for w in ch["warnings"] if w["level"] == "error"]
+        raise RuntimeError("チャンネル設定不足のためアップロード中止: " + "、".join(missing))
+
     theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
     if not os.path.isdir(theme_dir):
         raise FileNotFoundError(f"履歴フォルダが見つかりません: {history_name}")
@@ -91,7 +111,9 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
     if not mp4_path:
         raise FileNotFoundError(f"MP4ファイルが見つかりません: {history_name}")
 
-    render_info = _safe_json(os.path.join(theme_dir, "_meta", "render_info.json"))
+    from core.metadata_db import get_render_info
+    local_id = os.path.basename(theme_dir)
+    render_info = get_render_info(local_id)
     _log(job, f"アップロード開始: {mp4_path}", "info")
 
     if job.cancel_event.is_set():
@@ -180,6 +202,17 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
                     _log(job, f"再生リスト登録済み: {resolved}", "info")
                 else:
                     _log(job, f"再生リスト追加: {resolved}", "success")
+                # DB に再生リスト登録状態を保存
+                try:
+                    from core.metadata_db import upsert_playlist_registration, is_initialized, initialize_db
+                    if not is_initialized():
+                        initialize_db()
+                    local_id = os.path.basename(theme_dir)
+                    upsert_playlist_registration(
+                        local_id, video_id, resolved,
+                        create_result.get("id"), status="registered")
+                except Exception as _pl_e:
+                    _log(job, f"⚠ 再生リストDB同期失敗: {_pl_e}", "warning")
             else:
                 _log(job, f"再生リスト追加失敗: {resolved} — {add_result['reason']}", "error")
             playlist_assignments.append(entry)
@@ -204,23 +237,26 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
             except Exception as e:
                 _log(job, f"再生リスト追加エラー（続行）: {e}", "warning")
 
-    # upload_record.json を書く（ロック外で実施）
-    record: dict = {
+    # youtube_status を DB に直接書き込む（upload_record.json は廃止）
+    uploaded_at = datetime.now(_JST).isoformat()
+    upload_record = {
         "video_id": video_id,
         "title": render_info.get("video_title", history_name),
         "video_type": video_type,
-        "uploaded_at": datetime.now(_JST).isoformat(),
+        "uploaded_at": uploaded_at,
         "publish_status": "scheduled" if publish_at_iso else "private",
+        "publish_at": publish_at_iso,
     }
-    if publish_at_iso:
-        record["publish_at"] = publish_at_iso
-    if playlist_assignments:
-        record["playlist_assignments"] = playlist_assignments
-    meta_dir = os.path.join(theme_dir, "_meta")
-    os.makedirs(meta_dir, exist_ok=True)
-    with open(os.path.join(meta_dir, "upload_record.json"), "w", encoding="utf-8") as f:
-        json.dump(record, f, ensure_ascii=False, indent=2)
-    _log(job, "upload_record.json を保存しました", "info")
+    try:
+        from core.metadata_db import upsert_youtube_status, ManagedConnection, initialize_db, is_initialized
+        if not is_initialized():
+            initialize_db()
+        with ManagedConnection() as _conn:
+            upsert_youtube_status(_conn, local_id, upload_record)
+            _conn.commit()
+        _log(job, "youtube_status を DB に保存しました", "info")
+    except Exception as _db_e:
+        _log(job, f"⚠ DB保存失敗（続行）: {_db_e}", "warning")
 
     # 000_uploaded/ へフォルダ移動（既に移動済みの場合はスキップ）
     folder_name = os.path.basename(theme_dir)

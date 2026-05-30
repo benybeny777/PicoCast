@@ -217,6 +217,9 @@ async function loadConfig() {
           const note = ollamaAvailable ? '（モデルなし）' : '（Ollama 未起動）';
           td.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="text" value="${esc(item.current)}" class="form-input" style="width:180px"><small style="color:var(--text-muted)"> ${note}</small>`;
         }
+      } else if (item.type === 'hex_color') {
+        const colorVal = (item.current && /^#[0-9a-fA-F]{6}$/i.test(item.current)) ? item.current : '#4a5568';
+        td.innerHTML = `<input id="cfg-${item.key}" data-key="${item.key}" type="color" value="${colorVal}" class="form-input" style="width:52px;height:32px;padding:2px 4px;cursor:pointer;vertical-align:middle">`;
       } else if (item.type === 'bgm_file') {
         if (bgmFiles.length > 0) {
           const allFiles = bgmFiles.includes(item.current) ? bgmFiles : [item.current, ...bgmFiles];

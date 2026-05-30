@@ -5,6 +5,10 @@
 
 {% if candidates %}
 <div class="card">
+  <div id="upload-channel-confirm" class="upload-channel-confirm">
+    <span class="uc-label">アップロード先:</span>
+    <span id="uc-content" style="color:var(--text-dim);font-size:12px">読み込み中...</span>
+  </div>
   <div class="action-row">
     <button id="upload-btn" class="btn btn-primary" onclick="confirmBatchUpload()" disabled>アップロード（0件選択中）</button>
     <button class="btn btn-secondary" onclick="selectAll(true)">全選択</button>
@@ -62,6 +66,38 @@
 
 {% block scripts %}
 <script>
+let _channelUploadAllowed = false;
+
+(async function initUploadChannelConfirm() {
+  const confirm = document.getElementById('upload-channel-confirm');
+  const content = document.getElementById('uc-content');
+  if (!content) return;
+  let info;
+  try {
+    const res = await fetch('/api/channel-info');
+    info = await res.json();
+  } catch {
+    content.innerHTML = '<span class="ch-warning ch-error">チャンネル情報の取得に失敗しました。アップロードは禁止されています。</span>';
+    _channelUploadAllowed = false;
+    updateBtn();
+    return;
+  }
+  if (info.accent_color && confirm) {
+    confirm.style.borderLeftColor = info.accent_color;
+  }
+  if (info.upload_allowed) {
+    _channelUploadAllowed = true;
+    let html = `<span class="uc-name">${info.name}</span>`;
+    if (info.handle) html += ` <span class="uc-handle">${info.handle}</span>`;
+    content.innerHTML = html;
+  } else {
+    _channelUploadAllowed = false;
+    const errs = (info.warnings || []).filter(w => w.level === 'error').map(w => w.message);
+    content.innerHTML = errs.map(m => `<span class="ch-warning ch-error">${m}</span>`).join(' ');
+  }
+  updateBtn();
+})();
+
 function getChecked() {
   return Array.from(document.querySelectorAll('.upload-check:checked')).map(c => c.value);
 }
@@ -70,7 +106,7 @@ function updateBtn() {
   const names = getChecked();
   const btn = document.getElementById('upload-btn');
   btn.textContent = `アップロード（${names.length}件選択中）`;
-  btn.disabled = names.length === 0;
+  btn.disabled = names.length === 0 || !_channelUploadAllowed;
 
   // ヘッダチェックボックスの状態同期
   const all = document.querySelectorAll('.upload-check');

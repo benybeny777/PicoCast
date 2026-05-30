@@ -194,3 +194,8 @@ def page_sd_models(request: Request):
         "sd_webui_base_url": _cfg.SD_WEBUI_BASE_URL,
         "hf_token_set": bool(_cfg.HF_TOKEN),
     })
+
+
+@router.get("/db", response_class=HTMLResponse)
+def page_db(request: Request):
+    return _render(request, "db.html", {})

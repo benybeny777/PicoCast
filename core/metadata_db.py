@@ -1,54 +1,76 @@
 """
-ローカルメタデータ SQLite DB 接続管理。
-
-現在は shutdown hook 用の close_all_connections() のみ実装。
-テーブル定義・upsert・query は将来の実装で追加する。
+ローカルメタデータ SQLite DB。
 
 DB ファイル: output/000_data/metadata.db
+
+テーブル構成:
+  videos             — 生成動画の基本情報
+  video_metadata     — 台本由来のメタ情報
+  youtube_status     — YouTube 投稿・公開状態
+  analytics_snapshots — Analytics スナップショット
+  playlists          — 再生リスト登録状態
+  topic_history      — 食材・トピックの生成履歴（重複チェック用）
+  script_quality     — 台本品質スコア
+
+使い方:
+  from core.metadata_db import sync_folder_to_db, get_videos
+
+  sync_folder_to_db("/path/to/output/theme_dir")
+  videos = get_videos(video_type="shorts", limit=50)
+
+インポートコマンド:
+  py -3 -m core.metadata_db import-output
 """
+from __future__ import annotations
+
+import json
 import logging
+import os
 import sqlite3
 import threading
+from datetime import datetime, timezone
 from typing import Any
 
 _logger = logging.getLogger(__name__)
 
-# 全接続を追跡してshutdown時にcloseできるようにする
+# 接続追跡（shutdown hook 用）
 _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
+_db_path_cache: str | None = None
 
-# DB ファイルパスは起動時に解決する（循環インポート回避のため遅延参照）
-_db_path: str | None = None
+SCHEMA_VERSION = 4
 
+
+# ── パス ────────────────────────────────────────────────────────────────────
 
 def get_db_path() -> str:
-    """DB ファイルのパスを返す。"""
-    global _db_path
-    if _db_path is None:
-        from core.output_paths import OUTPUT_DIR
-        import os
-        _db_path = os.path.join(OUTPUT_DIR, "000_data", "metadata.db")
-    return _db_path
+    global _db_path_cache
+    if _db_path_cache is None:
+        from config.config import OUTPUT_DATA_DIR
+        _db_path_cache = os.path.join(OUTPUT_DATA_DIR, "metadata.db")
+    return _db_path_cache
 
+
+# ── 接続 ────────────────────────────────────────────────────────────────────
 
 def get_connection() -> sqlite3.Connection:
-    """DB 接続を取得する。呼び出し元は必ず close() または with 文で解放すること。"""
-    import os
+    """DB 接続を取得する。呼び出し元は必ず close() または ManagedConnection で解放すること。"""
     path = get_db_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False, timeout=10)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
     with _conn_lock:
         _connections.append(conn)
     return conn
 
 
 def release_connection(conn: sqlite3.Connection) -> None:
-    """接続を閉じてトラッキングリストから削除する。"""
     try:
         conn.close()
     except Exception as e:
-        _logger.warning("DB接続のclose失敗: %s", e)
+        _logger.warning("DB接続close失敗: %s", e)
     with _conn_lock:
         try:
             _connections.remove(conn)
@@ -57,22 +79,26 @@ def release_connection(conn: sqlite3.Connection) -> None:
 
 
 def close_all_connections() -> None:
-    """全DB接続をクローズする。shutdown hook として登録される。"""
+    """shutdown hook として登録される。全接続をクローズする。"""
     with _conn_lock:
         targets = list(_connections)
+    count = len(targets)
     for conn in targets:
         try:
             conn.close()
-            _logger.debug("DB接続をcloseしました")
         except Exception as e:
-            _logger.warning("DB接続のclose失敗: %s", e)
+            _logger.warning("[SQLite] DB接続close失敗: %s", e)
     with _conn_lock:
         _connections.clear()
-    _logger.info("全DB接続をクローズしました")
+    _logger.info("[SQLite] DB 終了: %d 接続をクローズしました", count)
+
+
+def is_initialized() -> bool:
+    return os.path.isfile(get_db_path())
 
 
 class ManagedConnection:
-    """with 文で使える DB 接続ラッパー。close を自動で呼ぶ。"""
+    """with 文で使える DB 接続ラッパー。例外時は rollback。"""
 
     def __init__(self) -> None:
         self._conn: sqlite3.Connection | None = None
@@ -93,7 +119,1134 @@ class ManagedConnection:
         return False
 
 
-def is_initialized() -> bool:
-    """DB ファイルが存在するかどうかを返す。"""
-    import os
-    return os.path.isfile(get_db_path())
+# ── スキーマ ────────────────────────────────────────────────────────────────
+
+_DDL = """
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER PRIMARY KEY
+);
+
+CREATE TABLE IF NOT EXISTS videos (
+    local_id       TEXT PRIMARY KEY,
+    output_dir     TEXT NOT NULL,
+    title          TEXT,
+    video_type     TEXT,
+    created_at     TEXT,
+    updated_at     TEXT,
+    script_path    TEXT,
+    mp4_path       TEXT,
+    thumbnail_path TEXT,
+    script_content TEXT
+);
+
+CREATE TABLE IF NOT EXISTS video_metadata (
+    local_id          TEXT PRIMARY KEY REFERENCES videos(local_id),
+    food_name         TEXT,
+    topic_key         TEXT,
+    genre             TEXT,
+    character_pattern TEXT,
+    generation_type   TEXT,
+    source_video_title TEXT,
+    purpose           TEXT,
+    thumbnail_text    TEXT,
+    fixed_comment     TEXT,
+    description       TEXT,
+    tags              TEXT,
+    playlist_categories TEXT,
+    video_format      TEXT,
+    screen_format     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS youtube_status (
+    local_id               TEXT PRIMARY KEY REFERENCES videos(local_id),
+    youtube_video_id       TEXT UNIQUE,
+    publish_status         TEXT,
+    publish_at             TEXT,
+    uploaded_at            TEXT,
+    published_at           TEXT,
+    privacy_status         TEXT,
+    fixed_comment_posted   INTEGER DEFAULT 0,
+    fixed_comment_id       TEXT,
+    playlist_registered    INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS analytics_snapshots (
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    youtube_video_id          TEXT NOT NULL,
+    collected_at              TEXT NOT NULL,
+    window_days               INTEGER,
+    views                     INTEGER,
+    average_view_duration     REAL,
+    average_percentage_viewed REAL,
+    likes                     INTEGER,
+    dislikes                  INTEGER,
+    comments                  INTEGER,
+    subscribers_gained        INTEGER,
+    subscribers_lost          INTEGER,
+    subscribers_net           INTEGER,
+    impressions               INTEGER,
+    ctr                       REAL,
+    like_rate                 REAL,
+    dislike_rate              REAL,
+    score                     TEXT,
+    action                    TEXT,
+    analysis_status           TEXT,
+    is_provisional            INTEGER,
+    audio_cutoff_risk         INTEGER,
+    blacklist_candidate       INTEGER,
+    weak_reason               TEXT,
+    avoid_pattern             TEXT,
+    UNIQUE(youtube_video_id, collected_at, window_days)
+);
+
+CREATE TABLE IF NOT EXISTS playlists (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_name    TEXT NOT NULL,
+    playlist_id      TEXT,
+    youtube_video_id TEXT,
+    local_id         TEXT,
+    registered_at    TEXT,
+    status           TEXT,
+    UNIQUE(playlist_name, youtube_video_id)
+);
+
+CREATE TABLE IF NOT EXISTS topic_history (
+    local_id         TEXT PRIMARY KEY,
+    topic_key        TEXT,
+    food_name        TEXT,
+    title            TEXT,
+    youtube_video_id TEXT,
+    status           TEXT,
+    created_at       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS script_quality (
+    local_id               TEXT PRIMARY KEY REFERENCES videos(local_id),
+    dialogue_lines         INTEGER,
+    total_chars            INTEGER,
+    avg_chars              REAL,
+    short_line_count       INTEGER,
+    estimated_duration     REAL,
+    actual_duration        REAL,
+    actual_duration_status TEXT,
+    opening_score          REAL,
+    opening_score_status   TEXT,
+    opening_rewrite_needed INTEGER,
+    final_review_score     REAL,
+    validation_status      TEXT,
+    validation_errors_json TEXT,
+    final_review_skipped   INTEGER,
+    final_review_reason    TEXT,
+    final_review_stage     TEXT,
+    final_review_model     TEXT
+);
+
+CREATE TABLE IF NOT EXISTS render_info (
+    local_id                      TEXT PRIMARY KEY,
+    render_engine                 TEXT,
+    video_title                   TEXT,
+    description                   TEXT,
+    tags                          TEXT,
+    video_format                  TEXT,
+    screen_format                 TEXT,
+    playlist_categories           TEXT,
+    native_renderer_json          TEXT,
+    estimated_duration_sec        REAL,
+    actual_duration_sec           REAL,
+    actual_duration_status        TEXT,
+    loudnorm_enabled              INTEGER,
+    loudnorm_i                    REAL,
+    loudnorm_tp                   REAL,
+    loudnorm_lra                  REAL,
+    motion_effects_enabled        INTEGER,
+    motion_effects_fallback_count INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS jobs (
+    job_id        TEXT PRIMARY KEY,
+    job_type      TEXT,
+    status        TEXT,
+    progress_text TEXT DEFAULT '',
+    started_at    TEXT,
+    finished_at   TEXT,
+    logs_json     TEXT DEFAULT '[]',
+    result_json   TEXT,
+    error         TEXT,
+    created_at    TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_youtube_status_vid ON youtube_status(youtube_video_id);
+CREATE INDEX IF NOT EXISTS idx_analytics_vid ON analytics_snapshots(youtube_video_id);
+CREATE INDEX IF NOT EXISTS idx_topic_key ON topic_history(topic_key);
+CREATE INDEX IF NOT EXISTS idx_food_name ON topic_history(food_name);
+CREATE INDEX IF NOT EXISTS idx_videos_type ON videos(video_type);
+CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_jobs_started ON jobs(started_at);
+"""
+
+
+def _add_column(conn: sqlite3.Connection, table: str, col: str, typedef: str) -> None:
+    """列が存在しなければ追加する。"""
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
+    except Exception as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
+
+def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
+    """スキーマバージョンに応じてマイグレーションを実行する。"""
+    if current_ver < 2:
+        _add_column(conn, "videos", "script_content", "TEXT")
+        _logger.info("[SQLite] スキーマ v1→v2: videos.script_content を追加しました")
+    if current_ver < 3:
+        for col, typedef in [
+            ("dislikes",        "INTEGER"),
+            ("subscribers_gained", "INTEGER"),
+            ("subscribers_lost",   "INTEGER"),
+            ("impressions",     "INTEGER"),
+            ("ctr",             "REAL"),
+            ("dislike_rate",    "REAL"),
+            ("is_provisional",  "INTEGER"),
+            ("audio_cutoff_risk", "INTEGER"),
+            ("blacklist_candidate", "INTEGER"),
+            ("weak_reason",     "TEXT"),
+            ("avoid_pattern",   "TEXT"),
+        ]:
+            _add_column(conn, "analytics_snapshots", col, typedef)
+        _logger.info("[SQLite] スキーマ v2→v3: analytics_snapshots に列を追加しました")
+    if current_ver < 4:
+        # video_metadata: CTA 列
+        for col, typedef in [
+            ("cta_shorts_loop_priority",    "INTEGER"),
+            ("cta_direct_next_video_allowed","INTEGER"),
+            ("cta_topic_request",           "TEXT"),
+            ("cta_topic_request_reason",    "TEXT"),
+            ("cta_final_type",              "TEXT"),
+        ]:
+            _add_column(conn, "video_metadata", col, typedef)
+        # script_quality: final_review / opening 追加列
+        for col, typedef in [
+            ("opening_score_status",  "TEXT"),
+            ("opening_rewrite_needed","INTEGER"),
+            ("final_review_skipped",  "INTEGER"),
+            ("final_review_reason",   "TEXT"),
+            ("final_review_stage",    "TEXT"),
+            ("final_review_model",    "TEXT"),
+        ]:
+            _add_column(conn, "script_quality", col, typedef)
+        # render_info / jobs テーブルは DDL の CREATE TABLE IF NOT EXISTS で作成済み
+        _logger.info("[SQLite] スキーマ v3→v4: video_metadata/script_quality に列追加、render_info/jobs テーブル作成")
+
+
+def initialize_db() -> None:
+    """DB を初期化する。既存 DB が存在する場合はスキーマ移行のみ行う。"""
+    path = get_db_path()
+    existed = os.path.isfile(path)
+    with ManagedConnection() as conn:
+        conn.executescript(_DDL)
+        row = conn.execute("SELECT version FROM schema_version").fetchone()
+        current_ver = row[0] if row else 0
+        if current_ver < SCHEMA_VERSION:
+            _migrate(conn, current_ver)
+            if row is None:
+                conn.execute("INSERT INTO schema_version(version) VALUES(?)", (SCHEMA_VERSION,))
+            else:
+                conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
+        conn.commit()
+    if existed:
+        _logger.info("[SQLite] DB 起動（既存 v%s）: %s", SCHEMA_VERSION, path)
+    else:
+        _logger.info("[SQLite] DB 起動（新規作成 v%s）: %s", SCHEMA_VERSION, path)
+
+
+# ── ヘルパー ─────────────────────────────────────────────────────────────────
+
+def _now_jst() -> str:
+    from datetime import timedelta
+    JST = timezone(timedelta(hours=9))
+    return datetime.now(JST).isoformat()
+
+
+def _local_id_from_dir(output_dir: str) -> str:
+    return os.path.basename(os.path.abspath(output_dir).rstrip("/\\"))
+
+
+def _safe_json(path: str) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+    except Exception as e:
+        _logger.warning("JSON読み込み失敗 %s: %s", path, e)
+        return {}
+
+
+def _find_mp4(output_dir: str) -> str | None:
+    try:
+        for f in os.listdir(output_dir):
+            if f.endswith("_native.mp4") or f.endswith(".mp4"):
+                return os.path.join(output_dir, f)
+    except OSError:
+        pass
+    return None
+
+
+def _find_thumbnail(output_dir: str) -> str | None:
+    candidates = [
+        os.path.join(output_dir, "thumbnails", "thumbnail.png"),
+        os.path.join(output_dir, "thumbnail.png"),
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+# ── upsert 関数 ──────────────────────────────────────────────────────────────
+
+def upsert_video(conn: sqlite3.Connection, local_id: str, output_dir: str,
+                 render_info: dict, upload_record: dict) -> None:
+    title = (render_info.get("video_title")
+             or upload_record.get("title")
+             or local_id)
+    video_type = (render_info.get("video_format")
+                  or upload_record.get("video_type")
+                  or "")
+    mp4 = _find_mp4(output_dir)
+    thumb = _find_thumbnail(output_dir)
+    script_path_val = os.path.join(output_dir, "script.txt")
+    script = script_path_val if os.path.isfile(script_path_val) else None
+    script_content: str | None = None
+    if script:
+        try:
+            with open(script, encoding="utf-8") as f:
+                script_content = f.read()
+        except Exception as e:
+            _logger.warning("script.txt 読み込み失敗 %s: %s", local_id, e)
+    now = _now_jst()
+    conn.execute("""
+        INSERT INTO videos(local_id, output_dir, title, video_type,
+                           created_at, updated_at, script_path, mp4_path, thumbnail_path,
+                           script_content)
+        VALUES(?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(local_id) DO UPDATE SET
+            title=excluded.title, video_type=excluded.video_type,
+            updated_at=excluded.updated_at, mp4_path=excluded.mp4_path,
+            thumbnail_path=excluded.thumbnail_path, script_path=excluded.script_path,
+            script_content=COALESCE(excluded.script_content, script_content)
+    """, (local_id, output_dir, title, video_type, now, now, script, mp4, thumb, script_content))
+
+
+def upsert_video_metadata(conn: sqlite3.Connection, local_id: str,
+                           render_info: dict, script_meta: dict) -> None:
+    tags = render_info.get("tags") or script_meta.get("tags") or []
+    cats = render_info.get("playlist_categories") or []
+    conn.execute("""
+        INSERT INTO video_metadata(
+            local_id, food_name, topic_key, genre, character_pattern,
+            generation_type, source_video_title, purpose, thumbnail_text,
+            fixed_comment, description, tags, playlist_categories, video_format, screen_format)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(local_id) DO UPDATE SET
+            genre=excluded.genre, character_pattern=excluded.character_pattern,
+            generation_type=excluded.generation_type, source_video_title=excluded.source_video_title,
+            purpose=excluded.purpose, thumbnail_text=excluded.thumbnail_text,
+            fixed_comment=excluded.fixed_comment, description=excluded.description,
+            tags=excluded.tags, playlist_categories=excluded.playlist_categories,
+            video_format=excluded.video_format, screen_format=excluded.screen_format
+    """, (
+        local_id,
+        script_meta.get("food_name"),
+        script_meta.get("topic_key"),
+        script_meta.get("genre_group") or script_meta.get("genre"),
+        script_meta.get("character_pattern"),
+        script_meta.get("generation_kind"),
+        script_meta.get("source_video_title"),
+        script_meta.get("generation_purpose"),
+        script_meta.get("thumbnail_text"),
+        script_meta.get("fixed_comment"),
+        render_info.get("description") or script_meta.get("description"),
+        json.dumps(tags, ensure_ascii=False),
+        json.dumps(cats, ensure_ascii=False),
+        render_info.get("video_format") or script_meta.get("video_format"),
+        render_info.get("screen_format") or script_meta.get("screen_format"),
+    ))
+
+
+def upsert_youtube_status(conn: sqlite3.Connection, local_id: str,
+                           upload_record: dict) -> None:
+    vid = upload_record.get("video_id") or upload_record.get("youtube_video_id")
+    if not vid and not local_id:
+        return
+    fc_posted = int(bool(upload_record.get("fixed_comment_auto_posted")
+                         or upload_record.get("fixed_comment_posted")))
+    fc_id = (upload_record.get("fixed_comment_thread_id")
+             or upload_record.get("fixed_comment_id"))
+    conn.execute("""
+        INSERT INTO youtube_status(
+            local_id, youtube_video_id, publish_status, publish_at,
+            uploaded_at, published_at, privacy_status,
+            fixed_comment_posted, fixed_comment_id)
+        VALUES(?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(local_id) DO UPDATE SET
+            youtube_video_id=COALESCE(excluded.youtube_video_id, youtube_video_id),
+            publish_status=excluded.publish_status,
+            publish_at=excluded.publish_at,
+            uploaded_at=excluded.uploaded_at,
+            published_at=excluded.published_at,
+            fixed_comment_posted=excluded.fixed_comment_posted,
+            fixed_comment_id=COALESCE(excluded.fixed_comment_id, fixed_comment_id)
+    """, (
+        local_id, vid,
+        upload_record.get("publish_status"),
+        upload_record.get("publish_at"),
+        upload_record.get("uploaded_at"),
+        upload_record.get("published_at"),
+        upload_record.get("privacy_status"),
+        fc_posted, fc_id,
+    ))
+
+
+def upsert_script_quality(conn: sqlite3.Connection, local_id: str,
+                            render_info: dict, opening_review: dict) -> None:
+    conn.execute("""
+        INSERT INTO script_quality(
+            local_id, estimated_duration, actual_duration, actual_duration_status,
+            opening_score, final_review_score, validation_status)
+        VALUES(?,?,?,?,?,?,?)
+        ON CONFLICT(local_id) DO UPDATE SET
+            estimated_duration=excluded.estimated_duration,
+            actual_duration=excluded.actual_duration,
+            actual_duration_status=excluded.actual_duration_status,
+            opening_score=excluded.opening_score
+    """, (
+        local_id,
+        render_info.get("estimated_duration_sec"),
+        render_info.get("actual_duration_sec"),
+        render_info.get("actual_duration_status"),
+        opening_review.get("final_score") or opening_review.get("overall_score"),
+        None,
+        "ok" if not opening_review.get("must_fix") else "must_fix",
+    ))
+
+
+def insert_analytics_snapshot(video_id: str, collected_at: str, window_days: int,
+                               data: dict) -> None:
+    """analytics データを snapshots テーブルに upsert する。"""
+    views = int(data.get("views") or 0)
+    likes = int(data.get("likes") or 0)
+    like_rate = data.get("like_rate") or (round(likes / views * 100, 2) if views > 0 else None)
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO analytics_snapshots(
+                youtube_video_id, collected_at, window_days,
+                views, average_view_duration, average_percentage_viewed,
+                likes, dislikes, comments,
+                subscribers_gained, subscribers_lost, subscribers_net,
+                impressions, ctr, like_rate, dislike_rate,
+                score, action, analysis_status,
+                is_provisional, audio_cutoff_risk,
+                blacklist_candidate, weak_reason, avoid_pattern)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(youtube_video_id, collected_at, window_days) DO UPDATE SET
+                views=excluded.views,
+                average_view_duration=excluded.average_view_duration,
+                average_percentage_viewed=excluded.average_percentage_viewed,
+                likes=excluded.likes, dislikes=excluded.dislikes,
+                comments=excluded.comments,
+                subscribers_gained=excluded.subscribers_gained,
+                subscribers_lost=excluded.subscribers_lost,
+                subscribers_net=excluded.subscribers_net,
+                impressions=excluded.impressions, ctr=excluded.ctr,
+                like_rate=excluded.like_rate, dislike_rate=excluded.dislike_rate,
+                score=excluded.score, action=excluded.action,
+                analysis_status=excluded.analysis_status,
+                is_provisional=excluded.is_provisional,
+                audio_cutoff_risk=excluded.audio_cutoff_risk,
+                blacklist_candidate=excluded.blacklist_candidate,
+                weak_reason=excluded.weak_reason,
+                avoid_pattern=excluded.avoid_pattern
+        """, (
+            video_id, collected_at, int(window_days),
+            views,
+            data.get("average_view_duration"),
+            data.get("average_percentage_viewed"),
+            likes,
+            data.get("dislikes"),
+            data.get("comments") or data.get("comment_count"),
+            data.get("subscribers_gained"),
+            data.get("subscribers_lost"),
+            data.get("subscribers_net"),
+            data.get("impressions"),
+            data.get("ctr"),
+            like_rate,
+            data.get("dislike_rate"),
+            str(data.get("score") or ""),
+            data.get("action"),
+            data.get("analysis_status"),
+            int(bool(data.get("is_provisional"))),
+            int(bool(data.get("audio_cutoff_risk"))),
+            int(bool(data.get("blacklist_candidate"))),
+            data.get("weak_reason"),
+            data.get("avoid_pattern"),
+        ))
+        conn.commit()
+
+
+def import_analytics_json(json_path: str) -> int:
+    """
+    analytics_score_YYYYMMDD.json を読んで analytics_snapshots に一括 upsert する。
+    返値: 処理件数
+    """
+    import json as _json
+    with open(json_path, encoding="utf-8") as f:
+        data = _json.load(f)
+    collected_at = data.get("generated_at", "")
+    window_days  = int(data.get("days", 28))
+    items = data.get("items", [])
+    count = 0
+    for item in items:
+        vid = item.get("video_id")
+        if not vid:
+            continue
+        try:
+            insert_analytics_snapshot(vid, collected_at, window_days, item)
+            count += 1
+        except Exception as e:
+            _logger.warning("[SQLite] analytics import スキップ %s: %s", vid, e)
+    _logger.info("[SQLite] analytics JSON 取込完了: %s → %d件", os.path.basename(json_path), count)
+    return count
+
+
+def import_all_analytics_jsons(analytics_dir: str) -> dict:
+    """analytics_dir 内の全 JSON を取り込む。"""
+    results: dict[str, int] = {}
+    for fname in sorted(os.listdir(analytics_dir)):
+        if not fname.startswith("analytics_score_") or not fname.endswith(".json"):
+            continue
+        path = os.path.join(analytics_dir, fname)
+        try:
+            results[fname] = import_analytics_json(path)
+        except Exception as e:
+            _logger.error("[SQLite] analytics JSON 取込失敗 %s: %s", fname, e)
+            results[fname] = -1
+    return results
+
+
+def upsert_playlist_registration(local_id: str, youtube_video_id: str,
+                                   playlist_name: str, playlist_id: str | None,
+                                   status: str = "registered") -> None:
+    """再生リスト登録結果を playlists テーブルに upsert する。"""
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO playlists(playlist_name, playlist_id, youtube_video_id, local_id,
+                                   registered_at, status)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(playlist_name, youtube_video_id) DO UPDATE SET
+                playlist_id=COALESCE(excluded.playlist_id, playlist_id),
+                registered_at=excluded.registered_at,
+                status=excluded.status
+        """, (playlist_name, playlist_id, youtube_video_id, local_id, _now_jst(), status))
+        # youtube_status の playlist_registered フラグも更新
+        if status == "registered" and local_id:
+            conn.execute(
+                "UPDATE youtube_status SET playlist_registered=1 WHERE local_id=?", (local_id,))
+        conn.commit()
+
+
+def upsert_render_info(local_id: str, data: dict) -> None:
+    """render_info データを DB に upsert する。"""
+    import json as _json
+    tags = data.get("tags")
+    cats = data.get("playlist_categories")
+    nr   = data.get("native_renderer")
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO render_info(
+                local_id, render_engine, video_title, description,
+                tags, video_format, screen_format, playlist_categories,
+                native_renderer_json,
+                estimated_duration_sec, actual_duration_sec, actual_duration_status,
+                loudnorm_enabled, loudnorm_i, loudnorm_tp, loudnorm_lra,
+                motion_effects_enabled, motion_effects_fallback_count)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                render_engine=COALESCE(excluded.render_engine, render_engine),
+                video_title=COALESCE(excluded.video_title, video_title),
+                description=COALESCE(excluded.description, description),
+                tags=COALESCE(excluded.tags, tags),
+                video_format=COALESCE(excluded.video_format, video_format),
+                screen_format=COALESCE(excluded.screen_format, screen_format),
+                playlist_categories=COALESCE(excluded.playlist_categories, playlist_categories),
+                native_renderer_json=COALESCE(excluded.native_renderer_json, native_renderer_json),
+                estimated_duration_sec=COALESCE(excluded.estimated_duration_sec, estimated_duration_sec),
+                actual_duration_sec=COALESCE(excluded.actual_duration_sec, actual_duration_sec),
+                actual_duration_status=COALESCE(excluded.actual_duration_status, actual_duration_status),
+                loudnorm_enabled=COALESCE(excluded.loudnorm_enabled, loudnorm_enabled),
+                loudnorm_i=COALESCE(excluded.loudnorm_i, loudnorm_i),
+                loudnorm_tp=COALESCE(excluded.loudnorm_tp, loudnorm_tp),
+                loudnorm_lra=COALESCE(excluded.loudnorm_lra, loudnorm_lra),
+                motion_effects_enabled=COALESCE(excluded.motion_effects_enabled, motion_effects_enabled),
+                motion_effects_fallback_count=COALESCE(excluded.motion_effects_fallback_count, motion_effects_fallback_count)
+        """, (
+            local_id,
+            data.get("render_engine"),
+            data.get("video_title"),
+            data.get("description"),
+            _json.dumps(tags, ensure_ascii=False) if isinstance(tags, (list, dict)) else tags,
+            data.get("video_format"),
+            data.get("screen_format"),
+            _json.dumps(cats, ensure_ascii=False) if isinstance(cats, (list, dict)) else cats,
+            _json.dumps(nr, ensure_ascii=False) if isinstance(nr, dict) else None,
+            data.get("estimated_duration_sec"),
+            data.get("actual_duration_sec"),
+            data.get("actual_duration_status"),
+            int(bool(data.get("loudnorm_enabled"))) if "loudnorm_enabled" in data else None,
+            data.get("loudnorm_i"),
+            data.get("loudnorm_tp"),
+            data.get("loudnorm_lra"),
+            int(bool(data.get("motion_effects_enabled"))) if "motion_effects_enabled" in data else None,
+            data.get("motion_effects_fallback_segments"),
+        ))
+        conn.commit()
+
+
+def get_render_info(local_id: str) -> dict:
+    """render_info を DB から取得する。"""
+    import json as _json
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT * FROM render_info WHERE local_id=?", (local_id,)
+        ).fetchone()
+    if row is None:
+        return {}
+    d = dict(row)
+    for key in ("tags", "playlist_categories"):
+        val = d.get(key)
+        if val:
+            try:
+                d[key] = _json.loads(val)
+            except Exception:
+                pass
+    nr = d.pop("native_renderer_json", None)
+    if nr:
+        try:
+            d["native_renderer"] = _json.loads(nr)
+        except Exception:
+            pass
+    return d
+
+
+def upsert_cta_policy(local_id: str, policy: dict) -> None:
+    """cta_policy を video_metadata の CTA 列に upsert する。"""
+    p = policy.get("cta_policy", policy)
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO video_metadata(local_id,
+                cta_shorts_loop_priority, cta_direct_next_video_allowed,
+                cta_topic_request, cta_topic_request_reason, cta_final_type)
+            VALUES(?,?,?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                cta_shorts_loop_priority=excluded.cta_shorts_loop_priority,
+                cta_direct_next_video_allowed=excluded.cta_direct_next_video_allowed,
+                cta_topic_request=excluded.cta_topic_request,
+                cta_topic_request_reason=excluded.cta_topic_request_reason,
+                cta_final_type=excluded.cta_final_type
+        """, (
+            local_id,
+            int(bool(p.get("shorts_loop_priority"))),
+            int(bool(p.get("direct_next_video_promo_allowed"))),
+            p.get("topic_request_cta"),
+            p.get("topic_request_cta_reason"),
+            p.get("final_cta_type"),
+        ))
+        conn.commit()
+
+
+def get_cta_policy(local_id: str) -> dict:
+    """video_metadata から CTA ポリシーを取得する。"""
+    with ManagedConnection() as conn:
+        row = conn.execute("""
+            SELECT cta_shorts_loop_priority, cta_direct_next_video_allowed,
+                   cta_topic_request, cta_topic_request_reason, cta_final_type
+            FROM video_metadata WHERE local_id=?
+        """, (local_id,)).fetchone()
+    if row is None:
+        return {}
+    return {
+        "cta_policy": {
+            "shorts_loop_priority": bool(row["cta_shorts_loop_priority"]),
+            "direct_next_video_promo_allowed": bool(row["cta_direct_next_video_allowed"]),
+            "topic_request_cta": row["cta_topic_request"],
+            "topic_request_cta_reason": row["cta_topic_request_reason"],
+            "final_cta_type": row["cta_final_type"],
+        }
+    }
+
+
+def upsert_opening_review(local_id: str, data: dict) -> None:
+    """opening_review データを script_quality に upsert する。"""
+    final = data.get("local_review", {}) if not data.get("llm_review") else data.get("llm_review", {})
+    score = data.get("final_score") or final.get("score")
+    status = data.get("final_status") or final.get("status")
+    rewrite = int(bool(data.get("rewrite_needed")))
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO script_quality(local_id, opening_score, opening_score_status, opening_rewrite_needed)
+            VALUES(?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                opening_score=COALESCE(excluded.opening_score, opening_score),
+                opening_score_status=excluded.opening_score_status,
+                opening_rewrite_needed=excluded.opening_rewrite_needed
+        """, (local_id, score, status, rewrite))
+        conn.commit()
+
+
+def upsert_final_review(local_id: str, review: dict | None) -> None:
+    """final_review データを script_quality に upsert する。"""
+    r = review or {"skipped": True}
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO script_quality(local_id,
+                final_review_skipped, final_review_reason, final_review_stage, final_review_model)
+            VALUES(?,?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                final_review_skipped=excluded.final_review_skipped,
+                final_review_reason=excluded.final_review_reason,
+                final_review_stage=excluded.final_review_stage,
+                final_review_model=excluded.final_review_model
+        """, (
+            local_id,
+            int(bool(r.get("skipped"))),
+            r.get("reason"),
+            r.get("stage"),
+            r.get("model"),
+        ))
+        conn.commit()
+
+
+def upsert_job(job_dict: dict) -> None:
+    """ジョブを jobs テーブルに upsert する。"""
+    import json as _json
+    with ManagedConnection() as conn:
+        conn.execute("""
+            INSERT INTO jobs(job_id, job_type, status, progress_text,
+                             started_at, finished_at, logs_json, result_json, error, created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(job_id) DO UPDATE SET
+                status=excluded.status,
+                progress_text=excluded.progress_text,
+                started_at=excluded.started_at,
+                finished_at=excluded.finished_at,
+                logs_json=excluded.logs_json,
+                result_json=excluded.result_json,
+                error=excluded.error
+        """, (
+            job_dict["job_id"],
+            job_dict.get("type"),
+            job_dict.get("status"),
+            job_dict.get("progress_text", ""),
+            job_dict.get("started_at"),
+            job_dict.get("finished_at"),
+            _json.dumps(job_dict.get("logs") or [], ensure_ascii=False),
+            _json.dumps(job_dict.get("result"), ensure_ascii=False) if job_dict.get("result") is not None else None,
+            job_dict.get("error"),
+            job_dict.get("started_at") or _now_jst(),
+        ))
+        conn.commit()
+
+
+def load_jobs_from_db(max_n: int = 500) -> list[dict]:
+    """jobs テーブルから最新 N 件を返す。"""
+    import json as _json
+    with ManagedConnection() as conn:
+        rows = conn.execute("""
+            SELECT job_id, job_type, status, progress_text,
+                   started_at, finished_at, logs_json, result_json, error
+            FROM jobs
+            ORDER BY COALESCE(started_at, created_at) DESC
+            LIMIT ?
+        """, (max_n,)).fetchall()
+    result = []
+    for row in rows:
+        d = dict(row)
+        d["type"] = d.pop("job_type", None)
+        try:
+            d["logs"] = _json.loads(d.pop("logs_json") or "[]")
+        except Exception:
+            d["logs"] = []
+        try:
+            result_raw = d.pop("result_json", None)
+            d["result"] = _json.loads(result_raw) if result_raw else None
+        except Exception:
+            d["result"] = None
+        result.append(d)
+    return result
+
+
+def delete_old_jobs(keep_n: int) -> None:
+    """古いジョブを削除して keep_n 件だけ残す。"""
+    with ManagedConnection() as conn:
+        conn.execute("""
+            DELETE FROM jobs WHERE job_id NOT IN (
+                SELECT job_id FROM jobs
+                ORDER BY COALESCE(started_at, created_at) DESC
+                LIMIT ?
+            )
+        """, (keep_n,))
+        conn.commit()
+
+
+def delete_video(local_id: str) -> None:
+    """
+    local_id に紐づく全テーブルのレコードを削除する。
+    analytics_snapshots は youtube_video_id 経由で削除する。
+    """
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT youtube_video_id FROM youtube_status WHERE local_id=?", (local_id,)
+        ).fetchone()
+        yt_id = row[0] if row else None
+
+        conn.execute("DELETE FROM render_info      WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM script_quality   WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM playlists         WHERE local_id=?", (local_id,))
+        if yt_id:
+            conn.execute("DELETE FROM analytics_snapshots WHERE youtube_video_id=?", (yt_id,))
+        conn.execute("DELETE FROM youtube_status   WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM video_metadata   WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM topic_history    WHERE local_id=?", (local_id,))
+        conn.execute("DELETE FROM videos           WHERE local_id=?", (local_id,))
+        conn.commit()
+    _logger.info("[SQLite] レコード削除: local_id=%s", local_id)
+
+
+# ── フォルダ同期 ─────────────────────────────────────────────────────────────
+
+def sync_folder_to_db(output_dir: str) -> None:
+    """
+    output_dir 配下を DB に同期する。
+    新規フォルダ: DB が正本なので JSON は参照しない。
+    既存フォルダ(旧形式): JSON が残っていれば fallback として読む。
+    失敗時はログに出して例外を伝播させる（サイレントスキップ禁止）。
+    """
+    local_id = _local_id_from_dir(output_dir)
+    meta_dir = os.path.join(output_dir, "_meta")
+
+    # render_info: DB を正本とし、DB に無ければ旧 JSON から取り込む
+    render_info = get_render_info(local_id)
+    if not render_info:
+        ri_json = _safe_json(os.path.join(meta_dir, "render_info.json"))
+        if ri_json:
+            upsert_render_info(local_id, ri_json)
+            render_info = ri_json
+
+    # upload_record: DB(youtube_status)を正本とし、無ければ旧 JSON から取り込む
+    upload_rec: dict = {}
+    with ManagedConnection() as _c:
+        _row = _c.execute(
+            "SELECT youtube_video_id FROM youtube_status WHERE local_id=?", (local_id,)
+        ).fetchone()
+        if _row and _row[0]:
+            upload_rec = {"video_id": _row[0]}
+    if not upload_rec:
+        upload_rec = _safe_json(os.path.join(meta_dir, "upload_record.json"))
+
+    # opening_review: DB を正本とし、無ければ旧 JSON から取り込む
+    opening_rev: dict = {}
+    with ManagedConnection() as _c:
+        _row2 = _c.execute(
+            "SELECT opening_score FROM script_quality WHERE local_id=?", (local_id,)
+        ).fetchone()
+        if _row2 and _row2[0] is not None:
+            opening_rev = {"final_score": _row2[0]}
+    if not opening_rev:
+        opening_rev_json = _safe_json(os.path.join(meta_dir, "opening_review.json"))
+        if opening_rev_json:
+            upsert_opening_review(local_id, opening_rev_json)
+            opening_rev = opening_rev_json
+
+    # cta_policy: DB を正本とし、無ければ旧 JSON から取り込む
+    cta_from_db = get_cta_policy(local_id)
+    if not cta_from_db.get("cta_policy"):
+        cta_json = _safe_json(os.path.join(meta_dir, "cta_policy.json"))
+        if cta_json:
+            upsert_cta_policy(local_id, cta_json)
+
+    # 台本メタを ScriptParser で取得
+    script_meta: dict = {}
+    script_path = os.path.join(output_dir, "script.txt")
+    if os.path.isfile(script_path):
+        try:
+            from core.parser import ScriptParser
+            with open(script_path, encoding="utf-8") as f:
+                content = f.read()
+            items = ScriptParser.parse_string(content)
+            script_meta = {it["type"]: it["text"] for it in items
+                           if it["type"] in ScriptParser.META_TYPES}
+        except Exception as e:
+            _logger.warning("script.txt パース失敗 %s: %s", local_id, e)
+
+    with ManagedConnection() as conn:
+        upsert_video(conn, local_id, output_dir, render_info, upload_rec)
+        upsert_video_metadata(conn, local_id, render_info, script_meta)
+        if upload_rec:
+            upsert_youtube_status(conn, local_id, upload_rec)
+        upsert_script_quality(conn, local_id, render_info, opening_rev)
+        conn.commit()
+
+    _logger.debug("sync_folder_to_db 完了: %s", local_id)
+
+
+# ── クエリ ───────────────────────────────────────────────────────────────────
+
+def get_videos(
+    video_type: str | None = None,
+    publish_status: str | None = None,
+    generation_type: str | None = None,
+    genre: str | None = None,
+    playlist_unregistered: bool = False,
+    has_youtube_id: bool | None = None,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[dict]:
+    """管理画面用のビデオ一覧を返す。"""
+    where: list[str] = []
+    params: list[Any] = []
+
+    if video_type:
+        where.append("LOWER(v.video_type) LIKE ?")
+        params.append(f"%{video_type.lower()}%")
+    if publish_status:
+        where.append("ys.publish_status=?")
+        params.append(publish_status)
+    if generation_type:
+        where.append("vm.generation_type=?")
+        params.append(generation_type)
+    if genre:
+        where.append("vm.genre=?")
+        params.append(genre)
+    if playlist_unregistered:
+        where.append("(ys.playlist_registered IS NULL OR ys.playlist_registered=0)")
+    if has_youtube_id is True:
+        where.append("ys.youtube_video_id IS NOT NULL")
+    elif has_youtube_id is False:
+        where.append("ys.youtube_video_id IS NULL")
+
+    where_sql = ("WHERE " + " AND ".join(where)) if where else ""
+    sql = f"""
+        SELECT
+            v.local_id, v.title, v.video_type, v.created_at, v.updated_at,
+            vm.genre, vm.generation_type, vm.food_name, vm.playlist_categories,
+            ys.youtube_video_id, ys.publish_status, ys.publish_at, ys.uploaded_at,
+            ys.fixed_comment_posted, ys.playlist_registered,
+            (SELECT a.views FROM analytics_snapshots a
+             WHERE a.youtube_video_id=ys.youtube_video_id
+             ORDER BY a.collected_at DESC LIMIT 1) AS latest_views,
+            (SELECT a.average_percentage_viewed FROM analytics_snapshots a
+             WHERE a.youtube_video_id=ys.youtube_video_id
+             ORDER BY a.collected_at DESC LIMIT 1) AS latest_avg_pct,
+            (SELECT a.score FROM analytics_snapshots a
+             WHERE a.youtube_video_id=ys.youtube_video_id
+             ORDER BY a.collected_at DESC LIMIT 1) AS latest_score
+        FROM videos v
+        LEFT JOIN video_metadata vm ON vm.local_id=v.local_id
+        LEFT JOIN youtube_status ys ON ys.local_id=v.local_id
+        {where_sql}
+        ORDER BY v.created_at DESC
+        LIMIT ? OFFSET ?
+    """
+    params += [limit, offset]
+
+    with ManagedConnection() as conn:
+        rows = conn.execute(sql, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_duplicate_topics() -> list[dict]:
+    """同一 topic_key または food_name が重複している動画を返す。"""
+    sql = """
+        SELECT topic_key, food_name, COUNT(*) AS cnt,
+               GROUP_CONCAT(local_id, '|') AS local_ids,
+               GROUP_CONCAT(title, '|') AS titles
+        FROM topic_history
+        WHERE topic_key IS NOT NULL OR food_name IS NOT NULL
+        GROUP BY COALESCE(topic_key, food_name)
+        HAVING cnt > 1
+        ORDER BY cnt DESC
+    """
+    with ManagedConnection() as conn:
+        return [dict(r) for r in conn.execute(sql).fetchall()]
+
+
+def load_latest_analytics_items() -> list[dict]:
+    """
+    analytics_snapshots の最新バッチを関連テーブルと JOIN して返す。
+    返却フィールドは analytics_score.to_tsv() / build_performance_summary() が期待する形式に合わせる。
+    """
+    with ManagedConnection() as conn:
+        meta_row = conn.execute(
+            "SELECT collected_at, window_days FROM analytics_snapshots ORDER BY collected_at DESC LIMIT 1"
+        ).fetchone()
+        if meta_row is None:
+            return []
+        latest_at = meta_row["collected_at"]
+        rows = conn.execute("""
+            SELECT
+                a.youtube_video_id        AS video_id,
+                a.collected_at,
+                a.window_days,
+                a.views,
+                a.average_view_duration,
+                a.average_percentage_viewed,
+                a.likes,
+                a.dislikes,
+                a.comments,
+                a.subscribers_gained,
+                a.subscribers_lost,
+                a.subscribers_net,
+                a.impressions,
+                a.ctr,
+                a.like_rate,
+                a.dislike_rate,
+                a.score,
+                a.action,
+                a.analysis_status,
+                a.is_provisional,
+                a.audio_cutoff_risk,
+                a.blacklist_candidate,
+                a.weak_reason,
+                a.avoid_pattern,
+                ri.video_title            AS title,
+                ri.video_format           AS video_type,
+                ri.actual_duration_sec    AS duration,
+                ri.actual_duration_status AS duration_status,
+                ri.render_engine,
+                vm.genre                  AS genre_group,
+                vm.generation_type        AS generation_kind,
+                vm.source_video_title,
+                vm.purpose                AS generation_purpose,
+                vm.character_pattern,
+                vm.cta_topic_request      AS topic_request_cta,
+                vm.cta_topic_request_reason AS topic_request_cta_reason,
+                vm.cta_final_type         AS final_cta_type,
+                ys.publish_status,
+                ys.published_at,
+                ys.privacy_status
+            FROM analytics_snapshots a
+            LEFT JOIN youtube_status ys ON ys.youtube_video_id = a.youtube_video_id
+            LEFT JOIN render_info ri    ON ri.local_id = ys.local_id
+            LEFT JOIN video_metadata vm ON vm.local_id = ys.local_id
+            WHERE a.collected_at = ?
+            ORDER BY a.views DESC
+        """, (latest_at,)).fetchall()
+
+    items = []
+    for row in rows:
+        d = dict(row)
+        d["analytics_available"] = True
+        likes = d.get("likes") or 0
+        dislikes = d.get("dislikes") or 0
+        d["like_dislike_total"] = likes + dislikes
+        d["is_provisional"] = bool(d.get("is_provisional"))
+        d["audio_cutoff_risk"] = bool(d.get("audio_cutoff_risk"))
+        d["blacklist_candidate"] = bool(d.get("blacklist_candidate"))
+        items.append(d)
+    return items
+
+
+def get_latest_analytics_meta() -> dict:
+    """最新バッチの collected_at / window_days を返す。"""
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT collected_at, window_days FROM analytics_snapshots ORDER BY collected_at DESC LIMIT 1"
+        ).fetchone()
+    if row is None:
+        return {}
+    return {"generated_at": row["collected_at"], "window_days": row["window_days"]}
+
+
+def get_stats() -> dict:
+    """DB の概要統計を返す。"""
+    with ManagedConnection() as conn:
+        total     = conn.execute("SELECT COUNT(*) FROM videos").fetchone()[0]
+        uploaded  = conn.execute("SELECT COUNT(*) FROM youtube_status WHERE youtube_video_id IS NOT NULL").fetchone()[0]
+        published = conn.execute("SELECT COUNT(*) FROM youtube_status WHERE publish_status='published'").fetchone()[0]
+        scheduled = conn.execute("SELECT COUNT(*) FROM youtube_status WHERE publish_status='scheduled' OR publish_status='private'").fetchone()[0]
+        pl_reg    = conn.execute("SELECT COUNT(*) FROM youtube_status WHERE playlist_registered=1").fetchone()[0]
+        return {
+            "total": total, "uploaded": uploaded,
+            "published": published, "scheduled": scheduled,
+            "playlist_registered": pl_reg,
+        }
+
+
+# ── インポートコマンド ────────────────────────────────────────────────────────
+
+def import_output_dir(output_dir_root: str | None = None) -> None:
+    """
+    output/ 配下の全動画フォルダを走査して DB に取り込む。
+
+    py -3 -m core.metadata_db import-output
+    """
+    from core.output_paths import OUTPUT_DIR
+    root = output_dir_root or OUTPUT_DIR
+
+    initialize_db()
+
+    ok = warn = fail = 0
+    for entry in sorted(os.scandir(root), key=lambda e: e.name):
+        if not entry.is_dir():
+            continue
+        name = entry.name
+        # 000_ 系の管理フォルダは再帰的に走査
+        if name.startswith("000_"):
+            for sub in sorted(os.scandir(entry.path), key=lambda e: e.name):
+                if sub.is_dir() and not sub.name.startswith("000_"):
+                    _import_one(sub.path, ok_ref := [ok], warn_ref := [warn], fail_ref := [fail])
+                    ok, warn, fail = ok_ref[0], warn_ref[0], fail_ref[0]
+            continue
+        _import_one(entry.path, ok_ref := [ok], warn_ref := [warn], fail_ref := [fail])
+        ok, warn, fail = ok_ref[0], warn_ref[0], fail_ref[0]
+
+    print(f"\n✅ 取り込み完了: 成功={ok} / 警告={warn} / 失敗={fail}")
+
+
+def _import_one(folder: str, ok_ref: list, warn_ref: list, fail_ref: list) -> None:
+    meta_dir = os.path.join(folder, "_meta")
+    if not os.path.isdir(meta_dir):
+        return  # 動画フォルダではない
+    try:
+        missing = []
+        for fname in ("render_info.json",):
+            if not os.path.isfile(os.path.join(meta_dir, fname)):
+                missing.append(fname)
+        if missing:
+            warn_ref[0] += 1
+            print(f"  ⚠ {os.path.basename(folder)}: 欠損ファイル {missing}")
+
+        sync_folder_to_db(folder)
+        ok_ref[0] += 1
+        print(f"  ✅ {os.path.basename(folder)}")
+    except Exception as e:
+        fail_ref[0] += 1
+        print(f"  ❌ {os.path.basename(folder)}: {e}")
+
+
+# ── __main__（コマンド実行） ─────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    import sys
+    logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(message)s")
+    if len(sys.argv) < 2:
+        print("使い方: py -3 -m core.metadata_db import-output")
+        sys.exit(1)
+    cmd = sys.argv[1]
+    if cmd == "import-output":
+        import_output_dir()
+    else:
+        print(f"不明なコマンド: {cmd}")
+        sys.exit(1)

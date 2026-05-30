@@ -103,7 +103,8 @@ yukkurijidou/
 │   ├── youtube_uploader.py # YouTube APIアップロード
 │   ├── playlist_resolver.py # 台本カテゴリ名＋動画形式 → YouTube再生リスト名の解決。`resolve_video_type(video_format, screen_format)` でネタ会議を含む全動画形式を "shorts"/"long" に統一判定する関数も提供
 │   ├── app_shutdown.py     # アプリ終了管理（shutdown hookの登録・実行・uvicorn.Server参照管理）
-│   ├── metadata_db.py      # SQLite接続管理stub（shutdown hookとしてclose登録・ManagedConnection提供）
+│   ├── metadata_db.py      # SQLite メタデータDB（スキーマ定義・upsert/query 関数群）
+│   ├── settings_store.py   # SQLite 設定DB（data/settings.db の読み書き・.env 移行）
 │   └── ng_words.py         # NGワード置換
 ├── config/
 │   ├── config.py            # 定数・設定
@@ -1572,3 +1573,300 @@ TOPIC_REQUEST_CTA_EVERY_N=5
 ## ComfyUI（廃止済み）
 > ~~- ssets/comfyui/model_manifest.json に必要なモデルを定義。~~
 > ~~- Web UIから半自動ダウンロードおよび充足チェックが可能。不足時は自動フォールバックせずに停止する。~~
+
+
+## チャンネル識別情報（複数チャンネル運用対応）
+
+Web UI 上部のチャンネルバナーと、アップロード誤爆防止のための設定項目。
+`.env` に記述し、`core/channel_info.py` で読み込む。
+
+### 環境変数
+
+| 変数名 | 必須 | 説明 |
+|---|---|---|
+| `CHANNEL_NAME` | アップロード時必須 | チャンネル表示名。未設定時はアップロード禁止。 |
+| `CHANNEL_HANDLE` | アップロード時必須 | `@` から始まるハンドル。未設定時はアップロード禁止。 |
+| `CHANNEL_PROFILE` | 任意 | チャンネル識別子（任意文字列）。未設定でも動作するが警告表示。 |
+| `CHANNEL_THEME` | 任意 | テーマ説明。バナーに表示するのみ。 |
+| `CHANNEL_ACCENT_COLOR` | 任意 | UI アクセント色（`#RRGGBB`）。不正値は警告を出してデフォルト色 `#4a5568` を使用。 |
+| `DEFAULT_HASHTAGS` | 任意 | デフォルトハッシュタグ文字列。 |
+
+### 設定例（.env）
+
+```
+CHANNEL_PROFILE=food_trivia
+CHANNEL_NAME=ずんだもんとめたんの食べ物雑学堂
+CHANNEL_HANDLE=@zundamon_food
+CHANNEL_THEME=食べ物雑学
+CHANNEL_ACCENT_COLOR=#7c2d12
+DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
+```
+
+### 挙動
+
+- Web UI 起動時、全画面上部のバナーにチャンネル名・ハンドル・テーマを表示する。バナーは sticky で常時表示。
+- `CHANNEL_NAME` / `CHANNEL_HANDLE` のいずれかが未設定の場合、赤色警告を表示し、アップロードボタンを無効化する。
+- アップロード API（`POST /api/upload`、`POST /api/upload/batch`）は `CHANNEL_NAME` / `CHANNEL_HANDLE` 未設定時に `400` を返す。
+- アップロードジョブ実行直前に `[CHANNEL]` プレフィックスでチャンネル情報をログ出力する。
+- 特定チャンネル名・ハンドルをコードにハードコードしない。未設定時に特定チャンネルへフォールバックしない（fail closed）。
+
+### API
+
+`GET /api/channel-info` — チャンネル情報を JSON で返す。`upload_allowed`（bool）を含む。
+
+---
+
+## DB アーキテクチャ
+
+### 概要
+
+ローカルファイル管理（JSON / TSV）を廃止し、すべての状態を SQLite で管理する。
+
+| DB ファイル | 用途 |
+|---|---|
+| `output/000_data/metadata.db` | 動画メタデータ・YouTube 状態・アナリティクス・ジョブ履歴 |
+| `data/settings.db` | アプリ設定（非認証情報）。`.env` は認証情報のみ残す |
+
+### 廃止したローカルファイル
+
+以下のファイルへの書き込みはすべて廃止済み。読み取りも DB に移行した。
+既存フォルダに JSON が残っていても `sync_folder_to_db()` が自動取込する。
+
+| 旧ファイル | 移行先テーブル |
+|---|---|
+| `_meta/render_info.json` | `render_info` |
+| `_meta/upload_record.json` | `youtube_status` |
+| `_meta/cta_policy.json` | `video_metadata`（CTA 列） |
+| `_meta/opening_review.json` | `script_quality` |
+| `_meta/final_review.json` | `script_quality` |
+| `output/000_data/jobs.json` | `jobs` |
+| `output/000_data/upload_records.json` | `youtube_status` + `render_info` |
+| `output/000_data/uploaded_titles.txt` | `000_uploaded/` フォルダスキャンで代替 |
+| `output/000_analytics/*.json` | `analytics_snapshots`（Analytics 取得時に自動同期） |
+| `.env`（非認証設定） | `data/settings.db`（`settings` テーブル） |
+
+---
+
+### `output/000_data/metadata.db` テーブル定義
+
+現在のスキーマバージョン: **4**
+
+#### `videos` — 動画基本情報
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `local_id` | TEXT PK | 出力フォルダ名（例: `Shorts_りんご_20260601_abc123`） |
+| `output_dir` | TEXT | 絶対パス |
+| `title` | TEXT | 動画タイトル |
+| `video_type` | TEXT | Shorts / Long / ネタ会議_Shorts など |
+| `created_at` | TEXT | JST ISO 8601 |
+| `updated_at` | TEXT | JST ISO 8601 |
+| `script_path` | TEXT | script.txt の絶対パス |
+| `mp4_path` | TEXT | 生成 MP4 の絶対パス |
+| `thumbnail_path` | TEXT | サムネイル PNG パス |
+| `script_content` | TEXT | script.txt の全文（v2 追加） |
+
+#### `render_info` — レンダリング設定・メタデータ
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `local_id` | TEXT PK | 動画フォルダ名 |
+| `render_engine` | TEXT | "native" |
+| `video_title` | TEXT | YouTube タイトル |
+| `description` | TEXT | YouTube 説明文 |
+| `tags` | TEXT | JSON 配列 |
+| `video_format` | TEXT | "Shorts" / "Long" |
+| `screen_format` | TEXT | "vertical" / "horizontal" |
+| `playlist_categories` | TEXT | JSON 配列 |
+| `native_renderer_json` | TEXT | native レンダラー設定（JSON） |
+| `estimated_duration_sec` | REAL | 推定尺（秒） |
+| `actual_duration_sec` | REAL | 実際の尺（秒） |
+| `actual_duration_status` | TEXT | "ideal" / "ok_but_short" など |
+| `loudnorm_enabled` | INTEGER | 0/1 |
+| `loudnorm_i` / `loudnorm_tp` / `loudnorm_lra` | REAL | loudnorm 設定値 |
+| `motion_effects_enabled` | INTEGER | 0/1 |
+| `motion_effects_fallback_count` | INTEGER | fallback セグメント数 |
+
+#### `video_metadata` — 台本由来のメタ情報・CTA ポリシー
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `local_id` | TEXT PK FK→videos | |
+| `food_name` | TEXT | 食材・トピック名 |
+| `topic_key` | TEXT | トピックキー |
+| `genre` | TEXT | ジャンル |
+| `character_pattern` | TEXT | キャラ構成パターン |
+| `generation_type` | TEXT | 新規 / 横展開 / 品質改善版 など |
+| `source_video_title` | TEXT | 横展開元タイトル |
+| `purpose` | TEXT | 生成目的 |
+| `thumbnail_text` | TEXT | サムネイルテキスト |
+| `fixed_comment` | TEXT | 固定コメント |
+| `description` | TEXT | YouTube 説明文 |
+| `tags` | TEXT | JSON 配列 |
+| `playlist_categories` | TEXT | JSON 配列 |
+| `video_format` | TEXT | Shorts / Long |
+| `screen_format` | TEXT | |
+| `cta_shorts_loop_priority` | INTEGER | 0/1（v4） |
+| `cta_direct_next_video_allowed` | INTEGER | 0/1（v4） |
+| `cta_topic_request` | TEXT | "blocked" / "allowed"（v4） |
+| `cta_topic_request_reason` | TEXT | （v4） |
+| `cta_final_type` | TEXT | "loop" / "channel"（v4） |
+
+#### `youtube_status` — YouTube 投稿・公開状態
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `local_id` | TEXT PK FK→videos | |
+| `youtube_video_id` | TEXT UNIQUE | YouTube 動画 ID |
+| `publish_status` | TEXT | "private" / "scheduled" / "published" |
+| `publish_at` | TEXT | 公開予定日時（JST ISO 8601） |
+| `uploaded_at` | TEXT | アップロード日時 |
+| `published_at` | TEXT | 実際の公開日時 |
+| `privacy_status` | TEXT | |
+| `fixed_comment_posted` | INTEGER | 0/1 |
+| `fixed_comment_id` | TEXT | |
+| `playlist_registered` | INTEGER | 0/1 |
+
+#### `analytics_snapshots` — YouTube Analytics スナップショット
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `id` | INTEGER PK AUTOINCREMENT | |
+| `youtube_video_id` | TEXT | |
+| `collected_at` | TEXT | 取得日時（JST ISO 8601） |
+| `window_days` | INTEGER | 集計期間（日数） |
+| `views` | INTEGER | |
+| `average_view_duration` | REAL | 秒 |
+| `average_percentage_viewed` | REAL | % |
+| `likes` / `dislikes` | INTEGER | （v3） |
+| `comments` | INTEGER | |
+| `subscribers_gained` / `subscribers_lost` / `subscribers_net` | INTEGER | （v3） |
+| `impressions` / `ctr` | INTEGER / REAL | （v3） |
+| `like_rate` / `dislike_rate` | REAL | （v3） |
+| `score` | TEXT | "S" / "A" / "B" / "C" など |
+| `action` | TEXT | "継続" / "改善" など |
+| `analysis_status` | TEXT | |
+| `is_provisional` / `audio_cutoff_risk` / `blacklist_candidate` | INTEGER | 0/1（v3） |
+| `weak_reason` / `avoid_pattern` | TEXT | （v3） |
+| UNIQUE | `(youtube_video_id, collected_at, window_days)` | |
+
+Analytics 取得（`save_score_files()`）のたびに自動 upsert される。
+動画DB画面の「Analytics JSON取込」で過去分を一括取込できる。
+
+#### `playlists` — 再生リスト登録状態
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `id` | INTEGER PK AUTOINCREMENT | |
+| `playlist_name` | TEXT | |
+| `playlist_id` | TEXT | YouTube 再生リスト ID |
+| `youtube_video_id` | TEXT | |
+| `local_id` | TEXT | |
+| `registered_at` | TEXT | |
+| `status` | TEXT | "registered" |
+| UNIQUE | `(playlist_name, youtube_video_id)` | |
+
+#### `topic_history` — トピック重複チェック
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `local_id` | TEXT PK | |
+| `topic_key` | TEXT | |
+| `food_name` | TEXT | |
+| `title` | TEXT | |
+| `youtube_video_id` | TEXT | |
+| `status` | TEXT | |
+| `created_at` | TEXT | |
+
+#### `script_quality` — 台本品質スコア・レビュー結果
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `local_id` | TEXT PK FK→videos | |
+| `dialogue_lines` | INTEGER | |
+| `total_chars` / `avg_chars` | INTEGER / REAL | |
+| `short_line_count` | INTEGER | |
+| `estimated_duration` / `actual_duration` | REAL | 秒 |
+| `actual_duration_status` | TEXT | "ideal" / "warning" など |
+| `opening_score` | REAL | オープニングスコア |
+| `opening_score_status` | TEXT | （v4） |
+| `opening_rewrite_needed` | INTEGER | 0/1（v4） |
+| `final_review_score` | REAL | |
+| `validation_status` | TEXT | |
+| `validation_errors_json` | TEXT | |
+| `final_review_skipped` | INTEGER | 0/1（v4） |
+| `final_review_reason` | TEXT | （v4） |
+| `final_review_stage` | TEXT | （v4） |
+| `final_review_model` | TEXT | （v4） |
+
+#### `jobs` — バックグラウンドジョブ履歴
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `job_id` | TEXT PK | UUID |
+| `job_type` | TEXT | "upload" / "generate" / "analytics_import" など |
+| `status` | TEXT | "queued" / "running" / "success" / "failed" / "cancelled" |
+| `progress_text` | TEXT | 最新進捗メッセージ |
+| `started_at` / `finished_at` | TEXT | JST ISO 8601 |
+| `logs_json` | TEXT | `[{time, tag, message}, ...]` の JSON 配列 |
+| `result_json` | TEXT | 結果 JSON |
+| `error` | TEXT | エラーメッセージ |
+| `created_at` | TEXT | |
+
+保持件数は `JOB_LOG_MAX_JOBS`（既定 300）。古い順に自動削除される。
+
+---
+
+### `data/settings.db` テーブル定義
+
+#### `settings` — アプリ設定
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `key` | TEXT PK | 環境変数名（例: `CHANNEL_NAME`） |
+| `value` | TEXT | 設定値（文字列） |
+
+`.env` の非認証設定を起動時に自動移行（`settings_store.bootstrap_from_env()`）。
+以降は設定画面（`/settings`）から保存する。`.env` には以下の認証情報のみ残す。
+
+- `GOOGLE_API_KEY`
+- `OPENAI_API_KEY`
+- `HF_TOKEN`
+
+---
+
+### スキーマバージョン履歴
+
+| バージョン | 変更内容 |
+|---|---|
+| 1 | 初期スキーマ（videos / video_metadata / youtube_status / analytics_snapshots / playlists / topic_history / script_quality） |
+| 2 | `videos.script_content` 追加 |
+| 3 | `analytics_snapshots` に dislikes / impressions / ctr など 11 列追加 |
+| 4 | `render_info` / `jobs` テーブル新設。`video_metadata` に CTA 列追加。`script_quality` に opening/final review 列追加 |
+
+マイグレーションは `initialize_db()` が起動時に自動適用する。
+
+---
+
+### 主要 API 関数（`core/metadata_db.py`）
+
+| 関数 | 用途 |
+|---|---|
+| `initialize_db()` | DB 初期化・スキーマ移行（起動時に自動呼び出し） |
+| `sync_folder_to_db(output_dir)` | 動画フォルダを全テーブルに同期（旧 JSON fallback 付き） |
+| `upsert_render_info(local_id, data)` | render_info テーブルへの upsert |
+| `get_render_info(local_id)` | render_info をフォルダ名で取得 |
+| `upsert_cta_policy(local_id, policy)` | CTA ポリシーを video_metadata に保存 |
+| `get_cta_policy(local_id)` | CTA ポリシーを取得 |
+| `upsert_opening_review(local_id, data)` | オープニングレビューを script_quality に保存 |
+| `upsert_final_review(local_id, review)` | 最終レビューを script_quality に保存 |
+| `upsert_job(job_dict)` | ジョブを jobs テーブルに upsert |
+| `load_jobs_from_db(max_n)` | ジョブ履歴を新しい順で返す |
+| `delete_old_jobs(keep_n)` | 古いジョブを削除して keep_n 件を維持 |
+| `insert_analytics_snapshot(video_id, ...)` | Analytics スナップショットを upsert |
+| `import_analytics_json(json_path)` | Analytics JSON ファイルを一括取込 |
+| `import_all_analytics_jsons(dir)` | ディレクトリ内の全 JSON を取込 |
+| `delete_video(local_id)` | 全テーブルから該当レコードを削除 |
+| `get_videos(...)` | 動画一覧を条件付きで取得（管理画面用） |
+| `get_stats()` | 集計サマリー（total / uploaded / published など） |
+| `get_duplicate_topics()` | トピック重複チェック |

@@ -42,6 +42,8 @@ async def _lifespan(app):
     from core.metadata_db import close_all_connections
 
     auto_migrate()  # 旧 [] プレフィックスフォルダを起動時に自動リネーム
+    from core.metadata_db import initialize_db
+    initialize_db()  # 起動時に DB を確実に初期化しログを残す
     register_shutdown_hook("metadata_db", close_all_connections)
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
@@ -77,6 +79,8 @@ from web_app.routes.api_settings import router as settings_router
 from web_app.routes.api_prompt import router as prompt_router
 from web_app.routes.api_sd_models import router as sd_models_router
 from web_app.routes.api_shutdown import router as shutdown_router
+from web_app.routes.api_db import router as db_router
+from web_app.routes.api_channel import router as channel_router
 
 app.include_router(pages_router)
 app.include_router(status_router)
@@ -93,6 +97,8 @@ app.include_router(settings_router)
 app.include_router(prompt_router)
 app.include_router(sd_models_router)
 app.include_router(shutdown_router)
+app.include_router(db_router)
+app.include_router(channel_router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():

@@ -1,13 +1,11 @@
 """
-.env ファイルの読み書きによる設定変更サービス。
-APIキー・トークンなど秘密値は対象外。一部設定は保存直後に現在プロセスへ反映する。
+設定 DB（data/settings.db）による設定管理サービス。
+APIキー・トークンなど認証情報は対象外（.env で管理）。
+一部設定は保存直後に現在プロセスへ反映する。
 """
 import os
 from typing import Any
 from config import config as cfg
-
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_ENV_PATH = os.path.join(_ROOT, ".env")
 
 # 編集可能な設定項目の定義（秘密値は含めない）
 EDITABLE_CONFIG: list[dict[str, Any]] = [
@@ -89,6 +87,12 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "FFMPEG_BIN",                  "type": "str",   "label": "ffmpeg バイナリパス",           "default": str(cfg.FFMPEG_BIN),                                           "group": "ffmpeg"},
     {"key": "NATIVE_FFMPEG_TIMEOUT_SEC",   "type": "float", "label": "ffmpegタイムアウト(秒)",        "default": str(cfg.NATIVE_FFMPEG_TIMEOUT_SEC),  "min": 30,  "max": 7200,  "group": "ffmpeg"},
     {"key": "NATIVE_FFPROBE_TIMEOUT_SEC",  "type": "float", "label": "ffprobeタイムアウト(秒)",       "default": str(cfg.NATIVE_FFPROBE_TIMEOUT_SEC), "min": 5,   "max": 300,   "group": "ffmpeg"},
+    # ── チャンネル ──
+    {"key": "CHANNEL_NAME",         "type": "str",       "label": "チャンネル表示名（アップロード必須）",  "default": str(cfg.CHANNEL_NAME),         "allow_empty": True, "group": "チャンネル"},
+    {"key": "CHANNEL_HANDLE",       "type": "str",       "label": "@ハンドル（アップロード必須・@ 省略可）",         "default": str(cfg.CHANNEL_HANDLE),       "allow_empty": True, "group": "チャンネル"},
+    {"key": "CHANNEL_THEME",        "type": "str",       "label": "テーマ説明（任意）",                    "default": str(cfg.CHANNEL_THEME),        "allow_empty": True, "group": "チャンネル"},
+    {"key": "CHANNEL_ACCENT_COLOR", "type": "hex_color", "label": "UIアクセント色（任意）",               "default": str(cfg.CHANNEL_ACCENT_COLOR), "allow_empty": True, "group": "チャンネル"},
+    {"key": "DEFAULT_HASHTAGS",     "type": "str",       "label": "デフォルトハッシュタグ（任意）",        "default": str(cfg.DEFAULT_HASHTAGS),     "allow_empty": True, "group": "チャンネル"},
 ]
 
 _ALLOWED_KEYS = {item["key"] for item in EDITABLE_CONFIG}
@@ -96,13 +100,14 @@ _ALLOWED_KEYS = {item["key"] for item in EDITABLE_CONFIG}
 
 def get_editable_config() -> list[dict[str, Any]]:
     """現在値付きの設定項目リストを返す。"""
-    env_values = _read_env()
+    from core.settings_store import get_all as _db_get_all
+    db_values = _db_get_all()
     result = []
     for item in EDITABLE_CONFIG:
         key = item["key"]
         raw = getattr(cfg, key, None)
         if raw is None:
-            raw = env_values.get(key, item["default"])
+            raw = db_values.get(key, item["default"])
         if isinstance(raw, bool):
             current_str = "1" if raw else "0"
         elif isinstance(raw, (tuple, list)):
@@ -115,15 +120,16 @@ def get_editable_config() -> list[dict[str, Any]]:
 
 def save_config(updates: dict[str, str]) -> list[str]:
     """
-    更新値を検証して .env に書き込む。
+    更新値を検証して設定 DB に書き込む。
     戻り値: バリデーションエラーのリスト（空なら成功）
     """
     errors = _validate(updates)
     if errors:
         return errors
 
+    from core.settings_store import set_many as _db_set_many
     safe_updates = {_key: _normalize_update_value(_key, _value) for _key, _value in updates.items() if _key in _ALLOWED_KEYS}
-    _write_env(safe_updates)
+    _db_set_many(safe_updates)
     _apply_runtime_updates(safe_updates)
     return []
 
@@ -164,6 +170,10 @@ def _validate(updates: dict[str, str]) -> list[str]:
             elif spec["type"] == "bool":
                 if raw_val not in ("0", "1"):
                     errors.append(f"{key}: '0' か '1' で指定してください")
+            elif spec["type"] == "hex_color":
+                import re as _re
+                if raw_val and not _re.match(r'^#[0-9a-fA-F]{6}$', raw_val):
+                    errors.append(f"{key}: '#RRGGBB' 形式で指定してください（例: #7c2d12）。空欄にするとデフォルト色になります")
             elif spec["type"] in ("str", "ollama_model", "bgm_file"):
                 if not raw_val.strip() and not spec.get("allow_empty"):
                     errors.append(f"{key}: 空文字は不正です")
@@ -177,50 +187,6 @@ def _validate(updates: dict[str, str]) -> list[str]:
         except (ValueError, TypeError):
             errors.append(f"{key}: '{raw_val}' は {spec['type']} として無効です")
     return errors
-
-
-def _read_env() -> dict[str, str]:
-    result: dict[str, str] = {}
-    try:
-        with open(_ENV_PATH, encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                if "=" in line:
-                    k, _, v = line.partition("=")
-                    result[k.strip()] = v.strip()
-    except FileNotFoundError:
-        pass
-    return result
-
-
-def _write_env(updates: dict[str, str]) -> None:
-    """既存の .env を行単位で書き換え、未登録キーは末尾に追記する。"""
-    try:
-        with open(_ENV_PATH, encoding="utf-8") as f:
-            lines = f.readlines()
-    except FileNotFoundError:
-        lines = []
-
-    updated: set[str] = set()
-    new_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            k = stripped.partition("=")[0].strip()
-            if k in updates:
-                new_lines.append(f"{k}={updates[k]}\n")
-                updated.add(k)
-                continue
-        new_lines.append(line)
-
-    for k, v in updates.items():
-        if k not in updated:
-            new_lines.append(f"{k}={v}\n")
-
-    with open(_ENV_PATH, "w", encoding="utf-8") as f:
-        f.writelines(new_lines)
 
 
 def _apply_runtime_updates(updates: dict[str, str]) -> None:
@@ -249,6 +215,8 @@ def _apply_runtime_updates(updates: dict[str, str]) -> None:
                 value = cfg._split_env_choices(raw_val)
             elif key == "WEB_DEFAULT_IMAGE_STYLE":
                 value = cfg._clean_env_choice(raw_val)
+            elif spec["type"] == "hex_color":
+                value = str(raw_val).strip()
             else:
                 value = str(raw_val)
         except (ValueError, TypeError):

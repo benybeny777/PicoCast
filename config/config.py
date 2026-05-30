@@ -3,6 +3,10 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+# .env の非認証設定を DB へ移行し、DB の設定を環境変数に反映する
+from core.settings_store import initialize as _init_settings
+_init_settings()
+
 _ENV_VALUE_QUOTES = "\"'`´‘’“”＇＂"
 
 
@@ -27,6 +31,15 @@ def _split_env_choices(value: str) -> tuple[str, ...]:
             return tuple(choice for raw in parsed if (choice := _clean_env_choice(raw)))
     return tuple(choice for raw in text.split(",") if (choice := _clean_env_choice(raw)))
 
+
+# ───────────────────────────────────────────────
+# チャンネル識別情報（.env で設定）
+# ───────────────────────────────────────────────
+CHANNEL_NAME         = os.environ.get("CHANNEL_NAME", "").strip()          # チャンネル表示名（アップロード必須）
+CHANNEL_HANDLE       = os.environ.get("CHANNEL_HANDLE", "").strip()        # @ハンドル（アップロード必須）
+CHANNEL_THEME        = os.environ.get("CHANNEL_THEME", "").strip()         # テーマ説明（任意）
+CHANNEL_ACCENT_COLOR = os.environ.get("CHANNEL_ACCENT_COLOR", "").strip()  # UIアクセント色（#RRGGBB / 未設定可）
+DEFAULT_HASHTAGS     = os.environ.get("DEFAULT_HASHTAGS", "").strip()      # デフォルトハッシュタグ（任意）
 
 # ───────────────────────────────────────────────
 # VOICEVOX
@@ -358,9 +371,6 @@ OUTPUT_DIR            = os.environ.get("OUTPUT_DIR",            "output")
 OUTPUT_DATA_DIR       = os.environ.get("OUTPUT_DATA_DIR",       os.path.join(OUTPUT_DIR, "000_data"))
 OUTPUT_ANALYTICS_DIR  = os.environ.get("OUTPUT_ANALYTICS_DIR",  os.path.join(OUTPUT_DIR, "000_analytics"))
 OUTPUT_LEGACY_DIR     = os.environ.get("OUTPUT_LEGACY_DIR",     os.path.join(OUTPUT_DIR, "000_legacy"))
-UPLOAD_RECORDS_FILE   = os.environ.get("UPLOAD_RECORDS_FILE",   os.path.join(OUTPUT_DATA_DIR, "upload_records.json"))
-UPLOADED_TITLES_FILE  = os.environ.get("UPLOADED_TITLES_FILE",  os.path.join(OUTPUT_DATA_DIR, "uploaded_titles.txt"))
-
 # 動画フォルダのプレフィックス（Windows/Mac 両対応：[] を使わない）
 FOLDER_PREFIX_SHORTS  = os.environ.get("FOLDER_PREFIX_SHORTS",  "Shorts_")   # 短動画フォルダプレフィックス
 FOLDER_PREFIX_LONG    = os.environ.get("FOLDER_PREFIX_LONG",    "Long_")     # 長動画フォルダプレフィックス
@@ -438,5 +448,4 @@ AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_C
 # ───────────────────────────────────────────────
 # ジョブログ永続化
 # ───────────────────────────────────────────────
-JOB_LOG_DIR      = os.environ.get("JOB_LOG_DIR",      os.path.join(OUTPUT_DATA_DIR, "job_logs"))  # ジョブログ保存ディレクトリ
-JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))                                  # 保持する最大ジョブ件数
+JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))  # 保持する最大ジョブ件数

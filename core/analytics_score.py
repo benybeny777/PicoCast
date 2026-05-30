@@ -784,28 +784,24 @@ def build_long_title_prompt(items: list[dict[str, Any]]) -> str:
     return header + _ANALYTICS_RULES_TEXT + "\n" + (base if base else "（実績データなし）")
 
 
-def save_score_files(items: list[dict[str, Any]], days: int, output_dir=ANALYTICS_DIR, summary: dict[str, Any] | None = None) -> tuple[str, str]:
-    os.makedirs(output_dir, exist_ok=True)
+def save_score_files(items: list[dict[str, Any]], days: int, output_dir=None, summary: dict[str, Any] | None = None) -> int:
+    """analytics データを DB に保存する。JSON/TSV ファイルへの書き込みは廃止済み。返値: 保存件数。"""
     jst = timezone(timedelta(hours=9))
     now = datetime.now(jst)
-    summary = dict(summary or {})
-    start_date = summary.get("start_date")
-    end_date = summary.get("end_date")
-    if not start_date or not end_date:
-        start_date, end_date = _analytics_date_range(days, now.isoformat())
-    stamp = now.strftime("%Y%m%d")
-    json_path = os.path.join(output_dir, f"analytics_score_{stamp}.json")
-    tsv_path = os.path.join(output_dir, f"analytics_score_{stamp}.tsv")
-    data = {
-        "generated_at": now.isoformat(),
-        "days": days,
-        "start_date": start_date,
-        "end_date": end_date,
-        "summary": summary,
-        "items": items,
-    }
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    with open(tsv_path, "w", encoding="utf-8", newline="") as f:
-        f.write(to_tsv(items))
-    return json_path, tsv_path
+    collected_at = now.isoformat()
+    count = 0
+    try:
+        from core.metadata_db import insert_analytics_snapshot, is_initialized, initialize_db
+        if not is_initialized():
+            initialize_db()
+        for item in items:
+            vid = item.get("video_id")
+            if not vid:
+                continue
+            insert_analytics_snapshot(vid, collected_at, int(days), item)
+            count += 1
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).error("[SQLite] analytics DB書き込み失敗: %s", e)
+        raise
+    return count
