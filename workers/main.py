@@ -7,7 +7,6 @@ import re
 import uuid
 import json
 import shutil
-import gc
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.voicevox import VoicevoxAPI
@@ -812,7 +811,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     _saved_bg_dir = None
     _saved_thumb_path = None
     if os.path.exists(theme_dir):
-        gc.collect()  # release any PIL file handles from previous run
         backup_base = os.path.join("output", "000_backups")
         backup_name = f"{safe_topic}_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         backup_dir = os.path.join(backup_base, backup_name)
