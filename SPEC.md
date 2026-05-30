@@ -1610,12 +1610,14 @@ output/{profile_id}/
 
 ### API
 
-- `GET /api/channels` — プロファイル一覧
-- `GET /api/channels/current` — アクティブプロファイル
+- `GET /api/channels` — プロファイル一覧（is_active 先頭）
+- `GET /api/channels/current` — アクティブプロファイル + OAuth 登録状態（bool のみ）
 - `POST /api/channels` — 作成
 - `PUT /api/channels/{id}` — 更新
-- `POST /api/channels/{id}/activate` — アクティブ化
-- `DELETE /api/channels/{id}` — 削除（confirmed=true 必須）
+- `POST /api/channels/{id}/activate` — アクティブ化（トランザクションで is_active を排他切替）
+- `POST /api/channels/{id}/validate` — プロファイル + genre_profile の存在チェック
+- `DELETE /api/channels/{id}` — 削除（confirmed=true 必須。アクティブは削除不可）
+- `GET /api/channels/prompt-profiles` — 利用可能な genre_profile 一覧
 
 ### プロンプトプロファイル構成
 
@@ -1666,15 +1668,16 @@ DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
 
 ### 挙動
 
-- Web UI 起動時、全画面上部のバナーにチャンネル名・ハンドル・テーマを表示する。バナーは sticky で常時表示。
-- `CHANNEL_NAME` / `CHANNEL_HANDLE` のいずれかが未設定の場合、赤色警告を表示し、アップロードボタンを無効化する。
-- アップロード API（`POST /api/upload`、`POST /api/upload/batch`）は `CHANNEL_NAME` / `CHANNEL_HANDLE` 未設定時に `400` を返す。
-- アップロードジョブ実行直前に `[CHANNEL]` プレフィックスでチャンネル情報をログ出力する。
+- Web UI 全画面上部のバナー（sticky）に active channel 名・ハンドルを常時表示する。ドロップダウンで別チャンネルへ切替可能。
+- 切替ボタン押下 → `POST /api/channels/{id}/activate` → 成功後 `location.reload()` で全画面更新。
+- active channel がない場合は「チャンネル未設定」エラーをバナーに表示。YouTube 操作（アップロード・Analytics）は不可。
+- 設定画面の「チャンネル」タブ（`/settings#channels`）でチャンネルの追加・編集・削除・切替が可能。
 - 特定チャンネル名・ハンドルをコードにハードコードしない。未設定時に特定チャンネルへフォールバックしない（fail closed）。
+- アップロード API（`POST /api/upload`、`POST /api/upload/batch`）はチャンネル未設定時に `400` を返す。
 
-### API
+### 旧 API（後方互換のみ）
 
-`GET /api/channel-info` — チャンネル情報を JSON で返す。`upload_allowed`（bool）を含む。
+`GET /api/channel-info` — 旧バナー用。active profile から読む。新規実装では `/api/channels/current` を使うこと。
 
 ---
 

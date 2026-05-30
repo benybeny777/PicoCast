@@ -14,6 +14,21 @@ SCOPES = [
 _DEFAULT_PROFILE = "default"
 
 
+def _resolve_profile_id(profile_id: str | None) -> str:
+    """
+    profile_id が未指定の場合、active channel profile の profile_id を使う。
+    active profile も未設定なら "default" にフォールバック。
+    """
+    if profile_id is not None:
+        return profile_id
+    try:
+        from core.channel_profile import get_active_profile
+        p = get_active_profile()
+        return p.profile_id if p else _DEFAULT_PROFILE
+    except Exception:
+        return _DEFAULT_PROFILE
+
+
 THUMB_MAX_BYTES = 2 * 1024 * 1024  # YouTube 上限 2MB
 
 
@@ -46,12 +61,13 @@ def _compress_thumbnail(path):
 
 
 
-def get_youtube_client(profile_id: str = _DEFAULT_PROFILE):
+def get_youtube_client(profile_id: str | None = None):
     """
     YouTube Data API クライアントを取得する。
     トークンは DB（encrypted_secrets）から読み込み、refresh 後は DB へ再保存する。
     token.json / client_secrets.json ファイルは使用しない。
     """
+    profile_id = _resolve_profile_id(profile_id)
     from core.secret_store import has_secret, load_secret, save_secret, delete_secret, SecretNotFoundError
 
     creds = None

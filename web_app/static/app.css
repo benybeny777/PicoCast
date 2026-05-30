@@ -104,6 +104,85 @@ a.ch-name:hover {
   color: var(--warn);
 }
 
+/* ── チャンネル切替ドロップダウン ── */
+.ch-switcher {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ch-switcher-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+.ch-switcher-btn:hover { background: rgba(255,255,255,0.06); }
+
+.ch-switcher-caret { font-size: 10px; opacity: 0.6; }
+
+.ch-switcher-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 999;
+  overflow: hidden;
+}
+.ch-switcher-menu.open { display: block; }
+
+.ch-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.ch-menu-item:last-child { border-bottom: none; }
+.ch-menu-item:hover { background: rgba(255,255,255,0.06); }
+.ch-menu-item.active { background: rgba(0,216,214,0.1); }
+
+.ch-menu-active-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  flex-shrink: 0;
+}
+.ch-menu-inactive-dot {
+  width: 6px; height: 6px;
+  flex-shrink: 0;
+}
+
+.ch-menu-info { flex: 1; min-width: 0; }
+.ch-menu-name { font-weight: bold; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-menu-handle { color: var(--text-dim); font-size: 11px; }
+
+.ch-menu-add {
+  display: block;
+  padding: 8px 14px;
+  color: var(--accent2);
+  text-decoration: none;
+  font-size: 12px;
+  background: rgba(0,216,214,0.04);
+}
+.ch-menu-add:hover { background: rgba(0,216,214,0.1); }
+
 /* ── アップロード画面チャンネル確認 ── */
 .upload-channel-confirm {
   border: 1px solid var(--border);

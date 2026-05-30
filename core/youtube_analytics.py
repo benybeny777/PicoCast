@@ -18,17 +18,29 @@ ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 _DEFAULT_PROFILE = "default"
 
 
+def _resolve_profile_id(profile_id: str | None) -> str:
+    if profile_id is not None:
+        return profile_id
+    try:
+        from core.channel_profile import get_active_profile
+        p = get_active_profile()
+        return p.profile_id if p else _DEFAULT_PROFILE
+    except Exception:
+        return _DEFAULT_PROFILE
+
+
 def _close_google_resource(resource):
     if resource is not None and hasattr(resource, "close"):
         resource.close()
 
 
-def _get_credentials(profile_id: str = _DEFAULT_PROFILE):
+def _get_credentials(profile_id: str | None = None):
     """
     YouTube Analytics 用 Credentials を取得する。
     トークンは DB（encrypted_secrets）から読み込み、refresh 後は DB へ再保存する。
     token_analytics.json ファイルは使用しない。
     """
+    profile_id = _resolve_profile_id(profile_id)
     from core.secret_store import has_secret, load_secret, save_secret, delete_secret, SecretNotFoundError
 
     creds = None

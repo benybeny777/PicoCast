@@ -28,10 +28,112 @@
     <li><button class="btn btn-danger btn-xs nav-shutdown-btn" onclick="navShutdown()" title="アプリを終了する">⏻ 終了</button></li>
   </ul>
 </nav>
-<div id="channel-banner" class="channel-banner"></div>
+<div id="channel-banner" class="channel-banner">
+  <span class="ch-label">チャンネル:</span>
+  <div class="ch-switcher" id="ch-switcher">
+    <button class="ch-switcher-btn" id="ch-switcher-btn" onclick="toggleChMenu(event)" aria-haspopup="true">
+      <span id="ch-current-name">読み込み中...</span>
+      <span class="ch-switcher-caret">▼</span>
+    </button>
+    <div class="ch-switcher-menu" id="ch-switcher-menu" role="menu"></div>
+  </div>
+  <span id="ch-warnings"></span>
+</div>
 </div>
 
 <script>
+// ── チャンネル切替 ───────────────────────────────────────────────
+(async function initChannelSwitcher() {
+  const btn = document.getElementById('ch-switcher-btn');
+  const menu = document.getElementById('ch-switcher-menu');
+  const nameEl = document.getElementById('ch-current-name');
+  const warningsEl = document.getElementById('ch-warnings');
+  const banner = document.getElementById('channel-banner');
+
+  async function loadChannels() {
+    try {
+      const [curRes, listRes] = await Promise.all([
+        fetch('/api/channels/current'),
+        fetch('/api/channels'),
+      ]);
+      const curData = await curRes.json();
+      const listData = await listRes.json();
+      const current = curData.profile;
+      const profiles = listData.profiles || [];
+
+      // アクセントカラー
+      if (current && current.channel_accent_color) {
+        document.documentElement.style.setProperty('--channel-accent', current.channel_accent_color);
+        banner.style.borderLeftColor = current.channel_accent_color;
+      }
+
+      // 現在チャンネル表示
+      if (current) {
+        const handle = current.channel_handle ? ` / ${current.channel_handle}` : '';
+        nameEl.textContent = `${current.channel_name}${handle}`;
+        nameEl.title = `genre: ${current.genre_profile}`;
+      } else {
+        nameEl.textContent = '（チャンネル未設定）';
+        warningsEl.innerHTML = '<span class="ch-warning ch-error">チャンネルが未設定です。設定画面から追加してください。</span>';
+      }
+
+      // メニュー構築
+      menu.innerHTML = '';
+      for (const p of profiles) {
+        const item = document.createElement('div');
+        item.className = 'ch-menu-item' + (p.is_active ? ' active' : '');
+        item.setAttribute('role', 'menuitem');
+        item.innerHTML = `
+          <div class="${p.is_active ? 'ch-menu-active-dot' : 'ch-menu-inactive-dot'}"></div>
+          <div class="ch-menu-info">
+            <div class="ch-menu-name">${escHtml(p.channel_name)}</div>
+            <div class="ch-menu-handle">${escHtml(p.channel_handle || '')} — ${escHtml(p.genre_profile)}</div>
+          </div>
+        `;
+        if (!p.is_active) {
+          item.onclick = () => switchChannel(p.profile_id);
+          item.style.cursor = 'pointer';
+        }
+        menu.appendChild(item);
+      }
+      const addLink = document.createElement('a');
+      addLink.href = '/settings#channels';
+      addLink.className = 'ch-menu-add';
+      addLink.textContent = '＋ チャンネルを追加・管理';
+      menu.appendChild(addLink);
+    } catch (e) {
+      nameEl.textContent = '取得失敗';
+    }
+  }
+
+  async function switchChannel(profileId) {
+    menu.classList.remove('open');
+    try {
+      const res = await fetch(`/api/channels/${encodeURIComponent(profileId)}/activate`, { method: 'POST' });
+      if (res.ok) {
+        location.reload();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert('切替失敗: ' + (err.detail || res.status));
+      }
+    } catch (e) {
+      alert('通信エラー: ' + e);
+    }
+  }
+
+  window.toggleChMenu = function(e) {
+    e.stopPropagation();
+    menu.classList.toggle('open');
+  };
+  document.addEventListener('click', () => menu.classList.remove('open'));
+
+  function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  loadChannels();
+})();
+
 async function navShutdown() {
   // 実行中ジョブを確認
   let statusData = {};
@@ -89,36 +191,5 @@ window.WEB_TOAST_HIDE_DELAY_MS = {{ web_toast_hide_delay_ms }};
 <script src="/static/app.js?v={{ static_asset_version }}"></script>
 <script src="/static/job_poll.js?v={{ static_asset_version }}"></script>
 {% block scripts %}{% endblock %}
-<script>
-(async function initChannelBanner() {
-  const banner = document.getElementById('channel-banner');
-  if (!banner) return;
-  let info;
-  try {
-    const res = await fetch('/api/channel-info');
-    info = await res.json();
-  } catch {
-    banner.innerHTML = '<span class="ch-warning ch-error">チャンネル情報の取得に失敗しました</span>';
-    return;
-  }
-  if (info.accent_color) {
-    document.documentElement.style.setProperty('--channel-accent', info.accent_color);
-    banner.style.borderLeftColor = info.accent_color;
-  }
-  let html = '';
-  for (const w of (info.warnings || [])) {
-    html += `<span class="ch-warning ch-${w.level}">${w.message}</span>`;
-  }
-  if (info.name || info.handle) {
-    html += `<span class="ch-label">現在のチャンネル:</span>`;
-    html += `<a class="ch-name" href="https://studio.youtube.com/" target="_blank" rel="noopener" title="YouTube Studio を開く">${info.name || '（未設定）'}</a>`;
-    if (info.handle) html += `<span class="ch-handle">${info.handle}</span>`;
-    if (info.theme) html += `<span class="ch-theme">— ${info.theme}</span>`;
-  } else if (!info.warnings || !info.warnings.some(w => w.level === 'error')) {
-    html += '<span class="ch-warning ch-error">チャンネル情報が未設定です</span>';
-  }
-  banner.innerHTML = html;
-})();
-</script>
 </body>
 </html>

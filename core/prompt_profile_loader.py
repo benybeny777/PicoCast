@@ -69,19 +69,42 @@ def list_available_genre_profiles() -> list[str]:
 # ファイル読み込み
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _get_active_profile_id() -> str | None:
+    """active profile の profile_id を返す。取得失敗なら None。"""
+    try:
+        from core.channel_profile import get_active_profile
+        p = get_active_profile()
+        return p.profile_id if p else None
+    except Exception:
+        return None
+
+
 def _read_genre_file(genre_profile: str, filename: str, required: bool = True) -> str:
     """
     genres/{genre_profile}/{filename} を読む。
-    local/{genre_profile}/{filename} が存在すれば優先して読む（オーバーライド）。
+    優先順位:
+      1. local/{profile_id}/{filename}  (active profile_id 別上書き)
+      2. local/{genre_profile}/{filename} (genre 別上書き)
+      3. genres/{genre_profile}/{filename} (正規)
     required=True で見つからない場合は FileNotFoundError。
     """
-    local_path = _LOCAL_DIR / genre_profile / filename
     genre_path = _GENRES_DIR / genre_profile / filename
 
-    if local_path.exists():
-        _logger.debug("[PromptLoader] local override: %s", local_path)
-        return local_path.read_text(encoding="utf-8").strip()
+    # 1. local/{profile_id}/
+    profile_id = _get_active_profile_id()
+    if profile_id and profile_id != genre_profile:
+        local_profile_path = _LOCAL_DIR / profile_id / filename
+        if local_profile_path.exists():
+            _logger.debug("[PromptLoader] local profile override: %s", local_profile_path)
+            return local_profile_path.read_text(encoding="utf-8").strip()
 
+    # 2. local/{genre_profile}/
+    local_genre_path = _LOCAL_DIR / genre_profile / filename
+    if local_genre_path.exists():
+        _logger.debug("[PromptLoader] local genre override: %s", local_genre_path)
+        return local_genre_path.read_text(encoding="utf-8").strip()
+
+    # 3. genres/{genre_profile}/
     if genre_path.exists():
         return genre_path.read_text(encoding="utf-8").strip()
 

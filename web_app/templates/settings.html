@@ -15,6 +15,7 @@
   <button class="tab-btn" onclick="switchTab('dict-base', this)">よみがな辞書</button>
   <button class="tab-btn" onclick="switchTab('dict-user', this)">自動学習辞書</button>
   <button class="tab-btn" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
+  <button class="tab-btn" id="tab-btn-channels" onclick="switchTab('channels', this)">チャンネル</button>
 </div>
 
 <!-- ── タブ: 設定変更 ── -->
@@ -139,6 +140,73 @@
   </div>
 </div>
 
+<!-- ── タブ: チャンネル管理 ── -->
+<div id="tab-channels" class="tab-panel">
+  <div class="card">
+    <h2>チャンネル管理</h2>
+    <p class="hint">複数のYouTubeチャンネルを登録できます。<strong>アクティブ</strong>にしたチャンネルの設定が台本生成・アップロード・Analytics・履歴など全操作に適用されます。</p>
+    <div id="ch-status" style="display:none;margin-bottom:8px;padding:8px 12px;border-radius:4px;font-size:13px"></div>
+    <div id="ch-list"><p style="color:var(--text-muted)">読み込み中...</p></div>
+    <div style="margin-top:14px">
+      <button class="btn btn-primary" onclick="chShowForm(null)">＋ チャンネルを追加</button>
+      <button class="btn btn-secondary" style="margin-left:6px" onclick="chLoadChannels()">再読込</button>
+    </div>
+  </div>
+
+  <div id="ch-form-card" class="card" style="display:none;margin-top:10px">
+    <h2 id="ch-form-title">チャンネルを追加</h2>
+    <table class="status-table" style="width:100%">
+      <tr>
+        <td style="width:40%"><label for="chf-profile_id"><strong>profile_id</strong></label><br>
+          <small style="color:var(--text-muted)">英小文字・数字・アンダースコア（例: urban_legend）</small></td>
+        <td><input id="chf-profile_id" type="text" class="form-input" style="width:220px" placeholder="urban_legend"></td>
+      </tr>
+      <tr>
+        <td><label for="chf-channel_name"><strong>チャンネル名</strong></label></td>
+        <td><input id="chf-channel_name" type="text" class="form-input" style="width:340px" placeholder="ずんだもんとめたんのゾッとする都市伝説"></td>
+      </tr>
+      <tr>
+        <td><label for="chf-channel_handle"><strong>チャンネルハンドル</strong></label><br>
+          <small style="color:var(--text-muted)">@から始まる形式</small></td>
+        <td><input id="chf-channel_handle" type="text" class="form-input" style="width:220px" placeholder="@zundamon_kowai"></td>
+      </tr>
+      <tr>
+        <td><label for="chf-genre_profile"><strong>genre_profile</strong></label><br>
+          <small style="color:var(--text-muted)">プロンプト・テーマを決定する</small></td>
+        <td>
+          <select id="chf-genre_profile" class="form-input" style="width:220px">
+            <option value="">読み込み中...</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td><label for="chf-output_root"><strong>output_root</strong></label><br>
+          <small style="color:var(--text-muted)">動画・DB・Analyticsの出力先（例: output/urban_legend）</small></td>
+        <td><input id="chf-output_root" type="text" class="form-input" style="width:300px" placeholder="output/urban_legend"></td>
+      </tr>
+      <tr>
+        <td><label for="chf-default_hashtags"><strong>デフォルトハッシュタグ</strong></label></td>
+        <td><input id="chf-default_hashtags" type="text" class="form-input" style="width:340px" placeholder="#都市伝説 #怖い話 #ずんだもん"></td>
+      </tr>
+      <tr>
+        <td><label for="chf-channel_theme"><strong>チャンネルテーマ</strong></label></td>
+        <td><input id="chf-channel_theme" type="text" class="form-input" style="width:240px" placeholder="ゾッとする都市伝説・怖い話"></td>
+      </tr>
+      <tr>
+        <td><label for="chf-channel_accent_color"><strong>アクセントカラー</strong></label><br>
+          <small style="color:var(--text-muted)">ヘッダーバーの色（#RRGGBB）</small></td>
+        <td><input id="chf-channel_accent_color" type="color" class="form-input" value="#4a5568" style="width:52px;height:32px;padding:2px 4px;cursor:pointer"></td>
+      </tr>
+    </table>
+    <div class="action-row mt" style="gap:8px">
+      <button class="btn btn-primary" onclick="chSaveForm()">保存</button>
+      <button class="btn btn-secondary" onclick="chValidateForm()">バリデート</button>
+      <button class="btn btn-secondary" onclick="chHideForm()">キャンセル</button>
+    </div>
+    <div id="ch-form-result" style="display:none;margin-top:8px;padding:8px 12px;border-radius:4px;font-size:13px"></div>
+  </div>
+</div>
+
 {% endblock %}
 {% block scripts %}
 <script>
@@ -168,6 +236,7 @@ function switchTab(name, btn) {
   btn.classList.add('active');
   if ((name === 'dict-base' || name === 'dict-user') && !_dictLoaded) loadDict();
   if (name === 'sd-models' && !_sdLoaded) sdInitTab();
+  if (name === 'channels' && !_chLoaded) chLoadChannels();
 }
 
 async function loadConfig() {
@@ -626,6 +695,230 @@ async function sdRescanModels() {
     if (data.status === 'ok') { await sdLoadWebuiModels(); alert('再スキャン完了。'); }
     else alert('エラー: ' + data.message);
   } catch(e) { alert('通信エラー'); }
+}
+
+/* ══════════════════════════════════════════════
+   チャンネル管理タブ
+══════════════════════════════════════════════ */
+let _chLoaded = false;
+let _chProfiles = [];
+let _chGenreProfiles = [];
+let _chEditing = null;
+
+async function chLoadChannels() {
+  _chLoaded = true;
+  const listEl = document.getElementById('ch-list');
+  try {
+    const [listRes, genreRes] = await Promise.all([
+      fetch('/api/channels'),
+      fetch('/api/channels/prompt-profiles'),
+    ]);
+    const listData = await listRes.json();
+    const genreData = await genreRes.json();
+    _chProfiles = listData.profiles || [];
+    _chGenreProfiles = genreData.genre_profiles || [];
+    chRenderList();
+    chPopulateGenreSelect();
+  } catch(e) {
+    listEl.innerHTML = `<p style="color:var(--err,#e74c3c)">読み込みエラー: ${esc(String(e))}</p>`;
+  }
+}
+
+function chRenderList() {
+  const listEl = document.getElementById('ch-list');
+  if (_chProfiles.length === 0) {
+    listEl.innerHTML = '<p style="color:var(--text-muted)">チャンネルが登録されていません。「＋ チャンネルを追加」で最初のチャンネルを登録してください。</p>';
+    return;
+  }
+  let html = '<table class="status-table" style="width:100%">'
+    + '<thead><tr><th>チャンネル</th><th>genre_profile</th><th>output_root</th><th>操作</th></tr></thead><tbody>';
+  for (const p of _chProfiles) {
+    const activeBadge = p.is_active
+      ? '<span class="badge badge-ok" style="margin-right:4px">Active</span>'
+      : '';
+    const dot = p.channel_accent_color
+      ? `<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${esc(p.channel_accent_color)};margin-right:4px;vertical-align:middle"></span>`
+      : '';
+    html += `<tr>
+      <td>${activeBadge}${dot}<strong>${esc(p.channel_name)}</strong><br>
+        <small style="color:var(--text-muted)">${esc(p.channel_handle || '')} &mdash; <code>${esc(p.profile_id)}</code></small></td>
+      <td><code style="font-size:12px">${esc(p.genre_profile)}</code></td>
+      <td style="font-family:monospace;font-size:12px;word-break:break-all">${esc(p.output_root)}</td>
+      <td style="white-space:nowrap;vertical-align:top;padding-top:8px">
+        ${!p.is_active ? `<button class="btn btn-primary" style="font-size:12px" onclick="chActivate('${esc(p.profile_id)}')">切替</button> ` : ''}
+        <button class="btn btn-secondary" style="font-size:12px" onclick="chEdit('${esc(p.profile_id)}')">編集</button>
+        ${!p.is_active ? `<button class="btn btn-danger btn-xs" style="margin-left:4px;font-size:12px" onclick="chDelete('${esc(p.profile_id)}')">削除</button>` : ''}
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  listEl.innerHTML = html;
+}
+
+function chPopulateGenreSelect(keepVal) {
+  const sel = document.getElementById('chf-genre_profile');
+  if (!sel) return;
+  const cur = keepVal || sel.value;
+  sel.innerHTML = '';
+  for (const g of _chGenreProfiles) {
+    const opt = document.createElement('option');
+    opt.value = g;
+    opt.textContent = g;
+    if (g === cur) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  if (_chGenreProfiles.length === 0) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = '（genres/ にフォルダが見つかりません）';
+    sel.appendChild(opt);
+  }
+}
+
+function chShowForm(profileId) {
+  _chEditing = profileId || null;
+  document.getElementById('ch-form-title').textContent = _chEditing ? 'チャンネルを編集' : 'チャンネルを追加';
+
+  const p = _chEditing ? _chProfiles.find(x => x.profile_id === _chEditing) : null;
+  const idEl = document.getElementById('chf-profile_id');
+  idEl.value = p ? p.profile_id : '';
+  idEl.readOnly = !!_chEditing;
+  idEl.style.background = _chEditing ? 'rgba(255,255,255,0.04)' : '';
+
+  document.getElementById('chf-channel_name').value       = p ? (p.channel_name || '') : '';
+  document.getElementById('chf-channel_handle').value     = p ? (p.channel_handle || '') : '';
+  document.getElementById('chf-output_root').value        = p ? (p.output_root || '') : '';
+  document.getElementById('chf-default_hashtags').value   = p ? (p.default_hashtags || '') : '';
+  document.getElementById('chf-channel_theme').value      = p ? (p.channel_theme || '') : '';
+  const col = (p && p.channel_accent_color && /^#[0-9a-fA-F]{6}$/.test(p.channel_accent_color))
+    ? p.channel_accent_color : '#4a5568';
+  document.getElementById('chf-channel_accent_color').value = col;
+
+  chPopulateGenreSelect(p ? p.genre_profile : (_chGenreProfiles[0] || ''));
+
+  const outEl = document.getElementById('chf-output_root');
+  delete outEl.dataset.manual;
+  if (!_chEditing) {
+    idEl.oninput = () => { if (!outEl.dataset.manual) outEl.value = 'output/' + idEl.value; };
+    outEl.oninput = function() { this.dataset.manual = '1'; };
+  } else {
+    idEl.oninput = null;
+    outEl.oninput = null;
+  }
+
+  document.getElementById('ch-form-result').style.display = 'none';
+  const card = document.getElementById('ch-form-card');
+  card.style.display = '';
+  card.scrollIntoView({behavior: 'smooth', block: 'start'});
+}
+
+function chEdit(profileId) { chShowForm(profileId); }
+
+function chHideForm() {
+  document.getElementById('ch-form-card').style.display = 'none';
+  _chEditing = null;
+}
+
+function _chFormData() {
+  return {
+    profile_id:           document.getElementById('chf-profile_id').value.trim(),
+    channel_name:         document.getElementById('chf-channel_name').value.trim(),
+    channel_handle:       document.getElementById('chf-channel_handle').value.trim(),
+    genre_profile:        document.getElementById('chf-genre_profile').value.trim(),
+    output_root:          document.getElementById('chf-output_root').value.trim(),
+    default_hashtags:     document.getElementById('chf-default_hashtags').value.trim(),
+    channel_theme:        document.getElementById('chf-channel_theme').value.trim(),
+    channel_accent_color: document.getElementById('chf-channel_accent_color').value,
+  };
+}
+
+function _chShowResult(elId, msg, isError) {
+  const el = document.getElementById(elId);
+  el.textContent = msg;
+  el.style.display = 'block';
+  el.style.background = isError ? 'rgba(255,94,87,0.12)' : 'rgba(39,174,96,0.12)';
+  el.style.color = isError ? 'var(--err,#e74c3c)' : 'var(--ok,#27ae60)';
+}
+function chShowStatus(msg, isError)     { _chShowResult('ch-status', msg, isError); }
+function chShowFormResult(msg, isError) { _chShowResult('ch-form-result', msg, isError); }
+
+async function chSaveForm() {
+  const data = _chFormData();
+  const method = _chEditing ? 'PUT' : 'POST';
+  const url = _chEditing
+    ? `/api/channels/${encodeURIComponent(_chEditing)}`
+    : '/api/channels';
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      chShowFormResult('エラー: ' + (result.detail || JSON.stringify(result)), true);
+    } else {
+      chHideForm();
+      chShowStatus(`「${data.channel_name || data.profile_id}」を保存しました`, false);
+      _chLoaded = false;
+      await chLoadChannels();
+    }
+  } catch(e) {
+    chShowFormResult('通信エラー: ' + e, true);
+  }
+}
+
+async function chValidateForm() {
+  if (!_chEditing) { chShowFormResult('バリデートは先に保存してから実行してください', true); return; }
+  try {
+    const res = await fetch(`/api/channels/${encodeURIComponent(_chEditing)}/validate`, { method: 'POST' });
+    const result = await res.json();
+    if (result.valid) {
+      chShowFormResult('バリデーション OK', false);
+    } else {
+      chShowFormResult('バリデーション失敗: ' + (result.errors || []).join(' / '), true);
+    }
+  } catch(e) { chShowFormResult('通信エラー: ' + e, true); }
+}
+
+async function chActivate(profileId) {
+  try {
+    const res = await fetch(`/api/channels/${encodeURIComponent(profileId)}/activate`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) {
+      chShowStatus('切替失敗: ' + (data.detail || JSON.stringify(data)), true);
+    } else {
+      chShowStatus(`「${profileId}」をアクティブにしました。リロードします...`, false);
+      setTimeout(() => location.reload(), 1000);
+    }
+  } catch(e) { chShowStatus('通信エラー: ' + e, true); }
+}
+
+async function chDelete(profileId) {
+  const p = _chProfiles.find(x => x.profile_id === profileId);
+  const name = p ? p.channel_name : profileId;
+  if (!confirm(`チャンネル「${name}」(${profileId}) を削除しますか？\nこの操作は元に戻せません。`)) return;
+  try {
+    const res = await fetch(`/api/channels/${encodeURIComponent(profileId)}`, {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirmed: true}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      chShowStatus('削除失敗: ' + (data.detail || JSON.stringify(data)), true);
+    } else {
+      chShowStatus(`「${name}」を削除しました`, false);
+      _chLoaded = false;
+      await chLoadChannels();
+    }
+  } catch(e) { chShowStatus('通信エラー: ' + e, true); }
+}
+
+// URL ハッシュ #channels でチャンネルタブを自動選択
+if (window.location.hash === '#channels') {
+  const btn = document.getElementById('tab-btn-channels');
+  if (btn) switchTab('channels', btn);
 }
 </script>
 {% endblock %}

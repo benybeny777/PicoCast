@@ -70,9 +70,25 @@ def api_list_channels():
 
 @router.get("/current")
 def api_current_channel():
-    """アクティブプロファイルを返す。未設定なら null。"""
+    """
+    アクティブプロファイルを返す。未設定なら null。
+    auth フィールドに OAuth token の登録状態（bool）を含める。値は含めない。
+    """
     profile = get_active_profile()
-    return {"profile": _profile_to_dict(profile) if profile else None}
+    if profile is None:
+        return {"profile": None}
+    d = _profile_to_dict(profile)
+    # OAuth token の登録状態（値は含めない）
+    try:
+        from core.secret_store import has_secret
+        d["auth"] = {
+            "upload_oauth":    has_secret("youtube_upload_token",    profile_id=profile.profile_id),
+            "analytics_oauth": has_secret("youtube_analytics_token", profile_id=profile.profile_id),
+            "client_secrets":  has_secret("youtube_client_secrets",  profile_id=profile.profile_id),
+        }
+    except Exception:
+        d["auth"] = {"upload_oauth": False, "analytics_oauth": False, "client_secrets": False}
+    return {"profile": d}
 
 
 @router.post("")
