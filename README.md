@@ -49,7 +49,7 @@ graph TD
     D --> F[ネイティブレンダリング<br/>ffmpeg GPU/CPU]
     E --> F
     T --> F
-    F --> G[実尺評価 & 実績保存<br/>native MP4 / _meta]
+    F --> G[実尺評価 & 実績保存<br/>native MP4 / SQLite DB]
     G --> H[YouTube予約アップロード<br/>OAuth / スロット管理]
     H --> I[再生リスト自動追加<br/>playlist_resolver]
     I --> J[固定コメント投稿]
@@ -200,6 +200,7 @@ Stable Diffusion WebUI を `--api` オプション付きで起動してくださ
 |:---|:---|:---|
 | `/` | ホーム | 外部サービス（ffmpeg / VOICEVOX / SD WebUI）の起動状態確認 |
 | `/generate` | 動画生成 | 台本貼り付け → 音声・画像・動画を一括生成 |
+| `/check` | 台本チェック | 生成前の台本品質チェック・プリフライト |
 | `/history` | 履歴一覧 | 生成済み動画の一覧・品質スコア確認 |
 | `/history/{name}` | 履歴詳細 | 個別の動画確認・再生成・レンダー・アップロード |
 | `/images` | 画像確認・再生成 | 背景画像・サムネイルの確認と個別再生成 |
@@ -207,7 +208,8 @@ Stable Diffusion WebUI を `--api` オプション付きで起動してくださ
 | `/fixed-comment` | 固定コメント | 公開済み動画へのコメント投稿 |
 | `/schedule` | スケジュール管理 | YouTube予約状態の確認・同期 |
 | `/analytics` | Analytics | 視聴データ取得・スコアリング・実績参照 |
-| `/settings` | 設定 | 各種パラメータのGUI変更（再起動不要で即時反映） |
+| `/db` | 動画DB | 全動画のDB検索・Analytics 履歴・レコード削除 |
+| `/settings` | 設定 | 各種パラメータのGUI変更・チャンネル情報設定 |
 
 ---
 
@@ -320,9 +322,10 @@ Stable Diffusion WebUI を `--api` オプション付きで起動してくださ
 
 ## ⚙️ 主な設定値
 
-優先順位: **`.env` / 環境変数 > `config.py` の既定値**
+優先順位: **`data/settings.db`（設定画面で変更） > `config.py` の既定値**
 
-設定は `/settings` 画面からも変更可能です（再起動不要で即時反映）。
+`.env` は認証情報（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）のみ記載します。
+それ以外の設定は `/settings` 画面で変更でき、`data/settings.db` に保存されます（再起動不要で即時反映）。
 
 ### AI モデル
 
@@ -364,6 +367,18 @@ Stable Diffusion WebUI を `--api` オプション付きで起動してくださ
 | `NATIVE_SUBTITLE_WRAP_CHARS_SHORTS` | `13` | Shorts 字幕の1行最大文字数（超えると自動折り返し） |
 | `NATIVE_SUBTITLE_WRAP_CHARS_LONG` | `24` | Long 字幕の1行最大文字数 |
 
+### チャンネル識別情報
+
+複数チャンネルを別 clone で運用する際の操作ミス防止用。設定画面の「チャンネル」グループで変更可能。
+
+| 設定項目 | 必須 | 説明 |
+|:---|:---|:---|
+| `CHANNEL_NAME` | アップロード時必須 | チャンネル表示名。未設定時はアップロード禁止。 |
+| `CHANNEL_HANDLE` | アップロード時必須 | `@` から始まるハンドル（`@` は省略可、自動補完）。 |
+| `CHANNEL_THEME` | 任意 | テーマ説明（バナー表示のみ）。 |
+| `CHANNEL_ACCENT_COLOR` | 任意 | UI アクセント色（`#RRGGBB`）。 |
+| `DEFAULT_HASHTAGS` | 任意 | デフォルトハッシュタグ。 |
+
 ### Web UI 既定値
 
 | 設定項目 | 既定値 | 説明 |
@@ -380,41 +395,75 @@ Stable Diffusion WebUI を `--api` オプション付きで起動してくださ
 ```
 .
 ├── config/
-│   ├── config.py              # 全設定値の定義
+│   ├── config.py              # 全設定値の定義（os.environ.get ベース）
 │   ├── requirements.txt       # Python依存パッケージ
+│   ├── script_generation_prompt.txt  # Gemini台本生成プロンプト
 │   └── prompt_parts/          # 台本生成プロンプト部品
 │       ├── local/             # 個人用（.gitignore 対象）
 │       └── samples/           # サンプル（リポジトリ管理）
 ├── core/
+│   ├── metadata_db.py         # SQLite メタデータDB（schema v4）
+│   ├── settings_store.py      # SQLite 設定DB（data/settings.db）
+│   ├── channel_info.py        # チャンネル識別情報の読み込み・検証
 │   ├── native_renderer.py     # ffmpeg MP4レンダラー
 │   ├── voicevox.py            # VOICEVOX音声生成
-│   ├── image_generator.py     # 背景・サムネイル生成
-│   ├── parser.py              # 台本パーサー
+│   ├── image_generator.py     # 背景・サムネイル生成（Nano Banana）
+│   ├── parser.py              # 台本パーサー（ScriptParser）
+│   ├── ai_generator.py        # Gemini台本生成・画像プロンプト強化
+│   ├── analytics_score.py     # Analytics スコアリング・DBへの保存
+│   ├── opening_quality.py     # 冒頭品質レビュー（ローカル+Ollama+ChatGPT）
+│   ├── cta_policy.py          # CTA許可/禁止ポリシー判定・DB読み書き
+│   ├── upload_scheduler.py    # アップロードスロット管理
+│   ├── upload_records.py      # アップロード記録（DBクエリラッパー）
 │   ├── playlist_resolver.py   # 再生リスト名解決・動画形式判定
 │   ├── youtube_uploader.py    # YouTubeアップロード・再生リスト操作
-│   └── youtube_analytics.py  # Analytics データ取得
+│   ├── youtube_analytics.py   # YouTube Analytics API取得
+│   ├── reading_normalizer.py  # VOICEVOX読み仮名補正
+│   ├── script_prompts.py      # Gemini台本生成プロンプト構築
+│   ├── output_paths.py        # 出力パスの集約
+│   └── app_shutdown.py        # アプリ終了管理
 ├── workers/
-│   └── main.py                # 動画生成パイプライン本体
+│   ├── main.py                # 動画生成パイプライン本体
+│   ├── worker_pipeline.py     # パイプライン分割処理
+│   └── worker_render.py       # レンダリング処理
 ├── web_app/
 │   ├── app.py                 # FastAPI エントリポイント
-│   ├── routes/                # APIルーター
+│   ├── job_manager.py         # バックグラウンドジョブ管理（DB永続化）
+│   ├── routes/                # APIルーター群
 │   ├── services/              # ビジネスロジック
-│   └── templates/             # Jinja2 HTMLテンプレート
-├── data/
-│   └── reading_dictionary_base.json  # よみがな補正辞書
+│   ├── templates/             # Jinja2 HTMLテンプレート
+│   └── static/                # CSS / JS / 画像
+├── tests/                     # ユニットテスト
+├── scripts/
+│   └── migrate_folder_prefixes.py  # 旧フォルダプレフィックス移行スクリプト
+├── assets/
+│   ├── bgm/                   # BGM音源
+│   ├── characters/            # キャラクター立ち絵
+│   ├── nanobanana/            # 画像生成テンプレート
+│   └── se/                    # 効果音
+├── data/                      # アプリデータ（一部 .gitignore 対象）
+│   ├── settings.db            # 設定DB（.gitignore 対象）
+│   ├── reading_dictionary_base.json   # よみがな補正辞書（同梱）
+│   └── reading_dictionary_user.json  # ユーザー追加辞書（.gitignore 対象）
 ├── output/                    # 生成物（.gitignore対象）
 │   ├── {テーマ名}/
-│   │   ├── script.txt
+│   │   ├── script.txt         # 台本
 │   │   ├── {テーマ名}_native.mp4
 │   │   ├── thumbnails/
 │   │   ├── audio/
 │   │   ├── backgrounds/
-│   │   └── _meta/             # メタデータ・レビュー結果
+│   │   └── _meta/             # ※JSON管理廃止。内容はすべてDBに保存
+│   ├── 000_data/
+│   │   └── metadata.db        # 動画メタデータ・Analytics・ジョブ履歴DB
 │   └── 000_uploaded/          # アップロード済みフォルダの移動先
-├── start.ps1                  # Windows起動スクリプト
+├── start.ps1                  # Windows起動スクリプト（通常用）
+├── start-dev.ps1              # Windows起動スクリプト（開発用）
 ├── start.command              # macOS起動スクリプト
-└── .env                       # APIキー等（.gitignore対象）
+└── .env                       # 認証情報のみ（GOOGLE_API_KEY 等）
 ```
+
+> **DB について**: 設定・動画メタデータ・Analytics・ジョブ履歴はすべて SQLite で管理。
+> `_meta/*.json` への書き込みは廃止済み。詳細は [SPEC.md](SPEC.md) の「DB アーキテクチャ」を参照。
 
 ---
 
