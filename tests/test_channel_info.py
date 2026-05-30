@@ -103,6 +103,14 @@ class TestGetChannelInfo(unittest.TestCase):
         self.assertIsNone(info["name"])
         self.assertIsNone(info["handle"])
 
+    def test_handle_at_prefix_added_if_missing(self):
+        info = self._call(CHANNEL_NAME="テストチャンネル", CHANNEL_HANDLE="zundamon_food")
+        self.assertEqual(info["handle"], "@zundamon_food")
+
+    def test_handle_at_prefix_not_duplicated(self):
+        info = self._call(CHANNEL_NAME="テストチャンネル", CHANNEL_HANDLE="@zundamon_food")
+        self.assertEqual(info["handle"], "@zundamon_food")
+
     def test_hashtags_returned_when_set(self):
         info = self._call(
             CHANNEL_NAME="テストチャンネル",

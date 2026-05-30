@@ -17,6 +17,8 @@ def get_channel_info() -> dict:
     from config import config
     name = config.CHANNEL_NAME
     handle = config.CHANNEL_HANDLE
+    if handle and not handle.startswith("@"):
+        handle = "@" + handle
     theme = config.CHANNEL_THEME
     accent_raw = config.CHANNEL_ACCENT_COLOR
     hashtags = config.DEFAULT_HASHTAGS
