@@ -144,25 +144,63 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
         except Exception as e:
             _log(job, f"スロット設定エラー（非公開のまま続行）: {e}", "warning")
 
-    # Long 動画は再生リストに追加
-    if video_type == "long":
-        try:
-            from config import config as _cfg
-            from core.youtube_uploader import add_video_to_playlist_by_name
-            playlist_name = _cfg.LONG_UPLOAD_PLAYLIST_NAME
-            if playlist_name:
-                result = add_video_to_playlist_by_name(
-                    video_id, playlist_name,
-                    progress_callback=lambda msg: _log(job, msg, "info"),
-                )
-                if result.get("added"):
-                    _log(job, f"再生リスト追加: {playlist_name}", "success")
-                elif result.get("already_exists"):
-                    _log(job, f"再生リスト追加済み: {playlist_name}", "info")
+    # 再生リストへ追加
+    playlist_categories: list[str] = render_info.get("playlist_categories") or []
+    playlist_assignments: list[dict] = []
+    if playlist_categories:
+        # 新仕様: 台本の「再生リスト:」に従い形式別名へ解決して登録
+        from core.playlist_resolver import resolve_playlist_title
+        from core.youtube_uploader import create_playlist, add_video_to_playlist_by_name
+        video_format = render_info.get("video_format", "")
+        screen_format = render_info.get("screen_format", "")
+        for cat in playlist_categories:
+            resolved = resolve_playlist_title(cat, video_format, screen_format)
+            entry: dict = {"category": cat, "resolved": resolved, "ok": False, "reason": ""}
+            if resolved is None:
+                entry["reason"] = f"動画形式が不明なため再生リストを特定できません（video_format={video_format!r}, screen_format={screen_format!r}）"
+                _log(job, f"再生リスト解決不能: {entry['reason']}", "warning")
+                playlist_assignments.append(entry)
+                continue
+            create_result = create_playlist(resolved)
+            if not create_result["ok"]:
+                entry["reason"] = f"再生リスト作成失敗: {create_result['reason']}"
+                _log(job, f"再生リスト作成失敗: {resolved} — {create_result['reason']}", "error")
+                playlist_assignments.append(entry)
+                continue
+            add_result = add_video_to_playlist_by_name(
+                video_id, resolved,
+                progress_callback=lambda msg: _log(job, msg, "info"),
+            )
+            entry["ok"] = add_result["ok"]
+            entry["reason"] = add_result["reason"]
+            if add_result["ok"]:
+                if add_result.get("skipped"):
+                    _log(job, f"再生リスト登録済み: {resolved}", "info")
                 else:
-                    _log(job, f"再生リスト追加スキップ: {result.get('reason', '不明')}", "warning")
-        except Exception as e:
-            _log(job, f"再生リスト追加エラー（続行）: {e}", "warning")
+                    _log(job, f"再生リスト追加: {resolved}", "success")
+            else:
+                _log(job, f"再生リスト追加失敗: {resolved} — {add_result['reason']}", "error")
+            playlist_assignments.append(entry)
+    else:
+        # 後方互換: 台本に「再生リスト:」なし → Long のみ LONG_UPLOAD_PLAYLIST_NAME へ追加
+        if video_type == "long":
+            try:
+                from config import config as _cfg
+                from core.youtube_uploader import add_video_to_playlist_by_name
+                playlist_name = _cfg.LONG_UPLOAD_PLAYLIST_NAME
+                if playlist_name:
+                    result = add_video_to_playlist_by_name(
+                        video_id, playlist_name,
+                        progress_callback=lambda msg: _log(job, msg, "info"),
+                    )
+                    if result["ok"] and not result.get("skipped"):
+                        _log(job, f"再生リスト追加: {playlist_name}", "success")
+                    elif result.get("skipped"):
+                        _log(job, f"再生リスト追加済み: {playlist_name}", "info")
+                    else:
+                        _log(job, f"再生リスト追加スキップ: {result.get('reason', '不明')}", "warning")
+            except Exception as e:
+                _log(job, f"再生リスト追加エラー（続行）: {e}", "warning")
 
     # upload_record.json を書く（ロック外で実施）
     record: dict = {
@@ -174,6 +212,8 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
     }
     if publish_at_iso:
         record["publish_at"] = publish_at_iso
+    if playlist_assignments:
+        record["playlist_assignments"] = playlist_assignments
     meta_dir = os.path.join(theme_dir, "_meta")
     os.makedirs(meta_dir, exist_ok=True)
     with open(os.path.join(meta_dir, "upload_record.json"), "w", encoding="utf-8") as f:

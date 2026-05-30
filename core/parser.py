@@ -21,6 +21,7 @@ class ScriptParser:
     _topic_request_cta_re = re.compile(r'^(?:ネタ募集CTA|TopicRequestCTA)[:：](.*)$', re.IGNORECASE)
     _topic_request_cta_reason_re = re.compile(r'^(?:ネタ募集CTA理由|TopicRequestCTAReason)[:：](.*)$', re.IGNORECASE)
     _screen_format_re = re.compile(r'^(?:画面形式|ScreenFormat)[:：](.*)$', re.IGNORECASE)
+    _playlist_re = re.compile(r'^(?:再生リスト|Playlist)[:：](.*)$', re.IGNORECASE)
     _meeting_candidates_re = re.compile(r'^(?:候補ネタ|MeetingCandidates|Candidates)[:：](.*)$', re.IGNORECASE)
     _candidate_num_re = re.compile(r'^候補番号[:：](.*)$', re.IGNORECASE)
     _poll_options_re = re.compile(r'^(?:アンケート設定案|アンケート手動設定用|PollOptions)[:：]', re.IGNORECASE)
@@ -83,7 +84,7 @@ class ScriptParser:
         "video_format", "screen_format", "thumbnail_text", "fixed_comment",
         "generation_kind", "source_video_title", "generation_purpose",
         "character_pattern", "genre_group", "topic_request_cta", "topic_request_cta_reason",
-        "meeting_candidates", "poll_options",
+        "meeting_candidates", "poll_options", "playlist_categories",
     })
 
     @staticmethod
@@ -149,7 +150,7 @@ class ScriptParser:
                         continue
                     _multiline_types = ("description", "meeting_candidates", "fixed_comment", "poll_options")
                     _dialogue_safe_types = ("meeting_candidates", "fixed_comment", "poll_options")
-                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, meeting_candidates_re, candidate_num_re, poll_options_re, bracket_meta_re])
+                    is_keyword = any(r.match(line) for r in [bg_re, thumb_re, thumb_text_re, title_re, desc_re, tags_re, telop_re, format_re, fixed_comment_re, generation_kind_re, source_video_re, generation_purpose_re, character_pattern_re, genre_group_re, topic_request_cta_re, topic_request_cta_reason_re, ScriptParser._playlist_re, meeting_candidates_re, candidate_num_re, poll_options_re, bracket_meta_re])
                     is_dialogue = bool(dialogue_re.match(line))
                     is_ignore = any(p.match(line) for p in ignore_patterns)
                     if not is_keyword and (not is_dialogue or last_meta["type"] in _dialogue_safe_types) and (not is_ignore or last_meta["type"] in _multiline_types):
@@ -220,6 +221,7 @@ class ScriptParser:
                     (topic_request_cta_re, "topic_request_cta"),
                     (topic_request_cta_reason_re, "topic_request_cta_reason"),
                     (ScriptParser._screen_format_re, "screen_format"),
+                    (ScriptParser._playlist_re, "playlist_categories"),
                     (meeting_candidates_re, "meeting_candidates"),
                 ]:
                     m = meta_re.match(line)

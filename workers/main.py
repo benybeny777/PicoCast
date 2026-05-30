@@ -351,6 +351,14 @@ def _detect_is_netakaigi(script_content):
     return False
 
 
+def _parse_playlist_categories_meta(raw: str | list) -> list[str]:
+    """meta["playlist_categories"] を list[str] に変換する。"""
+    if isinstance(raw, list):
+        return raw
+    from core.playlist_resolver import parse_playlist_categories
+    return parse_playlist_categories(str(raw or ""))
+
+
 def _detect_netakaigi_variant(script_content: str) -> str:
     """ネタ会議の画面形式バリアントを返す。'Long'（横） または 'Shorts'（縦・デフォルト）。
 
@@ -1785,6 +1793,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "description": meta.get("description", ""),
             "tags": meta.get("tags", []),
             "video_format": meta.get("video_format", ""),
+            "screen_format": meta.get("screen_format", ""),
+            "playlist_categories": _parse_playlist_categories_meta(meta.get("playlist_categories", "")),
         }
         render_info_path = os.path.join(_meta_dir(theme_dir), "render_info.json")
         with open(render_info_path, "w", encoding="utf-8") as f:
