@@ -64,7 +64,7 @@
         <label><input type="checkbox" id="long-budget-mode-normal" {% if default_long_budget_mode %}checked{% endif %}> Long節約</label>
       </div>
       <div class="form-group check-group">
-        <label><input type="checkbox" id="sd-size-mode-normal" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成</label>
+        <label><input type="checkbox" id="sd-size-mode-normal" {% if not default_sd_size_mode %}checked{% endif %}> 高画質（FHD）生成</label>
       </div>
     </div>
     <div class="action-row">
@@ -114,7 +114,7 @@
         <label><input type="checkbox" id="reuse-backgrounds-meeting" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
       </div>
       <div class="form-group check-group">
-        <label><input type="checkbox" id="sd-size-mode-meeting" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成</label>
+        <label><input type="checkbox" id="sd-size-mode-meeting" {% if not default_sd_size_mode %}checked{% endif %}> 高画質（FHD）生成</label>
       </div>
     </div>
     <div class="action-row">
@@ -251,7 +251,7 @@ async function startGenerate(tab) {
   const reuseBg          = document.getElementById(`reuse-backgrounds-${tab}`).checked;
   const longThumbnailAb  = tab === 'normal' ? document.getElementById('long-thumbnail-ab-normal').checked : false;
   const longBudgetMode   = tab === 'normal' ? document.getElementById('long-budget-mode-normal').checked  : false;
-  const sdSizeMode       = document.getElementById(`sd-size-mode-${tab}`).checked;
+  const fhdMode          = document.getElementById(`sd-size-mode-${tab}`).checked;
 
   document.getElementById(`generate-btn-${tab}`).disabled = true;
   document.getElementById('generate-status').style.display = 'block';
@@ -270,7 +270,7 @@ async function startGenerate(tab) {
         reuse_backgrounds:     reuseBg,
         long_thumbnail_ab_test: longThumbnailAb,
         long_budget_mode:      longBudgetMode,
-        sd_size_mode:          sdSizeMode,
+        sd_size_mode:          !fhdMode,
       }),
     });
     const data = await res.json();

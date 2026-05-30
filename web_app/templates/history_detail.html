@@ -44,6 +44,11 @@
     {% else %}
     <p>アップロード記録なし</p>
     {% endif %}
+    {% if detail.has_mp4 %}
+    <div class="action-row" style="margin-top:0.75rem">
+      <button id="upload-btn" class="btn btn-primary" onclick="uploadVideo()">▲ YouTubeにアップロード</button>
+    </div>
+    {% endif %}
   </div>
 </div>
 
@@ -70,7 +75,7 @@
       <label><input type="checkbox" id="long-budget-mode" {% if default_long_budget_mode %}checked{% endif %}> Long節約</label>
     </div>
     <div class="form-group check-group">
-      <label><input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成</label>
+      <label><input type="checkbox" id="sd-size-mode" {% if not default_sd_size_mode %}checked{% endif %}> 高画質（FHD）生成</label>
     </div>
   </div>
 
@@ -263,6 +268,8 @@ function disableButtons() {
   document.getElementById('regen-full-btn').disabled = true;
   document.getElementById('regenerate-btn').disabled = true;
   document.getElementById('render-btn').disabled = true;
+  const uploadBtn = document.getElementById('upload-btn');
+  if (uploadBtn) uploadBtn.disabled = true;
   document.getElementById('cancel-btn').style.display = 'inline-block';
 }
 
@@ -270,6 +277,8 @@ function finishGenerate() {
   document.getElementById('regen-full-btn').disabled = false;
   document.getElementById('regenerate-btn').disabled = false;
   document.getElementById('render-btn').disabled = false;
+  const uploadBtn = document.getElementById('upload-btn');
+  if (uploadBtn) uploadBtn.disabled = false;
   document.getElementById('cancel-btn').style.display = 'none';
 }
 
@@ -361,11 +370,11 @@ function _readPipelineParams() {
     reuseBg:          document.getElementById('reuse-backgrounds').checked,
     longThumbnailAb:  document.getElementById('long-thumbnail-ab').checked,
     longBudgetMode:   document.getElementById('long-budget-mode').checked,
-    sdSizeMode:       document.getElementById('sd-size-mode').checked,
+    fhdMode:          document.getElementById('sd-size-mode').checked,
   };
 }
 
-async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longThumbnailAb, longBudgetMode, sdSizeMode }) {
+async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longThumbnailAb, longBudgetMode, fhdMode }) {
   return fetch('/api/history/regenerate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -376,7 +385,7 @@ async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longT
       reuse_backgrounds: reuseBg,
       long_thumbnail_ab_test: longThumbnailAb,
       long_budget_mode: longBudgetMode,
-      sd_size_mode: sdSizeMode,
+      sd_size_mode: !fhdMode,
       confirmed: true
     }),
   });
@@ -439,6 +448,32 @@ function prepareLogView() {
   document.getElementById('generate-status').style.display = 'block';
   document.getElementById('job-card-log-container').innerHTML = '';
   document.getElementById('job-status-msg').textContent = '';
+}
+
+async function uploadVideo() {
+  if (!confirm('YouTubeにアップロードします。よろしいですか？')) return;
+  prepareLogView();
+  disableButtons();
+  appendLog('アップロードリクエストを送信中...', 'info');
+  try {
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({history_name: historyName, confirmed: true}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error');
+      finishGenerate();
+      return;
+    }
+    activeJobIds = [data.job_id];
+    appendLog('アップロードジョブを登録しました', 'info');
+    pollJobs(() => { window.location.reload(); });
+  } catch(e) {
+    appendLog('通信エラー: ' + e, 'error');
+    finishGenerate();
+  }
 }
 
 // リロード後にログを復元

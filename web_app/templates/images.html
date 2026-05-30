@@ -36,7 +36,7 @@
       </select>
     </label>
     <label style="font-size:13px; display:flex; align-items:center; gap:4px">
-      <input type="checkbox" id="sd-size-mode" {% if default_sd_size_mode %}checked{% endif %}> 縮小生成
+      <input type="checkbox" id="sd-size-mode" {% if not default_sd_size_mode %}checked{% endif %}> 高画質（FHD）生成
     </label>
   </div>
   <p class="hint">※ 背景画像は表示中のプロンプトで再生成します（保存前でも反映）。</p>
@@ -129,7 +129,7 @@ async function regenerateSelected() {
   const keys = Array.from(document.querySelectorAll('.img-check:checked')).map(c => c.value);
   if (!keys.length) { alert('画像を選択してください'); return; }
   const engine = document.getElementById('regen-engine')?.value || 'nanobanana';
-  const sdSizeMode = document.getElementById('sd-size-mode')?.checked || false;
+  const fhdMode = document.getElementById('sd-size-mode')?.checked || false;
   const msg = engine === 'nanobanana' ? `選択した ${keys.length} 枚を再生成しますか？\nGoogle AI費用が発生します。` : `選択した ${keys.length} 枚を再生成しますか？`;
   if (!confirm(msg)) return;
 
@@ -144,7 +144,7 @@ async function regenerateSelected() {
     const res = await fetch(`/api/images/${historyName}/regenerate`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({history_name: historyName, image_keys: keys, prompts, background_engine: engine, sd_size_mode: sdSizeMode}),
+      body: JSON.stringify({history_name: historyName, image_keys: keys, prompts, background_engine: engine, sd_size_mode: !fhdMode}),
     });
     const data = await res.json();
     if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || ''); return; }
