@@ -10,6 +10,44 @@
 
 ---
 
+## 2026-05-30 縮小生成デフォルト化・FHD生成オプション化・履歴詳細アップロードボタン追加・再生リスト自動登録・GPUフォールバック警告改善
+
+**対象ファイル:** `config/config.py` / `core/playlist_resolver.py`（新規） / `core/parser.py` / `core/native_renderer.py` / `workers/main.py` / `workers/worker_render.py` / `web_app/services/upload_service.py` / `web_app/templates/generate.html` / `web_app/templates/history_detail.html` / `web_app/templates/images.html` / `SPEC.md` / `README.md`
+
+**変更内容:**
+
+### 縮小生成デフォルト化・チェックボックス表記変更（`a0e6a76`）
+
+- `WEB_DEFAULT_SD_SIZE_MODE` のデフォルトを `"0"` → `"1"` に変更（縮小生成がデフォルト）
+- 全テンプレートのチェックボックスを **「縮小生成」→「高画質（FHD）生成」** に変更（ロジック反転）
+  - チェックなし（デフォルト）= 縮小生成 ON
+  - チェックあり = FHD 生成 ON
+  - JS 側の `sd_size_mode` 値を `!fhdMode` で反転して送信
+  - 対象: `generate.html`（通常・ネタ会議タブ）/ `history_detail.html` / `images.html`
+- `history_detail.html`: MP4 がある場合に **「YouTubeにアップロード」ボタン** を追加（確認ダイアログ → `POST /api/upload` → ジョブログのページ内表示 → 完了後リロード）
+
+### 台本「再生リスト:」からYouTube再生リストへ自動登録（`88b1b3e`）
+
+- `core/playlist_resolver.py`（新規）: カテゴリ名＋動画形式 → YouTube 再生リスト名の解決
+  - Shorts / 縦: `{カテゴリ} Shorts`
+  - Long / 横: `{カテゴリ}【じっくり解説】`
+  - ネタ会議（縦）: `ずんだもんとめたんのネタ会議 Shorts`
+  - ネタ会議Long / 横: `ずんだもんとめたんのネタ会議【じっくり版】`
+  - 判定不能: `None` を返す（自動フォールバック禁止）
+- `core/parser.py`: `再生リスト:` / `Playlist:` を `playlist_categories` としてパース
+- `workers/main.py`: `render_info.json` に `screen_format` / `playlist_categories` を追加
+- `web_app/services/upload_service.py`: アップロード時に再生リスト自動登録。存在しないリストは自動作成。結果を `_meta/upload_record.json` の `playlist_assignments` に保存。台本に `再生リスト:` がない場合は従来の `LONG_UPLOAD_PLAYLIST_NAME` による後方互換動作を維持
+- 管理ツール `tools/manage_playlists.py` / 設定ファイル `config/playlist_assignments.json` / `config/playlists.json` を削除（新仕様に置き換え）
+
+### GPUフォールバック警告をwarningタグで送出・エンコーダ名をログ表示（`fdc2e9e`）
+
+- `workers/worker_render.py`: `progress_callback` に `tag` パラメータを追加し、`native_renderer` 側からタグを渡せるように変更
+- `core/native_renderer.py`: レンダー開始時に使用エンコーダ名（`NATIVE_FFMPEG_ENCODER`）をジョブログへ出力。GPU エンコーダ失敗時のフォールバック警告3箇所を `tag="warning"` で送出し、UI 上でオレンジ色表示で視覚的に区別できるように変更
+
+README更新: 台本フォーマット節に `再生リスト:` フィールドを追加。ワークフロー節に履歴詳細アップロードボタンと再生リスト自動登録を追記
+
+---
+
 ---
 
 ## 2026-05-30 タイトル案生成プロンプトの採点ゲート強化（通常・Long共通）

@@ -101,6 +101,7 @@ yukkurijidou/
 │   ├── upload_records.py   # アップロード台帳の読み書き・upsert
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
 │   ├── youtube_uploader.py # YouTube APIアップロード
+│   ├── playlist_resolver.py # 台本カテゴリ名＋動画形式 → YouTube再生リスト名の解決
 │   └── ng_words.py         # NGワード置換
 ├── config/
 │   ├── config.py            # 定数・設定
@@ -577,7 +578,7 @@ POST /api/sd-models/rescan
 | 設定（即時反映 / APIキー変更） | `/settings` |
 | Stable Diffusion WebUI モデル管理 | `/sd-models` |
 
-`/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI）と **縮小生成**（`sd_size_mode`）の選択が含まれる。`/images` 再生成にも同様のエンジン選択と縮小生成チェックボックスがある。
+`/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI）と **高画質（FHD）生成**（`sd_size_mode` の反転、チェックなし=縮小生成ON）の選択が含まれる。`/images` 再生成にも同様のエンジン選択と高画質（FHD）生成チェックボックスがある。
 
 `/settings` のAPIキー設定タブ（「APIキー設定」）は画面最下部に置く。通常の設定変更欄には秘密値を含めない。APIキー設定欄には `GOOGLE_API_KEY`・`OPENAI_API_KEY`・`HF_TOKEN`（Hugging Face アクセストークン）が含まれ、いずれも有無（bool）のみ画面に表示する。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
 
@@ -685,6 +686,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 説明文: チョコレートの驚きの歴史を解説！
 タグ: ずんだもん,ゆっくり解説,VOICEVOX,...
 固定コメント: チョコレートが飲み物だった時代、飲んでみたかった？
+再生リスト: 実は薬・毒扱いだった！食べ物の黒歴史
 
 # Scene 1: Opening hook
 背景: 漫画風イラスト調。人物禁止。「飲み物」を白文字・極太黒縁で配置。
@@ -693,11 +695,23 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 四国めたん(ツンツン): えっ、薬ですの？
 ```
 
+`再生リスト:` はカンマ区切りで複数のカテゴリ名を指定できる（`Playlist:` も同義）。動画形式（Shorts/Long/ネタ会議）に応じてアップロード時に実際の再生リスト名を解決する（`core/playlist_resolver.py`）。
+
+| カテゴリ | 動画形式 | 解決後の再生リスト名 |
+|---|---|---|
+| `{カテゴリ}` | Shorts / 縦 | `{カテゴリ} Shorts` |
+| `{カテゴリ}` | Long / 横 | `{カテゴリ}【じっくり解説】` |
+| — | ネタ会議（縦） | `ずんだもんとめたんのネタ会議 Shorts` |
+| — | ネタ会議Long / 横 | `ずんだもんとめたんのネタ会議【じっくり版】` |
+
+指定した再生リストが YouTube 上に存在しない場合は自動作成してから登録する。判定不能な動画形式の場合は `None` を返し、フォールバックなしで警告ログを出す。
+
 ### Longフォーマット（追加要素）
 
 ```
 動画形式: Long
 チャプター: 1.イントロ / 2.起源 / 3.広まった理由 / 4.まとめ
+再生リスト: 実は薬・毒扱いだった！食べ物の黒歴史
 ```
 
 ---
@@ -764,7 +778,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_DEFAULT_REUSE_BACKGROUNDS` | `false` | Web UI生成画面の背景再利用既定値 |
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `false` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `false` | Web UI生成画面のLong節約既定値 |
-| `WEB_DEFAULT_SD_SIZE_MODE` | `false` | Web UI生成画面の縮小生成既定値 |
+| `WEB_DEFAULT_SD_SIZE_MODE` | `"1"` | Web UI生成画面の縮小生成既定値。`"1"` = 縮小生成ON（チェックボックス表記は「高画質（FHD）生成」でチェックなし） |
 | `WEB_JOB_POLL_INTERVAL_MS` | 2000 | Web UIジョブ状態更新間隔(ms) |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | 1500 | Web UIジョブ成功後再読み込み待ち時間(ms) |
 | `WEB_TOAST_VISIBLE_MS` | 2000 | Web UIトースト表示時間(ms) |
@@ -800,7 +814,8 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - エフェクトはセグメント単位で付与し、BGM・音声タイミングは変更しない。ffmpegフィルタが失敗したセグメントはエフェクトなしで再レンダーして生成を継続する。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭に `THUMBNAIL_HOLD_FRAMES_SHORTS`（デフォルト3フレーム≒0.1秒）だけサムネイル画像を挿入する（Long は挿入しない）。保持フレーム数は `.env` の `THUMBNAIL_HOLD_FRAMES_SHORTS` で変更可。1秒以上の静止サムネは設定値に関係なく生じない（上限5フレーム≒0.17秒）。
-- `_meta/render_info.json` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra。
+- レンダー開始時に使用エンコーダ名（`NATIVE_FFMPEG_ENCODER` の値）をジョブログへ出力する。GPU エンコーダ（h264_nvenc 等）が利用不可の場合は `tag="warning"` 付きの警告メッセージとして送出し、UI 上でオレンジ色表示で視覚的に識別できる。ソフトウェアエンコーダ（libx264）へのフォールバックは最大3箇所で検知・警告する。
+- `_meta/render_info.json` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra / screen_format / playlist_categories。
 
 ### 安定条件
 
@@ -869,9 +884,12 @@ YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案�
 
 ### 縮小生成モード
 
-Web UI の **「縮小生成」チェックボックス**（デフォルト OFF）または `WEB_DEFAULT_SD_SIZE_MODE` で制御する。Shorts / Long 両方に適用される。
+Web UI の **「高画質（FHD）生成」チェックボックス**（デフォルト OFF = 縮小生成）または `WEB_DEFAULT_SD_SIZE_MODE` で制御する。Shorts / Long 両方に適用される。
 
-ON にすると `SD_SIZE_IMAGE_SCALE`（デフォルト 0.5、`.env` で変更可）倍の小サイズで画像を生成し、元の解像度に拡大してセットする。生成時間・API トークン消費・コストを削減できる反面、解像度が粗くなる。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
+- **チェックなし（デフォルト）**: 縮小生成 ON。`SD_SIZE_IMAGE_SCALE`（デフォルト 0.5、`.env` で変更可）倍の小サイズで画像を生成し、元の解像度に拡大してセットする。生成時間・APIトークン消費・コストを削減できる反面、解像度が粗くなる。
+- **チェックあり**: FHD（フルHD）生成 ON。元の解像度で画像を生成する。品質は高いがコスト・時間がかかる。
+
+`WEB_DEFAULT_SD_SIZE_MODE` のデフォルトは `"1"`（縮小生成 ON）。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
 
 ### Long画像節約モード
 
@@ -1126,7 +1144,24 @@ Copy-Item -Path config\samples\prompt_parts\food\* -Destination config\prompt_pa
 
 YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや `script.txt` から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。アップロード時に実際に使ったタグを `_meta/youtube_metadata.json` へ保存します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
 
-Long動画のアップロード成功後は、`LONG_UPLOAD_PLAYLIST_NAME` の名前と完全一致する自チャンネルの再生リストへ動画を自動追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。既に同じ動画が入っている場合は重複追加せず、結果を `_meta/upload_record.json` の `playlist_*` フィールドに保存します。Shortsには適用しません。再生リストが見つからない場合、アップロード自体は成功扱いのまま警告ログを出します。
+アップロード成功後の再生リスト自動登録フローは2系統あります。
+
+**① 台本に `再生リスト:` が指定されている場合（新方式）**
+
+`_meta/render_info.json` に保存された `playlist_categories`（カテゴリ名リスト）と `screen_format`（画面形式）を参照し、`core/playlist_resolver.py` がアップロード時に実際の YouTube 再生リスト名を解決して登録します。
+
+- Shorts / 縦: `{カテゴリ名} Shorts`
+- Long / 横: `{カテゴリ名}【じっくり解説】`
+- ネタ会議（縦）: `ずんだもんとめたんのネタ会議 Shorts`
+- ネタ会議Long / 横: `ずんだもんとめたんのネタ会議【じっくり版】`
+
+対象の再生リストが YouTube 上に存在しない場合は自動作成してから登録します。カンマ区切りで複数カテゴリを指定した場合はすべてに登録します。結果は `_meta/upload_record.json` の `playlist_assignments`（`{再生リスト名: {playlist_id, status}}` 形式）に保存します。
+
+**② 台本に `再生リスト:` がない場合（後方互換）**
+
+Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リストへ動画を追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。Shortsには適用しません。
+
+いずれの場合も、既に同じ動画が登録済みなら重複追加しません。再生リスト操作に失敗した場合、アップロード自体は成功扱いのまま警告ログを出します。
 
 `💬 固定コメント` は、`output/000_uploaded/` 配下のアップロード済み履歴から、固定コメントと `video_id` がある公開済み動画を選んでコメント投稿します。予約中動画は候補に表示しません。YouTube Data APIで状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は該当動画の `_meta/upload_record.json` に `fixed_comment_thread_id` を保存し、二重投稿を避けます。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted_at` を記録できます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
 
@@ -1440,7 +1475,7 @@ YouTube OAuth:
 | `WEB_DEFAULT_REUSE_BACKGROUNDS` | `.env` / `config.py` | Web UI生成画面の背景再利用既定値 |
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `.env` / `config.py` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `.env` / `config.py` | Web UI生成画面のLong節約既定値 |
-| `WEB_DEFAULT_SD_SIZE_MODE` | `.env` / `config.py` | Web UI生成画面の縮小生成既定値 |
+| `WEB_DEFAULT_SD_SIZE_MODE` | `.env` / `config.py` | Web UI生成画面の縮小生成既定値。`"1"` = 縮小生成ON（デフォルト） |
 | `WEB_JOB_POLL_INTERVAL_MS` | `.env` / `config.py` | Web UIのジョブ状態更新間隔(ms) |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | `.env` / `config.py` | Web UIのジョブ成功後再読み込み待ち時間(ms) |
 | `WEB_TOAST_VISIBLE_MS` | `.env` / `config.py` | Web UIのトースト表示時間(ms) |
