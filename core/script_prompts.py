@@ -538,25 +538,25 @@ def build_title_prompt(
             existing_title_lines=existing_title_lines,
             used_food_text=used_food_text,
         )
-        base = f"{title_dynamic_context}
+        base = f"""{title_dynamic_context}
 
-{title_duplicate_context}"
+{title_duplicate_context}"""
 
     dynamic_block = (
-        f"
+        f"""
 
 ━━━━━━━━━━━━━━━━━━
 実績データ・既存タイトル
 ━━━━━━━━━━━━━━━━━━
 
-"
-        f"【実績データ（Analytics TSV）】
+"""
+        f"""【実績データ（Analytics TSV）】
 {analytics_data_block}
 
-"
-        f"【既存タイトル重複禁止】
+"""
+        f"""【既存タイトル重複禁止】
 {existing_title_lines}
-"
+"""
     )
     return base + dynamic_block
 
@@ -578,18 +578,17 @@ def build_gemini_system_prompt(
         content_section = globals().get("CONTENT_DIRECTION", "")
 
     existing_block = (
-        f"
+        f"""
 
 ━━━━━━━━━━━━━━━━━━
 既存タイトル重複禁止（台本生成時も適用）
 ━━━━━━━━━━━━━━━━━━
 
-"
-        f"以下と同じ、またはほぼ同じテーマの台本を作らないこと。
+"""
+        f"""以下と同じ、またはほぼ同じテーマの台本を作らないこと。
 
-"
-        + "
-".join(f"・{t}" for t in existing_titles)
+"""
+        + "\n".join(f"・{t}" for t in existing_titles)
         if existing_titles else ""
     )
 

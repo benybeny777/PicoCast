@@ -7,6 +7,7 @@ import os
 from typing import Any
 
 from core.output_paths import get_output_videos_dir, get_uploaded_dir, get_output_root
+from core.metadata_db import ManagedConnection
 from web_app.security import is_video_folder, safe_output_path
 
 def _is_management(name: str) -> bool:
@@ -69,14 +70,29 @@ def _video_format(name: str, render_info: dict, script_meta: dict[str, str]) -> 
     return ""
 
 
+def _fetch_yt_status_bulk(local_ids: list[str]) -> dict[str, dict]:
+    """youtube_status テーブルを一括取得して local_id → dict で返す。"""
+    if not local_ids:
+        return {}
+    placeholders = ",".join("?" * len(local_ids))
+    with ManagedConnection() as conn:
+        rows = conn.execute(
+            f"SELECT local_id, youtube_video_id, publish_status FROM youtube_status"
+            f" WHERE local_id IN ({placeholders})",
+            local_ids,
+        ).fetchall()
+    return {r["local_id"]: dict(r) for r in rows}
+
+
 def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
     """
     videos/（生成中・未アップロード）と 000_uploaded/（アップロード済みアーカイブ）
     の両方を走査する。同名フォルダは videos/ 優先。
+    アップロード状態は youtube_status テーブルから取得する（upload_record.json は参照しない）。
     """
     output_root = get_output_root()
-    results = []
     seen: set[str] = set()
+    items: list[dict[str, Any]] = []
 
     for search_dir in (get_output_videos_dir(), get_uploaded_dir()):
         try:
@@ -103,14 +119,13 @@ def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
             render_info = _safe_json(os.path.join(meta_d, "render_info.json"))
             opening_review = _safe_json(os.path.join(meta_d, "opening_review.json"))
             final_review = _safe_json(os.path.join(meta_d, "final_review.json"))
-            upload_record = _safe_json(os.path.join(meta_d, "upload_record.json"))
             script_meta = _script_meta(theme_dir)
 
             mp4_name = _find_mp4(theme_dir)
             thumb_rel = _find_thumbnail(theme_dir)
             video_format = _video_format(name, render_info, script_meta)
 
-            results.append({
+            items.append({
                 "name": name,
                 "is_management": is_mgmt,
                 "title": render_info.get("video_title") or script_meta.get("video_title") or name,
@@ -125,10 +140,16 @@ def list_histories(include_management: bool = False) -> list[dict[str, Any]]:
                 "thumbnail_rel": thumb_rel,
                 "opening_score": opening_review.get("final_score") or opening_review.get("overall_score"),
                 "final_score": final_review.get("final_score"),
-                "upload_status": upload_record.get("publish_status", ""),
-                "video_id": upload_record.get("video_id", ""),
             })
-    return results
+
+    # youtube_status を一括取得して付与
+    yt_map = _fetch_yt_status_bulk([it["name"] for it in items])
+    for it in items:
+        yt = yt_map.get(it["name"], {})
+        it["upload_status"] = yt.get("publish_status") or ""
+        it["video_id"] = yt.get("youtube_video_id") or ""
+
+    return items
 
 
 def get_history_detail(history_name: str) -> dict[str, Any] | None:
@@ -157,7 +178,25 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
     duration_review = _safe_json(os.path.join(meta_d, "duration_review.json"))
     final_review = _safe_json(os.path.join(meta_d, "final_review.json"))
     render_info = _safe_json(os.path.join(meta_d, "render_info.json"))
-    upload_record = _safe_json(os.path.join(meta_d, "upload_record.json"))
+
+    # アップロード状態は youtube_status テーブルから取得（upload_record.json は参照しない）
+    local_id = os.path.basename(theme_dir)
+    with ManagedConnection() as conn:
+        yt_row = conn.execute(
+            "SELECT youtube_video_id, publish_status, publish_at,"
+            " published_at, fixed_comment_id"
+            " FROM youtube_status WHERE local_id=?",
+            (local_id,),
+        ).fetchone()
+    upload_record: dict[str, Any] = {}
+    if yt_row:
+        upload_record = {
+            "video_id":         yt_row["youtube_video_id"] or "",
+            "publish_status":   yt_row["publish_status"] or "",
+            "publish_at":       yt_row["publish_at"] or "",
+            "published_at":     yt_row["published_at"] or "",
+            "comment_thread_id": yt_row["fixed_comment_id"] or "",
+        }
 
     mp4_name = _find_mp4(theme_dir)
     thumb_rel = _find_thumbnail(theme_dir)
