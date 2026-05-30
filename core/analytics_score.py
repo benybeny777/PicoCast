@@ -788,7 +788,7 @@ def save_score_files(items: list[dict[str, Any]], days: int, output_dir=None, su
     """analytics データを DB に保存する。JSON/TSV ファイルへの書き込みは廃止済み。返値: 保存件数。"""
     jst = timezone(timedelta(hours=9))
     now = datetime.now(jst)
-    collected_at = now.isoformat()
+    collected_at = now.strftime("%Y-%m-%d")  # 同日の重複防止
     count = 0
     try:
         from core.metadata_db import insert_analytics_snapshot, is_initialized, initialize_db
