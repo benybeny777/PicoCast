@@ -82,7 +82,20 @@ def submit_upload_job(history_name: str) -> str:
 
 
 def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
+    from core.channel_info import get_channel_info, log_channel_info
     from core.youtube_uploader import upload_video
+
+    # アップロード直前チャンネル確認ログ
+    log_channel_info()
+    ch = get_channel_info()
+    _log(job, f"[CHANNEL] profile={ch['profile'] or ''}", "info")
+    _log(job, f"[CHANNEL] name={ch['name'] or ''}", "info")
+    _log(job, f"[CHANNEL] handle={ch['handle'] or ''}", "info")
+    _log(job, f"[CHANNEL] theme={ch['theme'] or ''}", "info")
+    if not ch["upload_allowed"]:
+        missing = [w["message"] for w in ch["warnings"] if w["level"] == "error"]
+        raise RuntimeError("チャンネル設定不足のためアップロード中止: " + "、".join(missing))
+
     theme_dir = safe_output_path(history_name, output_base=OUTPUT_DIR)
     if not os.path.isdir(theme_dir):
         raise FileNotFoundError(f"履歴フォルダが見つかりません: {history_name}")

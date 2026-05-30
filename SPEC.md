@@ -1572,3 +1572,43 @@ TOPIC_REQUEST_CTA_EVERY_N=5
 ## ComfyUI（廃止済み）
 > ~~- ssets/comfyui/model_manifest.json に必要なモデルを定義。~~
 > ~~- Web UIから半自動ダウンロードおよび充足チェックが可能。不足時は自動フォールバックせずに停止する。~~
+
+
+## チャンネル識別情報（複数チャンネル運用対応）
+
+Web UI 上部のチャンネルバナーと、アップロード誤爆防止のための設定項目。
+`.env` に記述し、`core/channel_info.py` で読み込む。
+
+### 環境変数
+
+| 変数名 | 必須 | 説明 |
+|---|---|---|
+| `CHANNEL_NAME` | アップロード時必須 | チャンネル表示名。未設定時はアップロード禁止。 |
+| `CHANNEL_HANDLE` | アップロード時必須 | `@` から始まるハンドル。未設定時はアップロード禁止。 |
+| `CHANNEL_PROFILE` | 任意 | チャンネル識別子（任意文字列）。未設定でも動作するが警告表示。 |
+| `CHANNEL_THEME` | 任意 | テーマ説明。バナーに表示するのみ。 |
+| `CHANNEL_ACCENT_COLOR` | 任意 | UI アクセント色（`#RRGGBB`）。不正値は警告を出してデフォルト色 `#4a5568` を使用。 |
+| `DEFAULT_HASHTAGS` | 任意 | デフォルトハッシュタグ文字列。 |
+
+### 設定例（.env）
+
+```
+CHANNEL_PROFILE=food_trivia
+CHANNEL_NAME=ずんだもんとめたんの食べ物雑学堂
+CHANNEL_HANDLE=@zundamon_food
+CHANNEL_THEME=食べ物雑学
+CHANNEL_ACCENT_COLOR=#7c2d12
+DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
+```
+
+### 挙動
+
+- Web UI 起動時、全画面上部のバナーにチャンネル名・ハンドル・テーマを表示する。バナーは sticky で常時表示。
+- `CHANNEL_NAME` / `CHANNEL_HANDLE` のいずれかが未設定の場合、赤色警告を表示し、アップロードボタンを無効化する。
+- アップロード API（`POST /api/upload`、`POST /api/upload/batch`）は `CHANNEL_NAME` / `CHANNEL_HANDLE` 未設定時に `400` を返す。
+- アップロードジョブ実行直前に `[CHANNEL]` プレフィックスでチャンネル情報をログ出力する。
+- 特定チャンネル名・ハンドルをコードにハードコードしない。未設定時に特定チャンネルへフォールバックしない（fail closed）。
+
+### API
+
+`GET /api/channel-info` — チャンネル情報を JSON で返す。`upload_allowed`（bool）を含む。

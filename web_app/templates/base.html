@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/app.css?v={{ static_asset_version }}">
 </head>
 <body>
+<div class="sticky-header">
 <nav class="navbar">
   <div class="nav-brand">
     <a href="/">🎬 {{ web_app_name }}</a>
@@ -27,6 +28,8 @@
     <li><button class="btn btn-danger btn-xs nav-shutdown-btn" onclick="navShutdown()" title="アプリを終了する">⏻ 終了</button></li>
   </ul>
 </nav>
+<div id="channel-banner" class="channel-banner"></div>
+</div>
 
 <script>
 async function navShutdown() {
@@ -86,5 +89,36 @@ window.WEB_TOAST_HIDE_DELAY_MS = {{ web_toast_hide_delay_ms }};
 <script src="/static/app.js?v={{ static_asset_version }}"></script>
 <script src="/static/job_poll.js?v={{ static_asset_version }}"></script>
 {% block scripts %}{% endblock %}
+<script>
+(async function initChannelBanner() {
+  const banner = document.getElementById('channel-banner');
+  if (!banner) return;
+  let info;
+  try {
+    const res = await fetch('/api/channel-info');
+    info = await res.json();
+  } catch {
+    banner.innerHTML = '<span class="ch-warning ch-error">チャンネル情報の取得に失敗しました</span>';
+    return;
+  }
+  if (info.accent_color) {
+    document.documentElement.style.setProperty('--channel-accent', info.accent_color);
+    banner.style.borderLeftColor = info.accent_color;
+  }
+  let html = '';
+  for (const w of (info.warnings || [])) {
+    html += `<span class="ch-warning ch-${w.level}">${w.message}</span>`;
+  }
+  if (info.name || info.handle) {
+    html += `<span class="ch-label">現在のチャンネル:</span>`;
+    html += `<span class="ch-name">${info.name || '（未設定）'}</span>`;
+    if (info.handle) html += `<span class="ch-handle">${info.handle}</span>`;
+    if (info.theme) html += `<span class="ch-theme">— ${info.theme}</span>`;
+  } else if (!info.warnings || !info.warnings.some(w => w.level === 'error')) {
+    html += '<span class="ch-warning ch-error">チャンネル情報が未設定です</span>';
+  }
+  banner.innerHTML = html;
+})();
+</script>
 </body>
 </html>

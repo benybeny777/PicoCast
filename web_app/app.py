@@ -78,6 +78,7 @@ from web_app.routes.api_prompt import router as prompt_router
 from web_app.routes.api_sd_models import router as sd_models_router
 from web_app.routes.api_shutdown import router as shutdown_router
 from web_app.routes.api_db import router as db_router
+from web_app.routes.api_channel import router as channel_router
 
 app.include_router(pages_router)
 app.include_router(status_router)
@@ -95,6 +96,7 @@ app.include_router(prompt_router)
 app.include_router(sd_models_router)
 app.include_router(shutdown_router)
 app.include_router(db_router)
+app.include_router(channel_router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
