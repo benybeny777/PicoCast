@@ -803,18 +803,49 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         backup_base = os.path.join("output", "000_backups")
         backup_name = f"{safe_topic}_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         backup_dir = os.path.join(backup_base, backup_name)
+        _BACKUP_TIMEOUT_SEC = 8
+        import threading as _threading
+        _replace_result: dict = {"error": None, "done": False}
+
+        def _do_replace() -> None:
+            try:
+                os.replace(theme_dir, backup_dir)
+            except Exception as _e:
+                _replace_result["error"] = _e
+            finally:
+                _replace_result["done"] = True
+
         try:
             os.makedirs(backup_base, exist_ok=True)
-            os.replace(theme_dir, backup_dir)
-            _existing_theme_backup = backup_dir
-            update_status(f"📦 既存フォルダをバックアップへ退避しました: {backup_dir}")
-            removed_old_backups = _cleanup_old_theme_backups(backup_base, safe_topic, keep=backup_dir, keep_count=1)
-            if removed_old_backups:
-                update_status(f"🧹 古い同一テーマのバックアップを削除しました: {removed_old_backups}件")
+            _t = _threading.Thread(target=_do_replace, daemon=True)
+            _t.start()
+            _t.join(timeout=_BACKUP_TIMEOUT_SEC)
+
+            if not _replace_result["done"]:
+                # タイムアウト: フォルダがエクスプローラー等で開かれている可能性が高い
+                locker = _find_locking_process(theme_dir)
+                locker_info = f" (ロック: {locker})" if locker else ""
+                update_status(
+                    f"⚠️ 退避が {_BACKUP_TIMEOUT_SEC}秒 でタイムアウトしました{locker_info}。\n"
+                    f"  エクスプローラーで '{os.path.basename(theme_dir)}' フォルダを閉じてから再試行すると退避できます。\n"
+                    f"  今回はバックアップをスキップして上書き生成します。",
+                    "warning",
+                )
+            elif _replace_result["error"]:
+                raise _replace_result["error"]
+            else:
+                _existing_theme_backup = backup_dir
+                update_status(f"📦 既存フォルダをバックアップへ退避しました: {backup_dir}")
+                removed_old_backups = _cleanup_old_theme_backups(backup_base, safe_topic, keep=backup_dir, keep_count=1)
+                if removed_old_backups:
+                    update_status(f"🧹 古い同一テーマのバックアップを削除しました: {removed_old_backups}件")
         except (PermissionError, Exception) as e:
             locker = _find_locking_process(theme_dir) if isinstance(e, PermissionError) else None
             locker_info = f" (ロック: {locker})" if locker else ""
-            update_status(f"⚠️ バックアップをスキップして上書き生成します{locker_info}")
+            update_status(
+                f"⚠️ 退避に失敗しました{locker_info}。バックアップをスキップして上書き生成します。",
+                "warning",
+            )
 
         if _existing_theme_backup:
             if reuse_backgrounds:
