@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Query, HTTPException
 from web_app.services.analytics_service import (
     load_latest_analytics,
-    list_analytics_files,
     submit_refresh_job,
     get_tsv_text,
     get_ai_copy_text,
@@ -15,7 +14,6 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 @router.get("")
 def api_analytics():
     return {
-        "files": list_analytics_files(),
         "data": load_latest_analytics(),
     }
 
