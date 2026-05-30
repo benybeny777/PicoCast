@@ -18,11 +18,9 @@
 
 {% if analytics_data %}
 <div class="card mt">
-  {% if analytics_files %}
-    {% set _fname = analytics_files[0] %}
-    {% set _stamp = _fname | replace('analytics_score_', '') | replace('.json', '') | replace('.tsv', '') %}
+  {% if analytics_collected_at %}
     <p class="hint" style="margin:0 0 0.5rem 0; font-size:12px;">
-      最終データ取得日: {{ _stamp[:4] }}-{{ _stamp[4:6] }}-{{ _stamp[6:8] }}
+      最終データ取得日: {{ analytics_collected_at[:10] }}
     </p>
   {% endif %}
   <div class="filter-row" style="flex-wrap:wrap; gap:0.5rem">

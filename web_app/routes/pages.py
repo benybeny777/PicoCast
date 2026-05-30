@@ -142,10 +142,11 @@ def page_images(request: Request, history: str = ""):
 @router.get("/analytics", response_class=HTMLResponse)
 def page_analytics(request: Request):
     data = analytics_service.load_latest_analytics()
-    files = analytics_service.list_analytics_files()
+    from core.metadata_db import get_latest_analytics_meta
+    meta = get_latest_analytics_meta()
     return _render(request, "analytics.html", {
         "analytics_data": data,
-        "analytics_files": files,
+        "analytics_collected_at": meta.get("generated_at", ""),
     })
 
 
