@@ -315,6 +315,8 @@ NATIVE_SUBTITLE_BOX_LINE_HEIGHT   = float(os.environ.get("NATIVE_SUBTITLE_BOX_LI
 NATIVE_SUBTITLE_BOX_SHORTS        = os.environ.get("NATIVE_SUBTITLE_BOX_SHORTS", "1").strip().lower() in ("1", "true", "yes", "on")  # Shorts: 半透明帯を表示するか
 NATIVE_SUBTITLE_BOX_ALPHA         = float(os.environ.get("NATIVE_SUBTITLE_BOX_ALPHA", os.environ.get("NATIVE_SUBTITLE_BOX_OPACITY_SHORTS", "0.60")))  # 帯の不透明度 (0=透明 1=不透明)
 NATIVE_SUBTITLE_BOX_OPACITY_SHORTS = NATIVE_SUBTITLE_BOX_ALPHA  # 旧名エイリアス
+NATIVE_SUBTITLE_WRAP_CHARS_SHORTS  = int(os.environ.get("NATIVE_SUBTITLE_WRAP_CHARS_SHORTS", "13"))  # Shorts: 字幕の1行最大文字数（超えると折り返し）
+NATIVE_SUBTITLE_WRAP_CHARS_LONG    = int(os.environ.get("NATIVE_SUBTITLE_WRAP_CHARS_LONG",   "24"))  # Long:   字幕の1行最大文字数
 
 # ───────────────────────────────────────────────
 # アナリティクス — チャンネル固有注記

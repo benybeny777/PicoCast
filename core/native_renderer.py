@@ -61,6 +61,8 @@ from config import (
     NATIVE_SUBTITLE_OUTER_STROKE_WIDTH,
     NATIVE_SUBTITLE_PADDING_Y,
     NATIVE_SUBTITLE_STROKE_WIDTH,
+    NATIVE_SUBTITLE_WRAP_CHARS_LONG,
+    NATIVE_SUBTITLE_WRAP_CHARS_SHORTS,
     NATIVE_SUBTITLE_Y_OFFSET_LONG,
     NATIVE_SUBTITLE_Y_OFFSET_SHORTS,
     VIDEO_FPS,
@@ -354,6 +356,28 @@ def _subtitles_filter_path(path: str) -> str:
 def _ass_escape(text: str) -> str:
     text = str(text or "").replace("\\", r"\\").replace("{", r"\{").replace("}", r"\}")
     return text.replace("\n", r"\N")
+
+
+def _wrap_subtitle(text: str, max_chars: int) -> str:
+    """字幕を max_chars 文字ごとに改行（\\n）で折り返す。
+    句読点（、。！？…）が直前にあれば優先的にそこで折り返す。
+    戻り値の \\n は _ass_escape() で \\N に変換される。
+    """
+    if max_chars <= 0 or len(text) <= max_chars:
+        return text
+    lines: list[str] = []
+    while len(text) > max_chars:
+        break_pos = max_chars
+        for punct in "、。！？…":
+            pos = text.rfind(punct, 0, max_chars + 1)
+            if pos > max_chars // 2:
+                break_pos = pos + 1
+                break
+        lines.append(text[:break_pos])
+        text = text[break_pos:]
+    if text:
+        lines.append(text)
+    return "\n".join(lines)
 
 
 def _ass_time(sec: float) -> str:
@@ -946,6 +970,7 @@ def _write_subtitles(
         "[Events]",
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text",
     ])
+    wrap_chars = NATIVE_SUBTITLE_WRAP_CHARS_SHORTS if height >= 1600 else NATIVE_SUBTITLE_WRAP_CHARS_LONG
     t = 0.0
     for idx, dur in enumerate(audio_durations):
         text, style, _expression = chunks[idx] if idx < len(chunks) else ("", "Default", None)
@@ -953,12 +978,14 @@ def _write_subtitles(
             start = max(0.0, t + offset_sec)
             end = max(start + 0.1, t + max(0.1, dur) + offset_sec)
             style_name = style if style in inner_outline_colors else "Default"
-            escaped_text = _ass_escape(text)
+            wrapped_text = _wrap_subtitle(text, wrap_chars)
+            line_count = wrapped_text.count("\n") + 1
+            escaped_text = _ass_escape(wrapped_text)
             text_y = height // 2 + int(y_offset)
             override = f"{{\\pos({width // 2},{text_y})}}" if alignment == 5 and y_offset else ""
             if box_enabled and alignment == 5:
                 box_w = int(width * 0.88)
-                box_h = int(font_size * NATIVE_SUBTITLE_BOX_LINE_HEIGHT) + NATIVE_SUBTITLE_PADDING_Y * 2
+                box_h = int(font_size * (NATIVE_SUBTITLE_BOX_LINE_HEIGHT + (line_count - 1) * 1.2)) + NATIVE_SUBTITLE_PADDING_Y * 2
                 box_path = f"m {-box_w // 2} {-box_h // 2} l {box_w // 2} {-box_h // 2} {box_w // 2} {box_h // 2} {-box_w // 2} {box_h // 2}"
                 lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},SubtitleBox,,0,0,0,,{{\\pos({width // 2},{text_y})\\p1}}{box_path}{{\\p0}}")
             lines.append(f"Dialogue: 1,{_ass_time(start)},{_ass_time(end)},{style_name}Outer,,0,0,0,,{override}{escaped_text}")
