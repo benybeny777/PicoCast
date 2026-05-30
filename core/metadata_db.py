@@ -175,6 +175,12 @@ CREATE TABLE IF NOT EXISTS analytics_snapshots (
     youtube_video_id          TEXT NOT NULL,
     collected_at              TEXT NOT NULL,
     window_days               INTEGER,
+    title                     TEXT,
+    video_type                TEXT,
+    published_at              TEXT,
+    duration                  REAL,
+    duration_status           TEXT,
+    publish_status            TEXT,
     views                     INTEGER,
     average_view_duration     REAL,
     average_percentage_viewed REAL,
@@ -306,6 +312,12 @@ def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
 
     # v3: analytics_snapshots 追加列
     for col, typedef in [
+        ("title",              "TEXT"),
+        ("video_type",         "TEXT"),
+        ("published_at",       "TEXT"),
+        ("duration",           "REAL"),
+        ("duration_status",    "TEXT"),
+        ("publish_status",     "TEXT"),
         ("dislikes",           "INTEGER"),
         ("subscribers_gained", "INTEGER"),
         ("subscribers_lost",   "INTEGER"),
@@ -549,6 +561,7 @@ def insert_analytics_snapshot(video_id: str, collected_at: str, window_days: int
         conn.execute("""
             INSERT INTO analytics_snapshots(
                 youtube_video_id, collected_at, window_days,
+                title, video_type, published_at, duration, duration_status, publish_status,
                 views, average_view_duration, average_percentage_viewed,
                 likes, dislikes, comments,
                 subscribers_gained, subscribers_lost, subscribers_net,
@@ -556,8 +569,14 @@ def insert_analytics_snapshot(video_id: str, collected_at: str, window_days: int
                 score, action, analysis_status,
                 is_provisional, audio_cutoff_risk,
                 blacklist_candidate, weak_reason, avoid_pattern)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(youtube_video_id, collected_at, window_days) DO UPDATE SET
+                title=COALESCE(excluded.title, title),
+                video_type=COALESCE(excluded.video_type, video_type),
+                published_at=COALESCE(excluded.published_at, published_at),
+                duration=COALESCE(excluded.duration, duration),
+                duration_status=COALESCE(excluded.duration_status, duration_status),
+                publish_status=excluded.publish_status,
                 views=excluded.views,
                 average_view_duration=excluded.average_view_duration,
                 average_percentage_viewed=excluded.average_percentage_viewed,
@@ -577,6 +596,12 @@ def insert_analytics_snapshot(video_id: str, collected_at: str, window_days: int
                 avoid_pattern=excluded.avoid_pattern
         """, (
             video_id, collected_at, int(window_days),
+            data.get("title"),
+            data.get("video_type"),
+            data.get("published_at"),
+            data.get("duration"),
+            data.get("duration_status"),
+            data.get("publish_status"),
             views,
             data.get("average_view_duration"),
             data.get("average_percentage_viewed"),
@@ -1100,11 +1125,19 @@ def load_latest_analytics_items() -> list[dict]:
         if meta_row is None:
             return []
         latest_at = meta_row["collected_at"]
+        # YouTube API 由来の値（title, video_type 等）は analytics_snapshots に直接保存済み。
+        # render_info / video_metadata からは補助情報のみ取得する。
         rows = conn.execute("""
             SELECT
-                a.youtube_video_id        AS video_id,
+                a.youtube_video_id          AS video_id,
                 a.collected_at,
                 a.window_days,
+                a.title,
+                a.video_type,
+                a.published_at,
+                a.duration,
+                a.duration_status,
+                a.publish_status,
                 a.views,
                 a.average_view_duration,
                 a.average_percentage_viewed,
@@ -1126,22 +1159,15 @@ def load_latest_analytics_items() -> list[dict]:
                 a.blacklist_candidate,
                 a.weak_reason,
                 a.avoid_pattern,
-                ri.video_title            AS title,
-                ri.video_format           AS video_type,
-                ri.actual_duration_sec    AS duration,
-                ri.actual_duration_status AS duration_status,
                 ri.render_engine,
-                vm.genre                  AS genre_group,
-                vm.generation_type        AS generation_kind,
+                vm.genre                    AS genre_group,
+                vm.generation_type          AS generation_kind,
                 vm.source_video_title,
-                vm.purpose                AS generation_purpose,
+                vm.purpose                  AS generation_purpose,
                 vm.character_pattern,
-                vm.cta_topic_request      AS topic_request_cta,
+                vm.cta_topic_request        AS topic_request_cta,
                 vm.cta_topic_request_reason AS topic_request_cta_reason,
-                vm.cta_final_type         AS final_cta_type,
-                ys.publish_status,
-                ys.published_at,
-                ys.privacy_status
+                vm.cta_final_type           AS final_cta_type
             FROM analytics_snapshots a
             LEFT JOIN youtube_status ys ON ys.youtube_video_id = a.youtube_video_id
             LEFT JOIN render_info ri    ON ri.local_id = ys.local_id
