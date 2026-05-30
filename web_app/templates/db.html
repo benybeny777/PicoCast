@@ -133,8 +133,8 @@ async function loadVideos() {
       ? `<a href="https://youtu.be/${v.youtube_video_id}" target="_blank" class="btn btn-xs btn-secondary">YT</a>`
       : '';
     const histLink = `<a href="/history/${encodeURIComponent(v.local_id)}" class="btn btn-xs btn-secondary">詳細</a>`;
-    const anBtn = `<button class="btn btn-xs btn-secondary" onclick="showAnalytics(${JSON.stringify(v.local_id)},${JSON.stringify(v.title||v.local_id)})" title="Analytics履歴を表示">Analytics</button>`;
-    const delBtn = `<button class="btn btn-xs btn-danger" onclick="deleteVideo(${JSON.stringify(v.local_id)})" title="DBからレコードを削除">削除</button>`;
+    const anBtn = `<button class="btn btn-xs btn-secondary" onclick='showAnalytics(${JSON.stringify(v.local_id)},${JSON.stringify(v.title||v.local_id)})' title="Analytics履歴を表示">Analytics</button>`;
+    const delBtn = `<button class="btn btn-xs btn-danger" onclick='deleteVideo(${JSON.stringify(v.local_id)})' title="DBからレコードを削除">削除</button>`;
     return `<tr>
       <td title="${v.local_id}">${(v.title||'—').slice(0,30)}</td>
       <td>${v.video_type||'—'}</td>
