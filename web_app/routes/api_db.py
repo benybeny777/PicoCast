@@ -82,8 +82,12 @@ def api_db_analytics(local_id: str):
             SELECT
                 a.collected_at, a.window_days,
                 a.views, a.average_view_duration, a.average_percentage_viewed,
-                a.likes, a.like_rate, a.comments, a.subscribers_net,
-                a.score, a.action, a.analysis_status
+                a.impressions, a.ctr,
+                a.likes, a.like_rate, a.dislikes, a.dislike_rate,
+                a.comments, a.subscribers_gained, a.subscribers_lost, a.subscribers_net,
+                a.score, a.action, a.analysis_status,
+                a.is_provisional, a.audio_cutoff_risk,
+                a.blacklist_candidate, a.weak_reason, a.avoid_pattern
             FROM analytics_snapshots a
             JOIN youtube_status ys ON ys.youtube_video_id = a.youtube_video_id
             WHERE ys.local_id = ?
@@ -105,6 +109,33 @@ def api_db_delete_video(local_id: str):
         raise HTTPException(status_code=404, detail="レコードが見つかりません")
     delete_video(local_id)
     return {"ok": True, "deleted": local_id}
+
+
+@router.post("/import-analytics")
+def api_db_import_analytics():
+    """output/000_analytics/ の全 JSON を DB に取り込む（ジョブ）。"""
+    _ensure_init()
+    from web_app.job_manager import get_job_manager, _log
+    from web_app.job_manager import Job
+
+    def _run(job: Job):
+        from core.metadata_db import import_all_analytics_jsons
+        from core.output_paths import ANALYTICS_DIR
+        _log(job, f"取り込み対象: {ANALYTICS_DIR}", "info")
+        results = import_all_analytics_jsons(ANALYTICS_DIR)
+        ok = sum(1 for v in results.values() if v >= 0)
+        total = sum(v for v in results.values() if v >= 0)
+        fail = sum(1 for v in results.values() if v < 0)
+        for fname, cnt in results.items():
+            tag = "info" if cnt >= 0 else "error"
+            _log(job, f"{'✅' if cnt >= 0 else '❌'} {fname}: {cnt}件", tag)
+        _log(job, f"完了: {ok}ファイル / {total}件 / 失敗{fail}ファイル", "success")
+        return {"ok": ok, "total": total, "fail": fail}
+
+    mgr = get_job_manager()
+    job = mgr.create_job("analytics_import")
+    mgr.submit(job, _run)
+    return {"job_id": job.job_id}
 
 
 @router.post("/import-all")

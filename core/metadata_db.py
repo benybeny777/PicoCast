@@ -38,7 +38,7 @@ _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
 _db_path_cache: str | None = None
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 # ── パス ────────────────────────────────────────────────────────────────────
@@ -171,20 +171,31 @@ CREATE TABLE IF NOT EXISTS youtube_status (
 );
 
 CREATE TABLE IF NOT EXISTS analytics_snapshots (
-    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
-    youtube_video_id         TEXT NOT NULL,
-    collected_at             TEXT NOT NULL,
-    window_days              INTEGER,
-    views                    INTEGER,
-    average_view_duration    REAL,
+    id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+    youtube_video_id          TEXT NOT NULL,
+    collected_at              TEXT NOT NULL,
+    window_days               INTEGER,
+    views                     INTEGER,
+    average_view_duration     REAL,
     average_percentage_viewed REAL,
-    likes                    INTEGER,
-    comments                 INTEGER,
-    subscribers_net          INTEGER,
-    like_rate                REAL,
-    score                    TEXT,
-    action                   TEXT,
-    analysis_status          TEXT,
+    likes                     INTEGER,
+    dislikes                  INTEGER,
+    comments                  INTEGER,
+    subscribers_gained        INTEGER,
+    subscribers_lost          INTEGER,
+    subscribers_net           INTEGER,
+    impressions               INTEGER,
+    ctr                       REAL,
+    like_rate                 REAL,
+    dislike_rate              REAL,
+    score                     TEXT,
+    action                    TEXT,
+    analysis_status           TEXT,
+    is_provisional            INTEGER,
+    audio_cutoff_risk         INTEGER,
+    blacklist_candidate       INTEGER,
+    weak_reason               TEXT,
+    avoid_pattern             TEXT,
     UNIQUE(youtube_video_id, collected_at, window_days)
 );
 
@@ -233,15 +244,36 @@ CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at);
 """
 
 
+def _add_column(conn: sqlite3.Connection, table: str, col: str, typedef: str) -> None:
+    """列が存在しなければ追加する。"""
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typedef}")
+    except Exception as e:
+        if "duplicate column" not in str(e).lower():
+            raise
+
+
 def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
     """スキーマバージョンに応じてマイグレーションを実行する。"""
     if current_ver < 2:
-        try:
-            conn.execute("ALTER TABLE videos ADD COLUMN script_content TEXT")
-            _logger.info("[SQLite] スキーマ v1→v2: videos.script_content を追加しました")
-        except Exception as e:
-            if "duplicate column" not in str(e).lower():
-                raise
+        _add_column(conn, "videos", "script_content", "TEXT")
+        _logger.info("[SQLite] スキーマ v1→v2: videos.script_content を追加しました")
+    if current_ver < 3:
+        for col, typedef in [
+            ("dislikes",        "INTEGER"),
+            ("subscribers_gained", "INTEGER"),
+            ("subscribers_lost",   "INTEGER"),
+            ("impressions",     "INTEGER"),
+            ("ctr",             "REAL"),
+            ("dislike_rate",    "REAL"),
+            ("is_provisional",  "INTEGER"),
+            ("audio_cutoff_risk", "INTEGER"),
+            ("blacklist_candidate", "INTEGER"),
+            ("weak_reason",     "TEXT"),
+            ("avoid_pattern",   "TEXT"),
+        ]:
+            _add_column(conn, "analytics_snapshots", col, typedef)
+        _logger.info("[SQLite] スキーマ v2→v3: analytics_snapshots に列を追加しました")
 
 
 def initialize_db() -> None:
@@ -439,35 +471,105 @@ def upsert_script_quality(conn: sqlite3.Connection, local_id: str,
 
 def insert_analytics_snapshot(video_id: str, collected_at: str, window_days: int,
                                data: dict) -> None:
-    """analytics データを snapshots テーブルに insert する。重複はスキップ。"""
+    """analytics データを snapshots テーブルに upsert する。"""
+    views = int(data.get("views") or 0)
+    likes = int(data.get("likes") or 0)
+    like_rate = data.get("like_rate") or (round(likes / views * 100, 2) if views > 0 else None)
     with ManagedConnection() as conn:
-        like_rate = None
-        views = data.get("views") or 0
-        likes = data.get("likes") or 0
-        if views > 0:
-            like_rate = round(likes / views * 100, 2)
+        conn.execute("""
+            INSERT INTO analytics_snapshots(
+                youtube_video_id, collected_at, window_days,
+                views, average_view_duration, average_percentage_viewed,
+                likes, dislikes, comments,
+                subscribers_gained, subscribers_lost, subscribers_net,
+                impressions, ctr, like_rate, dislike_rate,
+                score, action, analysis_status,
+                is_provisional, audio_cutoff_risk,
+                blacklist_candidate, weak_reason, avoid_pattern)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(youtube_video_id, collected_at, window_days) DO UPDATE SET
+                views=excluded.views,
+                average_view_duration=excluded.average_view_duration,
+                average_percentage_viewed=excluded.average_percentage_viewed,
+                likes=excluded.likes, dislikes=excluded.dislikes,
+                comments=excluded.comments,
+                subscribers_gained=excluded.subscribers_gained,
+                subscribers_lost=excluded.subscribers_lost,
+                subscribers_net=excluded.subscribers_net,
+                impressions=excluded.impressions, ctr=excluded.ctr,
+                like_rate=excluded.like_rate, dislike_rate=excluded.dislike_rate,
+                score=excluded.score, action=excluded.action,
+                analysis_status=excluded.analysis_status,
+                is_provisional=excluded.is_provisional,
+                audio_cutoff_risk=excluded.audio_cutoff_risk,
+                blacklist_candidate=excluded.blacklist_candidate,
+                weak_reason=excluded.weak_reason,
+                avoid_pattern=excluded.avoid_pattern
+        """, (
+            video_id, collected_at, int(window_days),
+            views,
+            data.get("average_view_duration"),
+            data.get("average_percentage_viewed"),
+            likes,
+            data.get("dislikes"),
+            data.get("comments") or data.get("comment_count"),
+            data.get("subscribers_gained"),
+            data.get("subscribers_lost"),
+            data.get("subscribers_net"),
+            data.get("impressions"),
+            data.get("ctr"),
+            like_rate,
+            data.get("dislike_rate"),
+            str(data.get("score") or ""),
+            data.get("action"),
+            data.get("analysis_status"),
+            int(bool(data.get("is_provisional"))),
+            int(bool(data.get("audio_cutoff_risk"))),
+            int(bool(data.get("blacklist_candidate"))),
+            data.get("weak_reason"),
+            data.get("avoid_pattern"),
+        ))
+        conn.commit()
+
+
+def import_analytics_json(json_path: str) -> int:
+    """
+    analytics_score_YYYYMMDD.json を読んで analytics_snapshots に一括 upsert する。
+    返値: 処理件数
+    """
+    import json as _json
+    with open(json_path, encoding="utf-8") as f:
+        data = _json.load(f)
+    collected_at = data.get("generated_at", "")
+    window_days  = int(data.get("days", 28))
+    items = data.get("items", [])
+    count = 0
+    for item in items:
+        vid = item.get("video_id")
+        if not vid:
+            continue
         try:
-            conn.execute("""
-                INSERT OR IGNORE INTO analytics_snapshots(
-                    youtube_video_id, collected_at, window_days, views,
-                    average_view_duration, average_percentage_viewed,
-                    likes, comments, subscribers_net, like_rate, score, action)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
-            """, (
-                video_id, collected_at, window_days, views,
-                data.get("average_view_duration"),
-                data.get("average_percentage_viewed"),
-                likes,
-                data.get("comments") or data.get("comment_count"),
-                data.get("subscribers_net") or data.get("subscribers_gained"),
-                like_rate,
-                str(data.get("score") or ""),
-                data.get("action"),
-            ))
-            conn.commit()
+            insert_analytics_snapshot(vid, collected_at, window_days, item)
+            count += 1
         except Exception as e:
-            _logger.error("analytics_snapshot insert失敗 %s: %s", video_id, e)
-            raise
+            _logger.warning("[SQLite] analytics import スキップ %s: %s", vid, e)
+    _logger.info("[SQLite] analytics JSON 取込完了: %s → %d件", os.path.basename(json_path), count)
+    return count
+
+
+def import_all_analytics_jsons(analytics_dir: str) -> dict:
+    """analytics_dir 内の全 JSON を取り込む。"""
+    results: dict[str, int] = {}
+    for fname in sorted(os.listdir(analytics_dir)):
+        if not fname.startswith("analytics_score_") or not fname.endswith(".json"):
+            continue
+        path = os.path.join(analytics_dir, fname)
+        try:
+            results[fname] = import_analytics_json(path)
+        except Exception as e:
+            _logger.error("[SQLite] analytics JSON 取込失敗 %s: %s", fname, e)
+            results[fname] = -1
+    return results
 
 
 def upsert_playlist_registration(local_id: str, youtube_video_id: str,

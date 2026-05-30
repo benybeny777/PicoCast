@@ -808,4 +808,14 @@ def save_score_files(items: list[dict[str, Any]], days: int, output_dir=ANALYTIC
         json.dump(data, f, ensure_ascii=False, indent=2)
     with open(tsv_path, "w", encoding="utf-8", newline="") as f:
         f.write(to_tsv(items))
+
+    try:
+        from core.metadata_db import import_analytics_json, is_initialized, initialize_db
+        if not is_initialized():
+            initialize_db()
+        import_analytics_json(json_path)
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).warning("[SQLite] analytics DB書き込み失敗（続行）: %s", e)
+
     return json_path, tsv_path

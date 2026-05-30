@@ -40,7 +40,8 @@
       <label><input type="checkbox" id="f-no-upload" onchange="loadVideos()"> 未アップロードのみ</label>
     </div>
     <button class="btn btn-secondary" onclick="loadVideos()">更新</button>
-    <button class="btn btn-secondary" onclick="importAll()">全件取り込み</button>
+    <button class="btn btn-secondary" onclick="importAll()">動画DB全件取り込み</button>
+    <button class="btn btn-secondary" onclick="importAnalytics()">Analytics JSON取込</button>
   </div>
   <div id="db-stats" class="hint mt-sm"></div>
 </div>
@@ -186,17 +187,22 @@ async function showAnalytics(localId, title) {
     const fmtPct = v => v == null ? '—' : v.toFixed(1) + '%';
     const fmtSec = v => v == null ? '—' : Math.floor(v/60) + 'm' + (v%60|0) + 's';
     body.innerHTML = `
+      <div style="overflow-x:auto">
       <table class="data-table" style="width:100%;font-size:12px">
         <thead><tr>
-          <th>取得日</th><th>期間</th><th>再生数</th><th>平均視聴時間</th>
-          <th>平均視聴率</th><th>いいね</th><th>コメント</th>
-          <th>登録者増減</th><th>スコア</th><th>Action</th>
+          <th>取得日</th><th>期間</th>
+          <th>再生数</th><th>Imp</th><th>CTR</th>
+          <th>平均視聴時間</th><th>平均視聴率</th>
+          <th>いいね</th><th>コメント</th><th>登録者増減</th>
+          <th>スコア</th><th>Action</th><th>状態</th>
         </tr></thead>
         <tbody>
           ${rows.map(a => `<tr>
-            <td style="white-space:nowrap">${(a.collected_at||'').slice(0,16).replace('T',' ')}</td>
+            <td style="white-space:nowrap">${(a.collected_at||'').slice(0,10)}</td>
             <td>${a.window_days != null ? a.window_days+'日' : '—'}</td>
             <td style="text-align:right">${fmt(a.views)}</td>
+            <td style="text-align:right">${fmt(a.impressions)}</td>
+            <td style="text-align:right">${a.ctr != null ? a.ctr.toFixed(1)+'%' : '—'}</td>
             <td style="text-align:right">${fmtSec(a.average_view_duration)}</td>
             <td style="text-align:right">${fmtPct(a.average_percentage_viewed)}</td>
             <td style="text-align:right">${fmt(a.likes)}</td>
@@ -204,9 +210,16 @@ async function showAnalytics(localId, title) {
             <td style="text-align:right">${fmt(a.subscribers_net)}</td>
             <td style="text-align:center">${a.score||'—'}</td>
             <td style="text-align:center">${a.action||'—'}</td>
+            <td style="text-align:center">${a.analysis_status||'—'}</td>
           </tr>`).join('')}
         </tbody>
-      </table>`;
+      </table></div>
+      ${rows.some(a=>a.blacklist_candidate||a.weak_reason||a.avoid_pattern) ? `
+        <div style="margin-top:10px;font-size:12px">
+          ${rows.filter(a=>a.weak_reason||a.avoid_pattern).map(a=>
+            `<div style="color:var(--warn)">${(a.collected_at||'').slice(0,10)}: ${a.weak_reason||''} ${a.avoid_pattern||''}</div>`
+          ).join('')}
+        </div>` : ''}`;
   } catch(e) {
     body.innerHTML = `<p style="color:var(--err)">取得エラー: ${e}</p>`;
   }
@@ -222,6 +235,22 @@ async function deleteVideo(localId) {
     await loadVideos();
   } catch(e) {
     alert('通信エラー: ' + e);
+  }
+}
+
+async function importAnalytics() {
+  if (!confirm('output/000_analytics/ の全 JSON を DB に取り込みます。')) return;
+  const log = document.getElementById('import-log');
+  log.style.display = 'block';
+  log.textContent = 'Analytics 取り込みジョブを登録中...';
+  try {
+    const r = await fetch('/api/db/import-analytics', {method: 'POST'});
+    const d = await r.json();
+    if (!d.job_id) { log.textContent = 'エラー: ' + JSON.stringify(d); return; }
+    log.textContent = `ジョブ登録: ${d.job_id}\n`;
+    pollImportJob(d.job_id, log);
+  } catch(e) {
+    log.textContent = 'エラー: ' + e;
   }
 }
 
