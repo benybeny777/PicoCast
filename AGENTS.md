@@ -19,16 +19,16 @@
 - ファイル編集は `Edit` ツール（Claude Code）または `apply_patch`（Codex）を使う。検索はまず `rg` / `rg --files` を使う。
 - **エラーはすべてそのまま例外として上位に伝播させる。`except Exception: pass` / `except Exception: return default` のようなサイレントスキップ・無言フォールバック・無言デフォルト降格は禁止。** 失敗時は原因が分かるエラーとして即中止する。フォールバック処理はユーザーが明示的に許可した場合のみ実装し、その箇所に `# フォールバック許可: 理由` コメントを付ける。
 - ファイルポインタ、ネットワーク接続、画像/動画オブジェクト、subprocess、ブラウザ/GUIハンドルなどのリソースは明示的に解放する。`with`、`close()`、`terminate()`、一時ファイル削除などを使い、長時間処理では不要な大きい参照を手放してメモリも解放する。
-- プロンプトは `config/prompt_profiles/` の4層構成で管理する。読み込み優先順位（上ほど高い）：
-  1. `local/profiles/{profile_id}/` — channel profile 別個人上書き（Git 管理外・最優先）
-  2. `local/genres/{genre_profile}/` — ジャンル別個人上書き（Git 管理外）
-  3. `genres/{genre_profile}/` — ジャンル固有ルール（Git 管理・必須）
-  4. `common/` — 全ジャンル共通ルール（`core/script_prompts.py` 定数として保持・Git 管理）
-- active profile 以外の `local/` ディレクトリは絶対に読まない。
+- プロンプトテンプレートは `data/settings.db` の `prompt_templates` テーブルで管理する（DB が正本）。
+  - テンプレートは `profile_id` 単位で所有。別 profile のテンプレートは使用不可。
+  - `template_kind`: `script` / `title` / `meeting` の3種。`(profile_id, template_kind)` 単位でデフォルト1件。
+  - 初期データは起動時 `seed_all_profiles()` が `config/prompt_profiles/genres/{genre_profile}/` から投入する。
+  - 実行時のプロンプト組み立ては `core/script_prompts.py` が DB テンプレートから直接行う（ファイル読み込みなし）。
+  - テンプレートが DB に未登録なら RuntimeError（フォールバックなし）。
+  - 編集は設定画面「テンプレート」タブ または `POST /api/prompt-templates` で行う。
+- `config/prompt_profiles/genres/{genre_profile}/` はテンプレート seed 用ファイル置き場（`prompt_profile_loader.py` 経由）。seed 以外では参照しない。
+- `config/prompt_parts/` および `local/` オーバーライド層は廃止済み。ファイルは削除済み。
 - genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
-- `local/` を `samples/` へ同期する旧運用は廃止。ジャンル固有ルールは `genres/{genre_profile}/` に正式追加すること。
-- ジャンル固有の文言を `core/script_prompts.py` に直書きしない。`config/prompt_profiles/genres/*/` に置き、`core/prompt_profile_loader.py` 経由で読み込む。
-- `config/prompt_parts/local/` の変更は旧互換として残すが、新規追加は `prompt_profiles/` 側に行うこと。
 - 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。必ず `config/config.py` に `os.environ.get(...)` 付きで定数として定義する。ループインデックスや内部カウンタなど実装上の定数は対象外。
 - `config/config.py` の各定数には必ず末尾コメント（`# 説明`）を付ける。新規追加・変更時もコメントを省略しない。
 - native立ち絵に表情PNG（`expression` 指定）を使用している場合、口パク・まばたきの差分オーバーレイを同セグメントで無効化する。表情PNGはPSDから合成した専用口・目レイヤーを含むため、base.pngとの差分オーバーレイと重ねると二重口・二重目が生じる。

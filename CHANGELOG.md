@@ -6,6 +6,29 @@
 
 ## 2026-05-31
 
+### prompt_templates DB化・ローカルファイル管理廃止・旧互換コード全除去
+
+#### プロンプトテンプレートの DB 化
+- `data/settings.db` に `prompt_templates` テーブルを新設。テンプレートを profile_id 単位で管理。
+- `config/prompt_profiles/genres/{genre_profile}/` の既存ファイルから初期 seed を自動実行（`seed_all_profiles()`）。
+- `build_script_generation_prompt()` / `build_title_prompt()` / `build_meeting_script_prompt()` / `build_gemini_system_prompt()` がすべて DB テンプレートから読み込むよう変更。ファイル読み込みは seed 時のみ。テンプレート未登録時は RuntimeError（フォールバックなし）。
+- 設定画面に「テンプレート」タブを追加。active チャンネルのテンプレートのみ表示・編集可能。
+- REST API: `GET/POST/PUT/DELETE /api/prompt-templates`・クローン・デフォルト設定・seed 実行。別 profile への操作は 403。
+
+#### ローカルファイル管理廃止
+- `config/prompt_parts/` ディレクトリを削除（food_trivia 用 4 ファイル + local/ 5 ファイル）。
+- `core/prompt_profile_loader.py` の `local/` オーバーライド層（`_LOCAL_DIR` / `_get_active_profile_id` / `_read_local_override` / `get_local_override_text`）を削除。
+
+#### 旧互換コード全除去
+- `core/secret_migration.py` 削除（DB 移行完了済み）。
+- `core/output_migration.py` 削除（ディレクトリ移行完了済み）。
+- `core/channel_info.py` の `_build_from_env()` フォールバック削除。
+- `core/output_paths.py` の `__getattr__` 互換シム・`config.OUTPUT_DIR` フォールバック削除。
+- `config/config.py` の `MAX_BACKGROUNDS` 後方互換エイリアス削除。
+- `core/metadata_db.py` の `upload_record.json` JSON フォールバック読み込み削除。
+- Web UI 設定の「チャンネル」グループ（`CHANNEL_NAME` 等 5 項目）を EDITABLE_CONFIG から削除（channel_profiles が正本）。
+- `POST /api/settings/secrets/remigrate` エンドポイント削除。
+
 ### ドキュメント整合: マルチチャンネル運用ルール・出力構造・prompt_profiles 4層化
 
 - AGENTS.md の出力フォルダ構造を `output/{profile_id}/videos/{テーマ名}/` 配下の現行仕様に更新。

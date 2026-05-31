@@ -86,13 +86,9 @@ yukkurijidou/
 │   ├── parser.py           # 台本パーサー (ScriptParser)
 │   ├── native_renderer.py  # ffmpeg/native MP4レンダラー
 │   ├── opening_quality.py  # 冒頭品質レビュー
-│   ├── script_prompts.py   # 台本生成プロンプト (Python)
-│   ├── script_generation_prompt.txt  # 台本生成プロンプト (テキスト)
-│   ├── prompt_parts/       # タイトル/台本プロンプトの差し込み部品
-│   │   ├── title_dynamic_context_food.md    # 実績データ差し込み欄
-│   │   ├── title_duplicate_context_food.md  # 既存タイトル・既存食材の重複チェック
-│   │   ├── title_used_foods_food.txt        # 初期食べ物用の既存食材リスト
-│   │   └── local/           # 個人用差し替え欄（Git管理外・同名ファイル優先）
+│   ├── script_prompts.py   # 台本生成プロンプト組み立て（DB テンプレートから読む）
+│   ├── prompt_template_store.py  # prompt_templates テーブル CRUD
+│   ├── prompt_template_seeder.py # genres/ ファイルから DB へ初期投入
 │   ├── analytics_score.py  # YouTube Analytics評価・TSV保存
 │   ├── youtube_analytics.py # YouTube Analytics API取得（維持率取得含む）
 │   ├── retention_analysis.py # 視聴者維持率の離脱・ループ点分析
@@ -106,18 +102,18 @@ yukkurijidou/
 │   ├── metadata_db.py      # SQLite メタデータDB（スキーマ定義・upsert/query 関数群）
 │   ├── settings_store.py   # SQLite 設定DB（data/settings.db の読み書き・.env 移行）
 │   ├── secret_store.py     # 認証情報の暗号化保存（AES-GCM + DPAPI/keyring マスターキー）
-│   ├── secret_migration.py # .env / OAuthファイルから encrypted_secrets テーブルへの自動移行
 │   └── ng_words.py         # NGワード置換
 ├── config/
 │   ├── config.py            # 定数・設定
 │   ├── requirements.txt
-│   ├── script_generation_prompt.txt
-│   ├── prompt_parts/        # タイトル・台本プロンプトパーツ
-│   └── samples/             # 復元サンプル（prompt_parts/food/ / scripts/）
+│   └── prompt_profiles/
+│       └── genres/          # ジャンル別プロンプトファイル（seed 用）
+│           ├── food_trivia/
+│           └── urban_legend/
 └── output/                 # 生成物出力先
 ```
 
-プロンプトは `config/prompt_profiles/` の4層構成で管理する。読み込み優先順位（上ほど高い）：`local/profiles/{profile_id}/` > `local/genres/{genre_profile}/` > `genres/{genre_profile}/` > `common/`（`core/script_prompts.py` 定数）。active profile 以外の `local/` は読まない。
+プロンプトテンプレートは `data/settings.db` の `prompt_templates` テーブルで管理する（DB が正本）。実行時は DB から読む。`config/prompt_profiles/genres/{genre_profile}/` は起動時 seed 専用。
 
 ---
 
@@ -1142,25 +1138,14 @@ vidIQ/Analytics分析の反映として、食べ物雑学Shortsでは1行目を�
 - 固定部分: チャンネル方針、タイトル・サムネルール、既知ネタ除外、採点（100点満点）、Shorts / Long判定、出力形式、最終チェック
 - 差し込み部分: 既存タイトル一覧、既存食材リスト、YouTube Analytics実績データ、実績サマリー、今回の生成条件
 
-コード上では `core/script_prompts.py` の `build_title_prompt()` が固定ルールに差し込みデータを合成します。ネタ固有の差し替え部分は `config/prompt_parts/` に分離しています。
+コード上では `core/script_prompts.py` の `build_title_prompt()` / `build_script_generation_prompt()` / `build_meeting_script_prompt()` が、active profile のデフォルト DB テンプレートから組み立てます。実績データ未取得時の TSV 見出しは `TITLE_ANALYTICS_TSV_HEADER` で管理します。
 
-- `title_dynamic_context_food.md`: 実績データ差し込み欄
-- `title_duplicate_context_food.md`: 既存タイトル・既存食材・表記ゆれの重複チェック
-- `title_used_foods_food.txt`: 既に扱った食材リスト
-- `script_generation_prompt.txt`: 台本生成プロンプト全体の個人用差し替え
-
-別ジャンルへ差し替える場合は、上記ファイルを別名で追加し、`build_title_prompt()` が読むファイル名を切り替えます。実績データ未取得時のTSV見出しは `TITLE_ANALYTICS_TSV_HEADER` で管理します。
-
-個人用のネタ設定は `config/prompt_parts/local/` に置きます。このフォルダはGit管理外です。読み込み時は `local/` 側の同名ファイルを優先し、なければGit管理されている `config/prompt_parts/` 側のサンプルを使います。
-
-初回クローン直後は `config/prompt_parts/` 側の食べ物用設定でそのまま動きます。別ジャンル担当者はGit管理ファイルを直接編集せず、自分の環境の `config/prompt_parts/local/` に差し替えファイルを置きます。
+テンプレートの編集は設定画面「テンプレート」タブまたは `POST/PUT /api/prompt-templates` で行います。`config/prompt_parts/` および `local/` オーバーライド層は廃止済みです。
 
 AI編集者向けルール:
 
-- ジャンル固有のプロンプト設定を編集する場合は、Git管理されている `config/prompt_profiles/genres/{genre_profile}/` を直接編集しない。
-- 個人上書きは `config/prompt_profiles/local/genres/{genre_profile}/` または `config/prompt_profiles/local/profiles/{profile_id}/` に同名ファイルを置く（Git 管理外）。
-- channel profile 別の上書きが必要な場合は `local/profiles/{profile_id}/` を使う。ジャンル共通の上書きは `local/genres/{genre_profile}/` を使う。
-- 旧 `config/prompt_parts/local/` は廃止済み。新規追加は `prompt_profiles/` 側に行うこと。
+- プロンプトを変更する場合は設定画面「テンプレート」タブで直接 DB テンプレートを編集する。
+- ジャンル全体の共通変更は `config/prompt_profiles/genres/{genre_profile}/` のファイルを更新し、`POST /api/prompt-templates/seed` で再 seed する（既存テンプレートはスキップされるため手動削除 → 再 seed が必要）。
 
 タイトル・サムネの基本方針:
 
@@ -1622,6 +1607,43 @@ Analytics データは `metadata.db` の `analytics_snapshots` テーブルに�
 - `DELETE /api/channels/{id}` — 削除（confirmed=true 必須。アクティブは削除不可）
 - `GET /api/channels/prompt-profiles` — 利用可能な genre_profile 一覧
 
+### `prompt_templates` テーブル（`data/settings.db`）
+
+プロンプトテンプレートは channel profile 単位で管理する。テンプレートの使用可否は `profile_id` が主キー。
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| `template_id` | TEXT PK | UUID |
+| `profile_id` | TEXT FK | channel_profiles.profile_id |
+| `template_name` | TEXT | テンプレート名（profile_id 内でユニーク） |
+| `template_kind` | TEXT | `script` / `title` / `meeting` |
+| `genre_profile` | TEXT | 参考情報（seed 元ジャンル）。使用可否の主キーは profile_id |
+| `is_default` | INTEGER | (profile_id, template_kind) 単位で1件のみ |
+| `is_enabled` | INTEGER | 0=無効 |
+| `system_rules` | TEXT | ジャンル固有のチャンネルルール（script_context.md 相当） |
+| `script_rules` | TEXT | 共通ルール（script 種別のみ・COMMON_SCRIPT_RULES 等） |
+| `title_rules` | TEXT | タイトル案ルール（title 種別のみ） |
+| `meeting_rules` | TEXT | ネタ会議共通ルール（meeting 種別のみ） |
+| `ng_rules` | TEXT | NG ルール（任意） |
+| `default_hashtags` | TEXT | デフォルトハッシュタグ |
+| `default_playlist_category` | TEXT | デフォルト再生リストカテゴリ |
+| `created_at` / `updated_at` | TEXT | ISO8601 |
+
+制約: `(profile_id, template_kind)` に `is_default=1` は UNIQUE partial index で保証。
+
+#### API
+
+- `GET /api/prompt-templates` — active profile のテンプレート一覧（`?kind=script` で絞り込み可）
+- `POST /api/prompt-templates` — active profile にテンプレート作成
+- `GET /api/prompt-templates/{id}` — 取得（active profile 所属のみ）
+- `PUT /api/prompt-templates/{id}` — 更新（active profile 所属のみ）
+- `POST /api/prompt-templates/{id}/set-default` — デフォルト設定
+- `POST /api/prompt-templates/{id}/clone` — 別 profile へ複製
+- `DELETE /api/prompt-templates/{id}` — 削除（active profile 所属のみ）
+- `POST /api/prompt-templates/seed` — 全 profile へのファイルからの seed 実行（冪等）
+
+別 profile の template_id を指定した場合は 403 を返す。
+
 ### プロンプトプロファイル構成
 
 ```
@@ -1635,28 +1657,9 @@ config/prompt_profiles/
       playlist_categories.md← 再生リストカテゴリ名
       used_topics.txt       ← 使用済みトピック
     urban_legend/           ← 同構成
-  local/
-    food_trivia/            ← git管理外・個人上書き（任意）
-    urban_legend/
 ```
 
-読み込み優先順位: `local/profiles/{profile_id}/` > `local/genres/{genre_profile}/` > `genres/{genre_profile}/` > `common/`
-genre_profile が存在しない場合はエラー停止（別ジャンルへのフォールバック禁止）。
-
-### 初回移行
-
-アプリ起動時の lifespan で `ensure_initial_profile_from_env()` を実行し、
-`channel_profiles` が0件の場合のみ環境変数（CHANNEL_NAME / CHANNEL_HANDLE 等）から初期 profile を自動作成する。
-
-### 環境変数（後方互換）
-
-| 変数名 | 説明 |
-|---|---|
-| `CHANNEL_NAME` | 初回移行時に使用。移行後は channel_profiles が正本 |
-| `CHANNEL_HANDLE` | 同上 |
-| `CHANNEL_THEME` | 同上 |
-| `CHANNEL_ACCENT_COLOR` | 同上 |
-| `DEFAULT_HASHTAGS` | 同上 |
+`genres/{genre_profile}/` ファイルは起動時 seed 専用。実行時は DB テンプレートを参照する。genre_profile が存在しない場合はエラー停止（別ジャンルへのフォールバック禁止）。
 
 ### 設定例（.env）
 
@@ -1731,22 +1734,9 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 - OAuth refresh 後のトークンは `save_secret()` で DB へ再保存する
 - `token.json` / `token_analytics.json` を恒久ファイルとして新規作成しない
 
-#### 既存ファイルからの自動移行
+#### 既存ファイルからの移行（完了済み）
 
-アプリ起動時の lifespan で `core/secret_migration.py: migrate_existing_secret_files()` を実行する。
-DB に既存値がある場合はスキップ（上書きしない）。
-
-| 移行元 | 移行先 `secret_type` |
-|---|---|
-| `.env` の `GOOGLE_API_KEY` | `google_api_key` |
-| `.env` の `OPENAI_API_KEY` | `openai_api_key` |
-| `.env` の `HF_TOKEN` | `hf_token` |
-| `client_secrets.json` | `youtube_client_secrets` |
-| `token.json` | `youtube_upload_token` |
-| `token_analytics.json` | `youtube_analytics_token` |
-
-移行後、`.env` の認証キー行（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）は自動削除する。
-他の設定行は保持する。移行失敗したキーは `.env` に残す。
+`core/secret_migration.py` による自動移行は 2026-05-31 に完了し、モジュールは削除済み。既存の `.env` / OAuth JSON ファイルは手動で削除できる（設定画面「APIキー」タブ）。
 `client_secrets.json` / `token.json` / `token_analytics.json` は自動削除しない。削除は設定画面の「旧認証ファイル削除」ボタンで行う。
 
 ### 廃止したローカルファイル
