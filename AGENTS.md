@@ -19,10 +19,13 @@
 - ファイル編集は `Edit` ツール（Claude Code）または `apply_patch`（Codex）を使う。検索はまず `rg` / `rg --files` を使う。
 - **エラーはすべてそのまま例外として上位に伝播させる。`except Exception: pass` / `except Exception: return default` のようなサイレントスキップ・無言フォールバック・無言デフォルト降格は禁止。** 失敗時は原因が分かるエラーとして即中止する。フォールバック処理はユーザーが明示的に許可した場合のみ実装し、その箇所に `# フォールバック許可: 理由` コメントを付ける。
 - ファイルポインタ、ネットワーク接続、画像/動画オブジェクト、subprocess、ブラウザ/GUIハンドルなどのリソースは明示的に解放する。`with`、`close()`、`terminate()`、一時ファイル削除などを使い、長時間処理では不要な大きい参照を手放してメモリも解放する。
-- プロンプトは `config/prompt_profiles/` の3層構成で管理する。
-  - `common/` — 全ジャンル共通ルール（Git 管理）
-  - `genres/{genre_profile}/` — ジャンル固有ルール（Git 管理）
-  - `local/{genre_profile}/` — 個人環境上書き（Git 管理外）
+- プロンプトは `config/prompt_profiles/` の4層構成で管理する。読み込み優先順位（上ほど高い）：
+  1. `local/profiles/{profile_id}/` — channel profile 別個人上書き（Git 管理外・最優先）
+  2. `local/genres/{genre_profile}/` — ジャンル別個人上書き（Git 管理外）
+  3. `genres/{genre_profile}/` — ジャンル固有ルール（Git 管理・必須）
+  4. `common/` — 全ジャンル共通ルール（`core/script_prompts.py` 定数として保持・Git 管理）
+- active profile 以外の `local/` ディレクトリは絶対に読まない。
+- genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
 - `local/` を `samples/` へ同期する旧運用は廃止。ジャンル固有ルールは `genres/{genre_profile}/` に正式追加すること。
 - ジャンル固有の文言を `core/script_prompts.py` に直書きしない。`config/prompt_profiles/genres/*/` に置き、`core/prompt_profile_loader.py` 経由で読み込む。
 - `config/prompt_parts/local/` の変更は旧互換として残すが、新規追加は `prompt_profiles/` 側に行うこと。
@@ -57,9 +60,18 @@
 - Starlette 1.1.0以降: `TemplateResponse(request, name, context)` の引数順に従う（旧API `TemplateResponse(name, {request: ...})` は使わない）。
 - 設定画面で保存した値はアプリ再起動なしで即時反映する。`config_service._apply_runtime_updates()` で `setattr(cfg, key, value)` と `sys.modules` 全走査による伝搬を行う。`WEB_UI_PORT` など「アプリ起動時に固定されるパラメータ」だけを例外とし、それらは EDITABLE_CONFIG から除外する。UI上に「再起動後に反映」という文言を出さない。
 
+## Web UI チャンネル切替
+
+- Web UIヘッダーに現在の active channel profile（チャンネル名 / ハンドル）を常時表示する。
+- Web UI上で登録済み channel profile をいつでも切り替えられること。1つのWeb UIで複数プロファイルを選択・切替できることが完了条件であり、cloneごとに1プロファイルを固定する運用だけでは不十分。
+- チャンネル切替後、以下はすべて active profile 基準に切り替わること：履歴・生成・プロンプト・アップロード候補・Analytics・固定コメント・スケジュール・再生リスト。
+- active profile 未設定時は YouTube操作とプロンプト生成を禁止する（`require_active_profile()` で例外）。
+- 別 profile の `output_root` へのアクセスは `security.py: safe_output_path()` が 403 で拒否する。profile 間で output が混ざることを防ぐ。
+
 ## プロジェクト概要
 
-「ずんだもんとめたんの食べ物雑学堂」YouTube チャンネル向け動画自動生成ツール。
+複数のYouTubeチャンネル向けに、台本生成・VOICEVOX音声・画像生成・native MP4・YouTubeアップロード・Analytics確認までを行うローカルWebツール。
+「食べ物雑学堂」「都市伝説」などは channel profile / genre_profile の一例。チャンネル固有の設定はすべて channel_profiles テーブルで管理する。
 台本 → VOICEVOX音声 → Nano Banana背景画像 → native MP4 → YouTubeアップロード。
 
 ## 実行環境
@@ -92,24 +104,21 @@
 ## 出力フォルダ構造
 
 ```text
-output/{テーマ名}/
-├── script.txt
-├── {テーマ名}_native.mp4      ← native出力時
-├── thumbnails/
-│   ├── thumbnail.png
-│   └── {テーマ名}_thumbnail_A/B/C.png  (Longのみ)
-├── _meta/
-│   ├── metadata.txt
-│   ├── opening_review.json
-│   ├── duration_review.json
-│   ├── final_review.json
-│   ├── render_info.json
-│   ├── upload_record.json
-│   ├── thumbnail_ab_test.json  (Longのみ)
-│   └── title_ab_test.json      (Longのみ)
-├── audio/
-└── backgrounds/
+output/{profile_id}/          ← active profile の output_root
+├── videos/
+│   └── {テーマ名}/           ← 生成中・未アップロード
+│       ├── script.txt
+│       ├── {テーマ名}_native.mp4
+│       ├── thumbnails/
+│       ├── audio/
+│       └── backgrounds/
+├── 000_uploaded/             ← アップロード済みアーカイブ（履歴にも表示）
+├── 000_backups/              ← 生成時の旧フォルダバックアップ
+└── 000_data/
+    └── metadata.db           ← 動画メタ・youtube_status・Analytics・ジョブ履歴（正本）
 ```
+
+動画生成・履歴・画像確認・再レンダー・アップロード候補・Analytics・固定コメント・スケジュールは、必ず active profile の `output_root` 配下だけを参照する。別 profile の `output_root` へのアクセスは `safe_output_path()` が拒否する。
 
 ## 重要な規約・注意点
 

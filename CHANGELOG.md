@@ -2,6 +2,19 @@
 
 このファイルには、運用や品質に影響する大きめの変更を残します。
 
+---
+
+## 2026-05-31
+
+### ドキュメント整合: マルチチャンネル運用ルール・出力構造・prompt_profiles 4層化
+
+- AGENTS.md の出力フォルダ構造を `output/{profile_id}/videos/{テーマ名}/` 配下の現行仕様に更新。
+- AGENTS.md に「Web UI チャンネル切替」セクションを追加。1つのWeb UIで複数 profile を選択・切替できることを完了条件として明記。cloneごと固定運用は不十分と明記。
+- prompt_profiles の local 読み込み順を4層に整理: `local/profiles/{profile_id}/` > `local/genres/{genre_profile}/` > `genres/{genre_profile}/` > `common/`。`core/prompt_profile_loader.py` のパスも同様に更新。
+- AGENTS.md・SPEC.md のプロジェクト概要から食べ物チャンネル固定表現を除去し、複数チャンネル対応の汎用ツールとして再記述。
+- SPEC.md の Shorts アップロードスロットを誤記（0:00/12:00/21:00）から正しい値（7:00/12:00/19:00）に修正（コード・AGENTS.md との整合）。
+- SPEC.md・README.md の旧 `prompt_parts/local/` 参照を `prompt_profiles/` ベースの記述に更新。
+
 書く目安:
 - プロンプト方針を大きく変えた
 - YouTube Analytics、アップロード、スケジュールなど運用フローを変えた

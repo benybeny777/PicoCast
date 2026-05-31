@@ -7,7 +7,7 @@
 
 ## 概要
 
-食べ物雑学ゆっくり解説動画（Shorts / Long）を自動生成してYouTubeにアップロードするシステム。
+複数のYouTubeチャンネル向けに、台本生成・VOICEVOX音声・画像生成・native MP4・YouTubeアップロード・Analytics確認までを行うローカルWebツール。チャンネルごとの設定は channel profile で管理し、Web UI上でいつでも切り替えられる。
 
 - **台本生成** → Gemini AI
 - **音声生成** → VOICEVOX (ずんだもん / 四国めたん)（よみがな正規化を SudachiPy + 自前辞書で前処理）
@@ -117,7 +117,7 @@ yukkurijidou/
 └── output/                 # 生成物出力先
 ```
 
-`core/script_prompts.py` は `config/prompt_parts/local/` に同名ファイルがある場合、Git管理側の `config/prompt_parts/` より `local/` を優先して読み込む。これにより初期状態は食べ物用設定で動き、別ジャンル担当者は自分の `local/` だけを編集できる。
+プロンプトは `config/prompt_profiles/` の4層構成で管理する。読み込み優先順位（上ほど高い）：`local/profiles/{profile_id}/` > `local/genres/{genre_profile}/` > `genres/{genre_profile}/` > `common/`（`core/script_prompts.py` 定数）。active profile 以外の `local/` は読まない。
 
 ---
 
@@ -131,7 +131,7 @@ yukkurijidou/
 - 尺計算式（native）: `各セリフ本文の文字数 ÷ (5.4 × 音声速度) + 0.1 × 音声速度 = 推定尺`
 - 背景枚数: 6〜9枚（Shorts背景は下半分をキャラ立ち絵・字幕用に余白として空ける。食べ物・図解・重要テキストは画面上半分〜中央上寄せに配置。各背景プロンプトに「画面下半分はキャラ立ち絵用に余白を広く空ける。」を必ず含める）
 - 再生速度（native）: イントロ1.40x / 本編1.25x
-- アップロードスロット: 毎日 0:00 / 12:00 / 21:00 (JST)（視聴者アクティブ時間帯検証枠）
+- アップロードスロット: 毎日 7:00 / 12:00 / 19:00 (JST)（視聴者アクティブ時間帯検証枠）
 
 ### Long
 - 尺: **5〜10分（理想5〜8分）**
@@ -394,7 +394,7 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 | 種別 | スロット | 日程 |
 |---|---|---|
-| Shorts | 0:00 / 12:00 / 21:00 | 毎日（視聴者アクティブ時間帯検証枠） |
+| Shorts | 7:00 / 12:00 / 19:00 | 毎日（視聴者アクティブ時間帯検証枠） |
 | Long | 21:00（毎日）/ 12:00（土日のみ） | 毎日 |
 
 - スロット割当範囲: 最大90日先まで探索
@@ -1067,21 +1067,14 @@ output/{profile_id}/videos/{テーマ名}/
 
 初回セットアップでは、必ずプロンプト設定を確認します。
 
-初回クローン直後は、Git管理されている食べ物用プロンプト設定でそのまま動きます。別ジャンルで使う場合は、Git管理ファイルを直接編集せず、必ず `config/prompt_parts/local/` に同名の差し替えファイルを置きます。`local/` はGit管理外なので、他人の設定を上書きしません。
-
-食べ物用設定を復元する場合:
-
-```powershell
-New-Item -ItemType Directory -Force -Path config\prompt_parts\local
-Copy-Item -Path config\samples\prompt_parts\food\* -Destination config\prompt_parts\local\ -Force
-```
+プロンプトは `config/prompt_profiles/genres/{genre_profile}/` にジャンル固有設定を置く。個人上書きは `config/prompt_profiles/local/genres/{genre_profile}/` または `config/prompt_profiles/local/profiles/{profile_id}/` に置く（Git 管理外）。旧 `config/prompt_parts/local/` は廃止済み。
 
 ### 生成
 
 1. VOICEVOXを起動し、通常はOS別の起動スクリプトでWeb UIを起動（手動起動時のみ `python -m web_app.app --open-browser` を使用）
 2. 必要に応じて `📊 アナリティクス` で実績データを取得
 3. `Shortsタイトル案` でタイトル案作成プロンプトをコピーし、候補を作成
-4. `AI台本作成` で食べ物雑学特化の台本作成プロンプトをコピー
+4. `AI台本作成` で active profile のジャンル設定に基づく台本作成プロンプトをコピー
 5. 作成した台本を Web UI の台本欄に貼り付け
 6. 必要に応じて画風を選ぶ
 7. `生成開始` を押す
@@ -1092,7 +1085,7 @@ Copy-Item -Path config\samples\prompt_parts\food\* -Destination config\prompt_pa
 
 ### Shortsタイトル案 / Longタイトル案
 
-`Shortsタイトル案` は、既存タイトルと直近の YouTube Analytics 実績データを使って、Shorts寄りの食べ物雑学向けタイトル案プロンプトをコピーします。`Longタイトル案` は、Long候補だけを出す条件を付けたプロンプトをコピーします。
+`Shortsタイトル案` は、既存タイトルと直近の YouTube Analytics 実績データを使って、active profile のジャンル設定に基づくタイトル案プロンプトをコピーします。`Longタイトル案` は、Long候補だけを出す条件を付けたプロンプトをコピーします。
 
 - `metadata.db` の `analytics_snapshots` テーブルから直近データがある場合、最大80件をプロンプトへ自動差し込み
 - 実績データがない場合は、実績根拠のない案を `新規開拓枠` として扱う指示を追加
@@ -1164,26 +1157,10 @@ vidIQ/Analytics分析の反映として、食べ物雑学Shortsでは1行目を�
 
 AI編集者向けルール:
 
-- ネタ固有のプロンプト、既存食材リスト、別ジャンル用設定を編集する場合は、Git管理されている `config/prompt_parts/*.md` / `*.txt` を直接編集しない。
-- 必ず `config/prompt_parts/local/` の同名ファイルを編集する。
-- `local/` に同名ファイルがない場合は、`config/prompt_parts/` からコピーして作成してから編集する。
-- 例: `config/prompt_parts/title_used_foods_food.txt` を変えたい場合は、`config/prompt_parts/local/title_used_foods_food.txt` を編集する。
-- 共有サンプルを更新したい場合だけ、明示的に指示されたうえで `config/samples/prompt_parts/` または `config/prompt_parts/` を編集する。
-
-例:
-
-- `config/prompt_parts/local/title_used_foods_food.txt`
-- `config/prompt_parts/local/title_dynamic_context_food.md`
-- `config/prompt_parts/local/title_duplicate_context_food.md`
-- `config/prompt_parts/local/script_generation_prompt.txt`
-
-別ジャンル担当者は自分の環境の `local/` に差し替え用ファイルを置けば、Git pull / push で他人のネタ設定を上書きしません。共有用の見本台本は `config/samples/scripts/` に置きます。
-
-食べ物用の復元サンプルは `config/samples/prompt_parts/food/` に置きます。`config/prompt_parts/local/` を消してしまった場合は、以下をコピーすれば食べ物用設定を戻せます。
-
-```powershell
-Copy-Item -Path config\samples\prompt_parts\food\* -Destination config\prompt_parts\local\ -Force
-```
+- ジャンル固有のプロンプト設定を編集する場合は、Git管理されている `config/prompt_profiles/genres/{genre_profile}/` を直接編集しない。
+- 個人上書きは `config/prompt_profiles/local/genres/{genre_profile}/` または `config/prompt_profiles/local/profiles/{profile_id}/` に同名ファイルを置く（Git 管理外）。
+- channel profile 別の上書きが必要な場合は `local/profiles/{profile_id}/` を使う。ジャンル共通の上書きは `local/genres/{genre_profile}/` を使う。
+- 旧 `config/prompt_parts/local/` は廃止済み。新規追加は `prompt_profiles/` 側に行うこと。
 
 タイトル・サムネの基本方針:
 
@@ -1349,7 +1326,7 @@ YouTube Studio 側で予約動画を手動公開した場合:
 3. `公開予定を変更` を押す
 4. 日付と時間をプルダウンから選択
 
-この操作は YouTube の `publishAt` を更新する。対象動画には YouTube の `video_id` が必要。指定可能時刻は Shorts が 0:00 / 12:00 / 21:00、Long が平日 21:00、土日 12:00 / 21:00。移動先スロットに同じ動画タイプの別動画がある場合は、YouTube 側で2本の公開予定時刻を入れ替える。
+この操作は YouTube の `publishAt` を更新する。対象動画には YouTube の `video_id` が必要。指定可能時刻は Shorts が 7:00 / 12:00 / 19:00、Long が平日 21:00、土日 12:00 / 21:00。移動先スロットに同じ動画タイプの別動画がある場合は、YouTube 側で2本の公開予定時刻を入れ替える。
 
 予約スロットを前詰めしたい場合:
 
@@ -1663,7 +1640,7 @@ config/prompt_profiles/
     urban_legend/
 ```
 
-読み込み優先順位: `local/{genre_profile}/` > `genres/{genre_profile}/`
+読み込み優先順位: `local/profiles/{profile_id}/` > `local/genres/{genre_profile}/` > `genres/{genre_profile}/` > `common/`
 genre_profile が存在しない場合はエラー停止（別ジャンルへのフォールバック禁止）。
 
 ### 初回移行

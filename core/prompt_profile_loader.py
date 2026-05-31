@@ -3,18 +3,20 @@
 
 config/prompt_profiles/ の以下の順でファイルを読み込み、プロンプト文字列を組み立てる。
 
-  1. config/prompt_profiles/genres/{genre_profile}/  (必須)
-  2. config/prompt_profiles/local/{genre_profile}/   (任意・git管理外)
+  1. local/profiles/{profile_id}/  — channel profile 別個人上書き（Git 管理外・最優先）
+  2. local/genres/{genre_profile}/ — ジャンル別個人上書き（Git 管理外）
+  3. genres/{genre_profile}/       — ジャンル固有ルール（Git 管理・必須）
+  4. common/                       — 全ジャンル共通ルール（core/script_prompts.py 定数として保持）
 
-common/ の共通ルールは core/script_prompts.py の定数として持つ（COMMON_SCRIPT_RULES 等）。
+active profile 以外の local/ ディレクトリは絶対に読まない。
 genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
 
 使い方:
-  from core.prompt_profile_loader import load_prompt_profile, build_script_prompt_context
+  from core.prompt_profile_loader import build_script_prompt_context
   from core.channel_profile import require_active_profile
 
   profile = require_active_profile()
-  prompt = build_script_prompt_context(profile)
+  prompt = build_script_prompt_context(profile.genre_profile)
 """
 from __future__ import annotations
 
@@ -90,16 +92,16 @@ def _read_genre_file(genre_profile: str, filename: str, required: bool = True) -
     """
     genre_path = _GENRES_DIR / genre_profile / filename
 
-    # 1. local/{profile_id}/
+    # 1. local/profiles/{profile_id}/
     profile_id = _get_active_profile_id()
-    if profile_id and profile_id != genre_profile:
-        local_profile_path = _LOCAL_DIR / profile_id / filename
+    if profile_id:
+        local_profile_path = _LOCAL_DIR / "profiles" / profile_id / filename
         if local_profile_path.exists():
             _logger.debug("[PromptLoader] local profile override: %s", local_profile_path)
             return local_profile_path.read_text(encoding="utf-8").strip()
 
-    # 2. local/{genre_profile}/
-    local_genre_path = _LOCAL_DIR / genre_profile / filename
+    # 2. local/genres/{genre_profile}/
+    local_genre_path = _LOCAL_DIR / "genres" / genre_profile / filename
     if local_genre_path.exists():
         _logger.debug("[PromptLoader] local genre override: %s", local_genre_path)
         return local_genre_path.read_text(encoding="utf-8").strip()
@@ -120,8 +122,8 @@ def _read_genre_file_optional(genre_profile: str, filename: str) -> str:
 
 
 def _read_local_override(genre_profile: str, filename: str = "overrides.md") -> str:
-    """local/{genre_profile}/{filename} が存在すれば読む。なければ空文字。"""
-    path = _LOCAL_DIR / genre_profile / filename
+    """local/genres/{genre_profile}/{filename} が存在すれば読む。なければ空文字。"""
+    path = _LOCAL_DIR / "genres" / genre_profile / filename
     return path.read_text(encoding="utf-8").strip() if path.exists() else ""
 
 
