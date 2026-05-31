@@ -985,7 +985,6 @@ def sync_folder_to_db(output_dir: str) -> None:
             upsert_render_info(local_id, ri_json)
             render_info = ri_json
 
-    # upload_record: DB(youtube_status)を正本とし、無ければ旧 JSON から取り込む
     upload_rec: dict = {}
     with ManagedConnection() as _c:
         _row = _c.execute(
@@ -993,8 +992,6 @@ def sync_folder_to_db(output_dir: str) -> None:
         ).fetchone()
         if _row and _row[0]:
             upload_rec = {"video_id": _row[0]}
-    if not upload_rec:
-        upload_rec = _safe_json(os.path.join(meta_dir, "upload_record.json"))
 
     # opening_review: DB を正本とし、無ければ旧 JSON から取り込む
     opening_rev: dict = {}

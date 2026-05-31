@@ -43,7 +43,7 @@ def save_api_key(secret_type: str, value: str) -> list[str]:
 
 def save_secrets(updates: dict[str, str]) -> list[str]:
     """
-    複数の APIキーをまとめて保存する（後方互換用）。
+    複数の APIキーをまとめて保存する。
     空文字は「変更なし」として無視する。
     """
     errors: list[str] = []
@@ -171,26 +171,7 @@ def _check_migration_before_delete(filename: str) -> dict:
     from core.secret_store import has_secret
 
     if filename == ".env":
-        # .env の認証キーが DB に移行済みかチェック
-        # .env から読んで比較はしない（値をメモリに持たない）
-        # has_secret で DB 側の存在だけ確認する
-        # .env に auth キーが残っているかどうかは migration.py の _read_env_auth_keys() で確認
-        from core.secret_migration import _read_env_auth_keys
-        env_keys = _read_env_auth_keys()
-        _type_map = {
-            "GOOGLE_API_KEY": "google_api_key",
-            "OPENAI_API_KEY": "openai_api_key",
-            "HF_TOKEN": "hf_token",
-        }
-        not_migrated = [
-            env_key for env_key, secret_type in _type_map.items()
-            if env_keys.get(env_key) and not has_secret(secret_type)
-        ]
-        if not_migrated:
-            return {
-                "ok": False,
-                "error": f"未移行の認証情報があります: {not_migrated}。先に設定画面で移行してください。",
-            }
+        pass  # .env への auth キー書き込みは廃止済み
 
     elif filename == "client_secrets.json":
         if not has_secret("youtube_client_secrets"):
@@ -207,11 +188,3 @@ def _check_migration_before_delete(filename: str) -> dict:
     return {"ok": True}
 
 
-def remigrate_from_legacy(profile_id: str = "default") -> dict:
-    """
-    旧認証ファイルから DB への移行を再実行する（上書き不可）。
-    DB に既存の値がある場合はスキップされる。
-    """
-    from core.secret_migration import migrate_existing_secret_files
-    result = migrate_existing_secret_files(profile_id=profile_id)
-    return result

@@ -12,9 +12,6 @@ TITLE_ANALYTICS_TSV_HEADER = (
 )
 
 _PROJECT_ROOT = Path(__file__).parent.parent
-# 旧 prompt_parts は後方互換でそのまま残す（ファイル参照廃止予定）
-PROMPT_PARTS_DIR = _PROJECT_ROOT / "config" / "prompt_parts"
-PROMPT_PARTS_LOCAL_DIR = PROMPT_PARTS_DIR / "local"
 
 METADATA_FORMAT = """\
 動画形式: （テーマを見て「Shorts」か「Long」かを判定して記載。必ずどちらか一方のみ）
@@ -415,23 +412,13 @@ METAN_TSUNDERE_RULES_MEETING = """
 """
 
 
-def build_script_generation_prompt(existing_titles=None, genre_profile: str | None = None) -> str:
+def build_script_generation_prompt(existing_titles=None, genre_profile: str = "") -> str:
     """
     台本生成プロンプトを組み立てる。
-
-    genre_profile が指定された場合は config/prompt_profiles/genres/{genre_profile}/script_context.md を使う。
-    未指定の場合は旧来の local/script_generation_prompt.txt にフォールバック（後方互換）。
+    config/prompt_profiles/genres/{genre_profile}/script_context.md を使う。
     """
-    if genre_profile:
-        from core.prompt_profile_loader import build_script_prompt_context
-        base = build_script_prompt_context(genre_profile)
-    else:
-        local_prompt = PROMPT_PARTS_LOCAL_DIR / "script_generation_prompt.txt"
-        prompt_path = (
-            local_prompt if local_prompt.exists()
-            else _PROJECT_ROOT / "config" / "script_generation_prompt.txt"
-        )
-        base = prompt_path.read_text(encoding="utf-8").strip()
+    from core.prompt_profile_loader import build_script_prompt_context
+    base = build_script_prompt_context(genre_profile)
 
     if existing_titles:
         lines = "\n".join(f"・{t}" for t in existing_titles)
@@ -446,21 +433,13 @@ def build_script_generation_prompt(existing_titles=None, genre_profile: str | No
 def build_meeting_script_prompt(
     existing_titles=None,
     analytics_tsv=None,
-    genre_profile: str | None = None,
+    genre_profile: str = "",
 ) -> str:
     """
-    ネタ会議プロンプトを組み立てる。genre_profile が指定された場合はジャンル別ファイルを使う。
+    ネタ会議プロンプトを組み立てる。genres/{genre_profile}/meeting_context.md を使う。
     """
-    if genre_profile:
-        from core.prompt_profile_loader import build_meeting_prompt_context
-        base = build_meeting_prompt_context(genre_profile)
-    else:
-        local_prompt = PROMPT_PARTS_LOCAL_DIR / "script_generation_prompt_meeting.txt"
-        prompt_path = (
-            local_prompt if local_prompt.exists()
-            else PROMPT_PARTS_DIR / "script_generation_prompt_meeting.txt"
-        )
-        base = prompt_path.read_text(encoding="utf-8").strip()
+    from core.prompt_profile_loader import build_meeting_prompt_context
+    base = build_meeting_prompt_context(genre_profile)
 
     existing_titles = existing_titles or []
     existing_title_lines = _format_existing_title_lines(existing_titles)
@@ -478,11 +457,6 @@ def build_meeting_script_prompt(
     return base + appended_context + METAN_TSUNDERE_RULES + METAN_TSUNDERE_RULES_MEETING
 
 
-def build_vidiq_prompt() -> str:
-    """旧インポート向け後方互換エイリアス。"""
-    return build_script_generation_prompt()
-
-
 def _format_existing_title_lines(existing_titles) -> str:
     return "\n".join(f"・{title}" for title in existing_titles) if existing_titles else "・既存タイトルなし"
 
@@ -497,50 +471,21 @@ def _format_title_analytics_block(analytics_tsv=None) -> str:
     )
 
 
-def _prompt_part_path(filename: str) -> Path:
-    local_path = PROMPT_PARTS_LOCAL_DIR / filename
-    if local_path.exists():
-        return local_path
-    return PROMPT_PARTS_DIR / filename
-
-
-def _format_prompt_part(filename: str, **values) -> str:
-    template = _prompt_part_path(filename).read_text(encoding="utf-8").strip()
-    return template.format(**values)
-
-
 def build_title_prompt(
     existing_titles=None,
     analytics_tsv=None,
-    genre_profile: str | None = None,
+    genre_profile: str = "",
 ) -> str:
     """
     タイトル案プロンプトを組み立てる。
-    genre_profile が指定された場合は genres/{genre_profile}/title_context.md を使う。
-    未指定の場合は旧来の prompt_parts ファイルにフォールバック（後方互換）。
+    genres/{genre_profile}/title_context.md を使う。
     """
     existing_titles = existing_titles or []
     existing_title_lines = _format_existing_title_lines(existing_titles)
     analytics_data_block = _format_title_analytics_block(analytics_tsv)
 
-    if genre_profile:
-        from core.prompt_profile_loader import build_title_prompt_context
-        base = build_title_prompt_context(genre_profile)
-    else:
-        # 後方互換: 旧 prompt_parts から読む
-        title_dynamic_context = _format_prompt_part(
-            "title_dynamic_context_food.md",
-            analytics_data_block=analytics_data_block,
-        )
-        used_food_text = _format_prompt_part("title_used_foods_food.txt")
-        title_duplicate_context = _format_prompt_part(
-            "title_duplicate_context_food.md",
-            existing_title_lines=existing_title_lines,
-            used_food_text=used_food_text,
-        )
-        base = f"""{title_dynamic_context}
-
-{title_duplicate_context}"""
+    from core.prompt_profile_loader import build_title_prompt_context
+    base = build_title_prompt_context(genre_profile)
 
     dynamic_block = (
         f"""
@@ -563,19 +508,15 @@ def build_title_prompt(
 
 def build_gemini_system_prompt(
     existing_titles=None,
-    genre_profile: str | None = None,
+    genre_profile: str = "",
 ) -> str:
     """
     Gemini 台本生成用システムプロンプト。
-    genre_profile が指定された場合はジャンル別の script_context を使う。
+    genres/{genre_profile}/script_context.md を使う。
     """
-    if genre_profile:
-        from core.prompt_profile_loader import build_script_prompt_context
-        channel_context = build_script_prompt_context(genre_profile)
-        content_section = ""
-    else:
-        channel_context = globals().get("CHANNEL_CONTEXT", "")
-        content_section = globals().get("CONTENT_DIRECTION", "")
+    from core.prompt_profile_loader import build_script_prompt_context
+    channel_context = build_script_prompt_context(genre_profile)
+    content_section = ""
 
     existing_block = (
         f"""

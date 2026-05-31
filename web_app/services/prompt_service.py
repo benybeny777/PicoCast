@@ -1,22 +1,15 @@
 """
 台本生成プロンプト・タイトル案プロンプトを組み立てて返すサービス。
 Web UIのプロンプト生成ボタンから呼び出す。
-
-active channel profile の genre_profile に応じてプロンプトを切り替える。
-profile 未設定の場合は旧来の食べ物チャンネル動作にフォールバックする（後方互換）。
 """
 import os
 from typing import Optional
 
 
-def _get_genre_profile() -> str | None:
-    """active profile の genre_profile を返す。未設定なら None。"""
-    try:
-        from core.channel_profile import get_active_profile
-        profile = get_active_profile()
-        return profile.genre_profile if profile else None
-    except Exception:
-        return None
+def _get_genre_profile() -> str:
+    """active profile の genre_profile を返す。未設定時は例外。"""
+    from core.channel_profile import require_active_profile
+    return require_active_profile().genre_profile
 
 
 def _get_output_videos_dir() -> str:

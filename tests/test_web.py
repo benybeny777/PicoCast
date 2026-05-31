@@ -148,20 +148,24 @@ def test_path_traversal_rejected():
     assert not is_safe_output_path("/etc/passwd")
 
 
-def test_secret_files_rejected():
+def test_secret_files_rejected(monkeypatch, tmp_path):
+    import web_app.security as sec
     from web_app.security import is_safe_output_path
-    from core.output_paths import OUTPUT_DIR
+    output_dir = str(tmp_path / "output")
+    monkeypatch.setattr(sec, "_get_output_base", lambda: output_dir)
     # output/ 配下であっても秘密ファイル名は拒否
-    assert not is_safe_output_path(os.path.join(OUTPUT_DIR, ".env"))
-    assert not is_safe_output_path(os.path.join(OUTPUT_DIR, "token.json"))
-    assert not is_safe_output_path(os.path.join(OUTPUT_DIR, "client_secrets.json"))
+    assert not is_safe_output_path(os.path.join(output_dir, ".env"))
+    assert not is_safe_output_path(os.path.join(output_dir, "token.json"))
+    assert not is_safe_output_path(os.path.join(output_dir, "client_secrets.json"))
 
 
-def test_safe_path_accepted():
+def test_safe_path_accepted(monkeypatch, tmp_path):
+    import web_app.security as sec
     from web_app.security import is_safe_output_path
-    from core.output_paths import OUTPUT_DIR
+    output_dir = str(tmp_path / "output")
+    monkeypatch.setattr(sec, "_get_output_base", lambda: output_dir)
     # output/ 自体はOK
-    assert is_safe_output_path(OUTPUT_DIR)
+    assert is_safe_output_path(output_dir)
 
 
 # ── 履歴一覧が管理フォルダを適切に扱う ────────────────────────────────────

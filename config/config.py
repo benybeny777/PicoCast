@@ -394,7 +394,6 @@ TOPIC_REQUEST_CTA_EVERY_N  = int(os.environ.get("TOPIC_REQUEST_CTA_EVERY_N", "5"
 MAX_BACKGROUNDS_SHORTS      = int(os.environ.get("MAX_BACKGROUNDS_SHORTS",      "9"))   # Shorts: 最大背景枚数
 MAX_BACKGROUNDS_LONG        = int(os.environ.get("MAX_BACKGROUNDS_LONG",        "90"))  # Long: 最大背景枚数（通常モード）
 MAX_BACKGROUNDS_LONG_BUDGET = int(os.environ.get("MAX_BACKGROUNDS_LONG_BUDGET", "16"))  # Long: 最大背景枚数（節約モード）
-MAX_BACKGROUNDS             = MAX_BACKGROUNDS_SHORTS  # 後方互換エイリアス
 
 # ───────────────────────────────────────────────
 # ローカル Web UI

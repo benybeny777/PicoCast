@@ -165,17 +165,6 @@ def test_delete_api_key_with_confirmed(client):
     assert status["secrets"]["hf_token"] is False
 
 
-# ── /api/settings/secrets/remigrate ──────────────────────────────────────────
-
-def test_remigrate_returns_status_dict(client):
-    """remigrate は各 secret_type のステータス dict を返す。"""
-    resp = client.post("/api/settings/secrets/remigrate")
-    assert resp.status_code == 200
-    body = resp.json()
-    assert "result" in body
-    assert "google_api_key" in body["result"]
-
-
 # ── /api/settings/secrets/legacy-file ────────────────────────────────────────
 
 def test_delete_legacy_file_requires_confirmed(client):

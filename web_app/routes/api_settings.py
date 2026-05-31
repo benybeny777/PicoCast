@@ -13,7 +13,6 @@ from web_app.services.secrets_service import (
     get_secret_status,
     get_legacy_file_status,
     delete_legacy_file,
-    remigrate_from_legacy,
 )
 from config import config as cfg
 
@@ -129,13 +128,6 @@ def api_delete_youtube_secret(req: DeleteSecretRequest):
     if errors:
         raise HTTPException(status_code=422, detail=errors)
     return {"deleted": req.secret_type, "profile_id": req.profile_id}
-
-
-@router.post("/secrets/remigrate")
-def api_remigrate(profile_id: str = "default"):
-    """旧認証ファイルから DB への移行を再実行する（DB既存値は上書きしない）。"""
-    result = remigrate_from_legacy(profile_id=profile_id)
-    return {"result": result}
 
 
 @router.delete("/secrets/legacy-file")

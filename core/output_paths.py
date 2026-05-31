@@ -2,7 +2,6 @@
 出力パス管理モジュール。
 
 active channel profile の output_root を基準にすべてのパスを解決する。
-profile が未設定でも動作するよう、フォールバックとして config の OUTPUT_DIR を使う。
 
 ディレクトリ構造（profile 別）:
   output/{profile_id}/
@@ -36,20 +35,9 @@ def _abs(path: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _get_output_root() -> str:
-    """
-    active profile の output_root の絶対パスを返す。
-    profile 未設定なら config の OUTPUT_DIR を使う（後方互換）。
-    """
-    try:
-        from core.channel_profile import get_active_profile
-        profile = get_active_profile()
-        if profile:
-            return profile.output_root_abs
-    except Exception:
-        pass
-    # フォールバック: config の OUTPUT_DIR
-    from config.config import OUTPUT_DIR as _cfg_output
-    return _abs(_cfg_output)
+    """active profile の output_root の絶対パスを返す。"""
+    from core.channel_profile import require_active_profile
+    return require_active_profile().output_root_abs
 
 
 def get_output_root() -> str:
@@ -109,16 +97,3 @@ def migrate_root_file(
     return new_path
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 旧互換シム
-# ─────────────────────────────────────────────────────────────────────────────
-
-def __getattr__(name: str):
-    _compat = {
-        "OUTPUT_DIR": get_output_videos_dir,
-        "DATA_DIR":   get_data_dir,
-        "LEGACY_DIR": get_uploaded_dir,
-    }
-    if name in _compat:
-        return _compat[name]()
-    raise AttributeError(f"module 'core.output_paths' has no attribute {name!r}")
