@@ -2,6 +2,18 @@
 
 このファイルには、運用や品質に影響する大きめの変更を残します。
 
+> 注意: このファイルは過去履歴も含むため、古い項目には廃止済みの YMM4 / Tkinter / prompt_parts/local / ローカルJSON台帳 / 旧認証ファイルの記述が残ります。現行仕様の判断は `AGENTS.md` / `SPEC.md` / `README.md` / `MANUAL.md` と最新日付の項目を優先してください。
+
+---
+
+## 2026-06-01
+
+### 旧ドキュメント・認証表示の現行仕様化
+
+- SPEC.md の APIキー・YouTube OAuth 手順から `.env` / `client_secrets.json` / `token.json` 正本前提の説明を削除し、`encrypted_secrets` DB 正本の手順へ更新。
+- CHANGELOG.md 冒頭に、過去履歴内の YMM4 / Tkinter / prompt_parts/local / ローカルJSON台帳 / 旧認証ファイル記述は現行仕様ではない旨を明記。
+- ダッシュボードと設定画面の YouTube 認証状態表示を、旧ファイル有無ではなく DB の `youtube_client_secrets` / `youtube_upload_token` / `youtube_analytics_token` 基準へ修正。
+
 ---
 
 ## 2026-05-31

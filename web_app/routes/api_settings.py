@@ -40,11 +40,11 @@ def api_get_config():
 
 @router.post("/config")
 def api_save_config(updates: dict[str, str]):
-    """設定を .env に書き込み、可能なものは現在プロセスへ反映する。"""
+    """設定を DB に保存し、可能なものは現在プロセスへ反映する。"""
     errors = save_config(updates)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
-    return {"saved": list(updates.keys()), "note": "保存しました。一部の起動時設定は再起動後に反映されます。"}
+    return {"saved": list(updates.keys()), "note": "保存しました。"}
 
 
 @router.post("/secrets")

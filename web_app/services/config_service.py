@@ -1,6 +1,6 @@
 """
 設定 DB（data/settings.db）による設定管理サービス。
-APIキー・トークンなど認証情報は対象外（.env で管理）。
+APIキー・トークンなど認証情報は対象外（encrypted_secrets で管理）。
 一部設定は保存直後に現在プロセスへ反映する。
 """
 import os

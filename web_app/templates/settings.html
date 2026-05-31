@@ -40,7 +40,7 @@
 <div id="tab-apikey" class="tab-panel">
   <div class="card">
     <h2>APIキー設定</h2>
-    <p class="hint">APIキーは <code>.env</code> に直接保存され、<strong>アプリ再起動後</strong>に反映されます（空欄は変更されません）。</p>
+    <p class="hint">APIキーは暗号化して DB に保存され、保存後すぐに反映されます（空欄は変更されません）。</p>
     <table class="status-table">
       <tr>
         <td style="width:55%">
@@ -64,9 +64,9 @@
         </td>
         <td><input id="secret-HF_TOKEN" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px"></td>
       </tr>
-      <tr><td><strong>client_secrets.json</strong></td><td>{% if status.client_secrets_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
-      <tr><td><strong>token.json</strong></td><td>{% if status.token_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
-      <tr><td><strong>token_analytics.json</strong></td><td>{% if status.token_analytics_json %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-warn">なし</span>{% endif %}</td></tr>
+      <tr><td><strong>YouTube Client Secrets</strong></td><td>{% if status.youtube_client_secrets %}<span class="badge badge-ok">登録済み</span>{% else %}<span class="badge badge-warn">未登録</span>{% endif %}</td></tr>
+      <tr><td><strong>YouTube Upload OAuth</strong></td><td>{% if status.youtube_upload_token %}<span class="badge badge-ok">認証済み</span>{% else %}<span class="badge badge-warn">未認証</span>{% endif %}</td></tr>
+      <tr><td><strong>YouTube Analytics OAuth</strong></td><td>{% if status.youtube_analytics_token %}<span class="badge badge-ok">認証済み</span>{% else %}<span class="badge badge-warn">未認証</span>{% endif %}</td></tr>
     </table>
     <div class="action-row mt">
       <button class="btn btn-primary" onclick="saveSecrets()">APIキーを保存</button>
@@ -474,7 +474,7 @@ async function saveConfig() {
 
 async function saveSecrets() {
   const updates = {};
-  ['GOOGLE_API_KEY', 'OPENAI_API_KEY'].forEach(key => {
+  ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'HF_TOKEN'].forEach(key => {
     const val = document.getElementById(`secret-${key}`).value;
     if (val.trim()) updates[key] = val;
   });
@@ -493,8 +493,8 @@ async function saveSecrets() {
       const errs = Array.isArray(data.detail) ? data.detail.join('\n') : (data.detail || JSON.stringify(data));
       showToast('エラー: ' + errs, true);
     } else {
-      ['GOOGLE_API_KEY', 'OPENAI_API_KEY'].forEach(key => { document.getElementById(`secret-${key}`).value = ''; });
-      showToast(`保存しました (${data.saved.length}件)。再起動後に反映されます`, false);
+      ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'HF_TOKEN'].forEach(key => { document.getElementById(`secret-${key}`).value = ''; });
+      showToast(`保存しました (${data.saved.length}件)`, false);
     }
   } catch(e) {
     showToast('通信エラー: ' + e, true);

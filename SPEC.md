@@ -1406,24 +1406,22 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 | Ollama (qwen3:8b) | 冒頭品質レビュー・リライト | ローカル起動 |
 | Ollama (qwen2.5:7b-instruct) | よみがな正規化（VOICEVOX誤読対策） | ローカル起動 |
 | OpenAI API | ChatGPT生成前レビュー | `OPENAI_API_KEY` |
-| YouTube Data API v3 | 動画アップロード | OAuth2 (`client_secrets.json`) |
+| YouTube Data API v3 | 動画アップロード | OAuth2（`encrypted_secrets` DB） |
 
 ### APIキー・OAuth取得
 
-リポジトリ直下に `.env` を作り、必要なキーを設定します。
-
-```env
-GOOGLE_API_KEY=...
-OPENAI_API_KEY=...
-```
+認証情報は設定画面（`/settings`）の「APIキー」タブから登録します。APIキー・OAuthトークン・YouTube client_secrets は `data/settings.db` の `encrypted_secrets` テーブルへ AES-GCM で暗号化保存します。
+`.env` / `client_secrets.json` / `token.json` / `token_analytics.json` は正本として使用しません。
 
 `GOOGLE_API_KEY`:
 - 取得先: https://aistudio.google.com/apikey
 - 用途: Gemini台本生成、Nano Banana系の背景・サムネ画像生成
+- 登録先: 設定画面「APIキー」タブの `GOOGLE_API_KEY`
 
 `OPENAI_API_KEY`:
 - 取得先: https://platform.openai.com/api-keys
 - 用途: ChatGPT生成前レビュー
+- 登録先: 設定画面「APIキー」タブの `OPENAI_API_KEY`
 - `OPENAI_FINAL_REVIEW_ENABLED=0` にするとChatGPT生成前レビューを無効化できます。
 
 YouTube OAuth:
@@ -1431,19 +1429,19 @@ YouTube OAuth:
 - APIライブラリで `YouTube Data API v3` と `YouTube Analytics API` を有効化します。
 - 認証情報で OAuthクライアントIDを作成します。
 - アプリケーションの種類は「デスクトップアプリ」を選びます。
-- JSONをダウンロードし、ファイル名を `client_secrets.json` にしてリポジトリ直下へ置きます。
-- 初回の `YouTubeアップ` 実行時に `token.json`、`📊 アナリティクス` 実行時に `token_analytics.json` が自動作成されます。
-- スコープ変更や認証エラーが出た場合は、該当する `token*.json` を削除して再認証します。
+- OAuthクライアントJSONの内容を設定画面「APIキー」タブの YouTube Client Secrets 登録欄に貼り付けて保存します。
+- `YouTubeアップ` / `アナリティクス` の認証フローで取得したトークンは、それぞれ `youtube_upload_token` / `youtube_analytics_token` として DB に保存します。
+- OAuth refresh 後のトークンも `save_secret()` で DB へ再保存します。`token.json` / `token_analytics.json` を恒久ファイルとして新規作成しません。
+- スコープ変更や認証エラーが出た場合は、設定画面から該当する YouTube 認証情報を削除して再認証します。
 
 取得先:
 - Google Cloud APIライブラリ: https://console.cloud.google.com/apis/library
 - Google Cloud 認証情報: https://console.cloud.google.com/apis/credentials
 
 秘密情報:
-- `.env`
-- `client_secrets.json`
-- `token.json`
-- `token_analytics.json`
+- `data/settings.db` の `encrypted_secrets` 登録値
+- `data/secret_master.key`
+- 旧認証ファイル（残存している場合の `.env` / `client_secrets.json` / `token.json` / `token_analytics.json`）
 - `dev/` — 動作確認用の一時画像・動画・スクリプトなど開発用テストファイルの置き場（`assets/` 直下へのテスト画像配置は禁止）
 
 これらはGit管理外です。コミットしないでください。
@@ -1935,7 +1933,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 | `value` | TEXT | 設定値（文字列） |
 
 `.env` の非認証設定を起動時に自動移行（`settings_store.bootstrap_from_env()`）。
-以降は設定画面（`/settings`）から保存する。`.env` には認証情報（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` / `NVF_MASTER_KEY`）と `WEB_UI_PORT` のみ残す。
+以降は設定画面（`/settings`）から保存する。認証情報（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` / YouTube OAuth）は `encrypted_secrets` テーブルが正本。`.env` は正本ではなく、起動時固定値や未移行の手元設定が残る場合も新規利用しない。
 
 ---
 

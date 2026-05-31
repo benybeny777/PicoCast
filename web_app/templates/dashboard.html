@@ -23,9 +23,9 @@
       <tr>
         <td>YouTubeアップロード</td>
         <td id="st-yt-upload">
-          {% if status.client_secrets_json and status.token_json %}
+          {% if status.youtube_client_secrets and status.youtube_upload_token %}
           <span class="badge badge-ok">連携済み</span>
-          {% elif status.client_secrets_json %}
+          {% elif status.youtube_client_secrets %}
           <span class="badge badge-warn">認証待ち</span>
           {% else %}
           <span class="badge badge-ng">未設定</span>
@@ -35,9 +35,9 @@
       <tr>
         <td>YouTube Analytics</td>
         <td id="st-yt-analytics">
-          {% if status.client_secrets_json and status.token_analytics_json %}
+          {% if status.youtube_client_secrets and status.youtube_analytics_token %}
           <span class="badge badge-ok">連携済み</span>
-          {% elif status.client_secrets_json %}
+          {% elif status.youtube_client_secrets %}
           <span class="badge badge-warn">認証待ち</span>
           {% else %}
           <span class="badge badge-ng">未設定</span>
@@ -193,14 +193,14 @@ async function refreshAppStatus() {
     document.getElementById('st-openai').innerHTML =
       _badge(s.openai_api_key ? 'badge-ok' : 'badge-ng', s.openai_api_key ? '利用可' : '未設定');
 
-    const ytUp = s.client_secrets_json && s.token_json ? ['badge-ok','連携済み']
-               : s.client_secrets_json                  ? ['badge-warn','認証待ち']
-               :                                          ['badge-ng','未設定'];
+    const ytUp = s.youtube_client_secrets && s.youtube_upload_token ? ['badge-ok','連携済み']
+               : s.youtube_client_secrets                           ? ['badge-warn','認証待ち']
+               :                                                       ['badge-ng','未設定'];
     document.getElementById('st-yt-upload').innerHTML = _badge(...ytUp);
 
-    const ytAn = s.client_secrets_json && s.token_analytics_json ? ['badge-ok','連携済み']
-               : s.client_secrets_json                            ? ['badge-warn','認証待ち']
-               :                                                    ['badge-ng','未設定'];
+    const ytAn = s.youtube_client_secrets && s.youtube_analytics_token ? ['badge-ok','連携済み']
+               : s.youtube_client_secrets                              ? ['badge-warn','認証待ち']
+               :                                                          ['badge-ng','未設定'];
     document.getElementById('st-yt-analytics').innerHTML = _badge(...ytAn);
 
     const vv = s.voicevox || {};
