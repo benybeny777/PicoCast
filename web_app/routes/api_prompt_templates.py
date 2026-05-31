@@ -72,6 +72,7 @@ class UpdateTemplateRequest(BaseModel):
     default_hashtags: str | None = None
     default_playlist_category: str | None = None
     is_enabled: bool | None = None
+    is_default: bool | None = None
 
 
 class CloneRequest(BaseModel):
@@ -150,6 +151,9 @@ def api_update_template(template_id: str, req: UpdateTemplateRequest):
             default_playlist_category=req.default_playlist_category,
             is_enabled=req.is_enabled,
         )
+        if req.is_default:
+            set_default(template_id, profile_id)
+            tmpl = get_template(template_id)
         return _tmpl_to_dict(tmpl)
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))

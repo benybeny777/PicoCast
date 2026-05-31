@@ -16,6 +16,7 @@
   <button class="tab-btn" onclick="switchTab('dict-user', this)">自動学習辞書</button>
   <button class="tab-btn" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
   <button class="tab-btn" id="tab-btn-channels" onclick="switchTab('channels', this)">チャンネル</button>
+  <button class="tab-btn" id="tab-btn-templates" onclick="switchTab('templates', this)">テンプレート</button>
 </div>
 
 <!-- ── タブ: 設定変更 ── -->
@@ -207,6 +208,116 @@
   </div>
 </div>
 
+<!-- ── タブ: テンプレート ── -->
+<div id="tab-templates" class="tab-panel">
+  <div class="card">
+    <h2>プロンプトテンプレート</h2>
+    <p class="hint">表示されるのは <strong>アクティブチャンネル</strong> のテンプレートのみです。チャンネルを切り替えると一覧が変わります。</p>
+    <div id="tmpl-status" style="display:none;margin-bottom:8px;padding:8px 12px;border-radius:4px;font-size:13px"></div>
+    <div id="tmpl-list"><p style="color:var(--text-muted)">読み込み中...</p></div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="tmplShowForm(null)">＋ テンプレートを追加</button>
+      <button class="btn btn-secondary" onclick="tmplLoad()">再読込</button>
+    </div>
+  </div>
+
+  <div id="tmpl-form-card" class="card" style="display:none;margin-top:10px">
+    <h2 id="tmpl-form-title">テンプレートを追加</h2>
+    <table class="status-table" style="width:100%">
+      <tr>
+        <td style="width:30%;vertical-align:top;padding-top:10px">
+          <label for="tmplf-name"><strong>テンプレート名</strong></label>
+        </td>
+        <td><input id="tmplf-name" type="text" class="form-input" style="width:320px" placeholder="食べ物雑学 Shorts台本"></td>
+      </tr>
+      <tr>
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-kind"><strong>種別</strong></label>
+        </td>
+        <td>
+          <select id="tmplf-kind" class="form-input" style="width:200px" onchange="tmplKindChange()">
+            <option value="script">script（台本生成）</option>
+            <option value="title">title（タイトル案）</option>
+            <option value="meeting">meeting（ネタ会議）</option>
+          </select>
+        </td>
+      </tr>
+      <tr>
+        <td style="vertical-align:top;padding-top:10px">
+          <label><strong>デフォルト</strong></label>
+          <br><small style="color:var(--text-muted)">同 kind で1件のみ</small>
+        </td>
+        <td><label style="cursor:pointer"><input id="tmplf-is_default" type="checkbox"> このテンプレートをデフォルトにする</label></td>
+      </tr>
+      <tr>
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-description"><strong>説明</strong></label>
+          <br><small style="color:var(--text-muted)">任意</small>
+        </td>
+        <td><input id="tmplf-description" type="text" class="form-input" style="width:400px" placeholder="Shorts台本生成テンプレート"></td>
+      </tr>
+      <tr>
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-system_rules"><strong>チャンネルルール</strong></label>
+          <br><small style="color:var(--text-muted)">ジャンル固有の指示（script_context.md の内容）</small>
+        </td>
+        <td>
+          <textarea id="tmplf-system_rules" class="form-input" style="width:100%;min-height:200px;font-family:monospace;font-size:12px;resize:vertical" placeholder="あなたはYouTubeゆっくり動画の脚本家です..."></textarea>
+          <small id="tmplf-system_rules-count" style="color:var(--text-muted)"></small>
+        </td>
+      </tr>
+      <tr id="tmplf-row-script_rules">
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-script_rules"><strong>共通ルール</strong></label>
+          <br><small style="color:var(--text-muted)">全ジャンル共通の制約（script種別のみ）</small>
+        </td>
+        <td>
+          <textarea id="tmplf-script_rules" class="form-input" style="width:100%;min-height:160px;font-family:monospace;font-size:12px;resize:vertical" placeholder="COMMON_SCRIPT_RULES + SHORTS_QUANTITY_RULES..."></textarea>
+          <small id="tmplf-script_rules-count" style="color:var(--text-muted)"></small>
+        </td>
+      </tr>
+      <tr id="tmplf-row-title_rules">
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-title_rules"><strong>タイトルルール</strong></label>
+          <br><small style="color:var(--text-muted)">title種別のみ</small>
+        </td>
+        <td><textarea id="tmplf-title_rules" class="form-input" style="width:100%;min-height:120px;font-family:monospace;font-size:12px;resize:vertical"></textarea></td>
+      </tr>
+      <tr id="tmplf-row-meeting_rules">
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-meeting_rules"><strong>ネタ会議ルール</strong></label>
+          <br><small style="color:var(--text-muted)">meeting種別のみ</small>
+        </td>
+        <td><textarea id="tmplf-meeting_rules" class="form-input" style="width:100%;min-height:120px;font-family:monospace;font-size:12px;resize:vertical"></textarea></td>
+      </tr>
+      <tr>
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-ng_rules"><strong>NGルール</strong></label>
+          <br><small style="color:var(--text-muted)">任意</small>
+        </td>
+        <td><textarea id="tmplf-ng_rules" class="form-input" style="width:100%;min-height:80px;font-family:monospace;font-size:12px;resize:vertical" placeholder="禁止テーマ・禁止表現..."></textarea></td>
+      </tr>
+      <tr>
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-default_hashtags"><strong>デフォルトハッシュタグ</strong></label>
+        </td>
+        <td><input id="tmplf-default_hashtags" type="text" class="form-input" style="width:400px" placeholder="#ずんだもん #ゆっくり解説 #食べ物雑学"></td>
+      </tr>
+      <tr>
+        <td style="vertical-align:top;padding-top:10px">
+          <label for="tmplf-default_playlist_category"><strong>デフォルト再生リスト</strong></label>
+        </td>
+        <td><input id="tmplf-default_playlist_category" type="text" class="form-input" style="width:300px" placeholder="大逆転シリーズ"></td>
+      </tr>
+    </table>
+    <div class="action-row mt" style="gap:8px">
+      <button class="btn btn-primary" onclick="tmplSaveForm()">保存</button>
+      <button class="btn btn-secondary" onclick="tmplHideForm()">キャンセル</button>
+    </div>
+    <div id="tmpl-form-result" style="display:none;margin-top:8px;padding:8px 12px;border-radius:4px;font-size:13px"></div>
+  </div>
+</div>
+
 {% endblock %}
 {% block scripts %}
 <script>
@@ -237,6 +348,7 @@ function switchTab(name, btn) {
   if ((name === 'dict-base' || name === 'dict-user') && !_dictLoaded) loadDict();
   if (name === 'sd-models' && !_sdLoaded) sdInitTab();
   if (name === 'channels' && !_chLoaded) chLoadChannels();
+  if (name === 'templates' && !_tmplLoaded) tmplLoad();
 }
 
 async function loadConfig() {
@@ -919,6 +1031,205 @@ async function chDelete(profileId) {
 if (window.location.hash === '#channels') {
   const btn = document.getElementById('tab-btn-channels');
   if (btn) switchTab('channels', btn);
+}
+
+/* ══════════════════════════════════════════════
+   テンプレート管理タブ
+══════════════════════════════════════════════ */
+let _tmplLoaded = false;
+let _tmplList = [];
+let _tmplEditing = null; // 編集中の template_id
+
+const _TMPL_KIND_LABEL = { script: '台本生成', title: 'タイトル案', meeting: 'ネタ会議' };
+const _TMPL_KIND_COLOR = { script: '#2563eb', title: '#059669', meeting: '#7c3aed' };
+
+async function tmplLoad() {
+  _tmplLoaded = true;
+  const el = document.getElementById('tmpl-list');
+  try {
+    const res = await fetch('/api/prompt-templates');
+    if (!res.ok) throw new Error(await res.text());
+    _tmplList = await res.json();
+    tmplRender();
+  } catch(e) {
+    el.innerHTML = `<p style="color:var(--err,#e74c3c)">読み込みエラー: ${esc(String(e))}</p>`;
+  }
+}
+
+function tmplRender() {
+  const el = document.getElementById('tmpl-list');
+  if (_tmplList.length === 0) {
+    el.innerHTML = '<p style="color:var(--text-muted)">テンプレートが未登録です。「＋ テンプレートを追加」で作成してください。</p>';
+    return;
+  }
+  const byKind = { script: [], title: [], meeting: [] };
+  for (const t of _tmplList) {
+    if (byKind[t.template_kind]) byKind[t.template_kind].push(t);
+  }
+  let html = '';
+  for (const [kind, label] of Object.entries(_TMPL_KIND_LABEL)) {
+    const items = byKind[kind];
+    if (items.length === 0) continue;
+    const color = _TMPL_KIND_COLOR[kind];
+    html += `<div style="margin-bottom:18px">
+      <h3 style="margin:0 0 8px;font-size:14px;color:${color};text-transform:uppercase;letter-spacing:.05em">${esc(label)}</h3>
+      <table class="status-table" style="width:100%">
+        <thead><tr><th>テンプレート名</th><th>説明</th><th>ハッシュタグ</th><th>操作</th></tr></thead>
+        <tbody>`;
+    for (const t of items) {
+      const defBadge = t.is_default
+        ? '<span class="badge badge-ok" style="margin-right:4px">★デフォルト</span>'
+        : '';
+      const disabledBadge = !t.is_enabled
+        ? '<span class="badge" style="margin-right:4px;background:#999">無効</span>'
+        : '';
+      const charInfo = `<small style="color:var(--text-muted)">チャンネルルール: ${t.system_rules ? t.system_rules.length : 0}字${kind==='script' ? ' / 共通ルール: ' + (t.script_rules ? t.script_rules.length : 0) + '字' : ''}</small>`;
+      html += `<tr>
+        <td>${defBadge}${disabledBadge}<strong>${esc(t.template_name)}</strong><br>${charInfo}</td>
+        <td><small style="color:var(--text-muted)">${esc(t.description || '—')}</small></td>
+        <td><small style="color:var(--text-muted);word-break:break-all">${esc(t.default_hashtags || '—')}</small></td>
+        <td style="white-space:nowrap;vertical-align:top;padding-top:8px">
+          <button class="btn btn-secondary" style="font-size:12px" onclick="tmplShowForm('${esc(t.template_id)}')">編集</button>
+          ${!t.is_default ? `<button class="btn btn-secondary" style="font-size:12px;margin-left:4px" onclick="tmplSetDefault('${esc(t.template_id)}')">デフォルト化</button>` : ''}
+          <button class="btn btn-danger btn-xs" style="font-size:12px;margin-left:4px" onclick="tmplDelete('${esc(t.template_id)}', '${esc(t.template_name)}')">削除</button>
+        </td>
+      </tr>`;
+    }
+    html += '</tbody></table></div>';
+  }
+  el.innerHTML = html;
+}
+
+function tmplKindChange() {
+  const kind = document.getElementById('tmplf-kind').value;
+  document.getElementById('tmplf-row-script_rules').style.display  = (kind === 'script')  ? '' : 'none';
+  document.getElementById('tmplf-row-title_rules').style.display   = (kind === 'title')   ? '' : 'none';
+  document.getElementById('tmplf-row-meeting_rules').style.display = (kind === 'meeting') ? '' : 'none';
+}
+
+function tmplShowForm(templateId) {
+  _tmplEditing = templateId;
+  const card = document.getElementById('tmpl-form-card');
+  const result = document.getElementById('tmpl-form-result');
+  result.style.display = 'none';
+  document.getElementById('tmpl-form-title').textContent = templateId ? 'テンプレートを編集' : 'テンプレートを追加';
+  const t = templateId ? _tmplList.find(x => x.template_id === templateId) : null;
+  document.getElementById('tmplf-name').value = t ? t.template_name : '';
+  document.getElementById('tmplf-kind').value = t ? t.template_kind : 'script';
+  document.getElementById('tmplf-is_default').checked = t ? t.is_default : false;
+  document.getElementById('tmplf-description').value = t ? (t.description || '') : '';
+  document.getElementById('tmplf-system_rules').value = t ? (t.system_rules || '') : '';
+  document.getElementById('tmplf-script_rules').value = t ? (t.script_rules || '') : '';
+  document.getElementById('tmplf-title_rules').value = t ? (t.title_rules || '') : '';
+  document.getElementById('tmplf-meeting_rules').value = t ? (t.meeting_rules || '') : '';
+  document.getElementById('tmplf-ng_rules').value = t ? (t.ng_rules || '') : '';
+  document.getElementById('tmplf-default_hashtags').value = t ? (t.default_hashtags || '') : '';
+  document.getElementById('tmplf-default_playlist_category').value = t ? (t.default_playlist_category || '') : '';
+  tmplUpdateCharCounts();
+  tmplKindChange();
+  card.style.display = '';
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function tmplHideForm() {
+  document.getElementById('tmpl-form-card').style.display = 'none';
+  _tmplEditing = null;
+}
+
+function tmplUpdateCharCounts() {
+  const sysEl = document.getElementById('tmplf-system_rules');
+  const scrEl = document.getElementById('tmplf-script_rules');
+  document.getElementById('tmplf-system_rules-count').textContent = sysEl.value.length + '文字';
+  document.getElementById('tmplf-script_rules-count').textContent = scrEl.value.length + '文字';
+}
+document.getElementById('tmplf-system_rules').addEventListener('input', tmplUpdateCharCounts);
+document.getElementById('tmplf-script_rules').addEventListener('input', tmplUpdateCharCounts);
+
+async function tmplSaveForm() {
+  const result = document.getElementById('tmpl-form-result');
+  result.style.display = 'none';
+  const body = {
+    template_name:             document.getElementById('tmplf-name').value.trim(),
+    template_kind:             document.getElementById('tmplf-kind').value,
+    is_default:                document.getElementById('tmplf-is_default').checked,
+    description:               document.getElementById('tmplf-description').value.trim() || null,
+    system_rules:              document.getElementById('tmplf-system_rules').value,
+    script_rules:              document.getElementById('tmplf-script_rules').value,
+    title_rules:               document.getElementById('tmplf-title_rules').value || null,
+    meeting_rules:             document.getElementById('tmplf-meeting_rules').value || null,
+    ng_rules:                  document.getElementById('tmplf-ng_rules').value || null,
+    default_hashtags:          document.getElementById('tmplf-default_hashtags').value.trim() || null,
+    default_playlist_category: document.getElementById('tmplf-default_playlist_category').value.trim() || null,
+  };
+  if (!body.template_name) {
+    result.textContent = 'テンプレート名は必須です';
+    result.style.background = 'var(--error,#c0392b)';
+    result.style.color = '#fff';
+    result.style.display = 'block';
+    return;
+  }
+  try {
+    let res;
+    if (_tmplEditing) {
+      res = await fetch(`/api/prompt-templates/${encodeURIComponent(_tmplEditing)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } else {
+      res = await fetch('/api/prompt-templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    }
+    const data = await res.json();
+    if (!res.ok) {
+      result.textContent = '保存失敗: ' + (data.detail || JSON.stringify(data));
+      result.style.background = 'var(--error,#c0392b)';
+      result.style.color = '#fff';
+      result.style.display = 'block';
+      return;
+    }
+    tmplHideForm();
+    showToast('テンプレートを保存しました', false);
+    _tmplLoaded = false;
+    await tmplLoad();
+  } catch(e) {
+    result.textContent = '通信エラー: ' + e;
+    result.style.background = 'var(--error,#c0392b)';
+    result.style.color = '#fff';
+    result.style.display = 'block';
+  }
+}
+
+async function tmplSetDefault(templateId) {
+  try {
+    const res = await fetch(`/api/prompt-templates/${encodeURIComponent(templateId)}/set-default`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { showToast('失敗: ' + (data.detail || ''), true); return; }
+    showToast('デフォルトに設定しました', false);
+    _tmplLoaded = false;
+    await tmplLoad();
+  } catch(e) { showToast('通信エラー: ' + e, true); }
+}
+
+async function tmplDelete(templateId, name) {
+  if (!confirm(`テンプレート「${name}」を削除しますか？\nこの操作は元に戻せません。`)) return;
+  try {
+    const res = await fetch(`/api/prompt-templates/${encodeURIComponent(templateId)}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { showToast('削除失敗: ' + (data.detail || ''), true); return; }
+    showToast(`「${name}」を削除しました`, false);
+    _tmplLoaded = false;
+    await tmplLoad();
+  } catch(e) { showToast('通信エラー: ' + e, true); }
+}
+
+// URL ハッシュ #templates でテンプレートタブを自動選択
+if (window.location.hash === '#templates') {
+  const btn = document.getElementById('tab-btn-templates');
+  if (btn) switchTab('templates', btn);
 }
 </script>
 {% endblock %}
