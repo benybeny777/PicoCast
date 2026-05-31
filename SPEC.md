@@ -1931,6 +1931,8 @@ Analytics 取得（`save_score_files()`）のたびに自動 upsert される。
 
 ### `data/settings.db` テーブル定義
 
+テーブル: `channel_profiles` / `encrypted_secrets` / `settings` / `prompt_templates`
+
 #### `settings` — アプリ設定
 
 | 列 | 型 | 説明 |
@@ -1939,11 +1941,7 @@ Analytics 取得（`save_score_files()`）のたびに自動 upsert される。
 | `value` | TEXT | 設定値（文字列） |
 
 `.env` の非認証設定を起動時に自動移行（`settings_store.bootstrap_from_env()`）。
-以降は設定画面（`/settings`）から保存する。`.env` には以下の認証情報のみ残す。
-
-- `GOOGLE_API_KEY`
-- `OPENAI_API_KEY`
-- `HF_TOKEN`
+以降は設定画面（`/settings`）から保存する。`.env` には認証情報（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` / `NVF_MASTER_KEY`）と `WEB_UI_PORT` のみ残す。
 
 ---
 
