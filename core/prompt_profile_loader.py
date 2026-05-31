@@ -1,36 +1,24 @@
 """
 プロンプトプロファイルローダー。
 
-config/prompt_profiles/ の以下の順でファイルを読み込み、プロンプト文字列を組み立てる。
+config/prompt_profiles/genres/{genre_profile}/ のファイルを読む。
+ローカル上書き (local/) は廃止済み。テンプレートの編集は DB (prompt_templates) で行う。
 
-  1. local/profiles/{profile_id}/  — channel profile 別個人上書き（Git 管理外・最優先）
-  2. local/genres/{genre_profile}/ — ジャンル別個人上書き（Git 管理外）
-  3. genres/{genre_profile}/       — ジャンル固有ルール（Git 管理・必須）
-  4. common/                       — 全ジャンル共通ルール（core/script_prompts.py 定数として保持）
+主な用途: 起動時の seed（prompt_template_seeder.py から呼ばれる）。
+実行時のプロンプト組み立ては core/script_prompts.py が DB から直接行う。
 
-active profile 以外の local/ ディレクトリは絶対に読まない。
 genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
-
-使い方:
-  from core.prompt_profile_loader import build_script_prompt_context
-  from core.channel_profile import require_active_profile
-
-  profile = require_active_profile()
-  prompt = build_script_prompt_context(profile.genre_profile)
 """
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
-from typing import Any
 
 _logger = logging.getLogger(__name__)
 
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PROFILES_DIR = _PROJECT_ROOT / "config" / "prompt_profiles"
 _GENRES_DIR = _PROFILES_DIR / "genres"
-_LOCAL_DIR = _PROFILES_DIR / "local"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -68,48 +56,14 @@ def list_available_genre_profiles() -> list[str]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ファイル読み込み
+# ファイル読み込み（genres/ のみ）
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_active_profile_id() -> str | None:
-    """active profile の profile_id を返す。取得失敗なら None。"""
-    try:
-        from core.channel_profile import get_active_profile
-        p = get_active_profile()
-        return p.profile_id if p else None
-    except Exception:
-        return None
-
-
 def _read_genre_file(genre_profile: str, filename: str, required: bool = True) -> str:
-    """
-    genres/{genre_profile}/{filename} を読む。
-    優先順位:
-      1. local/{profile_id}/{filename}  (active profile_id 別上書き)
-      2. local/{genre_profile}/{filename} (genre 別上書き)
-      3. genres/{genre_profile}/{filename} (正規)
-    required=True で見つからない場合は FileNotFoundError。
-    """
-    genre_path = _GENRES_DIR / genre_profile / filename
-
-    # 1. local/profiles/{profile_id}/
-    profile_id = _get_active_profile_id()
-    if profile_id:
-        local_profile_path = _LOCAL_DIR / "profiles" / profile_id / filename
-        if local_profile_path.exists():
-            _logger.debug("[PromptLoader] local profile override: %s", local_profile_path)
-            return local_profile_path.read_text(encoding="utf-8").strip()
-
-    # 2. local/genres/{genre_profile}/
-    local_genre_path = _LOCAL_DIR / "genres" / genre_profile / filename
-    if local_genre_path.exists():
-        _logger.debug("[PromptLoader] local genre override: %s", local_genre_path)
-        return local_genre_path.read_text(encoding="utf-8").strip()
-
-    # 3. genres/{genre_profile}/
-    if genre_path.exists():
-        return genre_path.read_text(encoding="utf-8").strip()
-
+    """genres/{genre_profile}/{filename} を読む。required=True で存在しなければ FileNotFoundError。"""
+    path = _GENRES_DIR / genre_profile / filename
+    if path.exists():
+        return path.read_text(encoding="utf-8").strip()
     if required:
         raise FileNotFoundError(
             f"プロンプトファイルが見つかりません: genres/{genre_profile}/{filename}"
@@ -119,12 +73,6 @@ def _read_genre_file(genre_profile: str, filename: str, required: bool = True) -
 
 def _read_genre_file_optional(genre_profile: str, filename: str) -> str:
     return _read_genre_file(genre_profile, filename, required=False)
-
-
-def _read_local_override(genre_profile: str, filename: str = "overrides.md") -> str:
-    """local/genres/{genre_profile}/{filename} が存在すれば読む。なければ空文字。"""
-    path = _LOCAL_DIR / "genres" / genre_profile / filename
-    return path.read_text(encoding="utf-8").strip() if path.exists() else ""
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -173,43 +121,28 @@ def get_default_hashtags(genre_profile: str, fallback: str = "") -> str:
     return config.get("default_hashtags", fallback)
 
 
+def get_used_topics_text(genre_profile: str) -> str:
+    """genres/{genre_profile}/used_topics.txt の内容を返す（ない場合は空文字）。"""
+    return _read_genre_file_optional(genre_profile, "used_topics.txt")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# プロンプト組み立て
+# seed 用ファイル読み込み（prompt_template_seeder.py から呼ばれる）
 # ─────────────────────────────────────────────────────────────────────────────
 
 def build_script_prompt_context(genre_profile: str) -> str:
-    """
-    台本生成プロンプトのジャンル固有部分を返す。
-    genres/{genre_profile}/script_context.md を読む。
-    local オーバーライドがあれば優先する。
-    """
+    """genres/{genre_profile}/script_context.md を返す（seed 用）。"""
     validate_genre_profile_exists(genre_profile)
     return _read_genre_file(genre_profile, "script_context.md")
 
 
 def build_title_prompt_context(genre_profile: str) -> str:
-    """
-    タイトル案プロンプトのジャンル固有部分を返す。
-    genres/{genre_profile}/title_context.md を読む。
-    """
+    """genres/{genre_profile}/title_context.md を返す（seed 用）。"""
     validate_genre_profile_exists(genre_profile)
     return _read_genre_file(genre_profile, "title_context.md")
 
 
 def build_meeting_prompt_context(genre_profile: str) -> str:
-    """
-    ネタ会議プロンプトのジャンル固有部分を返す。
-    genres/{genre_profile}/meeting_context.md を読む。
-    """
+    """genres/{genre_profile}/meeting_context.md を返す（seed 用）。"""
     validate_genre_profile_exists(genre_profile)
     return _read_genre_file_optional(genre_profile, "meeting_context.md")
-
-
-def get_local_override_text(genre_profile: str) -> str:
-    """local/{genre_profile}/overrides.md の内容を返す（任意）。"""
-    return _read_local_override(genre_profile)
-
-
-def get_used_topics_text(genre_profile: str) -> str:
-    """genres/{genre_profile}/used_topics.txt の内容を返す（ない場合は空文字）。"""
-    return _read_genre_file_optional(genre_profile, "used_topics.txt")

@@ -412,14 +412,29 @@ METAN_TSUNDERE_RULES_MEETING = """
 """
 
 
+def _get_default_template(kind: str):
+    """active profile のデフォルトテンプレートを返す。存在しなければ例外。"""
+    from core.channel_profile import require_active_profile
+    from core.prompt_template_store import get_default_template
+    profile_id = require_active_profile().profile_id
+    tmpl = get_default_template(profile_id, kind)
+    if tmpl is None:
+        raise RuntimeError(
+            f"profile '{profile_id}' にデフォルト {kind} テンプレートがありません。"
+            "設定画面のテンプレートタブか POST /api/prompt-templates/seed で作成してください。"
+        )
+    return tmpl
+
+
 def build_script_generation_prompt(existing_titles=None, genre_profile: str = "") -> str:
     """
     台本生成プロンプトを組み立てる。
-    config/prompt_profiles/genres/{genre_profile}/script_context.md を使う。
+    active profile のデフォルト script テンプレート (DB) を使う。
     """
-    from core.prompt_profile_loader import build_script_prompt_context
-    base = build_script_prompt_context(genre_profile)
-
+    tmpl = _get_default_template("script")
+    base = tmpl.system_rules
+    if tmpl.script_rules:
+        base += "\n\n" + tmpl.script_rules
     if existing_titles:
         lines = "\n".join(f"・{t}" for t in existing_titles)
         base += (
@@ -427,7 +442,7 @@ def build_script_generation_prompt(existing_titles=None, genre_profile: str = ""
             f"━━━━━━━━━━━━━━━━━━\n\n"
             f"以下と同じ、またはほぼ同じテーマの台本を作らないこと。\n\n{lines}\n"
         )
-    return base + SHORTS_QUANTITY_RULES + METAN_TSUNDERE_RULES + "\n"
+    return base + "\n"
 
 
 def build_meeting_script_prompt(
@@ -436,10 +451,13 @@ def build_meeting_script_prompt(
     genre_profile: str = "",
 ) -> str:
     """
-    ネタ会議プロンプトを組み立てる。genres/{genre_profile}/meeting_context.md を使う。
+    ネタ会議プロンプトを組み立てる。
+    active profile のデフォルト meeting テンプレート (DB) を使う。
     """
-    from core.prompt_profile_loader import build_meeting_prompt_context
-    base = build_meeting_prompt_context(genre_profile)
+    tmpl = _get_default_template("meeting")
+    base = tmpl.system_rules
+    if tmpl.meeting_rules:
+        base += "\n\n" + tmpl.meeting_rules
 
     existing_titles = existing_titles or []
     existing_title_lines = _format_existing_title_lines(existing_titles)
@@ -453,8 +471,7 @@ def build_meeting_script_prompt(
         f"【既存タイトル】\n{existing_title_lines}\n\n"
         f"【実績データ】\n{analytics_data_block}\n"
     )
-
-    return base + appended_context + METAN_TSUNDERE_RULES + METAN_TSUNDERE_RULES_MEETING
+    return base + appended_context
 
 
 def _format_existing_title_lines(existing_titles) -> str:
@@ -478,14 +495,14 @@ def build_title_prompt(
 ) -> str:
     """
     タイトル案プロンプトを組み立てる。
-    genres/{genre_profile}/title_context.md を使う。
+    active profile のデフォルト title テンプレート (DB) を使う。
     """
     existing_titles = existing_titles or []
     existing_title_lines = _format_existing_title_lines(existing_titles)
     analytics_data_block = _format_title_analytics_block(analytics_tsv)
 
-    from core.prompt_profile_loader import build_title_prompt_context
-    base = build_title_prompt_context(genre_profile)
+    tmpl = _get_default_template("title")
+    base = tmpl.system_rules
 
     dynamic_block = (
         f"""
@@ -494,12 +511,10 @@ def build_title_prompt(
 実績データ・既存タイトル
 ━━━━━━━━━━━━━━━━━━
 
-"""
-        f"""【実績データ（Analytics TSV）】
+【実績データ（Analytics TSV）】
 {analytics_data_block}
 
-"""
-        f"""【既存タイトル重複禁止】
+【既存タイトル重複禁止】
 {existing_title_lines}
 """
     )
@@ -512,53 +527,17 @@ def build_gemini_system_prompt(
 ) -> str:
     """
     Gemini 台本生成用システムプロンプト。
-    genres/{genre_profile}/script_context.md を使う。
+    active profile のデフォルト script テンプレート (DB) を使う。
     """
-    from core.prompt_profile_loader import build_script_prompt_context
-    channel_context = build_script_prompt_context(genre_profile)
-    content_section = ""
+    tmpl = _get_default_template("script")
+    base = tmpl.system_rules
+    if tmpl.script_rules:
+        base += "\n\n" + tmpl.script_rules
 
     existing_block = (
-        f"""
-
-━━━━━━━━━━━━━━━━━━
-既存タイトル重複禁止（台本生成時も適用）
-━━━━━━━━━━━━━━━━━━
-
-"""
-        f"""以下と同じ、またはほぼ同じテーマの台本を作らないこと。
-
-"""
+        f"\n\n━━━━━━━━━━━━━━━━━━\n既存タイトル重複禁止（台本生成時も適用）\n━━━━━━━━━━━━━━━━━━\n\n"
+        f"以下と同じ、またはほぼ同じテーマの台本を作らないこと。\n\n"
         + "\n".join(f"・{t}" for t in existing_titles)
         if existing_titles else ""
     )
-
-    return f"""あなたはYouTubeゆっくり動画のプロ脚本家です。
-{channel_context}
-
-{content_section}
-
-## エンゲージメント最大化（必須）
-1. 冒頭フック: 最初のセリフで驚くべき事実を即断言する。前置き・挨拶は一切禁止。
-   悪例「今日はチョコレートについて話すのだ」　良例「チョコレートは500年間、飲み物だったのだ！」
-2. 感情の流れ: 共感（あるある）→驚き/怒り→カタルシス（スカッと/感動）の順で設計する。
-3. 好奇心ループ: 各シーンの終わりに次を引く一言を入れる。
-4. オチの破壊力: 予想を外すどんでん返し・スカッとする結末を最後に配置する。
-
-{COMMON_SCRIPT_RULES}
-
-{HIGH_TEMPO_RULES}
-
-## YouTube メタデータ（必須・台本の最初に出力）
-以下を台本の一番最初にまとめて出力してください。
-
-{METADATA_FORMAT}
-
-出力例:
-動画形式: Shorts
-動画タイトル: チョコは500年間ずっと飲み物だった
-サムネ文字: 実は飲み物
-説明文: チョコレートの驚きの歴史をずんだもんとめたんが解説！実はあの飲み物が起源だったのだ。
-タグ: ずんだもん,ゆっくり解説,VOICEVOX,チョコレート,怖い話,雑学,驚き,知らなかった
-固定コメント: チョコレートが飲み物だった時代、飲んでみたかった？🍫 コメントで教えてね！
-"""  + existing_block
+    return base + existing_block

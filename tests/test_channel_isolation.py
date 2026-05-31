@@ -32,10 +32,8 @@ def dual_profile_env(tmp_path, monkeypatch):
     # fake prompt_profiles ディレクトリ
     profiles_dir = tmp_path / "prompt_profiles"
     genres_dir = profiles_dir / "genres"
-    local_dir = profiles_dir / "local"
     (genres_dir / "food_trivia").mkdir(parents=True)
     (genres_dir / "urban_legend").mkdir(parents=True)
-    local_dir.mkdir(parents=True)
 
     (genres_dir / "food_trivia" / "script_context.md").write_text("FOOD_SCRIPT", encoding="utf-8")
     (genres_dir / "food_trivia" / "title_context.md").write_text("FOOD_TITLE", encoding="utf-8")
@@ -59,7 +57,6 @@ def dual_profile_env(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ppl, "_PROFILES_DIR", profiles_dir)
     monkeypatch.setattr(ppl, "_GENRES_DIR", genres_dir)
-    monkeypatch.setattr(ppl, "_LOCAL_DIR", local_dir)
 
     food = cp.ChannelProfile(
         profile_id="food_trivia",
@@ -177,18 +174,3 @@ def test_script_context_urban_legend(dual_profile_env):
     assert "URBAN_SCRIPT" in result
     assert "FOOD_SCRIPT" not in result
 
-
-# ── local/food_trivia が残っていても active urban_legend なら読まない ──────────
-
-def test_local_food_not_leaked_to_urban(dual_profile_env):
-    cp, ppl, tmp_path, *_ = dual_profile_env
-    import core.prompt_profile_loader as _ppl
-
-    # local/food_trivia/script_context.md を作成
-    local_food_dir = _ppl._LOCAL_DIR / "food_trivia"
-    local_food_dir.mkdir(parents=True, exist_ok=True)
-    (local_food_dir / "script_context.md").write_text("FOOD_LOCAL_CONTENT", encoding="utf-8")
-
-    # urban_legend の context には含まれない
-    result = ppl.build_script_prompt_context("urban_legend")
-    assert "FOOD_LOCAL_CONTENT" not in result

@@ -39,9 +39,7 @@ class AIGenerator:
 ---
 """
 
-        from core.channel_profile import require_active_profile
-        genre_profile = require_active_profile().genre_profile
-        system_prompt = build_gemini_system_prompt(existing_titles=existing_titles, genre_profile=genre_profile)
+        system_prompt = build_gemini_system_prompt(existing_titles=existing_titles)
         user_prompt = (
             f"テーマ: {topic}\n{ref_rule}\n\n"
             f"**重要: すべての「背景: 」タグの中に、必ず10文字以内の日本語キャッチコピーを「」で囲んで含めてください。文字なしの背景は絶対に出力しないでください。**"
