@@ -6,8 +6,8 @@ import os
 from typing import Optional
 
 
-def _get_genre_profile() -> str:
-    """active profile の genre_profile を返す。未設定時は例外。"""
+def _active_genre_profile() -> str:
+    """active profile の genre_profile を返す。未設定時は例外。レスポンス dict 用。"""
     from core.channel_profile import require_active_profile
     return require_active_profile().genre_profile
 
@@ -92,10 +92,10 @@ def _read_latest_analytics_summary() -> str:
 
 
 def get_script_generation_prompt() -> dict:
-    genre_profile = _get_genre_profile()
+    genre_profile = _active_genre_profile()
     all_titles = _collect_all_titles()
     from core.script_prompts import build_script_generation_prompt
-    prompt = build_script_generation_prompt(all_titles, genre_profile=genre_profile)
+    prompt = build_script_generation_prompt(all_titles)
     return {
         "prompt": prompt,
         "title_count": len(all_titles),
@@ -104,7 +104,7 @@ def get_script_generation_prompt() -> dict:
 
 
 def get_meeting_prompt() -> dict:
-    genre_profile = _get_genre_profile()
+    genre_profile = _active_genre_profile()
     all_titles = _collect_all_titles()
     tsv, tsv_count = _read_latest_analytics_tsv()
     summary = _read_latest_analytics_summary()
@@ -114,9 +114,7 @@ def get_meeting_prompt() -> dict:
     elif tsv:
         analytics_tsv = tsv
     from core.script_prompts import build_meeting_script_prompt
-    prompt = build_meeting_script_prompt(
-        all_titles, analytics_tsv=analytics_tsv, genre_profile=genre_profile
-    )
+    prompt = build_meeting_script_prompt(all_titles, analytics_tsv=analytics_tsv)
     return {
         "prompt": prompt,
         "title_count": len(all_titles),
@@ -125,7 +123,7 @@ def get_meeting_prompt() -> dict:
 
 
 def get_title_prompt(long_only: bool = False) -> dict:
-    genre_profile = _get_genre_profile()
+    genre_profile = _active_genre_profile()
     all_titles = _collect_all_titles()
     tsv, tsv_count = _read_latest_analytics_tsv()
     summary = _read_latest_analytics_summary()
@@ -135,9 +133,7 @@ def get_title_prompt(long_only: bool = False) -> dict:
     elif tsv:
         analytics_tsv = tsv
     from core.script_prompts import build_title_prompt
-    prompt = build_title_prompt(
-        all_titles, analytics_tsv=analytics_tsv, genre_profile=genre_profile
-    )
+    prompt = build_title_prompt(all_titles, analytics_tsv=analytics_tsv)
     if long_only:
         prompt += (
             "\n\n今回の生成条件:\n"

@@ -426,7 +426,7 @@ def _get_default_template(kind: str):
     return tmpl
 
 
-def build_script_generation_prompt(existing_titles=None, genre_profile: str = "") -> str:
+def build_script_generation_prompt(existing_titles=None) -> str:
     """
     台本生成プロンプトを組み立てる。
     active profile のデフォルト script テンプレート (DB) を使う。
@@ -448,7 +448,6 @@ def build_script_generation_prompt(existing_titles=None, genre_profile: str = ""
 def build_meeting_script_prompt(
     existing_titles=None,
     analytics_tsv=None,
-    genre_profile: str = "",
 ) -> str:
     """
     ネタ会議プロンプトを組み立てる。
@@ -491,7 +490,6 @@ def _format_title_analytics_block(analytics_tsv=None) -> str:
 def build_title_prompt(
     existing_titles=None,
     analytics_tsv=None,
-    genre_profile: str = "",
 ) -> str:
     """
     タイトル案プロンプトを組み立てる。
@@ -523,7 +521,6 @@ def build_title_prompt(
 
 def build_gemini_system_prompt(
     existing_titles=None,
-    genre_profile: str = "",
 ) -> str:
     """
     Gemini 台本生成用システムプロンプト。
