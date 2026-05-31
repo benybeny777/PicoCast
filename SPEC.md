@@ -93,8 +93,8 @@ yukkurijidou/
 │   ├── youtube_analytics.py # YouTube Analytics API取得（維持率取得含む）
 │   ├── retention_analysis.py # 視聴者維持率の離脱・ループ点分析
 │   ├── comment_templates.py # 固定コメント自動生成テンプレート（めたん調）
-│   ├── upload_scheduler.py # アップロードスケジュール管理（schedule_from_recordsで台帳から派生）
-│   ├── upload_records.py   # アップロード台帳の読み書き・upsert
+│   ├── upload_scheduler.py # YouTube Data API を正とするアップロードスケジュール管理
+│   ├── upload_records.py   # metadata.db の youtube_status + render_info からアップロード記録互換形式を構築
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
 │   ├── youtube_uploader.py # YouTube APIアップロード
 │   ├── playlist_resolver.py # 台本カテゴリ名＋動画形式 → YouTube再生リスト名の解決。`resolve_video_type(video_format, screen_format)` でネタ会議を含む全動画形式を "shorts"/"long" に統一判定する関数も提供
@@ -1744,7 +1744,7 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 | `_meta/opening_review.json` / `final_review.json` | `script_quality` テーブル | 廃止完了 |
 | `output/000_data/jobs.json` | `jobs` テーブル | 廃止完了 |
 | `output/000_data/upload_records.json` | `youtube_status` + `render_info` | 廃止完了 |
-| `output/000_data/uploaded_titles.txt` | `000_uploaded/` フォルダスキャンで代替 | 廃止完了 |
+| `output/000_data/uploaded_titles.txt` | `videos` / `youtube_status` テーブル | 廃止完了 |
 | `output/000_analytics/*.json` / `*.tsv` | `analytics_snapshots` テーブル | 廃止完了・ディレクトリ削除済み |
 | `.env`（非認証設定） | `data/settings.db`（`settings` テーブル） | 廃止完了 |
 | `.env`（認証情報） | `data/settings.db`（`encrypted_secrets` テーブル・AES-GCM暗号化） | 廃止完了 |

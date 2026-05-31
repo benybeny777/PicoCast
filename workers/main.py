@@ -1698,9 +1698,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             report.elapsed_sec = time.time() - pipeline_start
             return finish_result(msg)
 
-    # render_info を _meta に保存
+    # render_info を metadata.db に保存
     try:
         _thumb_frames = THUMBNAIL_HOLD_FRAMES_SHORTS if is_shorts else 0
+        _actual_duration_status = ""
+        if _actual_sec > 0:
+            _actual_duration_status = duration_review(_actual_sec, is_shorts, estimated=False).get("status", "")
         render_info = {
             "render_engine": _render_engine,
             "native_renderer": {
@@ -1720,6 +1723,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "video_format": meta.get("video_format", ""),
             "screen_format": meta.get("screen_format", ""),
             "playlist_categories": _parse_playlist_categories_meta(meta.get("playlist_categories", "")),
+            "actual_duration_sec": round(_actual_sec, 2) if _actual_sec > 0 else None,
+            "actual_duration_status": _actual_duration_status or None,
         }
         from core.metadata_db import upsert_render_info, initialize_db, is_initialized
         if not is_initialized():
