@@ -98,7 +98,8 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
 
     genre_dir = _GENRES_DIR / genre_profile
     if not genre_dir.is_dir():
-        raise FileNotFoundError(
+        from core.prompt_profile_loader import GenreProfileNotFoundError
+        raise GenreProfileNotFoundError(
             f"genre_profile '{genre_profile}' のディレクトリが存在しません: {genre_dir}"
         )
 
