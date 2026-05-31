@@ -44,6 +44,14 @@ async def _lifespan(app):
     initialize_db()  # 起動時に DB を確実に初期化しログを残す
     register_shutdown_hook("metadata_db", close_all_connections)
 
+    # channel profile にテンプレートが未投入であればファイルから seed する
+    try:
+        from core.prompt_template_seeder import seed_all_profiles
+        seed_all_profiles()
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning("[TemplateSeed] 起動時 seed でエラー: %s", _e)
+
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
     threading.Thread(target=log_external_services, daemon=True).start()
@@ -81,6 +89,7 @@ from web_app.routes.api_shutdown import router as shutdown_router
 from web_app.routes.api_db import router as db_router
 from web_app.routes.api_channel import router as channel_router
 from web_app.routes.api_channels import router as channels_router
+from web_app.routes.api_prompt_templates import router as prompt_templates_router
 
 app.include_router(pages_router)
 app.include_router(status_router)
@@ -100,6 +109,7 @@ app.include_router(shutdown_router)
 app.include_router(db_router)
 app.include_router(channel_router)
 app.include_router(channels_router)
+app.include_router(prompt_templates_router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
