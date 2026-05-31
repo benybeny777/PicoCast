@@ -2,7 +2,6 @@
 台本生成プロンプト・タイトル案プロンプトを組み立てて返すサービス。
 Web UIのプロンプト生成ボタンから呼び出す。
 """
-import os
 from typing import Optional
 
 
@@ -12,56 +11,46 @@ def _active_genre_profile() -> str:
     return require_active_profile().genre_profile
 
 
-def _get_output_videos_dir() -> str:
-    from core.output_paths import get_output_videos_dir
-    return get_output_videos_dir()
-
-
-def _get_uploaded_dir() -> str:
-    from core.output_paths import get_uploaded_dir
-    return get_uploaded_dir()
-
-
-def _folder_name_to_title(name: str) -> str:
-    from config import config as _cfg
-    for prefix in _cfg._LEGACY_FOLDER_PREFIXES:
-        if name.startswith(prefix):
-            return name[len(prefix):].strip()
-    return name
-
-
 def _collect_active_titles() -> list[str]:
-    """active profile の videos/ フォルダ内の未アップロードフォルダ名からタイトルを収集。"""
-    output_dir = _get_output_videos_dir()
-    skip = {"000_uploaded", "000_backups", "000_data", "000_legacy"}
-    if not os.path.isdir(output_dir):
-        return []
-    names = sorted(
-        (
-            d for d in os.listdir(output_dir)
-            if os.path.isdir(os.path.join(output_dir, d)) and d not in skip
-        ),
-        key=lambda d: os.path.getmtime(os.path.join(output_dir, d)),
-        reverse=True,
-    )
-    return [_folder_name_to_title(n) for n in names]
+    """metadata.db から未アップロードタイトルを収集。"""
+    from core.metadata_db import ManagedConnection, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        rows = conn.execute(
+            """
+            SELECT v.title
+            FROM videos v
+            LEFT JOIN youtube_status ys ON ys.local_id = v.local_id
+            WHERE ys.youtube_video_id IS NULL OR ys.youtube_video_id = ''
+            ORDER BY COALESCE(v.updated_at, v.created_at, v.local_id) DESC
+            LIMIT 200
+            """
+        ).fetchall()
+    return [str(r["title"] or "").strip() for r in rows if str(r["title"] or "").strip()]
 
 
 def _collect_uploaded_titles() -> list[str]:
-    """active profile の 000_uploaded フォルダからアップロード済みタイトルを収集。"""
-    uploaded_dir = _get_uploaded_dir()
-    if not os.path.isdir(uploaded_dir):
-        return []
-    folder_names = sorted(
-        (d for d in os.listdir(uploaded_dir) if os.path.isdir(os.path.join(uploaded_dir, d))),
-        key=lambda d: os.path.getmtime(os.path.join(uploaded_dir, d)),
-        reverse=True,
-    )
-    return [_folder_name_to_title(n) for n in folder_names]
+    """metadata.db からアップロード済みタイトルを収集。"""
+    from core.metadata_db import ManagedConnection, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        rows = conn.execute(
+            """
+            SELECT v.title
+            FROM videos v
+            JOIN youtube_status ys ON ys.local_id = v.local_id
+            WHERE ys.youtube_video_id IS NOT NULL AND ys.youtube_video_id != ''
+            ORDER BY COALESCE(v.updated_at, v.created_at, v.local_id) DESC
+            LIMIT 200
+            """
+        ).fetchall()
+    return [str(r["title"] or "").strip() for r in rows if str(r["title"] or "").strip()]
 
 
 def _collect_all_titles() -> list[str]:
-    """active profile の videos/ + 000_uploaded/ からタイトルを収集。"""
+    """metadata.db から生成済みタイトルを収集。"""
     return _collect_active_titles() + _collect_uploaded_titles()
 
 

@@ -1,4 +1,3 @@
-import json
 import os
 import re
 import subprocess
@@ -355,24 +354,10 @@ def probe_duration_sec(media_path: str) -> int | None:
 
 def read_policy_file(output_dir: str) -> dict:
     local_id = os.path.basename(os.path.abspath(output_dir))
-    try:
-        from core.metadata_db import get_cta_policy, is_initialized, initialize_db
-        if not is_initialized():
-            initialize_db()
-        result = get_cta_policy(local_id)
-        if result:
-            return result
-    except Exception:
-        pass
-    # 後方互換: DB になければ旧 JSON を参照
-    path = os.path.join(output_dir, "_meta", "cta_policy.json")
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    from core.metadata_db import get_cta_policy, is_initialized, initialize_db
+    if not is_initialized():
+        initialize_db()
+    return get_cta_policy(local_id)
 
 
 def write_policy_file(output_dir: str, policy: dict) -> str:

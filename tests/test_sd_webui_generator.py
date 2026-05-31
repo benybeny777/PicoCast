@@ -28,6 +28,19 @@ def _make_fake_response(status_code=200, json_data=None, text=""):
     return resp
 
 
+def _fake_client(*, get=None, post=None):
+    client = MagicMock()
+    if get is not None and hasattr(get, "status_code"):
+        client.get.return_value = get
+    elif get is not None:
+        client.get.side_effect = get
+    if post is not None and hasattr(post, "status_code"):
+        client.post.return_value = post
+    elif post is not None:
+        client.post.side_effect = post
+    return patch("core.sd_webui_generator.httpx.Client", return_value=client)
+
+
 def _png_b64() -> str:
     """1x1 白ピクセルの最小 PNG を base64 エンコードして返す。"""
     # 最小有効 PNG バイト列（1x1 px, 白）
@@ -53,7 +66,7 @@ class TestCheckHealth:
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         fake = _make_fake_response(200, {"sd_model_checkpoint": "someModel.safetensors"})
-        with patch("httpx.get", return_value=fake):
+        with _fake_client(get=fake):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             result = gen.check_health()
 
@@ -66,7 +79,7 @@ class TestCheckHealth:
         import httpx
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
-        with patch("httpx.get", side_effect=httpx.ConnectError("connection refused")):
+        with _fake_client(get=lambda *a, **kw: (_ for _ in ()).throw(httpx.ConnectError("connection refused"))):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             with pytest.raises(RuntimeError, match="接続できません"):
                 gen.check_health()
@@ -76,7 +89,7 @@ class TestCheckHealth:
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         fake = _make_fake_response(500, text="internal server error")
-        with patch("httpx.get", return_value=fake):
+        with _fake_client(get=fake):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             with pytest.raises(RuntimeError, match="status=500"):
                 gen.check_health()
@@ -96,8 +109,7 @@ class TestGenerateImage:
         fake_post = _make_fake_response(200, {"images": [b64]})
         output = str(tmp_path / "out.png")
 
-        with patch("httpx.get", side_effect=_fake_get_ok), \
-             patch("httpx.post", return_value=fake_post):
+        with _fake_client(get=_fake_get_ok, post=fake_post):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             result = gen.generate_image("テスト背景", output)
 
@@ -113,8 +125,7 @@ class TestGenerateImage:
         fake_post = _make_fake_response(200, {"images": [b64]})
         nested = str(tmp_path / "a" / "b" / "out.png")
 
-        with patch("httpx.get", side_effect=_fake_get_ok), \
-             patch("httpx.post", return_value=fake_post):
+        with _fake_client(get=_fake_get_ok, post=fake_post):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             gen.generate_image("テスト", nested)
 
@@ -127,8 +138,7 @@ class TestGenerateImage:
         fake_post = _make_fake_response(500, text="GPU out of memory")
         output = str(tmp_path / "fail.png")
 
-        with patch("httpx.get", side_effect=_fake_get_ok), \
-             patch("httpx.post", return_value=fake_post):
+        with _fake_client(get=_fake_get_ok, post=fake_post):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             with pytest.raises(RuntimeError):
                 gen.generate_image("test", output)
@@ -142,8 +152,10 @@ class TestGenerateImage:
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         output = str(tmp_path / "conn_fail.png")
-        with patch("httpx.get", side_effect=_fake_get_ok), \
-             patch("httpx.post", side_effect=httpx.ConnectError("refused")):
+        with _fake_client(
+            get=_fake_get_ok,
+            post=lambda *a, **kw: (_ for _ in ()).throw(httpx.ConnectError("refused")),
+        ):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             with pytest.raises(RuntimeError, match="接続できません"):
                 gen.generate_image("test", output)
@@ -157,8 +169,7 @@ class TestGenerateImage:
         fake_post = _make_fake_response(200, {"images": []})
         output = str(tmp_path / "empty.png")
 
-        with patch("httpx.get", side_effect=_fake_get_ok), \
-             patch("httpx.post", return_value=fake_post):
+        with _fake_client(get=_fake_get_ok, post=fake_post):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             with pytest.raises(RuntimeError, match="画像データがありません"):
                 gen.generate_image("test", output)
@@ -176,8 +187,7 @@ class TestGenerateImage:
             captured["prompt"] = json.get("prompt", "")
             return fake_post
 
-        with patch("httpx.get", side_effect=_fake_get_ok), \
-             patch("httpx.post", side_effect=mock_post):
+        with _fake_client(get=_fake_get_ok, post=mock_post):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             gen.generate_image("ベースプロンプト", output, prompt_suffix=", anime style")
 
@@ -189,8 +199,10 @@ class TestGenerateImage:
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         output = str(tmp_path / "timeout.png")
-        with patch("httpx.get", side_effect=_fake_get_ok), \
-             patch("httpx.post", side_effect=httpx.TimeoutException("timed out")):
+        with _fake_client(
+            get=_fake_get_ok,
+            post=lambda *a, **kw: (_ for _ in ()).throw(httpx.TimeoutException("timed out")),
+        ):
             gen = StableDiffusionWebUIGenerator(base_url="http://127.0.0.1:7860")
             with pytest.raises(RuntimeError, match="タイムアウト"):
                 gen.generate_image("test", output)

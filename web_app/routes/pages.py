@@ -102,9 +102,12 @@ def page_check(request: Request):
 
 
 @router.get("/history", response_class=HTMLResponse)
-def page_history(request: Request):
-    histories = history_service.list_histories()
-    return _render(request, "history.html", {"histories": histories})
+def page_history(request: Request, include_uploaded: bool = False):
+    histories = history_service.list_histories(include_uploaded=include_uploaded)
+    return _render(request, "history.html", {
+        "histories": histories,
+        "include_uploaded": include_uploaded,
+    })
 
 
 @router.get("/history/{history_name}", response_class=HTMLResponse)

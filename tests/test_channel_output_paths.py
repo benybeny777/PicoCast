@@ -3,7 +3,7 @@ core/output_paths.py と core/metadata_db.py のプロファイル別パステ�
 
 - output_root が profile 別に切り替わる
 - metadata.db path が profile 別に切り替わる
-- get_output_videos_dir / get_data_dir / get_analytics_dir が profile に応じたパスを返す
+- get_output_videos_dir / get_data_dir / get_uploaded_dir が profile に応じたパスを返す
 - 別 profile のパスへのアクセスは security.py が拒否する
 外部API実通信なし。
 """
@@ -97,17 +97,19 @@ def test_data_dir_profile_specific(profile_env):
     assert "urban_legend" in urban_data
 
 
-def test_analytics_dir_profile_specific(profile_env):
+def test_uploaded_dir_profile_specific(profile_env):
     cp, tmp_path, food, urban = profile_env
-    from core.output_paths import get_analytics_dir
+    from core.output_paths import get_uploaded_dir
 
     cp.activate_profile("food_trivia")
-    food_analytics = get_analytics_dir()
+    food_uploaded = get_uploaded_dir()
 
     cp.activate_profile("urban_legend")
-    urban_analytics = get_analytics_dir()
+    urban_uploaded = get_uploaded_dir()
 
-    assert food_analytics != urban_analytics
+    assert food_uploaded != urban_uploaded
+    assert "food_trivia" in food_uploaded
+    assert "urban_legend" in urban_uploaded
 
 
 # ── metadata.db が profile 別に切り替わる ─────────────────────────────────────

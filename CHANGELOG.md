@@ -6,6 +6,14 @@
 
 ## 2026-05-31
 
+### YouTube側を正とする動画DB同期を追加
+
+- `core/metadata_db.py` に `sync_youtube_statuses()` / `sync_youtube_statuses_from_api()` を追加。YouTube Data API の `title` / `privacyStatus` / `publishAt` / `publishedAt` / 動画種別を正として、`videos` / `render_info` / `youtube_status` を更新するようにした。
+- YouTube側で削除済みの既知動画IDは、`delete_missing=True` 指定時に `videos` / `youtube_status` / `render_info` / `analytics_snapshots` など関連DBレコードを削除する。
+- 同期後に `render_info` などの孤立行を削除し、過去削除や移行で残った空欄メタデータが画面・集計に混ざらないようにした。
+- `core/upload_scheduler.py` のスケジュール同期でも、廃止済みの `upload_record.json` には書き戻さず、`metadata.db` へ YouTube 側の状態を書き戻すよう変更。
+- 動画メタデータ管理で旧ローカルファイルを正本・補完元として使う処理を廃止。固定コメント、履歴表示、Analytics補助情報、CTAポリシー、YouTubeメタ、生成メタの参照・保存を `metadata.db` 正本へ寄せた。
+
 ### prompt_templates DB化・ローカルファイル管理廃止・旧互換コード全除去
 
 #### プロンプトテンプレートの DB 化

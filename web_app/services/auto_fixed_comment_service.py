@@ -5,16 +5,13 @@
 チェックタイミング: Shorts/Long の公開スロット時刻 (0:00 / 12:00 / 21:00 / 21:00 JST) の
 5分後にのみ起動。YouTube API は公開済み未投稿動画がある場合だけ呼ぶ。
 """
-import json
 import logging
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from config import config as _cfg
-from core.output_paths import get_output_videos_dir
 from core.upload_scheduler import JST, SLOTS, LONG_SLOTS_WEEKDAY, LONG_SLOTS_WEEKEND
-from web_app.security import safe_output_path
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +78,7 @@ def _interruptible_sleep(total_sec: float) -> None:
 
 
 def _run_once() -> None:
-    """ローカルで未処理候補があるときだけ YouTube API を呼んで投稿する。"""
-    if not _has_local_unsubmitted_candidates():
-        return
-
+    """metadata.db と YouTube API から未投稿候補を取得して投稿ジョブを登録する。"""
     from web_app.services.fixed_comment_service import (
         list_fixed_comment_candidates,
         submit_fixed_comment_job,
@@ -93,47 +87,9 @@ def _run_once() -> None:
     candidates = list_fixed_comment_candidates(only_unposted=True)
     for c in candidates:
         history_name = c["name"]
-        if c.get("auto_submitted_at"):
-            continue
 
-        _mark_auto_submitted(history_name)
         try:
             job_id = submit_fixed_comment_job(history_name, auto_posted=True)
             logger.info("固定コメント自動投稿ジョブ登録: %s (job_id=%s)", history_name, job_id)
         except Exception:
             logger.exception("固定コメント自動投稿ジョブ登録失敗: %s", history_name)
-
-
-def _has_local_unsubmitted_candidates() -> bool:
-    """YouTube API を呼ばずにローカルファイルだけで未処理候補の有無を判定する。"""
-    from web_app.services.fixed_comment_service import _iter_candidate_dirs, _safe_json, _first_existing
-    try:
-        for _relative_name, theme_dir in _iter_candidate_dirs():
-            record_path = _first_existing(theme_dir, ("_meta/upload_record.json", "upload_record.json"))
-            rec = _safe_json(record_path)
-            if not rec.get("video_id"):
-                continue
-            if rec.get("fixed_comment_thread_id") or rec.get("fixed_comment_posted_at") or rec.get("fixed_comment_pinned_at"):
-                continue
-            if rec.get("fixed_comment_auto_submitted_at"):
-                continue
-            return True
-    except Exception:
-        logger.exception("ローカル候補スキャン失敗")
-    return False
-
-
-def _mark_auto_submitted(history_name: str) -> None:
-    """upload_record.json に auto_submitted_at を記録して二重送信を防ぐ。"""
-    from web_app.services.fixed_comment_service import _first_existing, _safe_json
-    try:
-        theme_dir = safe_output_path(history_name, output_base=get_output_videos_dir())
-        record_path = _first_existing(theme_dir, ("_meta/upload_record.json", "upload_record.json"))
-        record = _safe_json(record_path)
-        if record.get("fixed_comment_auto_submitted_at"):
-            return
-        record["fixed_comment_auto_submitted_at"] = datetime.now(JST).isoformat(timespec="seconds")
-        with open(record_path, "w", encoding="utf-8") as f:
-            json.dump(record, f, ensure_ascii=False, indent=2)
-    except Exception:
-        logger.exception("auto_submitted_at 記録失敗: %s", history_name)

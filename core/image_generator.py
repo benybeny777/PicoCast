@@ -1,4 +1,3 @@
-import json
 import os
 import time
 from google import genai
@@ -189,24 +188,10 @@ class ImageGenerator:
         return fname
 
     def _meta_path_for_dir(self, save_dir):
-        theme_dir = os.path.dirname(os.path.abspath(save_dir))
-        meta_dir = os.path.join(theme_dir, "_meta")
-        os.makedirs(meta_dir, exist_ok=True)
-        return os.path.join(meta_dir, "image_generation.json")
+        return ""
 
     def _write_image_generation_meta(self, save_dir, entry):
-        path = self._meta_path_for_dir(save_dir)
-        current = {"entries": []}
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-            if isinstance(loaded, dict):
-                current = loaded
-                current.setdefault("entries", [])
-        current["entries"].append(entry)
-        current.update(entry)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(current, f, ensure_ascii=False, indent=2)
+        return None
 
     def _prepare_sd_webui_model(self) -> None:
         """SD_WEBUI_MODEL が設定されている場合、インストール確認・ダウンロード・モデル切り替えを行う。

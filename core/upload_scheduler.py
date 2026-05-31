@@ -1,12 +1,10 @@
 """
-YouTube upload schedule manager.
+YouTubeアップロードスケジュール管理。
 
-Shorts slots: 07:00 / 12:00 / 19:00 JST every day.
-Long slots: 21:00 JST on weekdays, 12:00 / 21:00 JST on weekends.
-Shorts and Long are tracked separately, so they may share the same time.
+Shorts枠: 毎日 07:00 / 12:00 / 19:00 JST。
+Long枠: 平日 21:00 JST、休日 12:00 / 21:00 JST。
+Shorts と Long は別枠として扱うため、同時刻をそれぞれ使用できる。
 """
-import json
-import os
 from datetime import datetime, timedelta, timezone
 
 JST = timezone(timedelta(hours=9))
@@ -404,7 +402,8 @@ def _remove_schedule_entry(schedule: dict, iso: str | None, title: str):
 
 def sync_schedule_from_youtube(progress_callback=None) -> dict:
     """YouTubeのステータスを正としてローカルレコード・スケジュールを更新する。"""
-    from core.upload_records import load_upload_records, save_upload_records
+    from core.metadata_db import sync_youtube_statuses
+    from core.upload_records import load_upload_records
     from core.youtube_uploader import get_channel_upload_video_statuses, get_video_statuses
 
     def _log(message):
@@ -422,6 +421,7 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
     except Exception as _e:
         _log(f"チャンネル全件取得失敗、既知IDのみでフォールバック: {_e}")
         statuses = get_video_statuses(list(id_to_record.keys()))
+    db_result = sync_youtube_statuses(statuses, delete_missing=False)
     now = datetime.now(JST)
     changed_records = 0
     scheduled = 0
@@ -499,23 +499,14 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
             changed_records += 1
 
     if changed_records:
-        # 各動画の _meta/upload_record.json へ書き戻す
-        for rec in records:
-            local_path = rec.get("_local_path")
-            if not local_path or not os.path.isfile(local_path):
-                continue
-            rec_to_save = {k: v for k, v in rec.items() if k != "_local_path"}
-            try:
-                with open(local_path, "w", encoding="utf-8") as _f:
-                    json.dump(rec_to_save, _f, ensure_ascii=False, indent=2)
-            except OSError as _e:
-                _log(f"レコード保存失敗: {local_path}: {_e}")
         _log(f"YouTube sync: records={changed_records}")
     return {
         "checked": len(statuses),
         "scheduled": scheduled,
         "published": published,
-        "changed": changed_records,
+        "changed": max(changed_records, db_result.get("updated", 0)),
+        "db_updated": db_result.get("updated", 0),
+        "db_missing": db_result.get("missing", 0),
     }
 
 

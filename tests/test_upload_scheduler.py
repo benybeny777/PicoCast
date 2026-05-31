@@ -294,7 +294,6 @@ class UploadSchedulerTests(unittest.TestCase):
                 "title": "unlisted scheduled",
             }
         ]
-        saved_records = []
         now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
 
         class FixedDateTime(datetime):
@@ -304,7 +303,7 @@ class UploadSchedulerTests(unittest.TestCase):
 
         with (
             patch("core.upload_records.load_upload_records", return_value=records),
-            patch("core.upload_records.save_upload_records", side_effect=lambda data: saved_records.append(data)),
+            patch("core.upload_records.save_upload_records"),
             patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={
                 "v1": {"privacyStatus": "unlisted", "publishAt": "2026-05-23T03:00:00Z"}
             }),
@@ -316,7 +315,7 @@ class UploadSchedulerTests(unittest.TestCase):
         self.assertEqual(records[0]["publish_at"], "2026-05-23T12:00:00+09:00")
         self.assertEqual(records[0]["publish_status"], "scheduled")
         self.assertEqual(records[0]["privacy_status"], "unlisted")
-        self.assertTrue(saved_records)
+        self.assertEqual(result["changed"], 1)
 
     def test_rebalance_skips_unlisted_without_publish_at(self):
         records = [
@@ -354,11 +353,10 @@ class UploadSchedulerTests(unittest.TestCase):
                 "publish_status": "scheduled",
             }
         ]
-        saved_records = []
 
         with (
             patch("core.upload_records.load_upload_records", return_value=records),
-            patch("core.upload_records.save_upload_records", side_effect=lambda data: saved_records.append(data)),
+            patch("core.upload_records.save_upload_records"),
             patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={
                 "v1": {"privacyStatus": "unlisted", "publishAt": None}
             }),
@@ -369,7 +367,7 @@ class UploadSchedulerTests(unittest.TestCase):
         self.assertEqual(records[0]["publish_status"], "unlisted")
         self.assertEqual(records[0]["privacy_status"], "unlisted")
         self.assertEqual(result["scheduled"], 0)
-        self.assertTrue(saved_records)
+        self.assertEqual(result["changed"], 1)
 
     def test_sync_clears_stale_past_publish_at_with_empty_status(self):
         records = [
@@ -380,7 +378,6 @@ class UploadSchedulerTests(unittest.TestCase):
                 "publish_at": "2026-05-19T12:00:00+09:00",
             }
         ]
-        saved_records = []
 
         class FixedDateTime(datetime):
             @classmethod
@@ -389,7 +386,7 @@ class UploadSchedulerTests(unittest.TestCase):
 
         with (
             patch("core.upload_records.load_upload_records", return_value=records),
-            patch("core.upload_records.save_upload_records", side_effect=lambda data: saved_records.append(data)),
+            patch("core.upload_records.save_upload_records"),
             patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={}),
             patch.object(upload_scheduler, "datetime", FixedDateTime),
         ):
@@ -398,7 +395,6 @@ class UploadSchedulerTests(unittest.TestCase):
         self.assertEqual(records[0]["publish_at"], None)
         self.assertEqual(records[0]["publish_status"], "private")
         self.assertEqual(result["changed"], 1)
-        self.assertTrue(saved_records)
 
     def test_long_weekend_rebalance_uses_noon_and_evening(self):
         now = datetime(2026, 5, 22, 22, 0, tzinfo=upload_scheduler.JST)
@@ -421,7 +417,6 @@ class UploadSchedulerTests(unittest.TestCase):
                 "publish_at": "2026-05-25T07:00:00+09:00",
             }
         ]
-        saved_records = []
         now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
 
         class FixedDateTime(datetime):
@@ -431,7 +426,7 @@ class UploadSchedulerTests(unittest.TestCase):
 
         with (
             patch("core.upload_records.load_upload_records", return_value=records),
-            patch("core.upload_records.save_upload_records", side_effect=lambda data: saved_records.append(data)),
+            patch("core.upload_records.save_upload_records"),
             patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={
                 "v1": {"privacyStatus": "private", "publishAt": "2026-05-23T03:00:00Z"}
             }),
@@ -442,7 +437,7 @@ class UploadSchedulerTests(unittest.TestCase):
         self.assertEqual(result["scheduled"], 1)
         self.assertEqual(records[0]["publish_at"], "2026-05-23T12:00:00+09:00")
         self.assertEqual(records[0]["publish_status"], "scheduled")
-        self.assertTrue(saved_records)
+        self.assertEqual(result["changed"], 1)
 
     def test_sync_clears_publish_at_when_youtube_is_not_scheduled(self):
         records = [
@@ -497,7 +492,6 @@ class UploadSchedulerTests(unittest.TestCase):
 
     def test_sync_imports_scheduled_video_missing_from_local_records(self):
         records = []
-        saved_records = []
         now = datetime(2026, 5, 21, 10, 0, tzinfo=upload_scheduler.JST)
 
         class FixedDateTime(datetime):
@@ -507,7 +501,7 @@ class UploadSchedulerTests(unittest.TestCase):
 
         with (
             patch("core.upload_records.load_upload_records", return_value=records),
-            patch("core.upload_records.save_upload_records", side_effect=lambda data: saved_records.append(list(data))),
+            patch("core.upload_records.save_upload_records"),
             patch("core.youtube_uploader.get_channel_upload_video_statuses", return_value={
                 "v-new": {
                     "privacyStatus": "private",
@@ -525,7 +519,7 @@ class UploadSchedulerTests(unittest.TestCase):
         self.assertEqual(records[0]["video_id"], "v-new")
         self.assertEqual(records[0]["publish_status"], "scheduled")
         self.assertEqual(records[0]["publish_at"], "2026-05-23T12:00:00+09:00")
-        self.assertTrue(saved_records)
+        self.assertEqual(result["changed"], 1)
 
 
 if __name__ == "__main__":

@@ -182,25 +182,7 @@ def _thumbnail_variant_filename(theme_dir, variant):
 
 
 def _write_long_thumbnail_manifest(theme_dir, topic, variants, video_id=None):
-    manifest_path = os.path.join(_meta_dir(theme_dir), "thumbnail_ab_test.json")
-    current = {}
-    if os.path.exists(manifest_path):
-        try:
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                current = json.load(f)
-        except Exception:
-            current = {}
-
-    data = {
-        "video_title": current.get("video_title") or topic,
-        "video_id": video_id if video_id is not None else current.get("video_id"),
-        "thumbnail_variants": variants,
-        "ab_test_status": current.get("ab_test_status") or "manual_pending",
-        "winner": current.get("winner"),
-    }
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    return manifest_path
+    return None
 
 
 def _fallback_title_variants(base_title):
@@ -219,58 +201,12 @@ def _fallback_title_variants(base_title):
 
 
 def _write_long_title_manifest(theme_dir, topic, title_variants, default_variant="A"):
-    manifest_path = os.path.join(_meta_dir(theme_dir), "title_ab_test.json")
-    data = {
-        "video_title": topic,
-        "default_variant": default_variant,
-        "title_variants": title_variants,
-        "ab_test_status": "manual_pending",
-        "winner": None,
-    }
-    with open(manifest_path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    return manifest_path
+    return None
 
 
 def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
-    """アップロード済みYouTube動画IDをLongサムネA/Bマニフェストに記録する。"""
-    if not output_dir or not video_id:
-        return None
-    manifest_path = os.path.join(output_dir, "_meta", "thumbnail_ab_test.json")
-    updated_path = None
-    try:
-        if os.path.exists(manifest_path):
-            with open(manifest_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            data["video_id"] = video_id
-            for item in data.get("thumbnail_variants", []):
-                variant = item.get("variant")
-                old_file = item.get("file")
-                if not variant or not old_file:
-                    continue
-                old_path = os.path.join(output_dir, old_file)
-                if not os.path.exists(old_path):
-                    old_path = os.path.join(_thumbs_dir(output_dir), old_file)
-                new_file = f"{video_id}_thumbnail_{variant}.png"
-                new_path = os.path.join(_thumbs_dir(output_dir), new_file)
-                if os.path.exists(old_path) and os.path.abspath(old_path) != os.path.abspath(new_path):
-                    shutil.copy2(old_path, new_path)
-                    item["file"] = new_file
-            with open(manifest_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            updated_path = manifest_path
-
-        title_manifest_path = os.path.join(output_dir, "_meta", "title_ab_test.json")
-        if os.path.exists(title_manifest_path):
-            with open(title_manifest_path, "r", encoding="utf-8") as f:
-                title_data = json.load(f)
-            title_data["video_id"] = video_id
-            with open(title_manifest_path, "w", encoding="utf-8") as f:
-                json.dump(title_data, f, ensure_ascii=False, indent=2)
-            updated_path = updated_path or title_manifest_path
-        return updated_path
-    except Exception:
-        return None
+    """LongサムネA/Bのローカルマニフェスト管理は廃止済み。"""
+    return None
 
 _CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
@@ -1263,74 +1199,32 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             variants_by_id.get(variant) or fallback_by_id[variant]
             for variant in ("A", "B", "C")
         ]
-        title_manifest_path = _write_long_title_manifest(theme_dir, base_title, merged_title_variants)
-        update_status(f"  ✅ タイトルA/B/C案保存: {title_manifest_path}")
+        _write_long_title_manifest(theme_dir, base_title, merged_title_variants)
+        update_status("  ✅ タイトルA/B/C案を生成しました")
 
     if meta:
-        meta_path = os.path.join(_meta_dir(theme_dir), "metadata.txt")
-        lines = []
-        if "video_title" in meta:
-            lines += ["【動画タイトル】", meta["video_title"], ""]
-        if "thumbnail_text" in meta:
-            lines += ["【サムネ文字】", meta["thumbnail_text"], ""]
-        if "description" in meta:
-            lines += ["【説明文】", meta["description"], ""]
-        if "tags" in meta:
-            lines += ["【タグ】", meta["tags"], ""]
-        if "generation_kind" in meta:
-            lines += ["【生成区分】", meta["generation_kind"], ""]
-        if "source_video_title" in meta:
-            lines += ["【元動画】", meta["source_video_title"], ""]
-        if "generation_purpose" in meta:
-            lines += ["【目的】", meta["generation_purpose"], ""]
-        if "thumbnail" in meta:
-            lines += ["【サムネイルプロンプト】", meta["thumbnail"], ""]
         if "meeting_candidates" in meta:
-            lines += ["【候補ネタ】", meta["meeting_candidates"], ""]
             cands = ScriptParser.parse_meeting_candidates(meta["meeting_candidates"])
-            topic_candidates_data = {
-                "mode": "netakaigi",
-                "purpose": "premiere_poll",
-                "candidate_count": len(cands),
-                "candidates": cands,
-                "poll_method": "comments_and_poll",
-                "winner": None,
-                "later_shorts_video_id": None,
-            }
-            with open(os.path.join(_meta_dir(theme_dir), "topic_candidates.json"), "w", encoding="utf-8") as nf:
-                json.dump(topic_candidates_data, nf, ensure_ascii=False, indent=2)
             update_status(f"📋 候補一覧: あり（{len(cands)}件）")
 
         if "poll_options" in meta:
             poll_data = ScriptParser.parse_poll_options(meta["poll_options"])
             poll_opts = poll_data.get("options", [])
             if len(poll_opts) < 2:
-                update_status("⚠ アンケート設定案: 選択肢が2件未満のため poll_options.json を保存しません", "warning")
+                update_status("⚠ アンケート設定案: 選択肢が2件未満です", "warning")
             else:
                 if len(set(poll_opts)) < len(poll_opts):
                     update_status("⚠ アンケート設定案: 重複選択肢があります", "warning")
-                with open(os.path.join(_meta_dir(theme_dir), "poll_options.json"), "w", encoding="utf-8") as pf:
-                    json.dump(poll_data, pf, ensure_ascii=False, indent=2)
-                poll_copy_text = ScriptParser.format_poll_copy(poll_data)
-                with open(os.path.join(_meta_dir(theme_dir), "poll_copy.txt"), "w", encoding="utf-8") as ptf:
-                    ptf.write(poll_copy_text)
-                update_status(f"📊 アンケート設定案: あり（選択肢{len(poll_opts)}件）  保存先: _meta/poll_copy.txt")
-        # 固定コメントを _meta/fixed_comment.txt にも保存
+                update_status(f"📊 アンケート設定案: あり（選択肢{len(poll_opts)}件）")
         raw_fixed_comment = meta.get("fixed_comment", "").strip()
-        if raw_fixed_comment:
-            with open(os.path.join(_meta_dir(theme_dir), "fixed_comment.txt"), "w", encoding="utf-8") as fcf:
-                fcf.write(raw_fixed_comment)
 
         # 台本に固定コメントがなければめたん調テンプレートで生成
         pinned_comment = raw_fixed_comment
         if not pinned_comment:
             _cmt_mode = "topic_request" if topic_request_allowed else "normal"
             pinned_comment = build_fixed_comment(meta.get("video_title", topic), mode=_cmt_mode)
+            meta["fixed_comment"] = pinned_comment
             update_status(f"💬 固定コメント自動生成: めたん調（{_cmt_mode}）")
-        if pinned_comment:
-            lines += ["【固定コメント】", pinned_comment, ""]
-        with open(meta_path, "w", encoding="utf-8") as mf:
-            mf.write("\n".join(lines))
         if "video_title" in meta:
             update_status(f"📝 動画タイトル: {meta['video_title']}")
         if is_netakaigi:
@@ -1786,12 +1680,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     if _actual_sec > 0:
         actual_duration_result = duration_review(_actual_sec, is_shorts, estimated=False)
-        dr_path = save_duration_review(theme_dir, actual_duration_result)
+        save_duration_review(theme_dir, actual_duration_result)
         _dur_status = actual_duration_result["status"]
         _dur_label = duration_status_label(_dur_status)
         _ideal = actual_duration_result.get("ideal", "")
         update_status(
-            f"⏱ 実尺チェック: {_actual_sec:.1f}秒 — {_dur_label}（目安: {_ideal}）　保存: {dr_path}",
+            f"⏱ 実尺チェック: {_actual_sec:.1f}秒 — {_dur_label}（目安: {_ideal}）",
             "warning" if _dur_status in ("warning", "needs_review") else "info",
         )
         if _dur_status == "needs_review":
@@ -1822,6 +1716,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "video_title": meta.get("video_title", topic),
             "description": meta.get("description", ""),
             "tags": meta.get("tags", []),
+            "fixed_comment": meta.get("fixed_comment", ""),
             "video_format": meta.get("video_format", ""),
             "screen_format": meta.get("screen_format", ""),
             "playlist_categories": _parse_playlist_categories_meta(meta.get("playlist_categories", "")),
@@ -1836,10 +1731,17 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # メタデータDB に同期（失敗しても生成結果は捨てない）
     try:
-        from core.metadata_db import sync_folder_to_db, initialize_db, is_initialized
+        from core.metadata_db import ManagedConnection, sync_folder_to_db, initialize_db, is_initialized
         if not is_initialized():
             initialize_db()
         sync_folder_to_db(theme_dir)
+        if meta.get("fixed_comment"):
+            with ManagedConnection() as _conn:
+                _conn.execute(
+                    "UPDATE video_metadata SET fixed_comment=? WHERE local_id=?",
+                    (meta["fixed_comment"], os.path.basename(theme_dir)),
+                )
+                _conn.commit()
     except Exception as _db_e:
         update_status(f"⚠ メタデータDB同期失敗（続行）: {_db_e}", "warning")
 

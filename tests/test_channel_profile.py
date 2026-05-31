@@ -176,9 +176,9 @@ def test_output_root_abs_relative(profile_db):
     assert os.path.normpath("output/food_trivia") in os.path.normpath(p.output_root_abs)
 
 
-# ── 初期プロファイル自動作成 ────────────────────────────────────────────────
+# ── 初期プロファイル自動作成なし ────────────────────────────────────────────
 
-def test_ensure_initial_profile_from_env(profile_db, monkeypatch):
+def test_env_config_does_not_create_profile(profile_db, monkeypatch):
     cp = profile_db
     import config.config as cfg
     monkeypatch.setattr(cfg, "CHANNEL_NAME", "食べ物雑学堂")
@@ -187,24 +187,5 @@ def test_ensure_initial_profile_from_env(profile_db, monkeypatch):
     monkeypatch.setattr(cfg, "CHANNEL_ACCENT_COLOR", "")
     monkeypatch.setattr(cfg, "DEFAULT_HASHTAGS", "#ずんだもん")
 
-    result = cp.ensure_initial_profile_from_env()
-    assert result is not None
-    assert result.genre_profile == "food_trivia"
-    active = cp.get_active_profile()
-    assert active is not None
-    assert active.channel_name == "食べ物雑学堂"
-
-
-def test_ensure_initial_profile_skips_if_exists(profile_db, monkeypatch):
-    cp = profile_db
-    p = _make_profile("existing")
-    cp.save_profile(p)
-    import config.config as cfg
-    monkeypatch.setattr(cfg, "CHANNEL_NAME", "別チャンネル")
-    monkeypatch.setattr(cfg, "CHANNEL_HANDLE", "@other")
-    monkeypatch.setattr(cfg, "CHANNEL_THEME", "")
-    monkeypatch.setattr(cfg, "CHANNEL_ACCENT_COLOR", "")
-    monkeypatch.setattr(cfg, "DEFAULT_HASHTAGS", "")
-
-    result = cp.ensure_initial_profile_from_env()
-    assert result is None  # 既存があるのでスキップ
+    assert cp.list_profiles() == []
+    assert cp.get_active_profile() is None

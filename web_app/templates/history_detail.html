@@ -495,7 +495,7 @@ async function copyFixedComment() {
   try {
     const res = await fetch(`/api/history/${encodeURIComponent('{{ detail.name }}')}/fixed-comment-copy`);
     const data = await res.json();
-    if (!data.exists) { msg.textContent = 'fixed_comment.txtが見つかりません'; msg.style.display = 'inline'; return; }
+    if (!data.exists) { msg.textContent = 'DBに固定コメントがありません'; msg.style.display = 'inline'; return; }
     if (navigator.clipboard) {
       await navigator.clipboard.writeText(data.text);
       msg.textContent = '固定コメントをコピーしました';
@@ -507,7 +507,7 @@ async function copyFixedComment() {
       msg.textContent = '固定コメントをコピーしました（フォールバック）';
     }
   } catch (e) {
-    msg.textContent = 'コピーに失敗しました。fixed_comment.txtを確認してください';
+    msg.textContent = 'コピーに失敗しました。DBの固定コメントを確認してください';
   }
   msg.style.display = 'inline';
   setTimeout(() => { msg.style.display = 'none'; }, 3000);
@@ -519,7 +519,7 @@ async function copyPollText() {
   try {
     const res = await fetch(`/api/history/${encodeURIComponent('{{ detail.name }}')}/poll-copy`);
     const data = await res.json();
-    if (!data.exists) { msg.textContent = 'poll_copy.txtが見つかりません'; msg.style.display = 'inline'; return; }
+    if (!data.exists) { msg.textContent = 'アンケートコピーはDB管理へ未移行です'; msg.style.display = 'inline'; return; }
     if (navigator.clipboard) {
       await navigator.clipboard.writeText(data.text);
       msg.textContent = 'アンケート文をコピーしました';
@@ -532,7 +532,7 @@ async function copyPollText() {
       msg.textContent = 'アンケート文をコピーしました（フォールバック）';
     }
   } catch (e) {
-    msg.textContent = 'コピーに失敗しました。poll_copy.txtを確認してください';
+    msg.textContent = 'コピーに失敗しました。アンケート情報を確認してください';
   }
   msg.style.display = 'inline';
   setTimeout(() => { msg.style.display = 'none'; }, 3000);

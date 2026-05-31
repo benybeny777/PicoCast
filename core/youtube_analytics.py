@@ -93,65 +93,39 @@ def _chunks(values, size=50):
 
 
 def _local_upload_records_by_video_id() -> dict:
+    from core.metadata_db import ManagedConnection, initialize_db, is_initialized
+
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        rows = conn.execute(
+            """
+            SELECT ys.youtube_video_id AS video_id,
+                   vm.generation_type AS generation_kind,
+                   vm.source_video_title,
+                   vm.purpose AS generation_purpose,
+                   vm.character_pattern,
+                   vm.genre AS genre_group,
+                   vm.cta_topic_request AS topic_request_cta,
+                   vm.cta_topic_request_reason,
+                   vm.cta_final_type AS final_cta_type
+            FROM youtube_status ys
+            LEFT JOIN video_metadata vm ON vm.local_id = ys.local_id
+            WHERE ys.youtube_video_id IS NOT NULL
+              AND TRIM(ys.youtube_video_id) <> ''
+            """
+        ).fetchall()
+
     records = {}
-    try:
-        from core.upload_records import load_upload_records
-        for record in load_upload_records():
-            video_id = record.get("video_id")
-            if video_id:
-                records[video_id] = dict(record)
-    except Exception as _e:
-        raise RuntimeError(f"Error: {_e}") from _e
-    uploaded_dir = os.path.join(ROOT_DIR, "output", "000_uploaded")
-    if not os.path.isdir(uploaded_dir):
-        return records
-    for root, _dirs, files in os.walk(uploaded_dir):
-        if "upload_record.json" not in files:
-            continue
-        path = os.path.join(root, "upload_record.json")
-        try:
-            import json
-            with open(path, "r", encoding="utf-8") as f:
-                record = json.load(f)
-        except Exception:
-            continue
-        video_id = record.get("video_id")
-        if video_id:
-            policy_path = os.path.join(root, "cta_policy.json") if os.path.basename(root) == "_meta" else os.path.join(root, "_meta", "cta_policy.json")
-            script_path = os.path.join(os.path.dirname(root), "script.txt") if os.path.basename(root) == "_meta" else os.path.join(root, "script.txt")
-            if os.path.exists(script_path):
-                try:
-                    from core.parser import ScriptParser
-                    script_meta = {
-                        it["type"]: it["text"]
-                        for it in ScriptParser.parse(script_path)
-                        if it["type"] in ScriptParser.META_TYPES
-                    }
-                    record.setdefault("generation_kind", script_meta.get("generation_kind", ""))
-                    record.setdefault("source_video_title", script_meta.get("source_video_title", ""))
-                    record.setdefault("generation_purpose", script_meta.get("generation_purpose", ""))
-                    record.setdefault("character_pattern", script_meta.get("character_pattern", ""))
-                    record.setdefault("genre_group", script_meta.get("genre_group", ""))
-                    record.setdefault("topic_request_cta", script_meta.get("topic_request_cta", ""))
-                    record.setdefault("topic_request_cta_reason", script_meta.get("topic_request_cta_reason", ""))
-                except Exception as _e:
-                    raise RuntimeError(f"Error: {_e}") from _e
-            if os.path.exists(policy_path):
-                try:
-                    with open(policy_path, "r", encoding="utf-8") as f:
-                        policy = json.load(f).get("cta_policy", {})
-                    topic_state = str(policy.get("topic_request_cta", ""))
-                    if topic_state == "allowed":
-                        record["topic_request_cta"] = "許可"
-                    elif topic_state == "blocked":
-                        record["topic_request_cta"] = "禁止"
-                    record.setdefault("topic_request_cta_reason", policy.get("topic_request_cta_reason", ""))
-                    record.setdefault("final_cta_type", policy.get("final_cta_type", ""))
-                except Exception as _e:
-                    raise RuntimeError(f"Error: {_e}") from _e
-            merged = dict(records.get(video_id, {}))
-            merged.update(record)
-            records[video_id] = merged
+    for row in rows:
+        record = dict(row)
+        video_id = record.pop("video_id")
+        topic_state = str(record.get("topic_request_cta") or "")
+        if topic_state == "allowed":
+            record["topic_request_cta"] = "許可"
+        elif topic_state == "blocked":
+            record["topic_request_cta"] = "禁止"
+        records[video_id] = record
     return records
 
 

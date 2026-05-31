@@ -13,8 +13,14 @@ router = APIRouter(prefix="/api/history", tags=["history"])
 
 
 @router.get("")
-def api_list_history(include_management: bool = Query(False)):
-    return list_histories(include_management=include_management)
+def api_list_history(
+    include_management: bool = Query(False),
+    include_uploaded: bool = Query(False),
+):
+    return list_histories(
+        include_management=include_management,
+        include_uploaded=include_uploaded,
+    )
 
 
 @router.get("/{history_name}")
@@ -51,25 +57,24 @@ def api_open_folder(history_name: str):
 
 @router.get("/{history_name}/fixed-comment-copy")
 def api_fixed_comment_copy(history_name: str):
-    """固定コメント本文を返す。fixed_comment.txt が存在しない場合は exists=false。"""
-    theme_dir = safe_output_path(history_name)
-    fc_path = os.path.join(theme_dir, "_meta", "fixed_comment.txt")
-    if os.path.isfile(fc_path):
-        with open(fc_path, "r", encoding="utf-8") as f:
-            text = f.read()
-        return {"exists": True, "text": text}
+    """metadata.db の固定コメント本文を返す。"""
+    local_id = os.path.basename(history_name.replace("\\", "/"))
+    from core.metadata_db import ManagedConnection, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT fixed_comment FROM video_metadata WHERE local_id=?",
+            (local_id,),
+        ).fetchone()
+    if row and row["fixed_comment"]:
+        return {"exists": True, "text": row["fixed_comment"]}
     return {"exists": False, "text": ""}
 
 
 @router.get("/{history_name}/poll-copy")
 def api_poll_copy(history_name: str):
-    """アンケート用コピーテキストを返す。poll_copy.txt が存在しない場合は exists=false。"""
-    theme_dir = safe_output_path(history_name)
-    poll_copy_path = os.path.join(theme_dir, "_meta", "poll_copy.txt")
-    if os.path.isfile(poll_copy_path):
-        with open(poll_copy_path, "r", encoding="utf-8") as f:
-            text = f.read()
-        return {"exists": True, "text": text}
+    """アンケート用コピーテキストはローカルファイル正本を廃止済みのため返さない。"""
     return {"exists": False, "text": ""}
 
 

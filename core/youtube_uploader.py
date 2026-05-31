@@ -456,26 +456,7 @@ def _read_script_text_for_tags(mp4_path: str) -> str:
 
 
 def _write_youtube_metadata(output_dir: str, title: str, youtube_tags: list[str], extra: dict | None = None) -> str | None:
-    if not output_dir:
-        return None
-    try:
-        from core.youtube_metadata import TAG_POLICY
-
-        meta_dir = os.path.join(output_dir, "_meta")
-        os.makedirs(meta_dir, exist_ok=True)
-        path = os.path.join(meta_dir, "youtube_metadata.json")
-        data = {
-            "title": title,
-            "youtube_tags": youtube_tags,
-            "tag_policy": TAG_POLICY,
-        }
-        if extra:
-            data.update(extra)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        return path
-    except Exception:
-        return None
+    return None
 
 
 def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
@@ -527,9 +508,6 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
         youtube = get_youtube_client()
 
         tag_list = split_tags(tags)
-        metadata_path = _write_youtube_metadata(os.path.dirname(os.path.abspath(mp4_path)), title, tag_list, extra=policy_data)
-        if metadata_path:
-            _log(f"  🏷 YouTubeタグ記録: {metadata_path}")
 
         # publish_at が指定されていれば ISO8601 文字列に統一
         publish_at_str = None

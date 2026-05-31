@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import sys
@@ -9,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.native_character_assets import CharacterVariantSet
-from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _filter_escape_path, _native_loudnorm_filter, _run_ffmpeg, _save_render_info, _write_subtitles
+from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _run_ffmpeg, _save_render_info, _subtitles_filter_path, _write_subtitles
 
 
 class TestDurationStatus(unittest.TestCase):
@@ -77,46 +76,50 @@ class TestFfmpegRunner(unittest.TestCase):
         self.assertEqual(calls["kwargs"]["stdin"], subprocess.DEVNULL)
         self.assertGreater(calls["kwargs"]["timeout"], 0)
 
-    def test_filter_escape_path_escapes_brackets(self):
-        escaped = _filter_escape_path("output/[Shorts]りんご/subtitle_0001.ass")
+    def test_subtitles_filter_path_escapes_brackets(self):
+        escaped = _subtitles_filter_path("output/[Shorts]りんご/subtitle_0001.ass")
         self.assertIn(r"\[Shorts\]", escaped)
 
 
 class TestSaveRenderInfo(unittest.TestCase):
+    def _patch_db_path(self, tmpdir: str):
+        import core.metadata_db as metadata_db
+        patcher = patch.object(metadata_db, "get_db_path", return_value=os.path.join(tmpdir, "metadata.db"))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(metadata_db.close_all_connections)
+        return metadata_db
+
     def test_creates_meta_dir_and_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
+            metadata_db = self._patch_db_path(tmpdir)
             info = {"render_engine": "native", "actual_duration_sec": 43.7, "actual_duration_status": "ideal"}
             _save_render_info(tmpdir, info)
-            path = os.path.join(tmpdir, "_meta", "render_info.json")
-            self.assertTrue(os.path.exists(path))
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
+            data = metadata_db.get_render_info(os.path.basename(tmpdir))
+            self.assertIsNotNone(data)
             self.assertEqual(data["render_engine"], "native")
             self.assertAlmostEqual(data["actual_duration_sec"], 43.7)
             self.assertEqual(data["actual_duration_status"], "ideal")
 
     def test_merges_with_existing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            meta_dir = os.path.join(tmpdir, "_meta")
-            os.makedirs(meta_dir)
-            existing_path = os.path.join(meta_dir, "render_info.json")
-            with open(existing_path, "w", encoding="utf-8") as f:
-                json.dump({"previous_key": "previous_value"}, f)
+            metadata_db = self._patch_db_path(tmpdir)
+            local_id = os.path.basename(tmpdir)
+            metadata_db.initialize_db()
+            metadata_db.upsert_render_info(local_id, {"video_title": "既存タイトル"})
 
-            _save_render_info(tmpdir, {"new_key": "new_value"})
+            _save_render_info(tmpdir, {"actual_duration_sec": 12.5})
 
-            with open(existing_path, encoding="utf-8") as f:
-                data = json.load(f)
-            self.assertEqual(data["previous_key"], "previous_value")
-            self.assertEqual(data["new_key"], "new_value")
+            data = metadata_db.get_render_info(local_id)
+            self.assertEqual(data["video_title"], "既存タイトル")
+            self.assertAlmostEqual(data["actual_duration_sec"], 12.5)
 
     def test_new_value_overwrites_existing(self):
         with tempfile.TemporaryDirectory() as tmpdir:
+            metadata_db = self._patch_db_path(tmpdir)
             _save_render_info(tmpdir, {"actual_duration_sec": 40.0})
             _save_render_info(tmpdir, {"actual_duration_sec": 45.0})
-            path = os.path.join(tmpdir, "_meta", "render_info.json")
-            with open(path, encoding="utf-8") as f:
-                data = json.load(f)
+            data = metadata_db.get_render_info(os.path.basename(tmpdir))
             self.assertAlmostEqual(data["actual_duration_sec"], 45.0)
 
 

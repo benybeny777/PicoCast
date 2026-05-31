@@ -396,17 +396,6 @@ def _local_id_from_dir(output_dir: str) -> str:
     return os.path.basename(os.path.abspath(output_dir).rstrip("/\\"))
 
 
-def _safe_json(path: str) -> dict:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-    except Exception as e:
-        _logger.warning("JSON読み込み失敗 %s: %s", path, e)
-        return {}
-
-
 def _find_mp4(output_dir: str) -> str | None:
     try:
         for f in os.listdir(output_dir):
@@ -425,6 +414,33 @@ def _find_thumbnail(output_dir: str) -> str | None:
     for p in candidates:
         if os.path.isfile(p):
             return p
+    return None
+
+
+def _parse_youtube_time(value: str | None) -> str | None:
+    if not value:
+        return None
+    return datetime.fromisoformat(str(value).replace("Z", "+00:00")).isoformat()
+
+
+def _youtube_publish_status(privacy_status: str | None, publish_at: str | None) -> str:
+    privacy = str(privacy_status or "").lower()
+    if privacy == "public":
+        return "published"
+    if privacy in {"private", "unlisted"} and publish_at:
+        publish_dt = datetime.fromisoformat(str(publish_at).replace("Z", "+00:00"))
+        return "scheduled" if publish_dt > datetime.now(timezone.utc) else privacy
+    if privacy:
+        return privacy
+    return "unknown"
+
+
+def _screen_format_from_video_type(video_type: str | None) -> str | None:
+    vt = str(video_type or "").lower()
+    if vt == "shorts":
+        return "縦"
+    if vt == "long":
+        return "横"
     return None
 
 
@@ -490,7 +506,7 @@ def upsert_video_metadata(conn: sqlite3.Connection, local_id: str,
         script_meta.get("source_video_title"),
         script_meta.get("generation_purpose"),
         script_meta.get("thumbnail_text"),
-        script_meta.get("fixed_comment"),
+        script_meta.get("fixed_comment") or render_info.get("fixed_comment"),
         render_info.get("description") or script_meta.get("description"),
         json.dumps(tags, ensure_ascii=False),
         json.dumps(cats, ensure_ascii=False),
@@ -531,6 +547,150 @@ def upsert_youtube_status(conn: sqlite3.Connection, local_id: str,
         upload_record.get("privacy_status"),
         fc_posted, fc_id,
     ))
+
+
+def sync_youtube_statuses(statuses: dict[str, dict], delete_missing: bool = False) -> dict[str, int]:
+    """
+    YouTube Data API 由来の状態を正として metadata.db を更新する。
+
+    statuses は video_id -> dict の形式で、core.youtube_uploader.get_channel_upload_video_statuses()
+    または get_video_statuses() の戻り値を想定する。delete_missing=True の場合、DB上の
+    youtube_video_id が statuses に存在しないレコードは YouTube 側で削除済みとして削除する。
+    """
+    if not is_initialized():
+        initialize_db()
+
+    checked = 0
+    updated = 0
+    deleted = 0
+    missing = 0
+    orphan_deleted = 0
+    now = _now_jst()
+
+    with ManagedConnection() as conn:
+        rows = conn.execute("""
+            SELECT v.local_id, v.title, v.video_type,
+                   ys.youtube_video_id, ys.publish_status, ys.publish_at,
+                   ys.uploaded_at, ys.published_at, ys.privacy_status,
+                   ri.video_title, ri.video_format, ri.screen_format
+            FROM youtube_status ys
+            JOIN videos v ON v.local_id = ys.local_id
+            LEFT JOIN render_info ri ON ri.local_id = ys.local_id
+            WHERE ys.youtube_video_id IS NOT NULL
+              AND TRIM(ys.youtube_video_id) <> ''
+        """).fetchall()
+
+        for row in rows:
+            checked += 1
+            local_id = row["local_id"]
+            video_id = str(row["youtube_video_id"]).strip()
+            status = statuses.get(video_id)
+            if status is None:
+                missing += 1
+                if delete_missing:
+                    conn.execute("DELETE FROM render_info      WHERE local_id=?", (local_id,))
+                    conn.execute("DELETE FROM script_quality   WHERE local_id=?", (local_id,))
+                    conn.execute("DELETE FROM playlists         WHERE local_id=?", (local_id,))
+                    conn.execute("DELETE FROM analytics_snapshots WHERE youtube_video_id=?", (video_id,))
+                    conn.execute("DELETE FROM youtube_status   WHERE local_id=?", (local_id,))
+                    conn.execute("DELETE FROM video_metadata   WHERE local_id=?", (local_id,))
+                    conn.execute("DELETE FROM topic_history    WHERE local_id=?", (local_id,))
+                    conn.execute("DELETE FROM videos           WHERE local_id=?", (local_id,))
+                    deleted += 1
+                continue
+
+            title = str(status.get("title") or "").strip() or None
+            video_type = str(status.get("video_type") or "").strip() or None
+            privacy = str(status.get("privacyStatus") or "").strip() or None
+            publish_at = _parse_youtube_time(status.get("publishAt"))
+            published_at = _parse_youtube_time(status.get("publishedAt"))
+            publish_status = _youtube_publish_status(privacy, status.get("publishAt"))
+            uploaded_at = published_at
+            screen_format = _screen_format_from_video_type(video_type)
+
+            before = dict(row)
+
+            conn.execute("""
+                UPDATE videos
+                SET title=COALESCE(?, title),
+                    video_type=COALESCE(?, video_type),
+                    updated_at=?
+                WHERE local_id=?
+            """, (title, video_type, now, local_id))
+
+            conn.execute("""
+                INSERT INTO render_info(local_id, video_title, video_format, screen_format)
+                VALUES(?,?,?,?)
+                ON CONFLICT(local_id) DO UPDATE SET
+                    video_title=COALESCE(excluded.video_title, render_info.video_title),
+                    video_format=COALESCE(excluded.video_format, render_info.video_format),
+                    screen_format=COALESCE(excluded.screen_format, render_info.screen_format)
+            """, (local_id, title, video_type, screen_format))
+
+            conn.execute("""
+                UPDATE youtube_status
+                SET publish_status=?,
+                    publish_at=?,
+                    uploaded_at=COALESCE(NULLIF(uploaded_at, ''), ?),
+                    published_at=COALESCE(NULLIF(published_at, ''), ?),
+                    privacy_status=?
+                WHERE local_id=?
+            """, (publish_status, publish_at, uploaded_at, published_at, privacy, local_id))
+
+            after = conn.execute("""
+                SELECT v.title, v.video_type,
+                       ys.publish_status, ys.publish_at, ys.uploaded_at,
+                       ys.published_at, ys.privacy_status,
+                       ri.video_title, ri.video_format, ri.screen_format
+                FROM videos v
+                LEFT JOIN youtube_status ys ON ys.local_id = v.local_id
+                LEFT JOIN render_info ri ON ri.local_id = v.local_id
+                WHERE v.local_id=?
+            """, (local_id,)).fetchone()
+            if after is not None and any(before.get(k) != after[k] for k in after.keys()):
+                updated += 1
+
+        orphan_deleted += conn.execute("""
+            DELETE FROM render_info
+            WHERE local_id NOT IN (SELECT local_id FROM videos)
+        """).rowcount
+        orphan_deleted += conn.execute("""
+            DELETE FROM script_quality
+            WHERE local_id NOT IN (SELECT local_id FROM videos)
+        """).rowcount
+        orphan_deleted += conn.execute("""
+            DELETE FROM video_metadata
+            WHERE local_id NOT IN (SELECT local_id FROM videos)
+        """).rowcount
+        orphan_deleted += conn.execute("""
+            DELETE FROM topic_history
+            WHERE local_id IS NOT NULL
+              AND local_id NOT IN (SELECT local_id FROM videos)
+        """).rowcount
+        orphan_deleted += conn.execute("""
+            DELETE FROM playlists
+            WHERE local_id IS NOT NULL
+              AND local_id NOT IN (SELECT local_id FROM videos)
+        """).rowcount
+        conn.commit()
+
+    return {
+        "checked": checked,
+        "updated": updated,
+        "missing": missing,
+        "deleted": deleted,
+        "orphan_deleted": orphan_deleted,
+    }
+
+
+def sync_youtube_statuses_from_api(delete_missing: bool = False) -> dict[str, int]:
+    """YouTube Data API を正として既知動画IDの DB 状態を更新する。"""
+    from core.youtube_uploader import get_channel_upload_video_statuses
+
+    statuses = get_channel_upload_video_statuses()
+    result = sync_youtube_statuses(statuses, delete_missing=delete_missing)
+    result["youtube_returned"] = len(statuses)
+    return result
 
 
 def upsert_script_quality(conn: sqlite3.Connection, local_id: str,
@@ -630,46 +790,6 @@ def insert_analytics_snapshot(video_id: str, collected_at: str, window_days: int
             data.get("avoid_pattern"),
         ))
         conn.commit()
-
-
-def import_analytics_json(json_path: str) -> int:
-    """
-    analytics_score_YYYYMMDD.json を読んで analytics_snapshots に一括 upsert する。
-    返値: 処理件数
-    """
-    import json as _json
-    with open(json_path, encoding="utf-8") as f:
-        data = _json.load(f)
-    collected_at = data.get("generated_at", "")
-    window_days  = int(data.get("days", 28))
-    items = data.get("items", [])
-    count = 0
-    for item in items:
-        vid = item.get("video_id")
-        if not vid:
-            continue
-        try:
-            insert_analytics_snapshot(vid, collected_at, window_days, item)
-            count += 1
-        except Exception as e:
-            _logger.warning("[SQLite] analytics import スキップ %s: %s", vid, e)
-    _logger.info("[SQLite] analytics JSON 取込完了: %s → %d件", os.path.basename(json_path), count)
-    return count
-
-
-def import_all_analytics_jsons(analytics_dir: str) -> dict:
-    """analytics_dir 内の全 JSON を取り込む。"""
-    results: dict[str, int] = {}
-    for fname in sorted(os.listdir(analytics_dir)):
-        if not fname.startswith("analytics_score_") or not fname.endswith(".json"):
-            continue
-        path = os.path.join(analytics_dir, fname)
-        try:
-            results[fname] = import_analytics_json(path)
-        except Exception as e:
-            _logger.error("[SQLite] analytics JSON 取込失敗 %s: %s", fname, e)
-            results[fname] = -1
-    return results
 
 
 def upsert_playlist_registration(local_id: str, youtube_video_id: str,
@@ -968,20 +1088,12 @@ def delete_video(local_id: str) -> None:
 def sync_folder_to_db(output_dir: str) -> None:
     """
     output_dir 配下を DB に同期する。
-    新規フォルダ: DB が正本なので JSON は参照しない。
-    既存フォルダ(旧形式): JSON が残っていれば fallback として読む。
+    DB を正本とし、旧メタJSONは参照しない。
     失敗時はログに出して例外を伝播させる（サイレントスキップ禁止）。
     """
     local_id = _local_id_from_dir(output_dir)
-    meta_dir = os.path.join(output_dir, "_meta")
 
-    # render_info: DB を正本とし、DB に無ければ旧 JSON から取り込む
     render_info = get_render_info(local_id)
-    if not render_info:
-        ri_json = _safe_json(os.path.join(meta_dir, "render_info.json"))
-        if ri_json:
-            upsert_render_info(local_id, ri_json)
-            render_info = ri_json
 
     upload_rec: dict = {}
     with ManagedConnection() as _c:
@@ -991,7 +1103,6 @@ def sync_folder_to_db(output_dir: str) -> None:
         if _row and _row[0]:
             upload_rec = {"video_id": _row[0]}
 
-    # opening_review: DB を正本とし、無ければ旧 JSON から取り込む
     opening_rev: dict = {}
     with ManagedConnection() as _c:
         _row2 = _c.execute(
@@ -999,18 +1110,6 @@ def sync_folder_to_db(output_dir: str) -> None:
         ).fetchone()
         if _row2 and _row2[0] is not None:
             opening_rev = {"final_score": _row2[0]}
-    if not opening_rev:
-        opening_rev_json = _safe_json(os.path.join(meta_dir, "opening_review.json"))
-        if opening_rev_json:
-            upsert_opening_review(local_id, opening_rev_json)
-            opening_rev = opening_rev_json
-
-    # cta_policy: DB を正本とし、無ければ旧 JSON から取り込む
-    cta_from_db = get_cta_policy(local_id)
-    if not cta_from_db.get("cta_policy"):
-        cta_json = _safe_json(os.path.join(meta_dir, "cta_policy.json"))
-        if cta_json:
-            upsert_cta_policy(local_id, cta_json)
 
     # 台本メタを ScriptParser で取得
     script_meta: dict = {}
@@ -1026,9 +1125,15 @@ def sync_folder_to_db(output_dir: str) -> None:
         except Exception as e:
             _logger.warning("script.txt パース失敗 %s: %s", local_id, e)
 
+    render_info_for_video = dict(render_info)
+    if script_meta:
+        render_info_for_video.setdefault("video_title", script_meta.get("video_title"))
+        render_info_for_video.setdefault("video_format", script_meta.get("video_format"))
+        render_info_for_video.setdefault("screen_format", script_meta.get("screen_format"))
+
     with ManagedConnection() as conn:
-        upsert_video(conn, local_id, output_dir, render_info, upload_rec)
-        upsert_video_metadata(conn, local_id, render_info, script_meta)
+        upsert_video(conn, local_id, output_dir, render_info_for_video, upload_rec)
+        upsert_video_metadata(conn, local_id, render_info_for_video, script_meta)
         if upload_rec:
             upsert_youtube_status(conn, local_id, upload_rec)
         upsert_script_quality(conn, local_id, render_info, opening_rev)
@@ -1253,18 +1358,10 @@ def import_output_dir(output_dir_root: str | None = None) -> None:
 
 
 def _import_one(folder: str, ok_ref: list, warn_ref: list, fail_ref: list) -> None:
-    meta_dir = os.path.join(folder, "_meta")
-    if not os.path.isdir(meta_dir):
+    script_path = os.path.join(folder, "script.txt")
+    if not os.path.isfile(script_path):
         return  # 動画フォルダではない
     try:
-        missing = []
-        for fname in ("render_info.json",):
-            if not os.path.isfile(os.path.join(meta_dir, fname)):
-                missing.append(fname)
-        if missing:
-            warn_ref[0] += 1
-            print(f"  ⚠ {os.path.basename(folder)}: 欠損ファイル {missing}")
-
         sync_folder_to_db(folder)
         ok_ref[0] += 1
         print(f"  ✅ {os.path.basename(folder)}")

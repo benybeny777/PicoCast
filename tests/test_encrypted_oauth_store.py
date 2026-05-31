@@ -51,9 +51,9 @@ def test_save_and_restore_token_json(oauth_env):
         "scopes": ["https://www.googleapis.com/auth/youtube.upload"],
     }
     token_json = json.dumps(token_data)
-    ss.save_secret("youtube_upload_token", token_json)
+    ss.save_secret("youtube_upload_token", token_json, profile_id="food_trivia")
 
-    recovered = json.loads(ss.load_secret("youtube_upload_token"))
+    recovered = json.loads(ss.load_secret("youtube_upload_token", profile_id="food_trivia"))
     assert recovered["token"] == "ya29.UPLOAD_TOKEN"
     assert recovered["refresh_token"] == "1//REFRESH_UPLOAD"
 
@@ -77,7 +77,7 @@ def test_token_file_not_created(oauth_env, monkeypatch, tmp_path):
         "client_secret": "TEST_SECRET",
         "scopes": uploader.SCOPES,
     }
-    ss.save_secret("youtube_upload_token", json.dumps(valid_token))
+    ss.save_secret("youtube_upload_token", json.dumps(valid_token), profile_id="food_trivia")
 
     # Credentials.from_authorized_user_info でモック Credentials を返す
     fake_creds = mock.MagicMock()
@@ -121,7 +121,7 @@ def test_token_analytics_file_not_created(oauth_env, monkeypatch, tmp_path):
         "client_secret": "TEST_SECRET",
         "scopes": analytics.SCOPES,
     }
-    ss.save_secret("youtube_analytics_token", json.dumps(valid_token))
+    ss.save_secret("youtube_analytics_token", json.dumps(valid_token), profile_id="food_trivia")
 
     fake_creds = mock.MagicMock()
     fake_creds.valid = True
@@ -158,7 +158,7 @@ def test_refresh_saves_updated_token_to_db(oauth_env, monkeypatch):
         "client_secret": "TEST_SECRET",
         "scopes": uploader.SCOPES,
     }
-    ss.save_secret("youtube_upload_token", json.dumps(expired_token))
+    ss.save_secret("youtube_upload_token", json.dumps(expired_token), profile_id="food_trivia")
 
     # refresh 後の新トークン
     new_token_json = json.dumps({
@@ -192,5 +192,5 @@ def test_refresh_saves_updated_token_to_db(oauth_env, monkeypatch):
     uploader.get_youtube_client()
 
     # DB に新しいトークンが保存されている
-    recovered = json.loads(ss.load_secret("youtube_upload_token"))
+    recovered = json.loads(ss.load_secret("youtube_upload_token", profile_id="food_trivia"))
     assert recovered["token"] == "ya29.REFRESHED"

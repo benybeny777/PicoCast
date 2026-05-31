@@ -6,7 +6,7 @@
 <div class="card">
   <div class="filter-row">
     <input type="text" id="filter-input" placeholder="テーマ名で絞り込み..." oninput="filterHistory()" class="filter-input">
-    <label><input type="checkbox" id="show-mgmt" onchange="filterHistory()"> 管理フォルダも表示</label>
+    <label><input type="checkbox" id="show-uploaded" {% if include_uploaded %}checked{% endif %} onchange="toggleUploaded()"> アップロード済みも表示</label>
     <button class="btn btn-primary"   onclick="regenerateSelected('full')">全工程再作成</button>
     <button class="btn btn-secondary" onclick="regenerateSelected('no_render')">動画再作成（レンダー以外）</button>
     <button class="btn btn-secondary" onclick="regenerateSelected('render_only')">動画再作成（レンダーのみ）</button>
@@ -79,18 +79,23 @@ document.querySelectorAll('.score-badge').forEach(el => {
   else el.classList.add('badge-ng');
 });
 
+function toggleUploaded() {
+  const checked = document.getElementById('show-uploaded').checked;
+  const url = new URL(location.href);
+  if (checked) url.searchParams.set('include_uploaded', 'true');
+  else url.searchParams.delete('include_uploaded');
+  location.href = url.toString();
+}
+
 function filterHistory() {
   const q = document.getElementById('filter-input').value.toLowerCase();
-  const showMgmt = document.getElementById('show-mgmt').checked;
   document.querySelectorAll('.history-row').forEach(row => {
     const name = (row.dataset.name || '').toLowerCase();
-    const isMgmt = row.dataset.mgmt === 'true';
     const matchQ = !q || name.includes(q);
-    const matchMgmt = showMgmt || !isMgmt;
-    row.style.display = (matchQ && matchMgmt) ? '' : 'none';
+    row.style.display = matchQ ? '' : 'none';
   });
 }
-filterHistory(); // 初期表示（管理フォルダを非表示）
+filterHistory();
 
 function selectVisibleHistories(checked) {
   document.querySelectorAll('.history-row').forEach(row => {

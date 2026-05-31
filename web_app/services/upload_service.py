@@ -2,7 +2,6 @@
 YouTubeアップロードサービス。
 二重アップロード防止チェックを行い、ジョブとして実行する。
 """
-import json
 import os
 import shutil
 import threading
@@ -18,7 +17,7 @@ _slot_lock = threading.Lock()  # スロット割り当ての同時実行を防�
 
 
 def list_upload_candidates() -> list[dict[str, Any]]:
-    """MP4がある動画履歴を返す（000_uploaded/配下も含む）。"""
+    """videos/ 配下でMP4がある動画を返す。"""
     candidates = []
     seen: set[str] = set()
 
@@ -237,7 +236,7 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
             except Exception as e:
                 _log(job, f"再生リスト追加エラー（続行）: {e}", "warning")
 
-    # youtube_status を DB に直接書き込む（upload_record.json は廃止）
+    # youtube_status を DB に直接書き込む
     uploaded_at = datetime.now(_JST).isoformat()
     upload_record = {
         "video_id": video_id,
@@ -296,10 +295,3 @@ def _find_mp4(theme_dir: str) -> str | None:
         pass
     return None
 
-
-def _safe_json(path: str) -> dict:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}

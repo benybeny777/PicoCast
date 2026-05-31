@@ -1,10 +1,8 @@
 """
 スケジュール管理サービス。
-upload_records.json 台帳ベースの設計を維持する。
+YouTube Data API と metadata.db を正として扱う。
 破壊的操作（公開予定変更・削除・詰め直し）は確認必須。
 """
-import json
-import os
 from typing import Any
 
 from web_app.job_manager import Job, _log, get_job_manager
@@ -62,7 +60,6 @@ def list_schedule(
             "privacy_status": privacy,
             "is_scheduled": is_scheduled,
             "is_published": is_published,
-            "_local_path": "",
         })
 
     result.sort(key=lambda x: x.get("publish_at") or "")

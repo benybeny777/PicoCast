@@ -163,7 +163,7 @@ yukkurijidou/
 - バリアント: `ネタ会議Long` → 横画面 (1920×1080)、`ネタ会議Shorts` または `ネタ会議`（デフォルト）→ 縦画面 (1080×1920)。`画面形式: 横` でも横判定
 - `render_native_test` が呼ばれる際、フォルダ名 `ネタ会議_...` は `_video_size` で上記バリアントを台本から再判定して解像度を決定する
 - プレミア公開や視聴者への投票（コメントやアンケート）を前提とする
-- `_meta/metadata.txt` に `候補ネタ: ...` の複数行データが保存され、後日の制作参考として蓄積できる
+- 候補ネタなどの管理データは `metadata.db` に保存し、ローカルメタファイルを正本にしない
 - ネタ会議モードでは、第1部の候補一覧に実績根拠として具体数値を保存するが、第2部の本編台本では再生数・平均視聴率・高評価数・コメント数などの具体数値を読み上げない。本編では「前に反応がよかった」「手応えがあった」「関心を持たれやすい」など、視聴者向けの自然な表現へ変換する。
 - 候補選定において、既存タイトルと同一主語・切り口の重複を避け、再挑戦候補は最大1個とし、未使用食材を3つ以上含めるようプロンプトで厳格に制御している。
 - **ネタ会議にも適用する標準ルール**: めたんは辛口編集者・毒舌ツッコミ役として固定（相槌禁止セリフ: 「なるほどですわ」「そうなんですの」「驚きですわ」等の単独使用禁止）。動画タイトルを0〜100点で内部採点し78点未満は出力禁止。TOP5汎用ワード（実は/意外な/驚き/知らなかった/衝撃）のタイトル単独使用禁止。本編セリフへの感情タグ必須。
@@ -321,21 +321,22 @@ for item in dialogue_items:
 - モデル: `OPENAI_FINAL_REVIEW_MODEL`（デフォルト `gpt-5.2`）
 - 入力: タイトル / サムネ文字 / 固定コメント / 台本 / 各レビュー結果 / 推定尺
 - 出力: `final_score` / `publish_ok` / `risk` / `must_fix` / `nice_to_fix`
-- **自動修正なし** — ログ表示と `_meta/final_review.json` 保存のみ
+- **自動修正なし** — ログ表示と `metadata.db` 保存のみ
 - `must_fix` がある場合、または `final_score` が `OPENING_SCORE_HARD_ABORT_THRESHOLD` 未満の場合は、音声・画像生成へ進まず中止する
 - `render_engine` を入力に含め、native Shorts では「31行以上のみ must_fix」の基準で判定させる（22〜28行は可、24〜27行は理想）
 - ChatGPT 応答に旧 YMM4 基準由来の「21行以上 must_fix」が返ってきた場合、native かつ dialogue_count <= 28 なら自動で除去する
 - 冒頭1行目の食べ物名チェック: タイトル由来キーワードだけでなく `FOOD_HINT_WORDS`（コーヒー・コーラ・牛乳・紅茶等の飲み物を含む）が初行に直接あればOKとする。N選型は初行に代表食材1つがあればOK（全食材の列挙は不要）
 
-### 保存ファイル（`_meta/` 配下）
+### DB保存
 
-| ファイル | 内容 |
+動画メタ・レビュー結果は `metadata.db` に保存する。ローカルJSON/TXTを正本・補完元として使わない。
+
+| 保存先 | 内容 |
 |---|---|
-| `opening_review.json` | ローカル・Ollamaレビュー結果、final_score、final_status |
-| `opening_rewrite_suggestion.txt` | Ollamaリライト内容（リライトが発生した場合） |
-| `duration_review.json` | 尺レビュー結果（seconds / status / ideal） |
-| `reading_map.json` | よみがな正規化マップ（チャンク原文 → 読み）。再生成時に再利用して一貫性を確保 |
-| `final_review.json` | ChatGPT生成前レビュー結果 |
+| `script_quality` | ローカル・Ollamaレビュー結果、final_score、final_status、尺レビュー、ChatGPT生成前レビュー要約 |
+| `video_metadata` | 固定コメント・CTA方針・説明文・タグ等 |
+| `render_info` | レンダリング情報・実尺・画面形式・再生リストカテゴリ等 |
+| 辞書ファイル | よみがな正規化辞書（ローカルファイル管理禁止の対象外） |
 
 ### LLMレビューの有効化
 
@@ -881,7 +882,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭に `THUMBNAIL_HOLD_FRAMES_SHORTS`（デフォルト3フレーム≒0.1秒）だけサムネイル画像を挿入する（Long は挿入しない）。保持フレーム数は `.env` の `THUMBNAIL_HOLD_FRAMES_SHORTS` で変更可。1秒以上の静止サムネは設定値に関係なく生じない（上限5フレーム≒0.17秒）。
 - レンダー開始時に使用エンコーダ名（`NATIVE_FFMPEG_ENCODER` の値）をジョブログへ出力する。GPU エンコーダ（h264_nvenc 等）が利用不可の場合は `tag="warning"` 付きの警告メッセージとして送出し、UI 上でオレンジ色表示で視覚的に識別できる。ソフトウェアエンコーダ（libx264）へのフォールバックは最大3箇所で検知・警告する。
-- `_meta/render_info.json` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra / screen_format / playlist_categories。
+- `metadata.db` の `render_info` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra / screen_format / playlist_categories。
 
 ### 安定条件
 
@@ -901,7 +902,7 @@ native では尺ではなく**語り速度（chars/sec）と台本量**で調整
 
 VOICEVOX 音声生成ループ完了後、よみがな正規化済みの全 WAV ファイルの長さを合算して `duration_review()` で評価する。WAV 合計 ≈ MP4 実尺 − 約 1s（サムネ保持 + 背景遷移分）のため、同じ閾値で判定して問題ない。
 
-- 結果は `_meta/duration_review.json` に `"estimated": false` 付きで保存する
+- 結果はログ表示し、最終的な実尺情報は `metadata.db` に保存する
 - Shorts で `needs_review`（< 35s または > 58s）のときは MP4 化を中止し、台本修正を促す
 - `warning` / `ok_but_short` / `ok_but_long` はログ警告のみで続行する
 - Long は `warning`（< 4分 または > 11分）のみログ警告、中止しない
@@ -1007,21 +1008,13 @@ output/{profile_id}/videos/{テーマ名}/
 │   ├── {テーマ名}_thumbnail_A.png          # Long: A案
 │   ├── {テーマ名}_thumbnail_B.png          # Long: B案
 │   └── {テーマ名}_thumbnail_C.png          # Long: C案
-├── _meta/
-│   ├── metadata.txt                        # タイトル・説明文・タグ
-│   ├── render_info.json                    # レンダリング情報（タイトル・形式・タグ等）
-│   ├── opening_review.json                 # 冒頭レビュー結果
-│   ├── opening_rewrite_suggestion.txt      # Ollama リライト内容（発生時のみ）
-│   ├── duration_review.json                # 尺レビュー結果
-│   ├── reading_map.json                    # よみがな正規化マップ
-│   ├── final_review.json                   # ChatGPT 生成前レビュー結果
-│   ├── thumbnail_ab_test.json              # Long: A/B テスト管理
-│   └── title_ab_test.json                  # Long: タイトル A/B 管理
 ├── audio/
 │   └── *.wav
 └── backgrounds/
     └── bg_*.png
 ```
+
+タイトル・説明文・タグ・レビュー・アップロード状態などの管理データは `output/{profile_id}/000_data/metadata.db` に保存する。
 
 **アップロード記録は `metadata.db` の `youtube_status` テーブルが正本。`_meta/upload_record.json` への書き込みは廃止済み。**
 予約・公開状態の正は YouTube Data API 側（`publishAt` / `privacyStatus`）。生成時に退避した `000_backups/` の同一テーマバックアップは最新1世代のみ保持し、アップロード成功後に削除する。
@@ -1184,13 +1177,13 @@ AI編集者向けルール:
 
 `YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には `output/{profile_id}/videos/` 配下にある `.mp4` がある履歴フォルダだけを表示します（`000_uploaded/` 配下は表示しない）。各履歴フォルダから最新の `.mp4` を探し、`metadata.db` の `render_info` テーブルのタイトル・説明文・タグを使ってアップロードします。アップロードの可否判断はローカルステータスでブロックしない（YouTube Data API が正）。アップロード成功後は履歴フォルダを `output/{profile_id}/000_uploaded/` に移動し、`metadata.db` の `youtube_status` テーブルへ結果を記録します（`_meta/upload_record.json` への書き込みは廃止済み）。予約枠の空き判断はYouTube側の予約状態を参照します。再アップロードが必要な場合はフォルダを `videos/` に手動で戻せば候補に現れます。
 
-YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや `script.txt` から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。アップロード時に実際に使ったタグを `_meta/youtube_metadata.json` へ保存します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
+YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや `script.txt` から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
 
 アップロード成功後の再生リスト自動登録フローは2系統あります。
 
 **① 台本に `再生リスト:` が指定されている場合（新方式）**
 
-`_meta/render_info.json` に保存された `playlist_categories`（カテゴリ名リスト）と `screen_format`（画面形式）を参照し、`core/playlist_resolver.py` がアップロード時に実際の YouTube 再生リスト名を解決して登録します。
+`metadata.db` の `render_info` に保存された `playlist_categories`（カテゴリ名リスト）と `screen_format`（画面形式）を参照し、`core/playlist_resolver.py` がアップロード時に実際の YouTube 再生リスト名を解決して登録します。
 
 - Shorts / 縦: `{カテゴリ名} Shorts`
 - Long / 横: `{カテゴリ名}【じっくり解説】`
@@ -1291,7 +1284,7 @@ views 上位20% ルール（`score_items` でまとめて適用）：
 - Shorts / ShortLong は最低視聴率ライン未満なら昇格しない
 - ただし action が `横展開` の場合は維持
 
-TSVには `publish_status` / `analysis_status` / `is_provisional` / `render_engine` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複や判定保留を考慮できます。`render_engine` は `_meta/render_info.json` から取得し、アップロード記録に保存されます。
+TSVには `publish_status` / `analysis_status` / `is_provisional` / `render_engine` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複や判定保留を考慮できます。`render_engine` は `metadata.db` から取得されます。
 TSVには `audio_cutoff_risk` 列も含み、2026-05-16以前の動画を品質改善版候補として再評価できるようにします。
 
 YouTube Studio 側で予約動画を手動公開した場合:
@@ -1557,7 +1550,7 @@ TOPIC_REQUEST_CTA_EVERY_N=5
 - `core/cta_policy.py` が生成登録時に `ネタ募集CTA: 許可 / 禁止` を判定する。Shortsかつ生成区分が `新規` / `横展開` の対象を既存出力から通算し、`TOPIC_REQUEST_CTA_EVERY_N`（既定5）本に1本だけ許可する。`TOPIC_REQUEST_CTA_EVERY_N=0` の場合は自動付与しない。
 - ネタ募集CTAを許可した台本で固定コメントが未指定なら、ネタ募集用固定コメントを自動差し込みする。
 - Longでは関連動画誘導・vidIQタイトル調整・説明欄YouTubeチャプター追加を許可する。アップロード時に `チャプター:` 行または既定章立てから `【目次】` を説明欄末尾へ追加する。
-- CTA方針は `_meta/cta_policy.json`、アップロード時のYouTubeメタ方針は `_meta/youtube_metadata.json` に保存する。YouTube Analytics取得時は `ネタ募集CTA` / `ネタ募集CTA理由` を取り込み、Analytics画面とTSVで確認できるようにする。
+- CTA方針とアップロード時のYouTubeメタ方針は `metadata.db` に保存する。YouTube Analytics取得時は `ネタ募集CTA` / `ネタ募集CTA理由` を取り込み、Analytics画面とTSVで確認できるようにする。
 
 ## ComfyUI（廃止済み）
 > ~~- ssets/comfyui/model_manifest.json に必要なモデルを定義。~~
@@ -1863,7 +1856,8 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 | UNIQUE | `(youtube_video_id, collected_at, window_days)` | |
 
 Analytics 取得（`save_score_files()`）のたびに自動 upsert される。
-動画DB画面の「Analytics JSON取込」で過去分を一括取込できる。
+
+YouTube Data API を正としてDBを補完・更新する場合は `sync_youtube_statuses_from_api(delete_missing=True)` を使う。YouTube側で手動変更されたタイトル・公開状態・公開予定日時・実公開日時・動画種別は `videos` / `render_info` / `youtube_status` に書き戻す。YouTube側で削除済みの既知動画IDは `delete_missing=True` 指定時にDBから関連レコードごと削除する。
 
 #### `playlists` — 再生リスト登録状態
 
@@ -1973,9 +1967,8 @@ Analytics 取得（`save_score_files()`）のたびに自動 upsert される。
 | `upsert_job(job_dict)` | ジョブを jobs テーブルに upsert |
 | `load_jobs_from_db(max_n)` | ジョブ履歴を新しい順で返す |
 | `delete_old_jobs(keep_n)` | 古いジョブを削除して keep_n 件を維持 |
+| `sync_youtube_statuses_from_api(delete_missing)` | YouTube Data API を正として動画DBのタイトル・公開状態・公開日時を更新し、削除済み動画を必要に応じてDBから削除 |
 | `insert_analytics_snapshot(video_id, ...)` | Analytics スナップショットを upsert |
-| `import_analytics_json(json_path)` | Analytics JSON ファイルを一括取込 |
-| `import_all_analytics_jsons(dir)` | ディレクトリ内の全 JSON を取込 |
 | `delete_video(local_id)` | 全テーブルから該当レコードを削除 |
 | `get_videos(...)` | 動画一覧を条件付きで取得（管理画面用） |
 | `get_stats()` | 集計サマリー（total / uploaded / published など） |

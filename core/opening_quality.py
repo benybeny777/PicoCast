@@ -569,11 +569,6 @@ def save_opening_review(theme_dir: str, local_review: dict[str, Any], llm_review
     if not is_initialized():
         initialize_db()
     upsert_opening_review(local_id, data)
-    if rewrite_text:
-        meta = _meta_dir(theme_dir)
-        os.makedirs(meta, exist_ok=True)
-        with open(os.path.join(meta, "opening_rewrite_suggestion.txt"), "w", encoding="utf-8") as f:
-            f.write(rewrite_text)
     return local_id
 
 
@@ -627,10 +622,7 @@ def duration_status_label(status: str) -> str:
 
 
 def save_duration_review(theme_dir: str, review: dict[str, Any]) -> str:
-    path = os.path.join(_meta_dir(theme_dir), "duration_review.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(review, f, ensure_ascii=False, indent=2)
-    return path
+    return os.path.basename(os.path.abspath(theme_dir))
 
 
 def _scene_summaries(items, limit: int = 12) -> list[dict[str, Any]]:

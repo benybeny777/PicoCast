@@ -36,13 +36,29 @@ def _write_manifest(tmp_path, sha256="", source_url="http://example.com/test.saf
     return str(path)
 
 
+def _patch_sd_client(monkeypatch, *, get=None, post=None):
+    from unittest.mock import MagicMock
+    import core.sd_webui_generator as sdg
+
+    client = MagicMock()
+    if get is not None and hasattr(get, "status_code"):
+        client.get.return_value = get
+    elif get is not None:
+        client.get.side_effect = get
+    if post is not None and hasattr(post, "status_code"):
+        client.post.return_value = post
+    elif post is not None:
+        client.post.side_effect = post
+    monkeypatch.setattr(sdg.httpx, "Client", lambda: client)
+    return client
+
+
 # ─────────────────────────────────────────────────────────────────
 # StableDiffusionWebUIGenerator のモデル管理メソッドテスト
 # ─────────────────────────────────────────────────────────────────
 
 class TestStableDiffusionWebUIGeneratorModelMethods:
     def test_get_current_model_returns_checkpoint_name(self, monkeypatch):
-        import httpx
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         class FakeResp:
@@ -51,12 +67,11 @@ class TestStableDiffusionWebUIGeneratorModelMethods:
             def json(self):
                 return {"sd_model_checkpoint": "test.safetensors [abc123]"}
 
-        monkeypatch.setattr(httpx, "get", lambda url, **kw: FakeResp())
+        _patch_sd_client(monkeypatch, get=FakeResp())
         gen = StableDiffusionWebUIGenerator()
         assert gen.get_current_model() == "test.safetensors [abc123]"
 
     def test_get_models_returns_list(self, monkeypatch):
-        import httpx
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         class FakeResp:
@@ -65,14 +80,13 @@ class TestStableDiffusionWebUIGeneratorModelMethods:
             def json(self):
                 return [{"title": "test.safetensors [abc]", "model_name": "test", "filename": "/models/test.safetensors"}]
 
-        monkeypatch.setattr(httpx, "get", lambda url, **kw: FakeResp())
+        _patch_sd_client(monkeypatch, get=FakeResp())
         gen = StableDiffusionWebUIGenerator()
         models = gen.get_models()
         assert isinstance(models, list)
         assert models[0]["title"] == "test.safetensors [abc]"
 
     def test_set_active_model_success(self, monkeypatch):
-        import httpx
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         class FakeGetResp:
@@ -87,14 +101,12 @@ class TestStableDiffusionWebUIGeneratorModelMethods:
             def json(self):
                 return {}
 
-        monkeypatch.setattr(httpx, "get", lambda url, **kw: FakeGetResp())
-        monkeypatch.setattr(httpx, "post", lambda url, **kw: FakePostResp())
+        _patch_sd_client(monkeypatch, get=FakeGetResp(), post=FakePostResp())
         gen = StableDiffusionWebUIGenerator()
         # Should not raise
         gen.set_active_model("test")
 
     def test_set_active_model_not_found_raises(self, monkeypatch):
-        import httpx
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         class FakeGetResp:
@@ -103,13 +115,12 @@ class TestStableDiffusionWebUIGeneratorModelMethods:
             def json(self):
                 return [{"title": "other.safetensors [abc]", "model_name": "other", "filename": "/models/other.safetensors"}]
 
-        monkeypatch.setattr(httpx, "get", lambda url, **kw: FakeGetResp())
+        _patch_sd_client(monkeypatch, get=FakeGetResp())
         gen = StableDiffusionWebUIGenerator()
         with pytest.raises(RuntimeError, match="見つかりません"):
             gen.set_active_model("nonexistent_model")
 
     def test_rescan_models_calls_refresh_endpoint(self, monkeypatch):
-        import httpx
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
         called = []
@@ -122,7 +133,7 @@ class TestStableDiffusionWebUIGeneratorModelMethods:
             called.append(url)
             return FakePostResp()
 
-        monkeypatch.setattr(httpx, "post", fake_post)
+        _patch_sd_client(monkeypatch, post=fake_post)
         gen = StableDiffusionWebUIGenerator()
         gen.rescan_models()
         assert any("refresh-checkpoints" in u for u in called)
@@ -131,7 +142,7 @@ class TestStableDiffusionWebUIGeneratorModelMethods:
         import httpx
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
 
-        monkeypatch.setattr(httpx, "get", lambda url, **kw: (_ for _ in ()).throw(httpx.ConnectError("refused")))
+        _patch_sd_client(monkeypatch, get=lambda url, **kw: (_ for _ in ()).throw(httpx.ConnectError("refused")))
         gen = StableDiffusionWebUIGenerator()
         with pytest.raises(RuntimeError, match="接続できません"):
             gen.get_models()

@@ -21,6 +21,47 @@ def client():
         yield c
 
 
+def _patch_service_output_dirs(monkeypatch, service, output_root):
+    videos_dir = output_root / "videos"
+    uploaded_dir = output_root / "000_uploaded"
+    monkeypatch.setattr(service, "get_output_root", lambda: str(output_root), raising=False)
+    monkeypatch.setattr(service, "get_output_videos_dir", lambda: str(videos_dir), raising=False)
+    monkeypatch.setattr(service, "get_uploaded_dir", lambda: str(uploaded_dir), raising=False)
+
+
+def _patch_metadata_db(monkeypatch, tmp_path):
+    import core.metadata_db as m
+    db_path = str(tmp_path / "metadata.db")
+    monkeypatch.setattr(m, "get_db_path", lambda: db_path)
+    m.initialize_db()
+    return m
+
+
+def _seed_fixed_comment_db(m, local_id, video_id, fixed_comment, *, title=None, publish_status="public", posted=False):
+    with m.ManagedConnection() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO videos(local_id, output_dir, title, video_type) VALUES(?,?,?,?)",
+            (local_id, f"output/{local_id}", title or local_id, "Shorts"),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO render_info(local_id, video_title, video_format) VALUES(?,?,?)",
+            (local_id, title or local_id, "Shorts"),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO video_metadata(local_id, fixed_comment, video_format) VALUES(?,?,?)",
+            (local_id, fixed_comment, "Shorts"),
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO youtube_status(
+                local_id, youtube_video_id, publish_status, fixed_comment_posted
+            ) VALUES(?,?,?,?)
+            """,
+            (local_id, video_id, publish_status, int(posted)),
+        )
+        conn.commit()
+
+
 # 1. /health が成功する
 def test_health(client):
     res = client.get("/health")
@@ -54,10 +95,9 @@ def test_generate_page(client):
     assert res.status_code == 200
     assert "LongサムネAB" in res.text
     assert "Long節約" in res.text
-    assert "縮小生成" in res.text
-    assert ">通常</option>" in res.text
-    assert ">’通常’</option>" not in res.text
-    assert ">’通常’</option>" not in res.text
+    assert "高画質（FHD）生成" in res.text
+    assert "const imageStyle" in res.text
+    assert "’通常’" not in res.text
 
 
 # 5. /history ページが 200 を返す
@@ -174,13 +214,15 @@ def test_history_excludes_management_dirs(tmp_path, monkeypatch):
     import web_app.services.history_service as hs
 
     fake_output = tmp_path / "output"
-    (fake_output / "000_analytics").mkdir(parents=True)
-    (fake_output / "000_data").mkdir(parents=True)
-    (fake_output / "random_folder").mkdir(parents=True)
-    (fake_output / "Shorts_テスト動画").mkdir(parents=True)
-    (fake_output / "Long_テスト動画").mkdir(parents=True)
+    videos_dir = fake_output / "videos"
+    (videos_dir / "000_analytics").mkdir(parents=True)
+    (videos_dir / "000_data").mkdir(parents=True)
+    (videos_dir / "random_folder").mkdir(parents=True)
+    (videos_dir / "Shorts_テスト動画").mkdir(parents=True)
+    (videos_dir / "Long_テスト動画").mkdir(parents=True)
 
-    monkeypatch.setattr(hs, "OUTPUT_DIR", str(fake_output))
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
 
     result = hs.list_histories(include_management=False)
     names = [r["name"] for r in result]
@@ -195,15 +237,40 @@ def test_history_includes_management_when_requested(tmp_path, monkeypatch):
     import web_app.services.history_service as hs
 
     fake_output = tmp_path / "output"
-    (fake_output / "000_analytics").mkdir(parents=True)
-    (fake_output / "Shorts_テスト動画").mkdir(parents=True)
+    videos_dir = fake_output / "videos"
+    (videos_dir / "000_analytics").mkdir(parents=True)
+    (videos_dir / "Shorts_テスト動画").mkdir(parents=True)
 
-    monkeypatch.setattr(hs, "OUTPUT_DIR", str(fake_output))
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
 
     result = hs.list_histories(include_management=True)
     names = [r["name"] for r in result]
     assert "000_analytics" in names
     assert "Shorts_テスト動画" in names
+
+
+def test_history_excludes_uploaded_orphans(tmp_path, monkeypatch):
+    import web_app.services.history_service as hs
+
+    fake_output = tmp_path / "output"
+    uploaded_dir = fake_output / "000_uploaded"
+    (uploaded_dir / "Shorts_DBあり").mkdir(parents=True)
+    (uploaded_dir / "Shorts_DBなし").mkdir(parents=True)
+    (uploaded_dir / "Shorts_IDなし").mkdir(parents=True)
+
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(hs, "_fetch_known_video_ids", lambda: {"Shorts_DBあり", "Shorts_IDなし"})
+    monkeypatch.setattr(hs, "_fetch_uploaded_video_ids_with_youtube_id", lambda: {"Shorts_DBあり"})
+    monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
+
+    assert hs.list_histories() == []
+
+    result = hs.list_histories(include_uploaded=True)
+    names = [r["name"] for r in result]
+    assert "Shorts_DBあり" in names
+    assert "Shorts_DBなし" not in names
+    assert "Shorts_IDなし" not in names
 
 
 def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, monkeypatch):
@@ -212,14 +279,14 @@ def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, 
 
     fake_output = tmp_path / "output"
     history_name = "Shorts_Bob's 100%"
-    theme_dir = fake_output / history_name
+    theme_dir = fake_output / "videos" / history_name
     theme_dir.mkdir(parents=True)
     (theme_dir / "script.txt").write_text(
         "動画形式: Shorts\n生成区分: 新規\n動画タイトル: Bob's 100%\n",
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(hs, "OUTPUT_DIR", str(fake_output))
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
 
     res = client.get(f"/history/{quote(history_name, safe='')}")
 
@@ -267,14 +334,14 @@ def test_config_image_style_choices_current_is_csv(monkeypatch):
 
 def test_config_image_style_choices_save_normalizes_quotes(tmp_path, monkeypatch):
     import web_app.services.config_service as cs
+    import core.settings_store as settings_store
 
-    env_path = tmp_path / ".env"
-    monkeypatch.setattr(cs, "_ENV_PATH", str(env_path))
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
 
     errors = cs.save_config({"WEB_IMAGE_STYLE_CHOICES": "('通常', 'アニメ', '水彩')"})
 
     assert errors == []
-    assert env_path.read_text(encoding="utf-8").strip() == "WEB_IMAGE_STYLE_CHOICES=通常,アニメ,水彩"
+    assert settings_store.get_all()["WEB_IMAGE_STYLE_CHOICES"] == "通常,アニメ,水彩"
 
 
 def test_secrets_reject_newline_injection(tmp_path, monkeypatch):
@@ -420,24 +487,22 @@ def test_api_fixed_comment_mark_posted_requires_confirmation(client):
 
 
 def test_fixed_comment_candidates_include_uploaded_metadata(tmp_path, monkeypatch):
-    import json
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
     theme_dir = fake_output / "000_uploaded" / "Shorts_固定コメントテスト"
-    meta_dir = theme_dir / "_meta"
-    meta_dir.mkdir(parents=True)
-    (meta_dir / "metadata.txt").write_text(
-        "【動画タイトル】\n固定コメントのテスト\n\n【固定コメント】\n投稿するコメントです\n",
-        encoding="utf-8",
-    )
-    (meta_dir / "upload_record.json").write_text(
-        json.dumps({"video_id": "abc123", "publish_status": "public"}, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    theme_dir.mkdir(parents=True)
 
-    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
-    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
+    _patch_service_output_dirs(monkeypatch, fcs, fake_output)
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    _seed_fixed_comment_db(
+        m,
+        "Shorts_固定コメントテスト",
+        "abc123",
+        "投稿するコメントです",
+        title="固定コメントのテスト",
+    )
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: {"abc123": {"privacyStatus": "public"}})
 
     candidates = fcs.list_fixed_comment_candidates()
     assert len(candidates) == 1
@@ -447,34 +512,27 @@ def test_fixed_comment_candidates_include_uploaded_metadata(tmp_path, monkeypatc
 
 
 def test_fixed_comment_candidates_filter_scheduled_locally(tmp_path, monkeypatch):
-    import json
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
     theme_dir = fake_output / "000_uploaded" / "Shorts_予約中テスト"
-    meta_dir = theme_dir / "_meta"
-    meta_dir.mkdir(parents=True)
-    (meta_dir / "metadata.txt").write_text(
-        "【固定コメント】\n予約中コメントです\n",
-        encoding="utf-8",
-    )
-    (meta_dir / "upload_record.json").write_text(
-        json.dumps({
-            "video_id": "scheduled123",
-            "publish_status": "scheduled",
-            "publish_at": "2026-05-27T07:00:00+09:00",
-        }, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    theme_dir.mkdir(parents=True)
 
-    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
-    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
+    _patch_service_output_dirs(monkeypatch, fcs, fake_output)
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    _seed_fixed_comment_db(
+        m,
+        "Shorts_予約中テスト",
+        "scheduled123",
+        "予約中コメントです",
+        publish_status="scheduled",
+    )
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: {"scheduled123": {"privacyStatus": "private"}})
 
     assert fcs.list_fixed_comment_candidates() == []
 
 
 def test_fixed_comment_candidates_filter_missing_and_non_public_youtube(tmp_path, monkeypatch):
-    import json
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
@@ -483,15 +541,16 @@ def test_fixed_comment_candidates_filter_missing_and_non_public_youtube(tmp_path
         ("Shorts_非公開テスト", "private123"),
         ("Shorts_存在しないテスト", "missing123"),
     ]:
-        meta_dir = fake_output / "000_uploaded" / name / "_meta"
-        meta_dir.mkdir(parents=True)
-        (meta_dir / "metadata.txt").write_text("【固定コメント】\nコメントです\n", encoding="utf-8")
-        (meta_dir / "upload_record.json").write_text(
-            json.dumps({"video_id": video_id, "publish_status": "public"}, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        (fake_output / "000_uploaded" / name).mkdir(parents=True)
 
-    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
+    _patch_service_output_dirs(monkeypatch, fcs, fake_output)
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    for name, video_id in [
+        ("Shorts_公開テスト", "public123"),
+        ("Shorts_非公開テスト", "private123"),
+        ("Shorts_存在しないテスト", "missing123"),
+    ]:
+        _seed_fixed_comment_db(m, name, video_id, "コメントです", title=name)
     monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: {
         "public123": {
             "privacyStatus": "public",
@@ -509,59 +568,51 @@ def test_fixed_comment_candidates_filter_missing_and_non_public_youtube(tmp_path
 
 
 def test_fixed_comment_mark_posted_writes_record(tmp_path, monkeypatch):
-    import json
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
     theme_dir = fake_output / "000_uploaded" / "Shorts_手動投稿済みテスト"
-    meta_dir = theme_dir / "_meta"
-    meta_dir.mkdir(parents=True)
-    (meta_dir / "metadata.txt").write_text(
-        "【固定コメント】\n手動で投稿したコメントです\n",
-        encoding="utf-8",
-    )
-    record_path = meta_dir / "upload_record.json"
-    record_path.write_text(
-        json.dumps({"video_id": "abc123", "publish_status": "public"}, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    theme_dir.mkdir(parents=True)
 
-    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
-    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
+    _patch_service_output_dirs(monkeypatch, fcs, fake_output)
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    _seed_fixed_comment_db(
+        m,
+        "Shorts_手動投稿済みテスト",
+        "abc123",
+        "手動で投稿したコメントです",
+    )
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: {"abc123": {"privacyStatus": "public"}})
 
     result = fcs.mark_fixed_comment_posted(os.path.join("000_uploaded", "Shorts_手動投稿済みテスト"))
     assert result["video_id"] == "abc123"
 
-    record = json.loads(record_path.read_text(encoding="utf-8"))
-    assert record["fixed_comment_text"] == "手動で投稿したコメントです"
-    assert record["fixed_comment_posted_at"]
-    assert record["fixed_comment_manual_recorded_at"]
+    with m.ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT fixed_comment_posted FROM youtube_status WHERE local_id=?",
+            ("Shorts_手動投稿済みテスト",),
+        ).fetchone()
+    assert row["fixed_comment_posted"] == 1
     assert fcs.list_fixed_comment_candidates() == []
 
 
 def test_fixed_comment_candidates_treat_pinned_as_posted(tmp_path, monkeypatch):
-    import json
     import web_app.services.fixed_comment_service as fcs
 
     fake_output = tmp_path / "output"
     theme_dir = fake_output / "000_uploaded" / "Shorts_ピン留め済みテスト"
-    meta_dir = theme_dir / "_meta"
-    meta_dir.mkdir(parents=True)
-    (meta_dir / "metadata.txt").write_text(
-        "【固定コメント】\n投稿済みコメントです\n",
-        encoding="utf-8",
-    )
-    (meta_dir / "upload_record.json").write_text(
-        json.dumps({
-            "video_id": "abc123",
-            "publish_status": "public",
-            "fixed_comment_pinned_at": "2026-05-25T01:57:25+0900",
-        }, ensure_ascii=False),
-        encoding="utf-8",
-    )
+    theme_dir.mkdir(parents=True)
 
-    monkeypatch.setattr(fcs, "OUTPUT_DIR", str(fake_output))
-    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: None)
+    _patch_service_output_dirs(monkeypatch, fcs, fake_output)
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    _seed_fixed_comment_db(
+        m,
+        "Shorts_ピン留め済みテスト",
+        "abc123",
+        "投稿済みコメントです",
+        posted=True,
+    )
+    monkeypatch.setattr(fcs, "_fetch_youtube_statuses", lambda _ids: {"abc123": {"privacyStatus": "public"}})
 
     assert fcs.list_fixed_comment_candidates() == []
     candidates = fcs.list_fixed_comment_candidates(only_unposted=False)
