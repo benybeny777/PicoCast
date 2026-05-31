@@ -36,8 +36,6 @@ _logger = logging.getLogger(__name__)
 # 接続追跡（shutdown hook 用）
 _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
-# キャッシュは廃止（profile が変わるとパスが変わるため）
-_db_path_cache: str | None = None  # 後方互換のため変数は残す（使用しない）
 
 SCHEMA_VERSION = 4
 
