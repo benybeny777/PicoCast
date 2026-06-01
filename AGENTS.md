@@ -160,7 +160,7 @@ output/{profile_id}/          ← active profile の output_root
 - `token.json`
 - `token_analytics.json`
 - `data/secret_master.key` — DPAPI保護マスターキー（個人PC専用）
-- `data/settings.db` — 設定DB（認証情報の暗号化エントリを含む）
+- `data/settings.db` / `data/settings.db-wal` / `data/settings.db-shm` — 設定DB（認証情報の暗号化エントリを含む）とSQLite補助ファイル
 - 認証情報、APIキー、OAuthトークン、秘密鍵、Cookie、個人用設定などのシークレットはファイル名に関わらずコミット禁止。ドキュメントやログにも値を記載しない。
 
 ### テスト用ファイルの置き場所

@@ -1,7 +1,7 @@
 # ずんかみ自動生成システム 仕様書
 
 チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
-最終更新: 2026-05-30
+最終更新: 2026-06-01
 
 ---
 
@@ -72,10 +72,10 @@ yukkurijidou/
 │   │   └── api_sd_models.py # GET/POST /api/sd-models
 │   ├── templates/          # Jinja2 HTMLテンプレート
 │   └── static/             # CSS/JS (app.css, app.js)
-├── main.py                 # 動画生成パイプライン
-├── worker_pipeline.py      # パイプライン subprocess ワーカー（1本生成完了でプロセス終了）
-├── worker_render.py        # レンダリング subprocess ワーカー（1本完了でプロセス終了）
-├── config.py               # 設定・定数
+├── workers/
+│   ├── main.py             # 動画生成パイプライン
+│   ├── worker_pipeline.py  # パイプライン subprocess ワーカー（1本生成完了でプロセス終了）
+│   └── worker_render.py    # レンダリング subprocess ワーカー（1本完了でプロセス終了）
 ├── core/
 │   ├── ai_generator.py     # Gemini台本生成
 │   ├── voicevox.py         # VOICEVOX音声生成
@@ -170,7 +170,7 @@ yukkurijidou/
 
 ---
 
-## 動画生成パイプライン (`main.py: run_pipeline`)
+## 動画生成パイプライン (`workers/main.py: run_pipeline`)
 
 ### 全体フロー
 
@@ -270,7 +270,7 @@ for item in dialogue_items:
 - マニフェスト内モデルのインストール状況確認・アプリ内ワンクリックダウンロード・使用モデル切り替えを行う
 - 「🎨 次の生成で使われるモデル」バナーを最上部に表示し、`SD_WEBUI_MODEL` 設定値または Stable Diffusion WebUI 現在ロード中モデルを示す
 - `HF_TOKEN` 未設定時は `requires_auth=true` モデルのダウンロードボタンを非表示にし、設定へ誘導する
-- 「このモデルを使う」は Stable Diffusion WebUI への即時切り替え + `SD_WEBUI_MODEL` を `.env` へ保存（次回起動以降も維持）
+- 「このモデルを使う」は Stable Diffusion WebUI への即時切り替え + `SD_WEBUI_MODEL` を設定DBへ保存（次回起動以降も維持）
 - 「削除して再DL」は `confirmed=true` 必須のバックグラウンド操作（破損ファイル・SHA256不一致時に使用）
 
 **API エンドポイント:**
@@ -281,7 +281,7 @@ for item in dialogue_items:
 - `/api/sd-models/progress` (GET): ダウンロード進捗確認（ポーリング用）
 - `/api/sd-models/delete` (POST): モデルファイル削除（`confirmed=true` 必須）
 - `/api/sd-models/delete-redownload` (POST): 削除して再ダウンロード（`confirmed=true` 必須、バックグラウンド）
-- `/api/sd-models/use` (POST): Stable Diffusion WebUI アクティブモデル切り替え + `SD_WEBUI_MODEL` を config に保存
+- `/api/sd-models/use` (POST): Stable Diffusion WebUI アクティブモデル切り替え + `SD_WEBUI_MODEL` を設定DBに保存
 - `/api/sd-models/rescan` (POST): Stable Diffusion WebUI への再スキャン依頼
 
 **追加設定項目:**
@@ -557,7 +557,7 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 - output/ 配下のみファイルアクセス可（`security.py` で検証）
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の内容は返さない
 - APIキー設定（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）は active profile ごとの有無（bool）のみ返す。値をレスポンス・ログに含めない
-- `.env` 書き込みAPIは許可キーだけを受け付け、値に改行を含む場合は拒否する
+- 設定DB書き込みAPIは許可キーだけを受け付け、値に改行を含む場合は拒否する
 - パストラバーサル拒否（`output/` 配下 / `SD_WEBUI_ROOT` 配下の実パス検査を実施）
 - 破壊的操作（アップロード・固定コメント投稿・モデル削除）は `confirmed=true` が必須
 - 例外時に秘密値をログへ出さない（HF_TOKEN 付き URL はログに含めない）
@@ -565,7 +565,7 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 ### Web一本化方針
 
 - 操作入口はローカル Web UI のみ。
-- `main.py` は `run_pipeline()` を提供する生成パイプラインとして残し、Web UI のジョブから呼び出す。
+- `workers/main.py` は `run_pipeline()` を提供する生成パイプラインとして残し、Web UI のジョブから呼び出す。
 - `run_pipeline` / `ScriptParser` / `core/*` はWeb UIの共通基盤として維持する。
 
 ### 主要機能
@@ -781,7 +781,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | 再生リスト: | アップロード先の再生リストカテゴリ名（カンマ区切りで複数可） |
 | ━━ タイトル ━━ | 複数動画を1つのテキストで一括処理する区切り |
 
-## 設定 (`config.py`)
+## 設定 (`config/config.py`)
 
 | 設定 | デフォルト | 説明 |
 |---|---|---|
@@ -949,7 +949,7 @@ Shortsの通常字幕は、背景に左右されない可読性を最優先す�
 
 ### サムネイルA/Bテスト
 
-Web UI の **「LongサムネAB」チェックボックス**（デフォルト OFF）または `config.py` の `LONG_THUMBNAIL_AB_TEST` / `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` で制御する。
+Web UI の **「LongサムネAB」チェックボックス**（デフォルト OFF）または `config/config.py` の `LONG_THUMBNAIL_AB_TEST` / `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` で制御する。
 
 - **OFF（デフォルト）**: Variant A のみ生成。`thumbnail_ab_test.json` は書かない。
 - **ON**: 3バリアントを生成し `_meta/thumbnail_ab_test.json` で管理。
@@ -1055,7 +1055,7 @@ output/{profile_id}/videos/{テーマ名}/
 四国めたん(ささやき): ここだけの話よ。
 ```
 
-表情PNGの生成・PSDレイヤー診断は `core/character_expressions.py` で行います。表情PNGの参照先は `config.py` の `CHARACTER_EXPRESSION_PNGS` で調整できます。
+表情PNGの生成・PSDレイヤー診断は `core/character_expressions.py` で行います。表情PNGの参照先は `config/config.py` の `CHARACTER_EXPRESSION_PNGS` で調整できます。
 
 ---
 
@@ -1452,7 +1452,7 @@ YouTube OAuth:
 - Google Cloud 認証情報: https://console.cloud.google.com/apis/credentials
 
 秘密情報:
-- `data/settings.db` の `encrypted_secrets` 登録値
+- `data/settings.db` / `data/settings.db-wal` / `data/settings.db-shm` の `encrypted_secrets` 登録値
 - `data/secret_master.key`
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json`
 - `dev/` — 動作確認用の一時画像・動画・スクリプトなど開発用テストファイルの置き場（`assets/` 直下へのテスト画像配置は禁止）
@@ -1461,10 +1461,11 @@ YouTube OAuth:
 
 ### 設定ファイルで変えられること
 
-主な設定は [config.py](config.py) と `.env` で変更します。
+主な設定は設定画面（`/settings`）から設定DBへ保存します。定数定義と初期値は [config/config.py](config/config.py) にあり、`.env` は起動時の初期移行・環境依存値の補助として扱います。
 
 | 設定 | 場所 | 内容 |
 |---|---|---|
+| 備考 | 設定DB / `config/config.py` / `.env` | 表中の `config.py` は `config/config.py` を指す。Web UIで保存できる項目は設定DBが優先され、`.env` は起動時初期移行・環境依存値の補助として扱う |
 | `VOICEVOX_URL` | `config.py` | VOICEVOX API のURL |
 | `VOICEVOX_PATH` | `config.py` | VOICEVOX実行ファイルの場所 |
 | `NATIVE_SHORTS_BODY_VOICE_SPEED` | `.env` / `config.py` | native Shorts本編の音声速度 |
@@ -1505,7 +1506,7 @@ YouTube OAuth:
 | `CHARACTER_EXPRESSION_PNGS` | `config.py` | native表情指定用PNG。素材未配置時は既定立ち絵へフォールバック |
 | `THUMBNAIL_CHARACTER_PNGS` | `config.py` | サムネ生成用参照画像 |
 | `THUMBNAIL_HOLD_FRAMES_SHORTS` | `config.py` / `.env` | Shorts先頭サムネ保持フレーム数。1〜5（30fps換算: 1=0.033s / 3=0.100s / 5=0.167s）。デフォルト3。不正値は3、範囲外は1〜5にクランプ。Long非対応 |
-| `BGM_PATH` | `config.py` | 固定BGMファイル |
+| `BGM_FILE` | `config.py` | 旧BGMファイル名。BGM未登録チャンネルの初回移行用としてのみ使用 |
 | `NATIVE_BGM_VOLUME_DB` | `.env` / `config.py` | native出力のBGM音量(dB) |
 | `NATIVE_ENABLE_MOTION_EFFECTS` | `.env` / `config.py` | native Shorts軽量エフェクト全体の有効/無効 |
 | `NATIVE_ENABLE_BG_KEN_BURNS` | `.env` / `config.py` | 背景画像のゆっくりズーム/パン |

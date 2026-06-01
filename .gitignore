@@ -14,5 +14,7 @@ dev/
 data/reading_dictionary_user.json
 data/reading_candidates.json
 data/settings.db
+data/settings.db-wal
+data/settings.db-shm
 data/secret_master.key
 .venv/
