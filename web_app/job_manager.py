@@ -68,8 +68,6 @@ class Job:
 
 
 class JobManager:
-    _PERSIST_FILE = "jobs.json"
-
     def __init__(self, max_workers: int = 4):
         self._jobs: dict[str, Job] = {}
         self._lock = threading.Lock()

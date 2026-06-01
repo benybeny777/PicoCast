@@ -467,9 +467,9 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 | logs | [{time, tag, message}] のリスト |
 | result / error | 成功時の結果 / 失敗時のエラーメッセージ |
 
-ジョブ情報は JSON ファイルへ永続化され、アプリ再起動後も指定件数分を参照できる。
+ジョブ情報は `metadata.db` の `jobs` テーブルへ永続化され（`upsert_job` / `load_jobs_from_db`）、アプリ再起動後も指定件数分を参照できる。
 実行中かつ再起動されたジョブは、起動時に `failed`（アプリ再起動により中断）としてマークされる。
-保存タイミング: 成功・失敗・キャンセル時（ `JOB_LOG_DIR/jobs.json` ）。
+保存タイミング: 成功・失敗・キャンセル時（`jobs` テーブルへ upsert、超過分は `delete_old_jobs` で古い順に削除）。
 保存失敗はジョブ自身のログに warning として記録する（ジョブ実行は妨げない）。
 
 ### ジョブの同時実行制御（キュー）
@@ -880,8 +880,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
-| `JOB_LOG_DIR` | `output/000_data/job_logs` | ジョブログ永続化ファイルの保存ディレクトリ |
-| `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`jobs.json` 1ファイルに全ジョブを保存し、超過分は古い順に切り捨て（ファイルローテーションなし）。デバッグログ（`app_debug.log`）は別途 `TimedRotatingFileHandler` で毎日0時にローテートし `DEBUG_LOG_RETENTION_DAYS` 日分を保持する |
+| `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`metadata.db` の `jobs` テーブルに保存し、超過分は `delete_old_jobs` で古い順に削除する。デバッグログ（`app_debug.log`）は別途 `TimedRotatingFileHandler` で毎日0時にローテートし `DEBUG_LOG_RETENTION_DAYS` 日分を保持する |
 | `JOB_MAX_CONCURRENT_WORKERS` | 1 | ワーカーsubprocess同時起動数。既定1=直列実行（生成・レンダーを1本ずつ）。超過分は順番待ち（キュー）。上げるとWeb無応答リスク増。`.env` ではなく config.py に置く。変更は再起動後に反映 |
 
 ---
@@ -969,17 +968,19 @@ Shortsの通常字幕は、背景に左右されない可読性を最優先す�
 
 Web UI の **「LongサムネAB」チェックボックス**（デフォルト OFF）または `config/config.py` の `LONG_THUMBNAIL_AB_TEST` / `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` で制御する。
 
-- **OFF（デフォルト）**: Variant A のみ生成。`thumbnail_ab_test.json` は書かない。
-- **ON**: 3バリアントを生成し `_meta/thumbnail_ab_test.json` で管理。
+- **OFF（デフォルト）**: Variant A のみ生成。
+- **ON**: 3バリアントを `thumbnails/{テーマ名}_thumbnail_A/B/C.png` として生成する。
   - **Variant A**: 食べ物クローズアップ（クリック重視）
   - **Variant B**: 古い歴史・驚き演出
   - **Variant C**: 昔と今の比較・ギャップ
 
-YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案はPC版YouTube Studioで手動登録します。通常アップロードではA案だけを `thumbnail.png` としてAPI設定します。アップロード後は動画IDを `thumbnail_ab_test.json` に記録し、`<video_id>_thumbnail_A/B/C.png` 形式のコピーも保存します。
+YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案はPC版YouTube Studioで手動登録します。通常アップロードではA案だけを `thumbnail.png` としてAPI設定します。
+
+> 旧仕様の `_meta/thumbnail_ab_test.json` 等のローカルマニフェスト管理および `<video_id>_thumbnail_*.png` コピー保存は廃止済み（生成物は variant PNG のみ。`_meta/` ディレクトリは使用しない）。
 
 ### タイトルA/Bテスト
 
-`_meta/title_ab_test.json` でタイトルバリアントを管理（手動切り替え）。YouTube APIアップロード時はA案タイトルを既定として使い、B/C案はYouTube Studioで手動テスト。
+Long ではタイトル候補（A/B/C案）を生成し、アップロード時は A 案を既定タイトルとして使う（B/C 案は YouTube Studio で手動テスト）。旧仕様の `_meta/title_ab_test.json` によるローカルマニフェスト管理は廃止済み。
 
 ### 縮小生成モード
 
@@ -1207,7 +1208,7 @@ AI編集者向けルール:
 
 `YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には `output/{profile_id}/videos/` 配下にある `.mp4` がある履歴フォルダだけを表示します（`000_uploaded/` 配下は表示しない）。各履歴フォルダから最新の `.mp4` を探し、`metadata.db` の `render_info` テーブルのタイトル・説明文・タグを使ってアップロードします。アップロードの可否判断はローカルステータスでブロックしない（YouTube Data API が正）。アップロード成功後は履歴フォルダを `output/{profile_id}/000_uploaded/` に移動し、`metadata.db` の `youtube_status` テーブルへ結果を記録します。予約枠の空き判断はYouTube側の予約状態を参照します。再アップロードが必要な場合はフォルダを `videos/` に手動で戻せば候補に現れます。
 
-YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや `script.txt` から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
+YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや台本本文（`metadata.db` の `videos.script_content`）から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
 
 アップロード成功後の再生リスト自動登録フローは2系統あります。
 
@@ -1777,10 +1778,10 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 | `video_type` | TEXT | Shorts / Long / ネタ会議_Shorts など |
 | `created_at` | TEXT | JST ISO 8601 |
 | `updated_at` | TEXT | JST ISO 8601 |
-| `script_path` | TEXT | script.txt の絶対パス |
+| `script_path` | TEXT | 旧 `script.txt` の絶対パス（廃止済み・新規行は未設定/NULL） |
 | `mp4_path` | TEXT | 生成 MP4 の絶対パス |
 | `thumbnail_path` | TEXT | サムネイル PNG パス |
-| `script_content` | TEXT | script.txt の全文（v2 追加） |
+| `script_content` | TEXT | 台本本文の正本（v2 追加）。`script.txt` ファイルは廃止し、本カラムが唯一の正本 |
 
 #### `render_info` — レンダリング設定・メタデータ
 
