@@ -694,6 +694,8 @@ VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防�
 - 元テキスト → ファイル名・字幕に使う（字幕マッチング維持）
 - 必要ライブラリ不足、辞書JSON不正、候補保存失敗などは `RuntimeError` または元例外で生成を中止する（サイレントスキップ禁止）
 
+**よみがな辞書は全チャンネル共通（プロファイル非依存）。** 辞書ファイルはプロジェクト直下の単一 `data/` ディレクトリに置き、`output/{profile_id}/` 配下には保存しない。アクティブチャンネルを切り替えても同じ辞書（base / user / candidates）を使う。`metadata.db` や認証情報がチャンネル別なのとは異なる扱い。設定画面から登録した読みは全チャンネルへ即時反映される。
+
 ```
 VOICE_READING_MODE = "safe_auto"
 VOICE_READING_BASE_DICT_PATH = "data/reading_dictionary_base.json"
