@@ -6,6 +6,11 @@
 
 ## 2026-06-01
 
+### 依存漏れの追加・固定コメント候補の N+1 解消
+
+- `requirements.txt` に不足していた依存を追加: `keyring`（macOS/Linux のシークレットマスターキー保管。Windows は DPAPI のため `platform_system != "Windows"` 限定）、`psd-tools`（キャラ立ち絵PSDの表情レイヤー読み込み）。これまで Mac/Linux で認証情報の保存・復号が動かない可能性があった。
+- 固定コメント候補一覧 `list_fixed_comment_candidates` が候補フォルダ1件ごとにレコードを個別クエリしていた N+1 を、`_fixed_comment_records_bulk()` の1クエリにまとめて解消（履歴一覧と同方針）。
+
 ### 履歴一覧の N+1 クエリを解消
 
 - 履歴一覧の生成でフォルダ1件ごとにメタ情報を個別クエリ（4テーブルJOIN）していた N+1 を、`_history_db_info_bulk()` で `WHERE local_id IN (...)` の1クエリにまとめて解消。動画本数が増えても `/history` 表示が重くならないようにした。回帰テストを追加。

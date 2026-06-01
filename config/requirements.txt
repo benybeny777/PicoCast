@@ -13,3 +13,5 @@ httpx
 sudachipy
 sudachidict_core
 cryptography
+keyring; platform_system != "Windows"  # macOS/Linux のシークレットマスターキー保管（Windowsはdpapi）
+psd-tools  # キャラ立ち絵PSD（表情レイヤー）読み込み core/character_expressions.py

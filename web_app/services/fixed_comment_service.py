@@ -17,6 +17,8 @@ from web_app.security import is_video_folder, safe_output_path
 def list_fixed_comment_candidates(only_unposted: bool = True, profile_id: str | None = None) -> list[dict[str, Any]]:
     context = _fixed_comment_context(profile_id)
     results = []
+    # まず候補フォルダを収集（ディレクトリ判定）→ レコードは1クエリで一括取得（N+1回避）
+    _cands: list[tuple[str, str, str, bool]] = []  # (relative_name, theme_dir, name, is_uploaded)
     for relative_name, theme_dir in _iter_candidate_dirs(context):
         name = os.path.basename(theme_dir)
         is_uploaded_archive = relative_name.startswith("000_uploaded" + os.sep)
@@ -26,8 +28,11 @@ def list_fixed_comment_candidates(only_unposted: bool = True, profile_id: str | 
             continue
         if not os.path.isdir(theme_dir):
             continue
+        _cands.append((relative_name, theme_dir, name, is_uploaded_archive))
 
-        record = _fixed_comment_record(name, context)
+    records = _fixed_comment_records_bulk([name for _, _, name, _ in _cands], context)
+    for relative_name, theme_dir, name, is_uploaded_archive in _cands:
+        record = records.get(name)
         if not record:
             continue
         fixed_comment = str(record.get("fixed_comment") or "").strip()
@@ -233,6 +238,43 @@ def _fixed_comment_record(local_id: str, context: dict[str, Any] | None = None) 
     finally:
         _close_metadata_connection(conn, manager)
     return dict(row) if row else {}
+
+
+def _fixed_comment_records_bulk(local_ids: list[str], context: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """候補一覧用: 複数 local_id のレコードを1クエリで取得する（N+1回避）。"""
+    if not local_ids:
+        return {}
+    db_path = context["db_path"]
+    if not os.path.isfile(db_path):
+        if context.get("profile_id"):
+            return {}
+        initialize_db()
+    placeholders = ",".join("?" * len(local_ids))
+    conn, manager = _open_metadata_connection(context)
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT v.local_id,
+                   COALESCE(ri.video_title, v.title, v.local_id) AS title,
+                   vm.fixed_comment,
+                   ys.youtube_video_id AS video_id,
+                   ys.publish_status,
+                   ys.publish_at,
+                   ys.uploaded_at,
+                   ys.published_at,
+                   ys.fixed_comment_posted,
+                   ys.fixed_comment_id AS comment_thread_id
+            FROM videos v
+            LEFT JOIN render_info ri ON ri.local_id = v.local_id
+            LEFT JOIN video_metadata vm ON vm.local_id = v.local_id
+            LEFT JOIN youtube_status ys ON ys.local_id = v.local_id
+            WHERE v.local_id IN ({placeholders})
+            """,
+            local_ids,
+        ).fetchall()
+    finally:
+        _close_metadata_connection(conn, manager)
+    return {r["local_id"]: dict(r) for r in rows}
 
 
 def _mark_fixed_comment_db(local_id: str, comment_thread_id: str | None = None, context: dict[str, Any] | None = None) -> None:
