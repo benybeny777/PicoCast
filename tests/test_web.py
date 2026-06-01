@@ -294,6 +294,36 @@ def test_history_initializes_empty_metadata_db(tmp_path, monkeypatch):
     assert [row["name"] for row in result] == ["Shorts_初期化テスト"]
 
 
+def test_build_metadata_txt_from_db_info():
+    """video_metadata 由来の dict から「メタデータ」欄テキストを組み立てられること。"""
+    from web_app.services.history_service import _build_metadata_txt
+
+    db_info = {
+        "video_title": "人面犬の正体",
+        "thumbnail_text": "犬じゃない",
+        "description": "都市伝説の解説。",
+        "tags": '["ずんだもん", "都市伝説", "怖い話"]',
+        "generation_type": "新規",
+        "source_video_title": "",
+        "purpose": "正体誤解型",
+        "fixed_comment": "あなたの地域にも？",
+    }
+    txt = _build_metadata_txt(db_info)
+    assert "【動画タイトル】" in txt
+    assert "人面犬の正体" in txt
+    # tags は JSON 配列をカンマ区切りに整形する
+    assert "ずんだもん, 都市伝説, 怖い話" in txt
+    assert "【目的】" in txt
+    # 空の項目（元動画）は出さない
+    assert "【元動画】" not in txt
+
+
+def test_build_metadata_txt_empty_when_no_fields():
+    """メタデータが空なら空文字を返すこと。"""
+    from web_app.services.history_service import _build_metadata_txt
+    assert _build_metadata_txt({}) == ""
+
+
 def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, monkeypatch):
     from urllib.parse import quote
     import web_app.services.history_service as hs

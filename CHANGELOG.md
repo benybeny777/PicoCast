@@ -6,6 +6,10 @@
 
 ## 2026-06-01
 
+### 履歴詳細の「メタデータ」欄を DB から再構築して復活
+
+- `_meta/metadata.txt` 廃止（metadata.db 正本化）の際に履歴詳細の「メタデータ」欄が空（`metadata_txt=""`）になっていた回帰を修正。`video_metadata`（動画タイトル・サムネ文字・説明文・タグ・生成区分・元動画・目的・固定コメント）から旧 `metadata.txt` と同じ体裁で再構築するようにした。
+
 ### 台本ファイル(script.txt)を完全廃止し metadata.db を唯一の正本に
 
 - 生成パイプラインが `script.txt` を**出力しない**ようにし、台本本文を `sync_folder_to_db(theme_dir, script_content=...)` で `metadata.db` の `videos.script_content` へ直接保存するようにした。
