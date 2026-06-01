@@ -428,6 +428,14 @@ class ImageGenerator:
         requests_list: [{"description": str, "raw": bool}, ...]
         戻り値: 同順のファイル名リスト（失敗は None）
         注意: スタイル参照（1枚目を基準にする機能）はバッチモードでは無効。
+
+        TODO(future): バッチAPIは将来的に正式対応する。現状は実運用未使用。
+          正式対応の前に下記を必ず解消すること:
+          - 下のポーリングループ（`while str(batch_job.state) not in terminal`）に
+            完了上限のタイムアウトが無く、ジョブが非終端状態のまま固まると無限ループする。
+            タイムアウト値・ポーリング間隔は config 化する（ハードコード禁止ルールに従う）。
+          - タイムアウト時はサイレントに部分結果を返さず例外を送出する
+            （無言フォールバック禁止ルールに従う）。
         """
         if not self.client:
             raise Exception("Google API キーが未設定です")
@@ -462,6 +470,8 @@ class ImageGenerator:
             print(f"  [Batch] ジョブ名: {batch_job.name}  初期状態: {batch_job.state}")
 
         # 完了までポーリング（30秒間隔）
+        # TODO(future): 完了上限タイムアウト無し＝非終端状態で無限ループの恐れ。
+        #   バッチ正式対応時に config 化したタイムアウトで打ち切り、超過時は例外送出する。
         terminal = {"JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED"}
         while str(batch_job.state) not in terminal:
             time.sleep(30)
