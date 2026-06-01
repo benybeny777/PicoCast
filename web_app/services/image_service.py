@@ -12,17 +12,19 @@ from web_app.security import find_history_dir
 
 
 def _detect_is_shorts_from_dir(theme_dir: str) -> bool:
-    """script.txt の動画形式行から Shorts か判定する。読めなければ Shorts として扱う。"""
+    """DBの台本(videos.script_content)の動画形式行から Shorts か判定する。読めなければ Shorts として扱う。"""
     import logging
-    script_path = os.path.join(theme_dir, "script.txt")
     try:
-        with open(script_path, "r", encoding="utf-8") as f:
-            content = f.read()
+        from core.metadata_db import get_script_content
+        local_id = os.path.basename(theme_dir.rstrip("/\\"))
+        content = get_script_content(local_id)
+        if not content:
+            raise ValueError("台本がDBに見つかりません")
         from workers.main import _detect_is_shorts
         return _detect_is_shorts(content)
     except Exception as e:
-        # フォールバック許可: script.txt が読めない場合は画像再生成を止めず Shorts として扱う
-        logging.warning("_detect_is_shorts_from_dir: script.txt 読み取り失敗 (%s) - Shorts として処理します: %s", theme_dir, e)
+        # フォールバック許可: 台本が取得できない場合は画像再生成を止めず Shorts として扱う
+        logging.warning("_detect_is_shorts_from_dir: 台本取得失敗 (%s) - Shorts として処理します: %s", theme_dir, e)
         return True
 
 

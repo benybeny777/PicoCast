@@ -223,7 +223,9 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
     if theme_dir is None:
         return None
 
-    script_txt = _read_text(os.path.join(theme_dir, "script.txt"))
+    # 台本本文は metadata.db (videos.script_content) を正本とする。
+    from core.metadata_db import get_script_content
+    script_txt = get_script_content(history_name) or ""
     db_info = _history_db_info(history_name)
     opening_review = {"final_score": db_info.get("opening_score")} if db_info.get("opening_score") is not None else {}
     duration_review = {
@@ -298,11 +300,3 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         "has_poll_copy": has_poll_copy,
         "has_fixed_comment": has_fixed_comment,
     }
-
-
-def _read_text(path: str) -> str:
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return f.read()
-    except OSError:
-        return ""

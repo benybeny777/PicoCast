@@ -569,12 +569,11 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
         else:
             print(msg, flush=True)
 
-    script_path = os.path.join(output_dir, "script.txt")
-    if not os.path.exists(script_path):
-        raise Exception(f"script.txt が見つかりません: {output_dir}")
-
-    with open(script_path, "r", encoding="utf-8") as f:
-        script_content = f.read()
+    from core.metadata_db import get_script_content
+    local_id = os.path.basename(os.path.abspath(output_dir).rstrip("/\\"))
+    script_content = get_script_content(local_id)
+    if not script_content:
+        raise Exception(f"台本がDB(metadata.db)に見つかりません: {local_id}")
 
     is_shorts = _detect_is_shorts(script_content)
     width = 1080 if is_shorts else 1920
@@ -831,9 +830,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if _saved_thumb_path and os.path.exists(_saved_thumb_path):
         shutil.copy2(_saved_thumb_path, os.path.join(_thumbs_dir(theme_dir), "thumbnail.png"))
 
-    script_txt_path = os.path.join(theme_dir, "script.txt")
-    with open(script_txt_path, "w", encoding="utf-8") as f:
-        f.write(script_content)  # 元テキスト全文を保存（参照用）
+    # 台本本文は script.txt ファイルではなく metadata.db (videos.script_content) を
+    # 正本とする。パイプライン末尾の sync_folder_to_db(..., script_content=...) で
+    # DB へ保存する（script.txt は生成しない）。
 
     # 本編テキスト（候補一覧/固定コメント/アンケートを除外済み）をパース
     items = ScriptParser.parse_string(_blocks["body_text"])
@@ -996,8 +995,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 if candidate_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not candidate_critical_errors:
                     rewrite_text = candidate_rewrite_text
                     script_content = candidate_script_content
-                    with open(script_txt_path, "w", encoding="utf-8") as f:
-                        f.write(script_content)
+                    # 確定した台本本文は末尾の sync_folder_to_db で DB へ保存する。
                     items = candidate_items
                     meta = candidate_meta
                     ai_thumbnail_prompt = meta.get("thumbnail")
@@ -1755,7 +1753,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         from core.metadata_db import ManagedConnection, sync_folder_to_db, initialize_db, is_initialized
         if not is_initialized():
             initialize_db()
-        sync_folder_to_db(theme_dir)
+        sync_folder_to_db(theme_dir, script_content=script_content)
         if meta.get("fixed_comment"):
             with ManagedConnection() as _conn:
                 _conn.execute(
