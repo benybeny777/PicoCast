@@ -32,6 +32,10 @@ def _split_env_choices(value: str) -> tuple[str, ...]:
     return tuple(choice for raw in text.split(",") if (choice := _clean_env_choice(raw)))
 
 
+def _split_env_ints(value: str) -> tuple[int, ...]:
+    return tuple(int(choice) for choice in _split_env_choices(value))
+
+
 # ───────────────────────────────────────────────
 # チャンネル識別情報（.env で設定）
 # ───────────────────────────────────────────────
@@ -386,6 +390,9 @@ _LEGACY_FOLDER_PREFIXES = ("Shorts_", "shorts_", "short_", "Long_", "long_", "�
 LONG_THUMBNAIL_AB_TEST     = os.environ.get("LONG_THUMBNAIL_AB_TEST",     "0").strip().lower() in ("1", "true", "yes", "on")  # Long サムネ A/B テスト（OFF: A のみ生成）
 LONG_UPLOAD_PLAYLIST_NAME  = os.environ.get("LONG_UPLOAD_PLAYLIST_NAME",  "ロング動画").strip()  # Long アップロード後に自動追加する再生リスト名（空で無効）
 TOPIC_REQUEST_CTA_EVERY_N  = int(os.environ.get("TOPIC_REQUEST_CTA_EVERY_N", "5"))  # Shorts新規/横展開のネタ募集CTAを許可する間隔（N本に1本、0で自動付与なし）
+UPLOAD_TIMEZONE            = os.environ.get("UPLOAD_TIMEZONE", "Asia/Tokyo").strip()  # 投稿予約スロットのタイムゾーン
+SHORTS_UPLOAD_SLOT_HOURS   = _split_env_ints(os.environ.get("SHORTS_UPLOAD_SLOT_HOURS", "7,12,21"))  # Shorts投稿予約スロット時刻（時）
+LONG_UPLOAD_SLOT_HOURS     = _split_env_ints(os.environ.get("LONG_UPLOAD_SLOT_HOURS", "22"))  # Long投稿予約スロット時刻（時、曜日共通）
 
 # ───────────────────────────────────────────────
 # 背景画像生成枚数上限

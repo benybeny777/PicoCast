@@ -9,6 +9,8 @@ POST /api/channels/{id}/activate - アクティブ化
 POST /api/channels/{id}/validate - バリデーション
 DELETE /api/channels/{id}    - 削除（confirmed=true 必須）
 GET  /api/prompt-profiles    - 利用可能な genre_profile 一覧
+
+プロファイル作成・更新ではチャンネル別投稿予約スロットも同時に保存する。
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -41,6 +43,9 @@ class ChannelProfileRequest(BaseModel):
     default_hashtags: str = ""
     channel_theme: str = ""
     channel_accent_color: str = ""
+    schedule_timezone: str = "Asia/Tokyo"
+    shorts_schedule_times: str = "07:00,12:00,21:00"
+    long_schedule_times: str = "22:00"
 
 
 class DeleteRequest(BaseModel):
@@ -63,6 +68,7 @@ def _profile_to_dict(p: ChannelProfile) -> dict:
     }
     try:
         from core.secret_store import has_secret
+        from core.channel_schedule import get_schedule, schedule_to_dict
         d["auth"] = {
             "google_api_key": has_secret("google_api_key", profile_id=p.profile_id),
             "openai_api_key": has_secret("openai_api_key", profile_id=p.profile_id),
@@ -71,6 +77,7 @@ def _profile_to_dict(p: ChannelProfile) -> dict:
             "upload_oauth": has_secret("youtube_upload_token", profile_id=p.profile_id),
             "analytics_oauth": has_secret("youtube_analytics_token", profile_id=p.profile_id),
         }
+        d["schedule"] = schedule_to_dict(get_schedule(p.profile_id))
     except Exception:
         d["auth"] = {
             "google_api_key": False,
@@ -80,7 +87,22 @@ def _profile_to_dict(p: ChannelProfile) -> dict:
             "upload_oauth": False,
             "analytics_oauth": False,
         }
+        d["schedule"] = {
+            "timezone": "Asia/Tokyo",
+            "shorts_times": ["07:00", "12:00", "21:00"],
+            "long_times": ["22:00"],
+        }
     return d
+
+
+def _save_channel_schedule(profile_id: str, req: ChannelProfileRequest) -> None:
+    from core.channel_schedule import save_schedule
+    save_schedule(
+        profile_id,
+        timezone_name=req.schedule_timezone,
+        shorts_slot_hours=req.shorts_schedule_times,
+        long_slot_hours=req.long_schedule_times,
+    )
 
 
 @router.get("")
@@ -118,7 +140,10 @@ def api_create_channel(req: ChannelProfileRequest):
     )
     try:
         save_profile(profile)
+        _save_channel_schedule(derived_profile_id, req)
     except ProfileValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     return {"saved": derived_profile_id}
 
@@ -145,7 +170,10 @@ def api_update_channel(profile_id: str, req: ChannelProfileRequest):
     )
     try:
         save_profile(profile)
+        _save_channel_schedule(derived_profile_id, req)
     except ProfileValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
     return {"saved": derived_profile_id}
 

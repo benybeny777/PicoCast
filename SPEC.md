@@ -93,7 +93,7 @@ yukkurijidou/
 │   ├── youtube_analytics.py # YouTube Analytics API取得（維持率取得含む）
 │   ├── retention_analysis.py # 視聴者維持率の離脱・ループ点分析
 │   ├── comment_templates.py # 固定コメント自動生成テンプレート（めたん調）
-│   ├── upload_scheduler.py # YouTube Data API を正とするアップロードスケジュール管理
+│   ├── upload_scheduler.py # YouTube Data API とチャンネル別設定を正とするアップロードスケジュール管理
 │   ├── upload_records.py   # metadata.db の youtube_status + render_info からアップロード記録を構築
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
 │   ├── youtube_uploader.py # YouTube APIアップロード
@@ -127,14 +127,14 @@ yukkurijidou/
 - 尺計算式（native）: `各セリフ本文の文字数 ÷ (5.4 × 音声速度) + 0.1 × 音声速度 = 推定尺`
 - 背景枚数: 6〜9枚（Shorts背景は下半分をキャラ立ち絵・字幕用に余白として空ける。食べ物・図解・重要テキストは画面上半分〜中央上寄せに配置。各背景プロンプトに「画面下半分はキャラ立ち絵用に余白を広く空ける。」を必ず含める）
 - 再生速度（native）: イントロ1.40x / 本編1.25x
-- アップロードスロット: 毎日 7:00 / 12:00 / 19:00 (JST)（視聴者アクティブ時間帯検証枠）
+- アップロードスロット: 毎日 7:00 / 12:00 / 21:00 (Asia/Tokyo)
 
 ### Long
 - 尺: **5〜10分（理想5〜8分）**
 - セリフ数: 150〜250行
 - 背景枚数: 5〜7秒に1枚（同一背景10秒以上禁止）
 - 再生速度（native）: イントロ1.40x / 本編1.20x
-- アップロードスロット: 毎日 21:00 / 土日は追加で 12:00 (JST)
+- アップロードスロット: 毎日 22:00 (Asia/Tokyo)
 
 ### 四国めたん 役割固定ルール
 
@@ -394,9 +394,11 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 | 種別 | スロット | 日程 |
 |---|---|---|
-| Shorts | 7:00 / 12:00 / 19:00 | 毎日（視聴者アクティブ時間帯検証枠） |
-| Long | 21:00（毎日）/ 12:00（土日のみ） | 毎日 |
+| Shorts | 7:00 / 12:00 / 21:00 | 毎日 |
+| Long | 22:00 | 毎日 |
 
+- スロット設定は `data/settings.db` の `channel_schedule_settings` テーブルで profile_id ごとに管理する。既定値は食べ物雑学チャンネル・都市伝説チャンネル・今後追加されるチャンネルで共通。タイムゾーンは `Asia/Tokyo`。
+- チャンネル詳細フォームで Shorts / Long の投稿予約スロットとタイムゾーンを編集できる。既存チャンネルに設定がない場合は自動作成する。2026-06-01 の既定値変更では既存の個別設定も Shorts 7:00 / 12:00 / 21:00、Long 22:00 へ更新する。
 - スロット割当範囲: 最大90日先まで探索
 - アップロード実行後:
   1. `assign_slots_from_youtube()` で YouTube 予約済み一覧を正として次の空きスロットを取得
@@ -407,7 +409,7 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 - スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。アップロード状態は `metadata.db` の `youtube_status` テーブルが正本
 - `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す
 - `sync_schedule_from_youtube()`: YouTube API を正として `youtube_status` テーブルへ書き戻す。チャンネル全件取得に失敗した場合は既知 video_id のみでフォールバック
-- すべての日時（ジョブ起動時刻・ログタイムスタンプ・`publish_at`）はJST で統一する
+- 投稿予約スロットと `publish_at` はチャンネル設定のタイムゾーンで扱う。既定は `Asia/Tokyo`。
 - `infer_video_type()`: タイトルプレフィックス優先。タイトルなしの場合は duration ≤ 60s を shorts と推定
 
 ### 出力データディレクトリ
@@ -513,6 +515,7 @@ POST /api/jobs/{job_id}/cancel
 
 GET  /api/history
 GET  /api/history/{history_name}
+DELETE /api/history/{history_name}      # confirmed=true 必須。履歴フォルダとDB関連行を削除
 POST /api/history/regenerate
 
 POST /api/generate
@@ -546,10 +549,40 @@ POST /api/fixed-comment
 GET  /api/prompt/script
 GET  /api/prompt/title
 GET  /api/settings/status
+POST /api/settings/status/refresh
 GET  /api/settings/config
 POST /api/settings/config
 POST /api/settings/secrets
+POST /api/settings/secrets/api-key
+POST /api/settings/secrets/client-secrets
 GET  /api/settings/ollama-models
+GET  /api/settings/bgm-files
+GET  /api/settings/reading-dict
+POST /api/settings/reading-dict/{dict_type}
+DELETE /api/settings/reading-dict/{dict_type}/{word}
+
+GET  /api/channels
+GET  /api/channels/current
+POST /api/channels
+PUT  /api/channels/{profile_id}
+POST /api/channels/{profile_id}/activate
+POST /api/channels/{profile_id}/validate
+DELETE /api/channels/{profile_id}
+GET  /api/channels/prompt-profiles
+
+GET  /api/bgm
+POST /api/bgm
+POST /api/bgm/{bgm_id}/default
+DELETE /api/bgm/{bgm_id}
+
+GET  /api/prompt-templates
+POST /api/prompt-templates
+GET  /api/prompt-templates/{template_id}
+PUT  /api/prompt-templates/{template_id}
+POST /api/prompt-templates/{template_id}/set-default
+POST /api/prompt-templates/{template_id}/clone
+DELETE /api/prompt-templates/{template_id}
+POST /api/prompt-templates/seed
 
 GET  /api/sd-models
 GET  /api/sd-models/webui
@@ -1337,7 +1370,7 @@ YouTube Studio 側で予約動画を手動公開した場合:
 3. `公開予定を変更` を押す
 4. 日付と時間をプルダウンから選択
 
-この操作は YouTube の `publishAt` を更新する。対象動画には YouTube の `video_id` が必要。指定可能時刻は Shorts が 7:00 / 12:00 / 19:00、Long が平日 21:00、土日 12:00 / 21:00。移動先スロットに同じ動画タイプの別動画がある場合は、YouTube 側で2本の公開予定時刻を入れ替える。
+この操作は YouTube の `publishAt` を更新する。対象動画には YouTube の `video_id` が必要。指定可能時刻はチャンネル別スケジュール設定から取得し、既定では Shorts が 7:00 / 12:00 / 21:00、Long が 22:00。移動先スロットに同じ動画タイプの別動画がある場合は、YouTube 側で2本の公開予定時刻を入れ替える。
 
 予約スロットを前詰めしたい場合:
 
@@ -1345,7 +1378,7 @@ YouTube Studio 側で予約動画を手動公開した場合:
 2. `スロット詰め直し計算` で変更案を確認（YouTube への書き込みなし）
 3. 内容を確認して `スロット詰め直し適用` で YouTube へ反映
 
-未来の予約枠は、最も早い空きスロットから前詰めできる。`rebalance_slots_detailed()` は YouTube の `publishAt` / `video_id` を正として読み、`update_video_publish_time()` で YouTube 側の公開予定時刻を更新する。Shorts と Long は同じ `publishAt` を共有してよいが、同じ動画タイプ内で `publishAt` が重複している場合は詰め直し対象にする。
+未来の予約枠は、最も早い空きスロットから前詰めできる。`rebalance_slots_detailed()` は YouTube の `publishAt` / `video_id` を正として読み、`update_video_publish_time()` で YouTube 側の公開予定時刻を更新する。詰め直しを実行した動画の `publish_at` は、実行時点のチャンネル別スケジュール設定に従って変更される。Shorts と Long は同じ `publishAt` を共有してよいが、同じ動画タイプ内で `publishAt` が重複している場合は詰め直し対象にする。
 
 native Shorts の立ち絵は、字幕との重なりを抑えるため小さめ・やや上寄せにする。Shorts通常字幕は中央寄せ、既定1.4倍のフォント倍率、白文字、話者色の内フチ（ずんだもん=濃緑 / めたん=濃い紫ピンク）、黒外フチ、任意の半透明黒帯（`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`）で可読性を優先する。字幕は `NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で少し下げる。調整は `NATIVE_CHARACTER_HEIGHT_SHORTS`、`NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`、`NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`、`NATIVE_SUBTITLE_FONT_SCALE`、`NATIVE_SUBTITLE_ALIGNMENT_SHORTS`、`NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で行う。
 
@@ -1607,6 +1640,18 @@ active profile によってすべての出力パス・DB・プロンプト・Ana
 | `is_active` | INTEGER | 1 のプロファイルが active（必ず1件のみ） |
 | `created_at` / `updated_at` | TEXT | ISO8601 UTC |
 
+### `channel_schedule_settings` テーブル（`data/settings.db`）
+
+チャンネル別の投稿予約スロットを管理する。新規予約・公開予定変更候補・スロット詰め直しは active profile のこの設定を使う。既定値は全チャンネル共通で Shorts が 07:00 / 12:00 / 21:00、Long が 22:00、タイムゾーンは Asia/Tokyo。
+
+| カラム | 型 | 説明 |
+|---|---|---|
+| `profile_id` | TEXT PK | channel_profiles.profile_id |
+| `timezone_name` | TEXT | IANA タイムゾーン名（既定 `Asia/Tokyo`） |
+| `shorts_slot_hours` | TEXT | Shorts の時刻リスト（例 `07:00,12:00,21:00`） |
+| `long_slot_hours` | TEXT | Long の時刻リスト（例 `22:00`） |
+| `created_at` / `updated_at` | TEXT | ISO8601 UTC |
+
 ### 出力ディレクトリ構造（profile 別）
 
 ```
@@ -1623,10 +1668,10 @@ Analytics データは `metadata.db` の `analytics_snapshots` テーブルに�
 
 ### API
 
-- `GET /api/channels` — プロファイル一覧（is_active 先頭）
+- `GET /api/channels` — プロファイル一覧（is_active 先頭、認証状態と投稿予約スロット設定を含む）
 - `GET /api/channels/current` — アクティブプロファイル + OAuth 登録状態（bool のみ）
-- `POST /api/channels` — 作成
-- `PUT /api/channels/{id}` — 更新
+- `POST /api/channels` — 作成。チャンネル別投稿予約スロットも同時保存
+- `PUT /api/channels/{id}` — 更新。チャンネル別投稿予約スロットも同時保存
 - `POST /api/channels/{id}/activate` — アクティブ化（トランザクションで is_active を排他切替）
 - `POST /api/channels/{id}/validate` — プロファイル + genre_profile の存在チェック
 - `DELETE /api/channels/{id}` — 削除（confirmed=true 必須。アクティブは削除不可）
@@ -1634,6 +1679,7 @@ Analytics データは `metadata.db` の `analytics_snapshots` テーブルに�
 
 既存 DB で `profile_id` / `genre_profile` / `output_root` がチャンネルハンドルと異なる場合は、`channel_handle` を正として `@` なしのハンドル名へ移行する。関連する `encrypted_secrets` / `prompt_templates` / `bgm_assets` の `profile_id` も同時に移行し、既存の genre_profile フォルダはハンドル名へコピーする。
 旧仕様で `default` に保存されていた `google_api_key` / `openai_api_key` / `hf_token` / `youtube_client_secrets` は、未登録の各 channel profile へ暗号化済みのままコピーする。YouTube OAuth token はチャンネル固有のためコピーしない。
+既存チャンネルに `channel_schedule_settings` がない場合は起動・保存時に自動作成する。2026-06-01 のスロット変更では、既存チャンネルの設定も新既定値へ更新する。
 
 ### `prompt_templates` テーブル（`data/settings.db`）
 

@@ -2,7 +2,7 @@
 予約投稿スロット時刻到達時の固定コメント自動投稿サービス。
 アプリ起動時にデーモンスレッドとして動作し、Webリクエストには一切影響しない。
 
-チェックタイミング: Shorts/Long の公開スロット時刻 (0:00 / 12:00 / 21:00 / 21:00 JST) の
+チェックタイミング: Shorts/Long の公開スロット時刻 (07:00 / 12:00 / 21:00 / 22:00 JST) の
 5分後にのみ起動。YouTube API は公開済み未投稿動画がある場合だけ呼ぶ。
 """
 import logging
@@ -20,8 +20,21 @@ _SETTING_POLL_SEC   = 60    # 設定ON/OFF確認の単位スリープ
 
 _watcher_thread: threading.Thread | None = None
 
-# 全スロット時間（重複排除）
-_ALL_SLOT_HOURS = sorted(set(SLOTS + LONG_SLOTS_WEEKDAY + LONG_SLOTS_WEEKEND))
+def _all_slot_hours() -> list[int]:
+    """全チャンネルの予約スロット時刻を返す。取得失敗時は既定値を使う。"""
+    try:
+        from core.channel_profile import list_profiles
+        from core.channel_schedule import get_schedule
+        hours: set[int] = set()
+        for profile in list_profiles():
+            schedule = get_schedule(profile.profile_id)
+            hours.update(schedule.shorts_slot_hours)
+            hours.update(schedule.long_slot_hours)
+        if hours:
+            return sorted(hours)
+    except Exception:
+        logger.exception("チャンネル別投稿スロット取得失敗。既定スロットで監視します")
+    return sorted(set(SLOTS + LONG_SLOTS_WEEKDAY + LONG_SLOTS_WEEKEND))
 
 
 def start_auto_watcher() -> None:
@@ -32,7 +45,7 @@ def start_auto_watcher() -> None:
     _watcher_thread = threading.Thread(target=_watch_loop, name="auto-fixed-comment", daemon=True)
     _watcher_thread.start()
     logger.info("固定コメント自動投稿ウォッチャー起動 (スロット時刻: %s JST + %d秒後)",
-                _ALL_SLOT_HOURS, _PUBLISH_BUFFER_SEC)
+                _all_slot_hours(), _PUBLISH_BUFFER_SEC)
 
 
 def _watch_loop() -> None:
@@ -56,7 +69,7 @@ def _seconds_to_next_slot_check() -> float:
     candidates: list[datetime] = []
     for offset in (0, 1):
         day = today + timedelta(days=offset)
-        for h in _ALL_SLOT_HOURS:
+        for h in _all_slot_hours():
             dt = datetime(day.year, day.month, day.day, h, 0, 0, tzinfo=JST) + timedelta(seconds=_PUBLISH_BUFFER_SEC)
             if dt > now:
                 candidates.append(dt)

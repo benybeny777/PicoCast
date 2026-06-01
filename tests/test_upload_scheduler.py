@@ -1,11 +1,19 @@
 import unittest
 from datetime import datetime
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from core import upload_scheduler
 
 
 class UploadSchedulerTests(unittest.TestCase):
+    def _default_schedule(self):
+        return SimpleNamespace(
+            timezone_name="Asia/Tokyo",
+            shorts_slot_hours=(7, 12, 21),
+            long_slot_hours=(22,),
+        )
+
     def _youtube_statuses(self, records):
         statuses = {}
         for idx, record in enumerate(records):
@@ -24,25 +32,34 @@ class UploadSchedulerTests(unittest.TestCase):
             "2026-05-21T07:00:00+09:00": "already fixed",
             "2026-05-25T07:00:00+09:00": "future a",
             "2026-05-25T12:00:00+09:00": "future b",
-            "2026-05-25T19:00:00+09:00": "future c",
+            "2026-05-25T21:00:00+09:00": "future c",
         }
 
-        new_schedule, changes = upload_scheduler.build_rebalanced_schedule(schedule, "shorts", now)
+        with patch.object(upload_scheduler, "_active_schedule", return_value=self._default_schedule()):
+            new_schedule, changes = upload_scheduler.build_rebalanced_schedule(schedule, "shorts", now)
 
         self.assertEqual(len(new_schedule), len(schedule))
         self.assertEqual(len(new_schedule), len(set(new_schedule)))
         self.assertEqual(new_schedule["2026-05-21T07:00:00+09:00"], "already fixed")
         self.assertEqual(new_schedule["2026-05-21T12:00:00+09:00"], "future a")
-        self.assertEqual(new_schedule["2026-05-21T19:00:00+09:00"], "future b")
+        self.assertEqual(new_schedule["2026-05-21T21:00:00+09:00"], "future b")
         self.assertEqual(new_schedule["2026-05-22T07:00:00+09:00"], "future c")
         self.assertEqual(
             changes,
             [
                 ("2026-05-25T07:00:00+09:00", "2026-05-21T12:00:00+09:00", "future a"),
-                ("2026-05-25T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "future b"),
-                ("2026-05-25T19:00:00+09:00", "2026-05-22T07:00:00+09:00", "future c"),
+                ("2026-05-25T12:00:00+09:00", "2026-05-21T21:00:00+09:00", "future b"),
+                ("2026-05-25T21:00:00+09:00", "2026-05-22T07:00:00+09:00", "future c"),
             ],
         )
+
+    def test_new_slots_use_channel_schedule_defaults(self):
+        now = datetime(2026, 5, 21, 6, 0, tzinfo=upload_scheduler.JST)
+        with patch.object(upload_scheduler, "_active_schedule", return_value=self._default_schedule()):
+            shorts = upload_scheduler._assign_slots_from_used(3, "shorts", set(), now)
+            long = upload_scheduler._assign_slots_from_used(1, "long", set(), now)
+        self.assertEqual([s.strftime("%H:%M") for s in shorts], ["07:00", "12:00", "21:00"])
+        self.assertEqual([s.strftime("%H:%M") for s in long], ["22:00"])
 
     def test_rebalance_reads_records_without_writing_schedule_json(self):
         records = [
@@ -104,7 +121,7 @@ class UploadSchedulerTests(unittest.TestCase):
         ):
             changes = upload_scheduler.rebalance_slots("shorts")
 
-        self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "future b")])
+        self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T21:00:00+09:00", "future b")])
 
     def test_rebalance_detailed_includes_youtube_video_id_for_duplicate_slots(self):
         records = [
@@ -136,7 +153,7 @@ class UploadSchedulerTests(unittest.TestCase):
 
         self.assertEqual(
             changes,
-            [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "same title", "auto-1", None)],
+            [("2026-05-21T12:00:00+09:00", "2026-05-21T21:00:00+09:00", "same title", "auto-1", None)],
         )
 
     def test_long_rebalance_preserves_duplicate_record_slots(self):
@@ -145,14 +162,14 @@ class UploadSchedulerTests(unittest.TestCase):
                 "video_id": "v1",
                 "video_type": "long",
                 "title": "long a",
-                "publish_at": "2026-05-23T12:00:00+09:00",
+                "publish_at": "2026-05-23T22:00:00+09:00",
                 "publish_status": "scheduled",
             },
             {
                 "video_id": "v2",
                 "video_type": "long",
                 "title": "long b",
-                "publish_at": "2026-05-23T12:00:00+09:00",
+                "publish_at": "2026-05-23T22:00:00+09:00",
                 "publish_status": "scheduled",
             },
         ]
@@ -169,7 +186,7 @@ class UploadSchedulerTests(unittest.TestCase):
         ):
             changes = upload_scheduler.rebalance_slots("long")
 
-        self.assertEqual(changes, [("2026-05-23T12:00:00+09:00", "2026-05-23T21:00:00+09:00", "long b")])
+        self.assertEqual(changes, [("2026-05-23T22:00:00+09:00", "2026-05-24T22:00:00+09:00", "long b")])
 
     def test_rebalance_uses_youtube_order_without_local_generation_kind_priority(self):
         records = [
@@ -185,7 +202,7 @@ class UploadSchedulerTests(unittest.TestCase):
                 "video_type": "shorts",
                 "title": "derived later",
                 "generation_kind": "横展開",
-                "publish_at": "2026-05-21T19:00:00+09:00",
+                "publish_at": "2026-05-21T21:00:00+09:00",
                 "publish_status": "scheduled",
             },
         ]
@@ -235,7 +252,7 @@ class UploadSchedulerTests(unittest.TestCase):
         ):
             changes = upload_scheduler.rebalance_slots("shorts")
 
-        self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T19:00:00+09:00", "derived duplicate")])
+        self.assertEqual(changes, [("2026-05-21T12:00:00+09:00", "2026-05-21T21:00:00+09:00", "derived duplicate")])
 
     def test_rebalance_includes_unlisted_records_with_publish_at(self):
         records = [
@@ -396,7 +413,7 @@ class UploadSchedulerTests(unittest.TestCase):
         self.assertEqual(records[0]["publish_status"], "private")
         self.assertEqual(result["changed"], 1)
 
-    def test_long_weekend_rebalance_uses_noon_and_evening(self):
+    def test_long_rebalance_uses_daily_2200_only(self):
         now = datetime(2026, 5, 22, 22, 0, tzinfo=upload_scheduler.JST)
         schedule = {
             "2026-05-25T21:00:00+09:00": "future a",
@@ -405,8 +422,8 @@ class UploadSchedulerTests(unittest.TestCase):
 
         new_schedule, _changes = upload_scheduler.build_rebalanced_schedule(schedule, "long", now)
 
-        self.assertEqual(new_schedule["2026-05-23T12:00:00+09:00"], "future a")
-        self.assertEqual(new_schedule["2026-05-23T21:00:00+09:00"], "future b")
+        self.assertEqual(new_schedule["2026-05-23T22:00:00+09:00"], "future a")
+        self.assertEqual(new_schedule["2026-05-24T22:00:00+09:00"], "future b")
 
     def test_sync_schedule_from_youtube_updates_local_publish_at(self):
         records = [
@@ -479,7 +496,7 @@ class UploadSchedulerTests(unittest.TestCase):
             {
                 "video_type": "shorts",
                 "title": "published",
-                "publish_at": "2026-05-25T19:00:00+09:00",
+                "publish_at": "2026-05-25T21:00:00+09:00",
                 "publish_status": "published",
             },
         ]
@@ -488,7 +505,7 @@ class UploadSchedulerTests(unittest.TestCase):
 
         self.assertIn("2026-05-25T07:00:00+09:00", schedule["shorts"])
         self.assertIn("2026-05-25T12:00:00+09:00", schedule["shorts"])
-        self.assertNotIn("2026-05-25T19:00:00+09:00", schedule["shorts"])
+        self.assertNotIn("2026-05-25T21:00:00+09:00", schedule["shorts"])
 
     def test_sync_imports_scheduled_video_missing_from_local_records(self):
         records = []

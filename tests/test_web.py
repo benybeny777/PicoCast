@@ -106,6 +106,17 @@ def test_history_page(client):
     assert res.status_code == 200
 
 
+def test_schedule_page_uses_new_default_slot_candidates(client):
+    res = client.get("/schedule")
+    assert res.status_code == 200
+    assert 'value="07:00"' in res.text
+    assert 'value="12:00"' in res.text
+    assert 'value="21:00"' in res.text
+    assert 'value="22:00"' in res.text
+    assert 'value="19:00"' not in res.text
+    assert "Long 週末" not in res.text
+
+
 # 6. /settings ページが 200 を返す
 def test_settings_page(client):
     res = client.get("/settings")

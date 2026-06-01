@@ -171,7 +171,7 @@ def _migrate_profile_ids_to_handles(conn: sqlite3.Connection) -> None:
                 "UPDATE channel_profiles SET profile_id=?, output_root=?, genre_profile=? WHERE profile_id=?",
                 (new_id, new_id, new_id, old_id),
             )
-            for table in ("encrypted_secrets", "bgm_assets"):
+            for table in ("encrypted_secrets", "bgm_assets", "channel_schedule_settings"):
                 exists = conn.execute(
                     "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
                 ).fetchone()
@@ -384,6 +384,12 @@ def save_profile(profile: ChannelProfile) -> None:
         finally:
             conn.close()
     _logger.info("[ChannelProfile] 保存: %s", profile.profile_id)
+    try:
+        from core.channel_schedule import ensure_profile_schedule
+        ensure_profile_schedule(profile.profile_id)
+    except Exception:
+        _logger.exception("[ChannelProfile] 投稿予約スロット初期化失敗: %s", profile.profile_id)
+        raise
 
 
 def activate_profile(profile_id: str) -> None:
@@ -429,6 +435,12 @@ def delete_profile(profile_id: str, confirmed: bool = False) -> None:
         finally:
             conn.close()
     _logger.info("[ChannelProfile] 削除: %s", profile_id)
+    try:
+        from core.channel_schedule import delete_schedule
+        delete_schedule(profile_id)
+    except Exception:
+        _logger.exception("[ChannelProfile] 投稿予約スロット削除失敗: %s", profile_id)
+        raise
 
 
 def validate_profile(profile: ChannelProfile) -> None:

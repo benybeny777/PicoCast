@@ -165,7 +165,18 @@ def page_schedule(request: Request):
     except Exception as e:
         scheduled = []
         schedule_error = str(e)
-    return _render(request, "schedule.html", {"schedule_items": scheduled, "schedule_error": schedule_error})
+    from core.channel_schedule import get_schedule, schedule_to_dict
+    active_schedule = schedule_to_dict(get_schedule())
+    schedule_times_unique = []
+    for t in active_schedule.get("shorts_times", []) + active_schedule.get("long_times", []):
+        if t not in schedule_times_unique:
+            schedule_times_unique.append(t)
+    return _render(request, "schedule.html", {
+        "schedule_items": scheduled,
+        "schedule_error": schedule_error,
+        "active_schedule": active_schedule,
+        "schedule_times_unique": schedule_times_unique,
+    })
 
 
 @router.get("/upload", response_class=HTMLResponse)

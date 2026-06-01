@@ -1,16 +1,25 @@
 """
 YouTubeアップロードスケジュール管理。
 
-Shorts枠: 毎日 07:00 / 12:00 / 19:00 JST。
-Long枠: 平日 21:00 JST、休日 12:00 / 21:00 JST。
+Shorts枠: 毎日 07:00 / 12:00 / 21:00 JST。
+Long枠: 毎日 22:00 JST。
 Shorts と Long は別枠として扱うため、同時刻をそれぞれ使用できる。
 """
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
-JST = timezone(timedelta(hours=9))
-SLOTS = [7, 12, 19]
-LONG_SLOTS_WEEKDAY = [21]
-LONG_SLOTS_WEEKEND = [12, 21]
+from config import config as _cfg
+
+def _timezone_from_name(name: str):
+    if name == "Asia/Tokyo":
+        return timezone(timedelta(hours=9))
+    return ZoneInfo(name)
+
+
+JST = _timezone_from_name(_cfg.UPLOAD_TIMEZONE)
+SLOTS = list(_cfg.SHORTS_UPLOAD_SLOT_HOURS)
+LONG_SLOTS_WEEKDAY = list(_cfg.LONG_UPLOAD_SLOT_HOURS)
+LONG_SLOTS_WEEKEND = list(_cfg.LONG_UPLOAD_SLOT_HOURS)
 
 VIDEO_TYPES = ("shorts", "long")
 SCHEDULED_STATUSES = {"", "scheduled", "unlisted", "private"}
@@ -18,19 +27,35 @@ NOT_SCHEDULED_STATUSES = {"published", "public", "manual_published", "deleted", 
 
 
 def _as_jst(dt: datetime) -> datetime:
+    tz = _active_timezone()
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=JST)
-    return dt.astimezone(JST)
+        return dt.replace(tzinfo=tz)
+    return dt.astimezone(tz)
+
+
+def _active_schedule():
+    from core.channel_schedule import get_schedule
+    return get_schedule()
+
+
+def _active_timezone():
+    schedule = _active_schedule()
+    if schedule is None:
+        return JST
+    return _timezone_from_name(schedule.timezone_name)
 
 
 def _parse_slot(iso: str) -> datetime:
     return _as_jst(datetime.fromisoformat(iso))
 
 
-def _slot_hours(video_type: str, candidate) -> list[int]:
+def _slot_hours(video_type: str, candidate, schedule=None) -> list[int]:
+    schedule = schedule or _active_schedule()
+    if schedule is None:
+        return LONG_SLOTS_WEEKDAY if video_type == "long" else SLOTS
     if video_type == "long":
-        return LONG_SLOTS_WEEKEND if candidate.weekday() in (5, 6) else LONG_SLOTS_WEEKDAY
-    return SLOTS
+        return list(schedule.long_slot_hours)
+    return list(schedule.shorts_slot_hours)
 
 
 def _is_scheduled_record(record: dict) -> bool:
@@ -54,12 +79,13 @@ def _assign_slots_from_used(
     used: set[str],
     now: datetime | None = None,
 ) -> list[datetime]:
-    now = _as_jst(now or datetime.now(JST))
+    now = _as_jst(now or datetime.now(_active_timezone()))
+    schedule = _active_schedule()
     result = []
     candidate = now.date()
 
     for _ in range(90):
-        for hour in _slot_hours(video_type, candidate):
+        for hour in _slot_hours(video_type, candidate, schedule):
             slot_dt = datetime(
                 candidate.year,
                 candidate.month,
@@ -67,7 +93,7 @@ def _assign_slots_from_used(
                 hour,
                 0,
                 0,
-                tzinfo=JST,
+                tzinfo=now.tzinfo,
             )
             if slot_dt <= now + timedelta(minutes=5):
                 continue
@@ -97,7 +123,7 @@ def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
     """
     from core.youtube_uploader import get_channel_upload_video_statuses
 
-    now = _as_jst(datetime.now(JST))
+    now = _as_jst(datetime.now(_active_timezone()))
     used: set[str] = set()
     try:
         statuses = get_channel_upload_video_statuses()
@@ -133,7 +159,7 @@ def schedule_from_youtube() -> dict[str, dict]:
     """
     from core.youtube_uploader import get_channel_upload_video_statuses
 
-    now = _as_jst(datetime.now(JST))
+    now = _as_jst(datetime.now(_active_timezone()))
     schedules: dict[str, dict] = {vt: {} for vt in VIDEO_TYPES}
     try:
         statuses = get_channel_upload_video_statuses()
@@ -166,7 +192,7 @@ def _scheduled_entries_from_youtube(video_type: str) -> list[dict]:
     """リバランス用にYouTubeから予約済みエントリを取得する。"""
     from core.youtube_uploader import get_channel_upload_video_statuses
 
-    now = datetime.now(JST)
+    now = datetime.now(_active_timezone())
     entries = []
     try:
         statuses = get_channel_upload_video_statuses()
@@ -235,7 +261,7 @@ def build_rebalanced_schedule(
     used_slots: set[str] | None = None,
 ) -> tuple[dict, list[tuple[str, str, str]]]:
     """保存せずにリバランス後のスケジュールを構築する。"""
-    now = _as_jst(now or datetime.now(JST))
+    now = _as_jst(now or datetime.now(_active_timezone()))
     cutoff = now + timedelta(minutes=5)
 
     fixed = {}
@@ -274,7 +300,7 @@ def build_rebalanced_schedule(
 
 
 def _scheduled_entries_from_records(records: list[dict], video_type: str) -> list[dict]:
-    now = datetime.now(JST)
+    now = datetime.now(_active_timezone())
     entries = []
     for idx, record in enumerate(records):
         vt = str(record.get("video_type") or "").lower()
@@ -316,7 +342,7 @@ def build_rebalanced_entries(
     include_record_index: bool = False,
 ) -> list[tuple]:
     """レコードエントリからリバランス変更リストを構築する（重複スロット保持）。"""
-    now = _as_jst(now or datetime.now(JST))
+    now = _as_jst(now or datetime.now(_active_timezone()))
     cutoff = now + timedelta(minutes=5)
 
     used = set(used_slots or set())
@@ -423,7 +449,7 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
         _log(f"チャンネル全件取得失敗、既知IDのみでフォールバック: {_e}")
         statuses = get_video_statuses(list(id_to_record.keys()))
     db_result = sync_youtube_statuses(statuses, delete_missing=False)
-    now = datetime.now(JST)
+    now = datetime.now(_active_timezone())
     changed_records = 0
     scheduled = 0
     published = 0

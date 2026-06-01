@@ -230,6 +230,26 @@
       </tr>
       <tr>
         <td colspan="2" style="padding-top:16px">
+          <h3 style="margin:0 0 6px;font-size:0.95em">投稿予約スロット</h3>
+          <small style="color:var(--text-muted)">このチャンネルで新規予約・スロット詰め直しに使う時刻です。既存の予約済み動画は詰め直しを実行するまで変更されません。</small>
+        </td>
+      </tr>
+      <tr>
+        <td><label for="chf-schedule_timezone"><strong>タイムゾーン</strong></label></td>
+        <td><input id="chf-schedule_timezone" type="text" class="form-input" style="width:220px" value="Asia/Tokyo"></td>
+      </tr>
+      <tr>
+        <td><label for="chf-shorts_schedule_times"><strong>Shorts スロット</strong></label><br>
+          <small style="color:var(--text-muted)">カンマ区切り。例: 07:00,12:00,21:00</small></td>
+        <td><input id="chf-shorts_schedule_times" type="text" class="form-input" style="width:300px" value="07:00,12:00,21:00"></td>
+      </tr>
+      <tr>
+        <td><label for="chf-long_schedule_times"><strong>Long スロット</strong></label><br>
+          <small style="color:var(--text-muted)">曜日共通。例: 22:00</small></td>
+        <td><input id="chf-long_schedule_times" type="text" class="form-input" style="width:300px" value="22:00"></td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding-top:16px">
           <h3 style="margin:0 0 6px;font-size:0.95em">認証情報</h3>
           <small style="color:var(--text-muted)">このチャンネル専用の認証情報です。空欄は変更されません。値そのものは保存後も表示しません。</small>
           <div id="ch-auth-current" style="margin-top:8px"></div>
@@ -977,7 +997,7 @@ function chRenderList() {
     return;
   }
   let html = '<table class="status-table" style="width:100%">'
-    + '<thead><tr><th>チャンネル</th><th>genre_profile</th><th>output_root</th><th>認証情報</th><th>操作</th></tr></thead><tbody>';
+    + '<thead><tr><th>チャンネル</th><th>genre_profile</th><th>予約スロット</th><th>認証情報</th><th>操作</th></tr></thead><tbody>';
   for (const p of _chProfiles) {
     const activeBadge = p.is_active
       ? '<span class="badge badge-ok" style="margin-right:4px">Active</span>'
@@ -1001,7 +1021,11 @@ function chRenderList() {
       <td>${activeBadge}${dot}<strong>${esc(p.channel_name)}</strong><br>
         <small style="color:var(--text-muted)">${esc(p.channel_handle || '')} &mdash; <code>${esc(p.profile_id)}</code></small></td>
       <td><code style="font-size:12px">${esc(p.genre_profile)}</code></td>
-      <td style="font-family:monospace;font-size:12px;word-break:break-all">${esc(p.output_root)}</td>
+      <td style="font-size:12px">
+        <div>Shorts: ${(p.schedule && p.schedule.shorts_times || []).map(esc).join(' / ')}</div>
+        <div>Long: ${(p.schedule && p.schedule.long_times || []).map(esc).join(' / ')}</div>
+        <div style="color:var(--text-muted)">${esc((p.schedule && p.schedule.timezone) || 'Asia/Tokyo')}</div>
+      </td>
       <td style="min-width:220px">${authHtml}</td>
       <td style="white-space:nowrap;vertical-align:top;padding-top:8px">
         ${!p.is_active ? `<button class="btn btn-primary" style="font-size:12px" onclick="chActivate('${esc(p.profile_id)}')">切替</button> ` : ''}
@@ -1053,6 +1077,10 @@ function chShowForm(profileId) {
   const col = (p && p.channel_accent_color && /^#[0-9a-fA-F]{6}$/.test(p.channel_accent_color))
     ? p.channel_accent_color : '#4a5568';
   document.getElementById('chf-channel_accent_color').value = col;
+  const sched = (p && p.schedule) ? p.schedule : {};
+  document.getElementById('chf-schedule_timezone').value = sched.timezone || 'Asia/Tokyo';
+  document.getElementById('chf-shorts_schedule_times').value = (sched.shorts_times || ['07:00', '12:00', '21:00']).join(',');
+  document.getElementById('chf-long_schedule_times').value = (sched.long_times || ['22:00']).join(',');
   document.getElementById('chf-google_api_key').value = '';
   document.getElementById('chf-openai_api_key').value = '';
   document.getElementById('chf-hf_token').value = '';
@@ -1100,6 +1128,9 @@ function _chFormData() {
     default_hashtags:     document.getElementById('chf-default_hashtags').value.trim(),
     channel_theme:        document.getElementById('chf-channel_theme').value.trim(),
     channel_accent_color: document.getElementById('chf-channel_accent_color').value,
+    schedule_timezone:    document.getElementById('chf-schedule_timezone').value.trim(),
+    shorts_schedule_times: document.getElementById('chf-shorts_schedule_times').value.trim(),
+    long_schedule_times:  document.getElementById('chf-long_schedule_times').value.trim(),
   };
 }
 

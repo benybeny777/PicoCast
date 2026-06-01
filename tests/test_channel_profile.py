@@ -19,8 +19,11 @@ if _ROOT not in sys.path:
 @pytest.fixture()
 def profile_db(tmp_path, monkeypatch):
     import core.channel_profile as cp
+    import core.channel_schedule as cs
     monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
     monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
+    monkeypatch.setattr(cs, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cs, "_ROOT", str(tmp_path))
     yield cp
 
 
@@ -252,6 +255,69 @@ def test_default_api_keys_are_copied_to_profiles(profile_db):
     finally:
         conn.close()
     assert row is not None
+
+
+def test_profile_schedule_is_created_with_default_slots(profile_db):
+    cp = profile_db
+    import core.channel_schedule as cs
+
+    cp.save_profile(_make_profile(profile_id="zunkami", channel_handle="@zunkami"))
+
+    schedule = cs.get_schedule("zunkami")
+    assert schedule.timezone_name == "Asia/Tokyo"
+    assert schedule.shorts_times == ["07:00", "12:00", "21:00"]
+    assert schedule.long_times == ["22:00"]
+
+
+def test_existing_profile_schedule_is_updated_to_current_default(profile_db):
+    cp = profile_db
+    import core.channel_schedule as cs
+
+    conn = cp._open_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO channel_profiles(
+                profile_id, channel_name, channel_handle, genre_profile, output_root,
+                default_hashtags, channel_theme, channel_accent_color, is_active,
+                created_at, updated_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                "zunkami", "食べ物雑学", "@zunkami", "zunkami", "zunkami",
+                "", "", "", 1, "2026-06-01T00:00:00+00:00", "2026-06-01T00:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS channel_schedule_settings (
+                profile_id TEXT PRIMARY KEY,
+                timezone_name TEXT NOT NULL,
+                shorts_slot_hours TEXT NOT NULL,
+                long_slot_hours TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO channel_schedule_settings(
+                profile_id, timezone_name, shorts_slot_hours, long_slot_hours,
+                created_at, updated_at
+            ) VALUES(?,?,?,?,?,?)
+            """,
+            ("zunkami", "Asia/Tokyo", "07:00,12:00,19:00", "12:00,21:00", "old", "old"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    cs.initialize()
+    schedule = cs.get_schedule("zunkami")
+
+    assert schedule.shorts_times == ["07:00", "12:00", "21:00"]
+    assert schedule.long_times == ["22:00"]
 
 
 # ── 初期プロファイル自動作成なし ────────────────────────────────────────────
