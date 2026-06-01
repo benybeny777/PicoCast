@@ -84,12 +84,33 @@ def _run_once() -> None:
         submit_fixed_comment_job,
     )
 
-    candidates = list_fixed_comment_candidates(only_unposted=True)
-    for c in candidates:
-        history_name = c["name"]
+    for profile_id in _target_profile_ids():
+        candidates = list_fixed_comment_candidates(only_unposted=True, profile_id=profile_id)
+        for c in candidates:
+            history_name = c["name"]
 
-        try:
-            job_id = submit_fixed_comment_job(history_name, auto_posted=True)
-            logger.info("固定コメント自動投稿ジョブ登録: %s (job_id=%s)", history_name, job_id)
-        except Exception:
-            logger.exception("固定コメント自動投稿ジョブ登録失敗: %s", history_name)
+            try:
+                job_id = submit_fixed_comment_job(history_name, auto_posted=True, profile_id=profile_id)
+                logger.info(
+                    "固定コメント自動投稿ジョブ登録: profile=%s %s (job_id=%s)",
+                    profile_id or "active",
+                    history_name,
+                    job_id,
+                )
+            except Exception:
+                logger.exception(
+                    "固定コメント自動投稿ジョブ登録失敗: profile=%s %s",
+                    profile_id or "active",
+                    history_name,
+                )
+
+
+def _target_profile_ids() -> list[str | None]:
+    scope = str(getattr(_cfg, "AUTO_FIXED_COMMENT_PROFILE_SCOPE", "all") or "all").strip().lower()
+    if scope == "active":
+        return [None]
+    if scope != "all":
+        raise ValueError(f"未対応の AUTO_FIXED_COMMENT_PROFILE_SCOPE です: {scope}")
+
+    from core.channel_profile import list_profiles
+    return [p.profile_id for p in list_profiles()]

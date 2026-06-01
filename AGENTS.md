@@ -42,6 +42,7 @@
 - 別 profile の output_root へのアクセスは `safe_output_path()` が 403 で拒否する。profile 間で output が混ざることを防ぐ。
 - genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
 - OAuth token（`youtube_upload_token` / `youtube_analytics_token`）は profile_id 単位で encrypted_secrets に保存する。
+- BGM は `data/settings.db` の `bgm_assets` テーブルで profile_id 単位に管理する。旧 `BGM_FILE` は初回移行用としてのみ扱い、生成・再レンダー時は `profile_default` / `selected` / `none` の明示指定を使う。
 
 ## Web UI 作業時の注意点
 
@@ -55,6 +56,7 @@
 - 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
 - output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
 - 破壊的操作（アップロード・固定コメント・スケジュール変更）は `confirmed=true` 必須 + 画面確認ダイアログ必須。
+- 画像手動差し替え・復元は `confirmed=true` 必須。元画像は `000_backups/image_replacements/` に退避し、履歴は active profile の `metadata.db:image_replacements` に記録する。
 - 実装が不安定な機能は `[DISABLED]` / `[dry-run]` として画面とコードコメントに明記し、無効ではなくユーザーに理由を提示する。
 - テストは `tests/test_web.py` で行う。外部API実通信が必要なテストはモックまたはskip可能にする。
 - Starlette 1.1.0以降: `TemplateResponse(request, name, context)` の引数順に従う。
@@ -65,6 +67,7 @@
 - Web UIヘッダーに現在の active channel profile（チャンネル名 / ハンドル）を常時表示する。
 - Web UI上で登録済み channel profile をいつでも切り替えられること。1つのWeb UIで複数プロファイルを選択・切替できることが完了条件であり、cloneごとに1プロファイルを固定する運用だけでは不十分。
 - チャンネル切替後、以下はすべて active profile 基準に切り替わること：履歴・生成・プロンプト・アップロード候補・Analytics・固定コメント・スケジュール・再生リスト。
+- 固定コメントの手動画面は active profile 基準。自動投稿ウォッチャーのみ `AUTO_FIXED_COMMENT_PROFILE_SCOPE` に従い、`all` の場合は全 channel profile の metadata.db と profile_id 別 YouTube OAuth token を巡回する。
 - active profile 未設定時は YouTube操作とプロンプト生成を禁止する（`require_active_profile()` で例外）。
 - 別 profile の `output_root` へのアクセスは `security.py: safe_output_path()` が 403 で拒否する。profile 間で output が混ざることを防ぐ。
 

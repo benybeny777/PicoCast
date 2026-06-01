@@ -602,7 +602,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  image_style="通常", reuse_backgrounds=False, use_batch_api=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
                  long_budget_mode=None, sd_size_mode=False,
-                 background_engine=None):
+                 background_engine=None, bgm_mode="profile_default",
+                 bgm_id=None, bgm_volume_db=None):
     report = GenerationReport()
     pipeline_start = time.time()
     img_gen = None
@@ -1730,6 +1731,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "playlist_categories": _parse_playlist_categories_meta(meta.get("playlist_categories", "")),
             "actual_duration_sec": round(_actual_sec, 2) if _actual_sec > 0 else None,
             "actual_duration_status": _actual_duration_status or None,
+            "bgm_mode": bgm_mode,
+            "bgm_id": bgm_id,
+            "bgm_volume_db": bgm_volume_db,
         }
         from core.metadata_db import upsert_render_info, initialize_db, is_initialized
         if not is_initialized():

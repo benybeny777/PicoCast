@@ -78,6 +78,7 @@ from web_app.routes.api_history import router as history_router
 from web_app.routes.api_generate import router as generate_router
 from web_app.routes.api_check import router as check_router
 from web_app.routes.api_images import router as images_router
+from web_app.routes.api_bgm import router as bgm_router
 from web_app.routes.api_analytics import router as analytics_router
 from web_app.routes.api_schedule import router as schedule_router
 from web_app.routes.api_upload import router as upload_router
@@ -98,6 +99,7 @@ app.include_router(history_router)
 app.include_router(generate_router)
 app.include_router(check_router)
 app.include_router(images_router)
+app.include_router(bgm_router)
 app.include_router(analytics_router)
 app.include_router(schedule_router)
 app.include_router(upload_router)

@@ -12,6 +12,7 @@
       <tr><td>MP4</td><td>{% if detail.has_mp4 %}<span class="badge badge-ok">{{ detail.mp4_name }}</span>{% else %}<span class="badge badge-ng">なし</span>{% endif %}</td></tr>
       <tr><td>サムネイル</td><td>{% if detail.has_thumbnail %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-ng">なし</span>{% endif %}</td></tr>
       <tr><td>背景画像数</td><td>{{ detail.backgrounds | length }} 枚</td></tr>
+      <tr><td>BGM</td><td>{{ detail.render_info.get('bgm_display_name') or detail.render_info.get('bgm_mode') or '—' }}</td></tr>
     </table>
     {% if detail.has_mp4 %}
     <a href="/api/images/{{ detail.name | urlencode }}/file/{{ detail.mp4_name | urlencode }}" class="btn btn-secondary mt-sm" target="_blank">MP4を確認</a>
@@ -76,6 +77,28 @@
     </div>
     <div class="form-group check-group">
       <label><input type="checkbox" id="sd-size-mode" {% if not default_sd_size_mode %}checked{% endif %}> 高画質（FHD）生成</label>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="form-group">
+      <label for="bgm-mode">BGM</label>
+      <select id="bgm-mode" onchange="toggleBgmSelect()">
+        <option value="profile_default" {% if (detail.render_info.get('bgm_mode') or 'profile_default') == 'profile_default' %}selected{% endif %}>チャンネル既定</option>
+        <option value="selected" {% if detail.render_info.get('bgm_mode') == 'selected' %}selected{% endif %}>個別指定</option>
+        <option value="none" {% if detail.render_info.get('bgm_mode') == 'none' %}selected{% endif %}>なし</option>
+      </select>
+    </div>
+    <div class="form-group" id="bgm-selected-wrap" style="{% if detail.render_info.get('bgm_mode') != 'selected' %}display:none{% endif %}">
+      <label for="bgm-id">BGMファイル</label>
+      <select id="bgm-id">
+        {% for bgm in bgm_assets %}
+        <option value="{{ bgm.bgm_id }}" {% if detail.render_info.get('bgm_id') == bgm.bgm_id or (not detail.render_info.get('bgm_id') and bgm.is_default) %}selected{% endif %}>{{ bgm.display_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="bgm-volume">BGM音量(dB)</label>
+      <input id="bgm-volume" type="number" step="0.5" value="{{ detail.render_info.get('bgm_volume_db') if detail.render_info.get('bgm_volume_db') is not none else '' }}">
     </div>
   </div>
 
@@ -345,7 +368,7 @@ async function renderVideo() {
     const res = await fetch(`/api/history/${encodeURIComponent(historyName)}/render`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({confirmed: true}),
+      body: JSON.stringify({confirmed: true, ...readBgmParams()}),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -371,10 +394,11 @@ function _readPipelineParams() {
     longThumbnailAb:  document.getElementById('long-thumbnail-ab').checked,
     longBudgetMode:   document.getElementById('long-budget-mode').checked,
     fhdMode:          document.getElementById('sd-size-mode').checked,
+    bgm:              readBgmParams(),
   };
 }
 
-async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longThumbnailAb, longBudgetMode, fhdMode }) {
+async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longThumbnailAb, longBudgetMode, fhdMode, bgm }) {
   return fetch('/api/history/regenerate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -386,6 +410,7 @@ async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longT
       long_thumbnail_ab_test: longThumbnailAb,
       long_budget_mode: longBudgetMode,
       sd_size_mode: !fhdMode,
+      ...bgm,
       confirmed: true
     }),
   });
@@ -421,7 +446,7 @@ async function regenerateFull() {
       const rres = await fetch(`/api/history/${encodeURIComponent(historyName)}/render`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({confirmed: true}),
+        body: JSON.stringify({confirmed: true, ...readBgmParams()}),
       });
       const rdata = await rres.json();
       if (!rres.ok) {
@@ -437,6 +462,21 @@ async function regenerateFull() {
       finishGenerate();
     }
   });
+}
+
+function toggleBgmSelect() {
+  document.getElementById('bgm-selected-wrap').style.display =
+    document.getElementById('bgm-mode').value === 'selected' ? '' : 'none';
+}
+
+function readBgmParams() {
+  const mode = document.getElementById('bgm-mode').value;
+  const volumeRaw = document.getElementById('bgm-volume').value;
+  return {
+    bgm_mode: mode,
+    bgm_id: mode === 'selected' ? document.getElementById('bgm-id').value : null,
+    bgm_volume_db: volumeRaw === '' ? null : Number(volumeRaw),
+  };
 }
 
 async function regenerateWithoutRender() {

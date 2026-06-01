@@ -108,7 +108,7 @@ def _close_youtube_client(youtube):
         youtube.close()
 
 
-def post_comment(video_id: str, comment_text: str, progress_callback=None) -> str | None:
+def post_comment(video_id: str, comment_text: str, progress_callback=None, profile_id: str | None = None) -> str | None:
     """動画にコメントを投稿する。成功時はコメントスレッドIDを返す。"""
     def _log(msg):
         if progress_callback:
@@ -118,7 +118,7 @@ def post_comment(video_id: str, comment_text: str, progress_callback=None) -> st
 
     youtube = None
     try:
-        youtube = get_youtube_client()
+        youtube = get_youtube_client(profile_id=profile_id)
         response = youtube.commentThreads().insert(
             part="snippet",
             body={
@@ -140,7 +140,7 @@ def post_comment(video_id: str, comment_text: str, progress_callback=None) -> st
         _close_youtube_client(youtube)
 
 
-def get_video_statuses(video_ids: list[str], youtube=None) -> dict[str, dict]:
+def get_video_statuses(video_ids: list[str], youtube=None, profile_id: str | None = None) -> dict[str, dict]:
     """video_id のリストを渡し、{video_id: {"privacyStatus": ..., "publishAt": ...}} を返す。
     見つからない動画は結果に含まれない。50件ずつバッチ処理。
     """
@@ -148,7 +148,7 @@ def get_video_statuses(video_ids: list[str], youtube=None) -> dict[str, dict]:
         return {}
     owns_client = youtube is None
     if owns_client:
-        youtube = get_youtube_client()
+        youtube = get_youtube_client(profile_id=profile_id)
     result = {}
     try:
         for i in range(0, len(video_ids), 50):

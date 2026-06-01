@@ -54,6 +54,12 @@
         <img src="/api/images/{{ selected_history }}/file/{{ img.key }}" alt="{{ img.filename }}" loading="lazy">
       </div>
       <p>{{ img.filename }}</p>
+      <p class="hint">{{ img.width or '?' }}x{{ img.height or '?' }}{% if img.last_replacement_at %} / 差替: {{ img.last_replacement_at[:16].replace('T',' ') }}{% endif %}</p>
+      <div class="action-row" style="gap:6px;flex-wrap:wrap">
+        <input type="file" id="replace-{{ img.key | replace('/', '-') }}" accept=".png,.jpg,.jpeg,.webp" style="max-width:210px">
+        <button class="btn btn-xs btn-secondary" onclick="replaceImage('{{ img.key }}')">手動差し替え</button>
+        {% if img.last_replacement_id %}<button class="btn btn-xs btn-secondary" onclick="restoreImage({{ img.last_replacement_id }})">元に戻す</button>{% endif %}
+      </div>
     </div>
     {% endfor %}
   </div>
@@ -74,6 +80,12 @@
                onclick="openLightbox(this.src, '{{ img.filename }}'); event.preventDefault(); event.stopPropagation();">
         </div>
         <p>{{ img.filename }}</p>
+        <p class="hint">{{ img.width or '?' }}x{{ img.height or '?' }}{% if img.last_replacement_at %} / 差替: {{ img.last_replacement_at[:16].replace('T',' ') }}{% endif %}</p>
+        <div class="action-row" style="gap:6px;flex-wrap:wrap">
+          <input type="file" id="replace-{{ img.key | replace('/', '-') }}" accept=".png,.jpg,.jpeg,.webp" style="max-width:210px">
+          <button class="btn btn-xs btn-secondary" onclick="replaceImage('{{ img.key }}')">手動差し替え</button>
+          {% if img.last_replacement_id %}<button class="btn btn-xs btn-secondary" onclick="restoreImage({{ img.last_replacement_id }})">元に戻す</button>{% endif %}
+        </div>
       </div>
       <div class="bg-prompt-editor">
         <textarea
@@ -89,6 +101,12 @@
     {% endfor %}
   </div>
   {% endif %}
+
+  <div class="card mt">
+    <h3>差し替え履歴</h3>
+    <button class="btn btn-secondary btn-sm" onclick="loadReplacementHistory()">履歴を表示</button>
+    <div id="replacement-history" class="mt hint"></div>
+  </div>
 
 </div>
 {% endif %}
@@ -207,6 +225,52 @@ function openLightbox(src, caption) {
 function closeLightbox() {
   document.getElementById('lightbox').classList.remove('open');
   document.getElementById('lightbox-img').src = '';
+}
+
+function replaceInputId(key) {
+  return 'replace-' + key.replaceAll('/', '-');
+}
+
+async function replaceImage(key) {
+  const input = document.getElementById(replaceInputId(key));
+  if (!input || !input.files.length) { alert('差し替える画像を選択してください'); return; }
+  if (!confirm(`${key} を手動差し替えしますか？\nMP4には未反映です。必要に応じて再レンダーしてください。`)) return;
+  const historyName = '{{ selected_history }}';
+  const form = new FormData();
+  form.append('target_key', key);
+  form.append('confirmed', 'true');
+  form.append('image_file', input.files[0]);
+  const res = await fetch(`/api/images/${encodeURIComponent(historyName)}/replace`, { method: 'POST', body: form });
+  const data = await res.json();
+  if (!res.ok) { alert('差し替えエラー: ' + (data.detail || JSON.stringify(data))); return; }
+  alert('差し替えました。MP4に反映するには再レンダーしてください。');
+  location.reload();
+}
+
+async function loadReplacementHistory() {
+  const historyName = '{{ selected_history }}';
+  const box = document.getElementById('replacement-history');
+  const res = await fetch(`/api/images/${encodeURIComponent(historyName)}/replacements`);
+  const data = await res.json();
+  if (!res.ok) { box.textContent = '履歴取得エラー: ' + (data.detail || ''); return; }
+  if (!data.replacements || !data.replacements.length) { box.textContent = '差し替え履歴はありません'; return; }
+  box.innerHTML = data.replacements.map(r =>
+    `<div>#${r.id} ${r.created_at || ''} ${r.status} ${r.target_rel_path} (${r.source_type}) ` +
+    `<button class="btn btn-xs btn-secondary" onclick="restoreImage(${r.id})">元に戻す</button></div>`
+  ).join('');
+}
+
+async function restoreImage(id) {
+  if (!confirm(`差し替え履歴 #${id} のバックアップへ戻しますか？\nMP4には未反映です。必要に応じて再レンダーしてください。`)) return;
+  const historyName = '{{ selected_history }}';
+  const res = await fetch(`/api/images/${encodeURIComponent(historyName)}/restore`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({replacement_id: id, confirmed: true}),
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('復元エラー: ' + (data.detail || JSON.stringify(data))); return; }
+  location.reload();
 }
 
 document.addEventListener('keydown', e => {

@@ -847,6 +847,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_DEFAULT_SD_SIZE_MODE` | `"1"` | Web UI生成画面の縮小生成既定値。`"1"` = 縮小生成ON（チェックボックス表記は「高画質（FHD）生成」でチェックなし） |
 | `NANOBANANA_SD_IMAGE_SIZE` | `"1K"` | Nano Banana縮小生成時の画像サイズ |
 | `NANOBANANA_FHD_IMAGE_SIZE` | `"2K"` | Nano Banana高画質生成時の画像サイズ |
+| `AUTO_FIXED_COMMENT_PROFILE_SCOPE` | `"all"` | 固定コメント自動投稿の対象。`all`=全チャンネル、`active`=アクティブのみ |
 | `WEB_JOB_POLL_INTERVAL_MS` | 2000 | Web UIジョブ状態更新間隔(ms) |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | 1500 | Web UIジョブ成功後再読み込み待ち時間(ms) |
 | `WEB_TOAST_VISIBLE_MS` | 2000 | Web UIトースト表示時間(ms) |
@@ -872,7 +873,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - `render_native_test(output_dir, voice_speed_intro, voice_speed_body, estimated_duration_sec)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
 - ffmpeg は常に `-nostdin` と `stdin=DEVNULL` で非対話実行し、履歴からの再作成で既存ファイルや入力待ちによりWebジョブがハングしないようにする。1コマンドの上限は `NATIVE_FFMPEG_TIMEOUT_SEC`、ffprobe は `NATIVE_FFPROBE_TIMEOUT_SEC` で制御する。
 - 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。
-- native出力のBGM音量は `NATIVE_BGM_VOLUME_DB=-20` (dB) で管理する。
+- BGMは `data/settings.db` の `bgm_assets` テーブルで channel profile 単位に管理する。生成・再レンダー時に `profile_default`（チャンネル既定）/ `selected`（個別指定）/ `none`（BGMなし）を選ぶ。旧 `BGM_FILE` はBGM未登録チャンネルの初回移行用としてのみ使い、以後はDB登録されたBGMを正本にする。
 - 出力後に ffmpeg `ebur128=peak=true` で最終MP4の音量解析を行い、Integrated loudness / LRA / True peak の要約をログに出す。
 - MP4生成後、ffprobe で実尺を取得し `📏 native実尺評価: Xs [理想/やや短い/OKだけど長め/警告/要確認]` をログ表示する。評価基準はShortsと同じ（38〜50s=理想 / 35〜37s=やや短い / 51〜55s=OKだけど長め / 32〜34s or 56〜58s=警告）。
 - `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
@@ -884,7 +885,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭に `THUMBNAIL_HOLD_FRAMES_SHORTS`（デフォルト3フレーム≒0.1秒）だけサムネイル画像を挿入する（Long は挿入しない）。保持フレーム数は `.env` の `THUMBNAIL_HOLD_FRAMES_SHORTS` で変更可。1秒以上の静止サムネは設定値に関係なく生じない（上限5フレーム≒0.17秒）。
 - レンダー開始時に使用エンコーダ名（`NATIVE_FFMPEG_ENCODER` の値）をジョブログへ出力する。GPU エンコーダ（h264_nvenc 等）が利用不可の場合は `tag="warning"` 付きの警告メッセージとして送出し、UI 上でオレンジ色表示で視覚的に識別できる。ソフトウェアエンコーダ（libx264）へのフォールバックは最大3箇所で検知・警告する。
-- `metadata.db` の `render_info` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra / screen_format / playlist_categories。
+- `metadata.db` の `render_info` に以下を保存する: render_engine / estimated_duration_sec / actual_duration_sec / actual_duration_status / loudnorm_enabled / loudnorm_i / loudnorm_tp / loudnorm_lra / screen_format / playlist_categories / bgm_mode / bgm_id / bgm_display_name / bgm_file_path / bgm_volume_db / bgm_loop_enabled。
 
 ### 安定条件
 
@@ -1173,6 +1174,8 @@ AI編集者向けルール:
 
 確認画面で再生成したい画像だけ選ぶと、同じファイル名で上書きします。A案を個別再生成した場合は `thumbnail.png` もA案に同期します。
 
+手動差し替えでは、対象画像と同じサイズへ中央トリミングして上書きします。差し替え前の画像は `output/{profile_id}/000_backups/image_replacements/{local_id}/` に保存し、`metadata.db` の `image_replacements` テーブルに対象パス・バックアップパス・適用サイズ・日時を記録します。復元操作も同じ履歴テーブルへ `restore` として追記します。MP4へ反映するには差し替え後にレンダーのみ再作成が必要です。
+
 ### 動画出力
 
 動画出力は ffmpeg/native MP4 のみを対象にします。
@@ -1203,6 +1206,8 @@ Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リス
 いずれの場合も、既に同じ動画が登録済みなら重複追加しません。再生リスト操作に失敗した場合、アップロード自体は成功扱いのまま警告ログを出します。
 
 `💬 固定コメント` は、`output/{profile_id}/000_uploaded/` 配下のアップロード済み履歴から、`youtube_status` テーブルに `video_id` がある公開済み動画を選んでコメント投稿します。予約中動画は候補に表示しません。YouTube Data API で状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は `youtube_status` テーブルの `fixed_comment_id` に保存します。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted_at` を記録できます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
+
+固定コメントの手動画面は active profile のみを対象にします。自動投稿ウォッチャーは `AUTO_FIXED_COMMENT_PROFILE_SCOPE` で対象を切り替え、既定の `all` では登録済み channel profile すべての `metadata.db` と profile_id 別 YouTube OAuth token を使って未投稿候補を巡回します。`active` に設定すると従来通り active profile のみを対象にします。
 
 台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。`metadata.db` の `render_info` テーブルへ保存し、Analytics 一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。
 
@@ -1515,6 +1520,7 @@ YouTube OAuth:
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `.env` / `config.py` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `.env` / `config.py` | Web UI生成画面のLong節約既定値 |
 | `WEB_DEFAULT_SD_SIZE_MODE` | `.env` / `config.py` | Web UI生成画面の縮小生成既定値。`"1"` = 縮小生成ON（デフォルト） |
+| `AUTO_FIXED_COMMENT_PROFILE_SCOPE` | `.env` / `config.py` | 固定コメント自動投稿の対象。`all`=全チャンネル、`active`=アクティブのみ |
 | `WEB_JOB_POLL_INTERVAL_MS` | `.env` / `config.py` | Web UIのジョブ状態更新間隔(ms) |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | `.env` / `config.py` | Web UIのジョブ成功後再読み込み待ち時間(ms) |
 | `WEB_TOAST_VISIBLE_MS` | `.env` / `config.py` | Web UIのトースト表示時間(ms) |
@@ -1769,6 +1775,44 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 | `loudnorm_i` / `loudnorm_tp` / `loudnorm_lra` | REAL | loudnorm 設定値 |
 | `motion_effects_enabled` | INTEGER | 0/1 |
 | `motion_effects_fallback_count` | INTEGER | fallback セグメント数 |
+| `bgm_mode` | TEXT | `profile_default` / `selected` / `none` |
+| `bgm_id` | TEXT | `bgm_assets.bgm_id` |
+| `bgm_display_name` | TEXT | レンダー時のBGM表示名 |
+| `bgm_file_path` | TEXT | レンダー時のBGM実ファイル |
+| `bgm_volume_db` | REAL | レンダー時のBGM音量(dB) |
+| `bgm_loop_enabled` | INTEGER | 0/1 |
+
+#### `image_replacements` — 画像手動差し替え履歴
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `id` | INTEGER PK | 差し替え履歴ID |
+| `local_id` | TEXT | 動画フォルダ名 |
+| `target_rel_path` | TEXT | 差し替え対象の相対パス |
+| `target_kind` | TEXT | `thumbnail` / `thumbnail_ab` / `background` |
+| `source_type` | TEXT | `manual_upload` / `restore` |
+| `backup_file_path` | TEXT | 復元用バックアップ画像 |
+| `applied_file_path` | TEXT | 適用先画像 |
+| `original_width` / `original_height` | INTEGER | 適用前サイズ |
+| `applied_width` / `applied_height` | INTEGER | 適用後サイズ |
+| `status` | TEXT | `applied` / `restored` |
+| `created_at` | TEXT | 実行日時 |
+| `note` | TEXT | 補足 |
+
+#### `bgm_assets` — チャンネル別BGM（`data/settings.db`）
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `bgm_id` | TEXT PK | BGM ID |
+| `profile_id` | TEXT | channel profile ID |
+| `display_name` | TEXT | 表示名 |
+| `file_path` | TEXT | profile 配下へコピーした実ファイル |
+| `default_volume_db` | REAL | 既定音量(dB) |
+| `loop_enabled` | INTEGER | 0/1 |
+| `is_enabled` | INTEGER | 0/1 |
+| `is_default` | INTEGER | チャンネル既定BGMなら1 |
+| `duration_sec` | REAL | ffprobe で取得した再生時間 |
+| `created_at` / `updated_at` | TEXT | 登録・更新日時 |
 
 #### `video_metadata` — 台本由来のメタ情報・CTA ポリシー
 

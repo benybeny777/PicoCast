@@ -6,6 +6,18 @@
 
 ## 2026-06-01
 
+### 画像手動差し替えとBGM選択を追加
+
+- `/images` から背景画像・サムネイルを手動アップロードで差し替え可能にした。元画像は `000_backups/image_replacements/` に保存し、差し替え履歴は `metadata.db` の `image_replacements` テーブルに記録する。
+- 設定画面にBGM管理タブを追加し、チャンネル別に `bgm_assets` を DB 管理できるようにした。生成・履歴詳細のレンダーでは「チャンネル既定 / 個別指定 / BGMなし」を選択できる。
+- nativeレンダー時に選択したBGM情報を `render_info` に保存し、再レンダーやアップロード前確認で参照できるようにした。
+
+### 固定コメント自動投稿の全チャンネル対応
+
+- `AUTO_FIXED_COMMENT_PROFILE_SCOPE` を追加し、固定コメント自動投稿の対象を `all`（全チャンネル）/ `active`（アクティブのみ）で切り替え可能にした。
+- `all` では登録済み channel profile すべての `metadata.db` と profile_id 別 YouTube OAuth token を使って未投稿候補を巡回する。
+- 手動画面は従来通り active profile のみを対象にする。
+
 ### 現行ドキュメントの整理
 
 - 現行アーキテクチャに関係する変更だけを記録する方針へ変更。

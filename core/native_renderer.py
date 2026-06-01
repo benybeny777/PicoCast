@@ -7,7 +7,6 @@ import wave
 from dataclasses import dataclass
 
 from config import (
-    BGM_PATH,
     FFMPEG_BIN,
     NATIVE_AUDIO_LOUDNORM_ENABLED,
     NATIVE_AUDIO_LOUDNORM_I,
@@ -22,7 +21,6 @@ from config import (
     CHARACTER_UPPER_BODY_SHORTS_SCALE,
     CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET,
     CHARACTER_EXPRESSION_PNGS,
-    NATIVE_BGM_VOLUME_DB,
     NATIVE_CHARACTER_HEIGHT_LONG,
     NATIVE_CHARACTER_HEIGHT_SHORTS,
     NATIVE_CHARACTER_BOTTOM_MARGIN_LONG,
@@ -74,6 +72,7 @@ from config import (
     NATIVE_TELOP_POP_START_SEC,
     NATIVE_TELOP_POP_MAX_SEC,
 )
+from core.bgm_store import resolve_bgm_selection
 from core.native_character_assets import CharacterVariantSet, load_character_variants
 from core.parser import ScriptParser
 
@@ -1050,6 +1049,9 @@ def render_native_test(
     voice_speed_intro: float | None = None,
     voice_speed_body: float | None = None,
     estimated_duration_sec: float | None = None,
+    bgm_mode: str = "profile_default",
+    bgm_id: str | None = None,
+    bgm_volume_db: float | None = None,
 ) -> NativeRenderResult:
     """生成済み音声・背景アセットからネイティブMP4を生成する。"""
     output_dir = os.path.abspath(output_dir)
@@ -1077,6 +1079,11 @@ def render_native_test(
     segment_list = os.path.join(work_dir, "segment_concat.txt")
     video_path = os.path.join(work_dir, "video_with_narration.mp4")
     output_path = _native_output_path(output_dir)
+    bgm_selection = resolve_bgm_selection(
+        bgm_mode=bgm_mode,
+        bgm_id=bgm_id,
+        bgm_volume_db=bgm_volume_db,
+    )
 
     durations = [_wav_duration(path) for path in audio_files]
     total_audio = sum(durations)
@@ -1238,19 +1245,20 @@ def render_native_test(
     _run_ffmpeg([FFMPEG_BIN, "-y", "-f", "concat", "-safe", "0", "-i", segment_list, "-c", "copy", video_path])
 
     loudnorm_filter = _native_loudnorm_filter()
-    if BGM_PATH and os.path.exists(BGM_PATH):
+    if bgm_selection["bgm_mode"] != "none":
         if progress_callback:
-            progress_callback("🔊 BGMミックス・最終エンコード中...")
+            progress_callback(f"🔊 BGMミックス・最終エンコード中... ({bgm_selection['bgm_display_name']})")
         audio_filter = (
-            f"[0:a]volume=1.0[a0];[1:a]volume={NATIVE_BGM_VOLUME_DB:.1f}dB[a1];"
+            f"[0:a]volume=1.0[a0];[1:a]volume={float(bgm_selection['bgm_volume_db']):.1f}dB[a1];"
             "[a0][a1]amix=inputs=2:duration=first:dropout_transition=0"
         )
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
             audio_filter += f"[mixed];[mixed]{loudnorm_filter}[a]"
         else:
             audio_filter += "[a]"
+        bgm_input_args = ["-stream_loop", "-1"] if bgm_selection["bgm_loop_enabled"] else []
         _run_ffmpeg([
-            FFMPEG_BIN, "-y", "-i", video_path, "-stream_loop", "-1", "-i", BGM_PATH,
+            FFMPEG_BIN, "-y", "-i", video_path, *bgm_input_args, "-i", bgm_selection["bgm_file_path"],
             "-filter_complex", audio_filter,
             "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-ar", "48000", "-ac", "2", "-shortest", output_path,
         ])
@@ -1310,6 +1318,7 @@ def render_native_test(
         "loudnorm_lra": NATIVE_AUDIO_LOUDNORM_LRA,
         "motion_effects_enabled": bool(NATIVE_ENABLE_MOTION_EFFECTS and is_shorts),
         "motion_effects_fallback_segments": motion_fallback_count,
+        **bgm_selection,
     })
 
     if progress_callback:

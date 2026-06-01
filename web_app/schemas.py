@@ -22,6 +22,9 @@ class GenerateRequest(BaseModel):
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
     sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
     with_render: bool = True
+    bgm_mode: str = "profile_default"  # profile_default / selected / none
+    bgm_id: str | None = None
+    bgm_volume_db: float | None = None
 
     @field_validator("script")
     @classmethod
@@ -40,6 +43,9 @@ class BatchGenerateRequest(BaseModel):
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
     sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
     with_render: bool = True
+    bgm_mode: str = "profile_default"  # profile_default / selected / none
+    bgm_id: str | None = None
+    bgm_volume_db: float | None = None
 
 
 class HistoryRegenerateRequest(BaseModel):
@@ -51,7 +57,17 @@ class HistoryRegenerateRequest(BaseModel):
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
     sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
     with_render: bool = False
+    bgm_mode: str = "profile_default"  # profile_default / selected / none
+    bgm_id: str | None = None
+    bgm_volume_db: float | None = None
     confirmed: bool = False
+
+
+class RenderRequest(BaseModel):
+    confirmed: bool = False
+    bgm_mode: str = "profile_default"  # profile_default / selected / none
+    bgm_id: str | None = None
+    bgm_volume_db: float | None = None
 
 
 # ── チェック ─────────────────────────────────────────

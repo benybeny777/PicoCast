@@ -10,7 +10,12 @@ from web_app.security import safe_output_path
 from web_app.worker_runner import run_in_worker
 
 
-def submit_render_job(history_name: str) -> str:
+def submit_render_job(
+    history_name: str,
+    bgm_mode: str = "profile_default",
+    bgm_id: str | None = None,
+    bgm_volume_db: float | None = None,
+) -> str:
     """動画再レンダリングジョブを登録してjob_idを返す。"""
     _validate_name(history_name)
     theme_dir = safe_output_path(history_name)
@@ -21,11 +26,17 @@ def submit_render_job(history_name: str) -> str:
     mgr = get_job_manager()
     job = mgr.create_job("render")
     _log(job, f"動画再レンダリングジョブを登録: {history_name}", "info")
-    mgr.submit(job, _run_render, history_name)
+    mgr.submit(job, _run_render, history_name, bgm_mode, bgm_id, bgm_volume_db)
     return job.job_id
 
 
-def _run_render(job: Job, history_name: str) -> dict[str, Any]:
+def _run_render(
+    job: Job,
+    history_name: str,
+    bgm_mode: str,
+    bgm_id: str | None,
+    bgm_volume_db: float | None,
+) -> dict[str, Any]:
     theme_dir = safe_output_path(history_name)
     _log(job, "audio/ と backgrounds/ から MP4 を再生成します", "info")
     _log(job, f"対象フォルダ: {theme_dir}", "info")
@@ -35,6 +46,9 @@ def _run_render(job: Job, history_name: str) -> dict[str, Any]:
         {
             "history_name": history_name,
             "theme_dir": theme_dir,
+            "bgm_mode": bgm_mode,
+            "bgm_id": bgm_id,
+            "bgm_volume_db": bgm_volume_db,
         },
         job,
     )

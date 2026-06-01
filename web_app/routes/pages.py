@@ -82,6 +82,7 @@ def page_dashboard(request: Request):
 def page_generate(request: Request):
     jobs = get_job_manager().list_jobs()
     gen_jobs = [j for j in jobs if j["type"] == "generate"][:10]
+    from core.bgm_store import list_bgm_assets
     return _render(request, "generate.html", {
         "recent_jobs": gen_jobs,
         "image_style_choices": WEB_IMAGE_STYLE_CHOICES,
@@ -91,6 +92,7 @@ def page_generate(request: Request):
         "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
         "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
         "image_backend": _cfg.IMAGE_BACKEND,
+        "bgm_assets": list_bgm_assets(),
     })
 
 
@@ -115,6 +117,7 @@ def page_history_detail(request: Request, history_name: str):
     detail = history_service.get_history_detail(history_name)
     if detail is None:
         raise HTTPException(status_code=404, detail="履歴が見つかりません")
+    from core.bgm_store import list_bgm_assets
     return _render(request, "history_detail.html", {
         "detail": detail,
         "image_style_choices": WEB_IMAGE_STYLE_CHOICES,
@@ -124,6 +127,7 @@ def page_history_detail(request: Request, history_name: str):
         "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
         "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
         "image_backend": _cfg.IMAGE_BACKEND,
+        "bgm_assets": list_bgm_assets(),
     })
 
 
@@ -179,7 +183,8 @@ def page_fixed_comment(request: Request):
 @router.get("/settings", response_class=HTMLResponse)
 def page_settings(request: Request):
     status = status_service.get_cached_settings_status()
-    return _render(request, "settings.html", {"status": status})
+    from core.bgm_store import list_bgm_assets
+    return _render(request, "settings.html", {"status": status, "bgm_assets": list_bgm_assets(include_disabled=True)})
 
 
 @router.get("/logs", response_class=HTMLResponse)

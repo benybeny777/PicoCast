@@ -23,6 +23,9 @@ def submit_generate_job(
     long_budget_mode: bool = False,
     sd_size_mode: bool = False,
     with_render: bool = False,
+    bgm_mode: str = "profile_default",
+    bgm_id: str | None = None,
+    bgm_volume_db: float | None = None,
 ) -> str:
     """台本1本分の生成ジョブを登録してjob_idを返す。"""
     prepared = apply_topic_request_cta_policy_to_scripts([script])
@@ -36,6 +39,9 @@ def submit_generate_job(
         long_budget_mode,
         sd_size_mode,
         with_render,
+        bgm_mode,
+        bgm_id,
+        bgm_volume_db,
     )
 
 
@@ -48,12 +54,15 @@ def _submit_generate_job_prepared(
     long_budget_mode: bool = False,
     sd_size_mode: bool = False,
     with_render: bool = False,
+    bgm_mode: str = "profile_default",
+    bgm_id: str | None = None,
+    bgm_volume_db: float | None = None,
 ) -> str:
     """CTA方針反映済み台本を生成ジョブへ登録する。"""
     mgr = get_job_manager()
     job = mgr.create_job("generate")
     _log(job, "生成ジョブを登録しました", "info")
-    mgr.submit(job, _run_generate, script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render)
+    mgr.submit(job, _run_generate, script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db)
     return job.job_id
 
 
@@ -66,11 +75,14 @@ def submit_batch_generate_jobs(
     long_budget_mode: bool = False,
     sd_size_mode: bool = False,
     with_render: bool = False,
+    bgm_mode: str = "profile_default",
+    bgm_id: str | None = None,
+    bgm_volume_db: float | None = None,
 ) -> list[str]:
     """複数台本の生成ジョブを登録してjob_id一覧を返す。"""
     job_ids = []
     for script in apply_topic_request_cta_policy_to_scripts(scripts):
-        job_ids.append(_submit_generate_job_prepared(script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render))
+        job_ids.append(_submit_generate_job_prepared(script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db))
     return job_ids
 
 
@@ -83,6 +95,9 @@ def submit_history_regenerate_jobs(
     long_budget_mode: bool = False,
     sd_size_mode: bool = False,
     with_render: bool = False,
+    bgm_mode: str = "profile_default",
+    bgm_id: str | None = None,
+    bgm_volume_db: float | None = None,
 ) -> list[str]:
     scripts: list[str] = []
     for name in history_names:
@@ -96,7 +111,7 @@ def submit_history_regenerate_jobs(
             text = f.read().strip()
         if text:
             scripts.append(text)
-    return submit_batch_generate_jobs(scripts, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render)
+    return submit_batch_generate_jobs(scripts, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db)
 
 
 def _run_generate(
@@ -109,6 +124,9 @@ def _run_generate(
     long_budget_mode: bool,
     sd_size_mode: bool,
     with_render: bool = False,
+    bgm_mode: str = "profile_default",
+    bgm_id: str | None = None,
+    bgm_volume_db: float | None = None,
 ) -> dict[str, Any]:
     """バックグラウンドスレッドから呼ばれる。worker_pipeline.py をサブプロセスで起動する。"""
     from core.parser import ScriptParser
@@ -134,6 +152,9 @@ def _run_generate(
             "long_thumbnail_ab_test": long_thumbnail_ab_test,
             "long_budget_mode": long_budget_mode,
             "sd_size_mode": sd_size_mode,
+            "bgm_mode": bgm_mode,
+            "bgm_id": bgm_id,
+            "bgm_volume_db": bgm_volume_db,
         },
         job,
     )
@@ -161,7 +182,7 @@ def _run_generate(
     if with_render and status == "success":
         from web_app.services.render_service import submit_render_job
         try:
-            render_job_id = submit_render_job(history_name)
+            render_job_id = submit_render_job(history_name, bgm_mode, bgm_id, bgm_volume_db)
             result["render_job_id"] = render_job_id
             _log(job, f"🎬 レンダージョブを登録しました (job_id={render_job_id[:8]}…)", "info")
         except Exception as _re:

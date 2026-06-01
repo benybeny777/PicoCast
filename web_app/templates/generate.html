@@ -67,6 +67,28 @@
         <label><input type="checkbox" id="sd-size-mode-normal" {% if not default_sd_size_mode %}checked{% endif %}> 高画質（FHD）生成</label>
       </div>
     </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="bgm-mode-normal">BGM</label>
+        <select id="bgm-mode-normal" onchange="toggleBgmSelect('normal')">
+          <option value="profile_default" selected>チャンネル既定</option>
+          <option value="selected">個別指定</option>
+          <option value="none">なし</option>
+        </select>
+      </div>
+      <div class="form-group" id="bgm-selected-wrap-normal" style="display:none">
+        <label for="bgm-id-normal">BGMファイル</label>
+        <select id="bgm-id-normal">
+          {% for bgm in bgm_assets %}
+          <option value="{{ bgm.bgm_id }}" {% if bgm.is_default %}selected{% endif %}>{{ bgm.display_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="bgm-volume-normal">BGM音量(dB)</label>
+        <input id="bgm-volume-normal" type="number" step="0.5" value="">
+      </div>
+    </div>
     <div class="action-row">
       <button id="generate-btn-normal" class="btn btn-primary" onclick="startGenerate('normal')">生成開始</button>
     </div>
@@ -115,6 +137,28 @@
       </div>
       <div class="form-group check-group">
         <label><input type="checkbox" id="sd-size-mode-meeting" {% if not default_sd_size_mode %}checked{% endif %}> 高画質（FHD）生成</label>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="bgm-mode-meeting">BGM</label>
+        <select id="bgm-mode-meeting" onchange="toggleBgmSelect('meeting')">
+          <option value="profile_default" selected>チャンネル既定</option>
+          <option value="selected">個別指定</option>
+          <option value="none">なし</option>
+        </select>
+      </div>
+      <div class="form-group" id="bgm-selected-wrap-meeting" style="display:none">
+        <label for="bgm-id-meeting">BGMファイル</label>
+        <select id="bgm-id-meeting">
+          {% for bgm in bgm_assets %}
+          <option value="{{ bgm.bgm_id }}" {% if bgm.is_default %}selected{% endif %}>{{ bgm.display_name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="bgm-volume-meeting">BGM音量(dB)</label>
+        <input id="bgm-volume-meeting" type="number" step="0.5" value="">
       </div>
     </div>
     <div class="action-row">
@@ -252,6 +296,7 @@ async function startGenerate(tab) {
   const longThumbnailAb  = tab === 'normal' ? document.getElementById('long-thumbnail-ab-normal').checked : false;
   const longBudgetMode   = tab === 'normal' ? document.getElementById('long-budget-mode-normal').checked  : false;
   const fhdMode          = document.getElementById(`sd-size-mode-${tab}`).checked;
+  const bgmParams        = readBgmParams(tab);
 
   document.getElementById(`generate-btn-${tab}`).disabled = true;
   document.getElementById('generate-status').style.display = 'block';
@@ -271,6 +316,7 @@ async function startGenerate(tab) {
         long_thumbnail_ab_test: longThumbnailAb,
         long_budget_mode:      longBudgetMode,
         sd_size_mode:          !fhdMode,
+        ...bgmParams,
       }),
     });
     const data = await res.json();
@@ -283,6 +329,21 @@ async function startGenerate(tab) {
     appendLog('通信エラー: ' + e, 'error');
     finishGenerate(tab);
   }
+}
+
+function toggleBgmSelect(tab) {
+  const mode = document.getElementById(`bgm-mode-${tab}`).value;
+  document.getElementById(`bgm-selected-wrap-${tab}`).style.display = mode === 'selected' ? '' : 'none';
+}
+
+function readBgmParams(tab) {
+  const mode = document.getElementById(`bgm-mode-${tab}`).value;
+  const volumeRaw = document.getElementById(`bgm-volume-${tab}`).value;
+  return {
+    bgm_mode: mode,
+    bgm_id: mode === 'selected' ? document.getElementById(`bgm-id-${tab}`).value : null,
+    bgm_volume_db: volumeRaw === '' ? null : Number(volumeRaw),
+  };
 }
 
 async function cancelGenerate() {

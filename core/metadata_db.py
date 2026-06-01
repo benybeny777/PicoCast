@@ -270,7 +270,30 @@ CREATE TABLE IF NOT EXISTS render_info (
     loudnorm_tp                   REAL,
     loudnorm_lra                  REAL,
     motion_effects_enabled        INTEGER,
-    motion_effects_fallback_count INTEGER
+    motion_effects_fallback_count INTEGER,
+    bgm_mode                      TEXT,
+    bgm_id                        TEXT,
+    bgm_display_name              TEXT,
+    bgm_file_path                 TEXT,
+    bgm_volume_db                 REAL,
+    bgm_loop_enabled              INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS image_replacements (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    local_id          TEXT NOT NULL,
+    target_rel_path   TEXT NOT NULL,
+    target_kind       TEXT NOT NULL,
+    source_type       TEXT NOT NULL,
+    backup_file_path  TEXT,
+    applied_file_path TEXT NOT NULL,
+    original_width    INTEGER,
+    original_height   INTEGER,
+    applied_width     INTEGER,
+    applied_height    INTEGER,
+    status            TEXT NOT NULL,
+    created_at        TEXT NOT NULL,
+    note              TEXT
 );
 
 CREATE TABLE IF NOT EXISTS jobs (
@@ -294,6 +317,7 @@ CREATE INDEX IF NOT EXISTS idx_videos_type ON videos(video_type);
 CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_started ON jobs(started_at);
+CREATE INDEX IF NOT EXISTS idx_image_replacements_local_id ON image_replacements(local_id);
 """
 
 
@@ -359,6 +383,16 @@ def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
         _add_column(conn, "script_quality", col, typedef)
 
     # render_info / jobs テーブルは DDL の CREATE TABLE IF NOT EXISTS で作成済み
+    for col, typedef in [
+        ("bgm_mode",         "TEXT"),
+        ("bgm_id",           "TEXT"),
+        ("bgm_display_name", "TEXT"),
+        ("bgm_file_path",    "TEXT"),
+        ("bgm_volume_db",    "REAL"),
+        ("bgm_loop_enabled", "INTEGER"),
+    ]:
+        _add_column(conn, "render_info", col, typedef)
+
     _logger.debug("[SQLite] スキーマ補完完了 (v%s → v%s)", current_ver, SCHEMA_VERSION)
 
 
@@ -827,8 +861,9 @@ def upsert_render_info(local_id: str, data: dict) -> None:
                 native_renderer_json,
                 estimated_duration_sec, actual_duration_sec, actual_duration_status,
                 loudnorm_enabled, loudnorm_i, loudnorm_tp, loudnorm_lra,
-                motion_effects_enabled, motion_effects_fallback_count)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                motion_effects_enabled, motion_effects_fallback_count,
+                bgm_mode, bgm_id, bgm_display_name, bgm_file_path, bgm_volume_db, bgm_loop_enabled)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(local_id) DO UPDATE SET
                 render_engine=COALESCE(excluded.render_engine, render_engine),
                 video_title=COALESCE(excluded.video_title, video_title),
@@ -846,7 +881,13 @@ def upsert_render_info(local_id: str, data: dict) -> None:
                 loudnorm_tp=COALESCE(excluded.loudnorm_tp, loudnorm_tp),
                 loudnorm_lra=COALESCE(excluded.loudnorm_lra, loudnorm_lra),
                 motion_effects_enabled=COALESCE(excluded.motion_effects_enabled, motion_effects_enabled),
-                motion_effects_fallback_count=COALESCE(excluded.motion_effects_fallback_count, motion_effects_fallback_count)
+                motion_effects_fallback_count=COALESCE(excluded.motion_effects_fallback_count, motion_effects_fallback_count),
+                bgm_mode=COALESCE(excluded.bgm_mode, bgm_mode),
+                bgm_id=COALESCE(excluded.bgm_id, bgm_id),
+                bgm_display_name=COALESCE(excluded.bgm_display_name, bgm_display_name),
+                bgm_file_path=COALESCE(excluded.bgm_file_path, bgm_file_path),
+                bgm_volume_db=COALESCE(excluded.bgm_volume_db, bgm_volume_db),
+                bgm_loop_enabled=COALESCE(excluded.bgm_loop_enabled, bgm_loop_enabled)
         """, (
             local_id,
             data.get("render_engine"),
@@ -866,6 +907,12 @@ def upsert_render_info(local_id: str, data: dict) -> None:
             data.get("loudnorm_lra"),
             int(bool(data.get("motion_effects_enabled"))) if "motion_effects_enabled" in data else None,
             data.get("motion_effects_fallback_segments"),
+            data.get("bgm_mode"),
+            data.get("bgm_id"),
+            data.get("bgm_display_name"),
+            data.get("bgm_file_path"),
+            data.get("bgm_volume_db"),
+            int(bool(data.get("bgm_loop_enabled"))) if "bgm_loop_enabled" in data else None,
         ))
         conn.commit()
 
@@ -894,6 +941,64 @@ def get_render_info(local_id: str) -> dict:
         except Exception:
             pass
     return d
+
+
+def insert_image_replacement(entry: dict) -> int:
+    """画像差し替え履歴をDBへ保存し、履歴IDを返す。"""
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO image_replacements(
+                local_id, target_rel_path, target_kind, source_type,
+                backup_file_path, applied_file_path,
+                original_width, original_height, applied_width, applied_height,
+                status, created_at, note
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                entry.get("local_id"),
+                entry.get("target_rel_path"),
+                entry.get("target_kind"),
+                entry.get("source_type"),
+                entry.get("backup_file_path"),
+                entry.get("applied_file_path"),
+                entry.get("original_width"),
+                entry.get("original_height"),
+                entry.get("applied_width"),
+                entry.get("applied_height"),
+                entry.get("status"),
+                entry.get("created_at"),
+                entry.get("note"),
+            ),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+
+
+def list_image_replacements(local_id: str) -> list[dict]:
+    """local_id の画像差し替え履歴を新しい順に返す。"""
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM image_replacements WHERE local_id=? ORDER BY id DESC",
+            (local_id,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_image_replacement(replacement_id: int) -> dict:
+    """画像差し替え履歴を1件取得する。"""
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT * FROM image_replacements WHERE id=?",
+            (replacement_id,),
+        ).fetchone()
+    return dict(row) if row else {}
 
 
 def upsert_cta_policy(local_id: str, policy: dict) -> None:

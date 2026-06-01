@@ -1,10 +1,11 @@
 import mimetypes
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from web_app.schemas import ImageRegenerateRequest
 from web_app.services.image_service import list_images, submit_regenerate_job, save_bg_prompts
+from web_app.services.image_replace_service import list_replacements, replace_image, restore_image
 from web_app.security import safe_output_path
 
 
@@ -33,6 +34,43 @@ def api_regenerate(history_name: str, req: ImageRegenerateRequest):
 def api_save_prompts(history_name: str, req: SavePromptsRequest):
     saved = save_bg_prompts(history_name, req.prompts)
     return {"saved": saved, "count": len(saved)}
+
+
+@router.post("/{history_name}/replace")
+async def api_replace_image(
+    history_name: str,
+    target_key: str = Form(...),
+    confirmed: bool = Form(False),
+    image_file: UploadFile = File(...),
+):
+    try:
+        content = await image_file.read()
+        return replace_image(history_name, target_key, content, image_file.filename or "", confirmed)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    finally:
+        await image_file.close()
+
+
+@router.get("/{history_name}/replacements")
+def api_replacements(history_name: str):
+    try:
+        return list_replacements(history_name)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+class RestoreImageRequest(BaseModel):
+    replacement_id: int
+    confirmed: bool = False
+
+
+@router.post("/{history_name}/restore")
+def api_restore_image(history_name: str, req: RestoreImageRequest):
+    try:
+        return restore_image(history_name, req.replacement_id, req.confirmed)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/{history_name}/file/{file_path:path}")

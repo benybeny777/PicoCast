@@ -618,3 +618,55 @@ def test_fixed_comment_candidates_treat_pinned_as_posted(tmp_path, monkeypatch):
     candidates = fcs.list_fixed_comment_candidates(only_unposted=False)
     assert len(candidates) == 1
     assert candidates[0]["already_posted"] is True
+
+
+def test_auto_fixed_comment_scope_all_profiles(monkeypatch):
+    import web_app.services.auto_fixed_comment_service as afc
+    import web_app.services.fixed_comment_service as fcs
+
+    class Profile:
+        def __init__(self, profile_id):
+            self.profile_id = profile_id
+
+    calls = []
+    monkeypatch.setattr(afc._cfg, "AUTO_FIXED_COMMENT_PROFILE_SCOPE", "all")
+    monkeypatch.setattr("core.channel_profile.list_profiles", lambda: [Profile("ch_a"), Profile("ch_b")])
+    monkeypatch.setattr(
+        fcs,
+        "list_fixed_comment_candidates",
+        lambda only_unposted=True, profile_id=None: [{"name": f"{profile_id}_video"}],
+    )
+    monkeypatch.setattr(
+        fcs,
+        "submit_fixed_comment_job",
+        lambda history_name, auto_posted=False, profile_id=None: calls.append((history_name, auto_posted, profile_id)) or "job",
+    )
+
+    afc._run_once()
+
+    assert calls == [
+        ("ch_a_video", True, "ch_a"),
+        ("ch_b_video", True, "ch_b"),
+    ]
+
+
+def test_auto_fixed_comment_scope_active_only(monkeypatch):
+    import web_app.services.auto_fixed_comment_service as afc
+    import web_app.services.fixed_comment_service as fcs
+
+    calls = []
+    monkeypatch.setattr(afc._cfg, "AUTO_FIXED_COMMENT_PROFILE_SCOPE", "active")
+    monkeypatch.setattr(
+        fcs,
+        "list_fixed_comment_candidates",
+        lambda only_unposted=True, profile_id=None: [{"name": "active_video"}],
+    )
+    monkeypatch.setattr(
+        fcs,
+        "submit_fixed_comment_job",
+        lambda history_name, auto_posted=False, profile_id=None: calls.append((history_name, auto_posted, profile_id)) or "job",
+    )
+
+    afc._run_once()
+
+    assert calls == [("active_video", True, None)]

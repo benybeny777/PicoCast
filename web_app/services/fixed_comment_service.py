@@ -3,29 +3,31 @@
 metadata.db の youtube_status / video_metadata を正本として扱う。
 """
 import os
+import sqlite3
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
 
 from core.output_paths import get_output_videos_dir, get_uploaded_dir, get_output_root
-from core.metadata_db import ManagedConnection, initialize_db, is_initialized
+from core.metadata_db import ManagedConnection, initialize_db
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import is_video_folder, safe_output_path
 
 
-def list_fixed_comment_candidates(only_unposted: bool = True) -> list[dict[str, Any]]:
+def list_fixed_comment_candidates(only_unposted: bool = True, profile_id: str | None = None) -> list[dict[str, Any]]:
+    context = _fixed_comment_context(profile_id)
     results = []
-    for relative_name, theme_dir in _iter_candidate_dirs():
+    for relative_name, theme_dir in _iter_candidate_dirs(context):
         name = os.path.basename(theme_dir)
         is_uploaded_archive = relative_name.startswith("000_uploaded" + os.sep)
         try:
-            _safe_fixed_comment_theme_dir(relative_name)
+            _safe_fixed_comment_theme_dir(relative_name, context)
         except Exception:
             continue
         if not os.path.isdir(theme_dir):
             continue
 
-        record = _fixed_comment_record(name)
+        record = _fixed_comment_record(name, context)
         if not record:
             continue
         fixed_comment = str(record.get("fixed_comment") or "").strip()
@@ -63,37 +65,40 @@ def list_fixed_comment_candidates(only_unposted: bool = True) -> list[dict[str, 
             "auto_submitted_at": "",
         })
     results.sort(key=lambda r: r.get("published_at") or "", reverse=True)
-    return _filter_existing_public_videos(results)
+    return _filter_existing_public_videos(results, context)
 
 
-def submit_fixed_comment_job(history_name: str, auto_posted: bool = False) -> str:
+def submit_fixed_comment_job(history_name: str, auto_posted: bool = False, profile_id: str | None = None) -> str:
     if _is_unsafe_history_name(history_name):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")
-    theme_dir = _safe_fixed_comment_theme_dir(history_name)
-    if not os.path.isdir(theme_dir) or not _is_fixed_comment_folder(theme_dir):
+    context = _fixed_comment_context(profile_id)
+    theme_dir = _safe_fixed_comment_theme_dir(history_name, context)
+    if not os.path.isdir(theme_dir) or not _is_fixed_comment_folder(theme_dir, context):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
 
     mgr = get_job_manager()
     job = mgr.create_job("fixed_comment")
-    _log(job, f"固定コメントジョブを登録: {history_name}", "info")
-    mgr.submit(job, _run_fixed_comment, history_name, auto_posted)
+    profile_note = f" profile={profile_id}" if profile_id else ""
+    _log(job, f"固定コメントジョブを登録: {history_name}{profile_note}", "info")
+    mgr.submit(job, _run_fixed_comment, history_name, auto_posted, profile_id)
     return job.job_id
 
 
-def mark_fixed_comment_posted(history_name: str) -> dict[str, Any]:
+def mark_fixed_comment_posted(history_name: str, profile_id: str | None = None) -> dict[str, Any]:
     if _is_unsafe_history_name(history_name):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")
 
-    theme_dir = _safe_fixed_comment_theme_dir(history_name)
-    if not os.path.isdir(theme_dir) or not _is_fixed_comment_folder(theme_dir):
+    context = _fixed_comment_context(profile_id)
+    theme_dir = _safe_fixed_comment_theme_dir(history_name, context)
+    if not os.path.isdir(theme_dir) or not _is_fixed_comment_folder(theme_dir, context):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
 
     local_id = os.path.basename(theme_dir)
-    record = _fixed_comment_record(local_id)
+    record = _fixed_comment_record(local_id, context)
     if not record:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="DBに固定コメント対象がありません")
@@ -109,7 +114,7 @@ def mark_fixed_comment_posted(history_name: str) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="固定コメントが設定されていません")
 
     recorded_at = _now_local_iso()
-    _mark_fixed_comment_db(local_id, comment_thread_id=record.get("comment_thread_id") or None)
+    _mark_fixed_comment_db(local_id, comment_thread_id=record.get("comment_thread_id") or None, context=context)
 
     return {
         "history_name": history_name,
@@ -118,13 +123,14 @@ def mark_fixed_comment_posted(history_name: str) -> dict[str, Any]:
     }
 
 
-def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False) -> dict[str, Any]:
-    theme_dir = _safe_fixed_comment_theme_dir(history_name)
+def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False, profile_id: str | None = None) -> dict[str, Any]:
+    context = _fixed_comment_context(profile_id)
+    theme_dir = _safe_fixed_comment_theme_dir(history_name, context)
     if not os.path.isdir(theme_dir):
         raise FileNotFoundError(f"履歴フォルダが見つかりません: {history_name}")
 
     local_id = os.path.basename(theme_dir)
-    record = _fixed_comment_record(local_id)
+    record = _fixed_comment_record(local_id, context)
     if not record:
         raise ValueError("DBに固定コメント対象がありません")
 
@@ -154,6 +160,7 @@ def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False) -
             video_id=video_id,
             comment_text=fixed_comment,
             progress_callback=lambda msg: _log(job, msg, "info"),
+            profile_id=context.get("profile_id"),
         )
     except Exception as e:
         _log(job, f"投稿エラー: {e}", "error")
@@ -164,24 +171,25 @@ def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False) -
 
     _log(job, f"固定コメント投稿完了: comment_thread_id={comment_thread_id}", "success")
 
-    _mark_fixed_comment_db(local_id, comment_thread_id=comment_thread_id)
+    _mark_fixed_comment_db(local_id, comment_thread_id=comment_thread_id, context=context)
 
     return {"comment_thread_id": comment_thread_id, "video_id": video_id, "auto_posted": auto_posted}
 
 
-def _iter_candidate_dirs() -> Iterable[tuple[str, str]]:
+def _iter_candidate_dirs(context: dict[str, Any]) -> Iterable[tuple[str, str]]:
+    output_videos_dir = context["videos_dir"]
     try:
-        names = sorted(os.listdir(get_output_videos_dir()), reverse=True)
+        names = sorted(os.listdir(output_videos_dir), reverse=True)
     except OSError:
         names = []
 
     for name in names:
         if is_video_folder(name):
-            path = os.path.join(get_output_videos_dir(), name)
+            path = os.path.join(output_videos_dir, name)
             if os.path.isdir(path):
                 yield name, path
 
-    uploaded_dir = get_uploaded_dir()
+    uploaded_dir = context["uploaded_dir"]
     try:
         uploaded_names = sorted(os.listdir(uploaded_dir), reverse=True)
     except OSError:
@@ -193,10 +201,15 @@ def _iter_candidate_dirs() -> Iterable[tuple[str, str]]:
             yield os.path.join("000_uploaded", name), path
 
 
-def _fixed_comment_record(local_id: str) -> dict[str, Any]:
-    if not is_initialized():
+def _fixed_comment_record(local_id: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    context = context or _fixed_comment_context(None)
+    db_path = context["db_path"]
+    if not os.path.isfile(db_path):
+        if context.get("profile_id"):
+            return {}
         initialize_db()
-    with ManagedConnection() as conn:
+    conn, manager = _open_metadata_connection(context)
+    try:
         row = conn.execute(
             """
             SELECT v.local_id,
@@ -217,13 +230,20 @@ def _fixed_comment_record(local_id: str) -> dict[str, Any]:
             """,
             (local_id,),
         ).fetchone()
+    finally:
+        _close_metadata_connection(conn, manager)
     return dict(row) if row else {}
 
 
-def _mark_fixed_comment_db(local_id: str, comment_thread_id: str | None = None) -> None:
-    if not is_initialized():
+def _mark_fixed_comment_db(local_id: str, comment_thread_id: str | None = None, context: dict[str, Any] | None = None) -> None:
+    context = context or _fixed_comment_context(None)
+    db_path = context["db_path"]
+    if not os.path.isfile(db_path):
+        if context.get("profile_id"):
+            return
         initialize_db()
-    with ManagedConnection() as conn:
+    conn, manager = _open_metadata_connection(context)
+    try:
         conn.execute(
             """
             UPDATE youtube_status
@@ -234,6 +254,8 @@ def _mark_fixed_comment_db(local_id: str, comment_thread_id: str | None = None) 
             (comment_thread_id, local_id),
         )
         conn.commit()
+    finally:
+        _close_metadata_connection(conn, manager)
 
 
 def _is_local_displayable_publish_status(publish_status: str) -> bool:
@@ -251,9 +273,13 @@ def _published_at_text(upload_record: dict) -> str:
     ).strip()
 
 
-def _filter_existing_public_videos(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _filter_existing_public_videos(candidates: list[dict[str, Any]], context: dict[str, Any]) -> list[dict[str, Any]]:
     video_ids = sorted({str(item.get("video_id") or "").strip() for item in candidates if item.get("video_id")})
-    statuses = _fetch_youtube_statuses(video_ids)
+    statuses = (
+        _fetch_youtube_statuses(video_ids, context)
+        if context.get("profile_id")
+        else _fetch_youtube_statuses(video_ids)
+    )
     if statuses is None:
         return candidates
 
@@ -276,11 +302,11 @@ def _filter_existing_public_videos(candidates: list[dict[str, Any]]) -> list[dic
     return filtered
 
 
-def _fetch_youtube_statuses(video_ids: list[str]) -> dict[str, dict] | None:
+def _fetch_youtube_statuses(video_ids: list[str], context: dict[str, Any] | None = None) -> dict[str, dict] | None:
     if not video_ids:
         return {}
     from core.youtube_uploader import get_video_statuses
-    return get_video_statuses(video_ids)
+    return get_video_statuses(video_ids, profile_id=(context or {}).get("profile_id"))
 
 
 def _is_unsafe_history_name(history_name: str) -> bool:
@@ -296,17 +322,71 @@ def _is_unsafe_history_name(history_name: str) -> bool:
     )
 
 
-def _safe_fixed_comment_theme_dir(history_name: str) -> str:
+def _safe_fixed_comment_theme_dir(history_name: str, context: dict[str, Any] | None = None) -> str:
+    context = context or _fixed_comment_context(None)
     normalized = history_name.replace("\\", "/")
+    if context.get("profile_id"):
+        if normalized.startswith("000_uploaded/"):
+            return _safe_join(context["output_root"], *normalized.split("/"))
+        return _safe_join(context["videos_dir"], *normalized.split("/"))
     if normalized.startswith("000_uploaded/"):
         return safe_output_path(normalized, output_base=get_output_root())
     return safe_output_path(normalized, output_base=get_output_videos_dir())
 
 
-def _is_fixed_comment_folder(theme_dir: str) -> bool:
+def _is_fixed_comment_folder(theme_dir: str, context: dict[str, Any] | None = None) -> bool:
     basename = os.path.basename(theme_dir)
-    record = _fixed_comment_record(basename)
+    record = _fixed_comment_record(basename, context)
     return bool(record.get("video_id") and record.get("fixed_comment"))
+
+
+def _fixed_comment_context(profile_id: str | None) -> dict[str, Any]:
+    if profile_id:
+        from core.channel_profile import get_profile
+        profile = get_profile(profile_id)
+        if profile is None:
+            raise ValueError(f"チャンネルプロファイルが見つかりません: {profile_id}")
+        output_root = profile.output_root_abs
+        return {
+            "profile_id": profile.profile_id,
+            "output_root": output_root,
+            "videos_dir": os.path.join(output_root, "videos"),
+            "uploaded_dir": os.path.join(output_root, "000_uploaded"),
+            "db_path": os.path.join(output_root, "000_data", "metadata.db"),
+        }
+
+    output_root = get_output_root()
+    return {
+        "profile_id": None,
+        "output_root": output_root,
+        "videos_dir": get_output_videos_dir(),
+        "uploaded_dir": get_uploaded_dir(),
+        "db_path": os.path.join(output_root, "000_data", "metadata.db"),
+    }
+
+
+def _safe_join(base: str, *parts: str) -> str:
+    base_abs = os.path.abspath(base)
+    target = os.path.abspath(os.path.join(base_abs, *parts))
+    if os.path.commonpath([base_abs, target]) != base_abs:
+        raise ValueError("出力フォルダ外へのアクセスは許可されていません")
+    return target
+
+
+def _open_metadata_connection(context: dict[str, Any]) -> tuple[sqlite3.Connection, ManagedConnection | None]:
+    if context.get("profile_id"):
+        conn = sqlite3.connect(context["db_path"])
+        conn.row_factory = sqlite3.Row
+        return conn, None
+    manager = ManagedConnection()
+    return manager.__enter__(), manager
+
+
+def _close_metadata_connection(conn: sqlite3.Connection, manager: ManagedConnection | None) -> None:
+    if manager is not None:
+        manager.__exit__(None, None, None)
+    else:
+        conn.close()
 
 
 def _now_local_iso() -> str:

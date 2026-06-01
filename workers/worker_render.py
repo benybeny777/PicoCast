@@ -51,6 +51,9 @@ def main() -> None:
 
     history_name: str = params["history_name"]
     theme_dir: str = params["theme_dir"]
+    bgm_mode: str = params.get("bgm_mode", "profile_default")
+    bgm_id: str | None = params.get("bgm_id")
+    bgm_volume_db = params.get("bgm_volume_db")
 
     result: dict = {"status": "failed", "error": "不明なエラー"}
     try:
@@ -62,6 +65,9 @@ def main() -> None:
             render_result = render_native_test(
                 output_dir=theme_dir,
                 progress_callback=lambda msg, tag="info": _emit(tag or "info", msg),
+                bgm_mode=bgm_mode,
+                bgm_id=bgm_id,
+                bgm_volume_db=bgm_volume_db,
             )
             output_path = (
                 render_result.output_path

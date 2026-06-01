@@ -31,15 +31,18 @@ def list_images(history_name: str) -> dict[str, Any]:
     _validate_name(history_name)
     theme_dir = safe_output_path(history_name)
 
+    replacements = _replacement_map(history_name)
     thumbnails = []
     thumbs_dir = os.path.join(theme_dir, "thumbnails")
     if os.path.isdir(thumbs_dir):
         for fname in sorted(os.listdir(thumbs_dir)):
             if fname.endswith(".png"):
+                key = f"thumbnails/{fname}"
                 thumbnails.append({
-                    "key": f"thumbnails/{fname}",
+                    "key": key,
                     "filename": fname,
                     "is_main": fname == "thumbnail.png",
+                    **_image_meta(os.path.join(thumbs_dir, fname), replacements.get(key)),
                 })
 
     backgrounds = []
@@ -48,10 +51,12 @@ def list_images(history_name: str) -> dict[str, Any]:
         for fname in sorted(os.listdir(bg_dir)):
             if fname.endswith(".png"):
                 prompt = _read_bg_prompt(bg_dir, fname)
+                key = f"backgrounds/{fname}"
                 backgrounds.append({
-                    "key": f"backgrounds/{fname}",
+                    "key": key,
                     "filename": fname,
                     "prompt": prompt,
+                    **_image_meta(os.path.join(bg_dir, fname), replacements.get(key)),
                 })
 
     return {
@@ -75,6 +80,38 @@ def _read_bg_prompt(bg_dir: str, fname: str) -> str:
         return content
     except Exception:
         return ""
+
+
+def _image_meta(path: str, replacement: dict[str, Any] | None = None) -> dict[str, Any]:
+    from PIL import Image
+    width = height = None
+    try:
+        with Image.open(path) as img:
+            width, height = img.size
+    except Exception:
+        pass
+    return {
+        "width": width,
+        "height": height,
+        "last_replacement_at": replacement.get("created_at") if replacement else "",
+        "last_replacement_source": replacement.get("source_type") if replacement else "",
+        "last_replacement_id": replacement.get("id") if replacement else None,
+    }
+
+
+def _replacement_map(history_name: str) -> dict[str, dict[str, Any]]:
+    try:
+        from core.metadata_db import list_image_replacements
+        local_id = os.path.basename(history_name.replace("\\", "/"))
+        rows = list_image_replacements(local_id)
+        result = {}
+        for row in rows:
+            key = row.get("target_rel_path")
+            if key and key not in result:
+                result[key] = row
+        return result
+    except Exception:
+        return {}
 
 
 def save_bg_prompts(history_name: str, prompts: dict[str, str]) -> list[str]:

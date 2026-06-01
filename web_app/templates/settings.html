@@ -11,6 +11,7 @@
 
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchTab('config', this)">設定変更</button>
+  <button class="tab-btn" onclick="switchTab('bgm', this)">BGM</button>
   <button class="tab-btn" onclick="switchTab('apikey', this)">APIキー</button>
   <button class="tab-btn" onclick="switchTab('dict-base', this)">よみがな辞書</button>
   <button class="tab-btn" onclick="switchTab('dict-user', this)">自動学習辞書</button>
@@ -33,6 +34,40 @@
       <button class="btn btn-primary" onclick="saveConfig()">保存</button>
       <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
     </div>
+  </div>
+</div>
+
+<!-- ── タブ: BGM ── -->
+<div id="tab-bgm" class="tab-panel">
+  <div class="card">
+    <h2>BGM管理</h2>
+    <p class="hint">現在のチャンネルで使うBGMを登録し、既定BGMを選択します。</p>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="bgm-file">音声ファイル</label>
+        <input id="bgm-file" type="file" accept=".mp3,.wav,.m4a,.aac,.ogg,.flac">
+      </div>
+      <div class="form-group">
+        <label for="bgm-name">表示名</label>
+        <input id="bgm-name" class="form-input" type="text" placeholder="作業用BGM">
+      </div>
+      <div class="form-group">
+        <label for="bgm-volume">既定音量(dB)</label>
+        <input id="bgm-volume" class="form-input" type="number" step="0.5" value="-20" style="width:90px">
+      </div>
+      <div class="form-group check-group">
+        <label><input id="bgm-loop" type="checkbox" checked> ループ</label>
+      </div>
+      <div class="form-group check-group">
+        <label><input id="bgm-default" type="checkbox"> 既定にする</label>
+      </div>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-primary" onclick="uploadBgm()">BGMを登録</button>
+      <button class="btn btn-secondary" onclick="loadBgm()">更新</button>
+    </div>
+    <div id="bgm-result" class="hint mt"></div>
+    <div id="bgm-list" class="mt"></div>
   </div>
 </div>
 
@@ -323,6 +358,7 @@
 <script>
 let _configItems = [];
 let _dictLoaded = false;
+let _bgmLoaded = false;
 let _toastTimer = null;
 
 function showToast(msg, isError) {
@@ -349,6 +385,7 @@ function switchTab(name, btn) {
   if (name === 'sd-models' && !_sdLoaded) sdInitTab();
   if (name === 'channels' && !_chLoaded) chLoadChannels();
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
+  if (name === 'bgm' && !_bgmLoaded) loadBgm();
 }
 
 async function loadConfig() {
@@ -470,6 +507,80 @@ async function saveConfig() {
   } catch(e) {
     showToast('通信エラー: ' + e, true);
   }
+}
+
+async function loadBgm() {
+  const list = document.getElementById('bgm-list');
+  const result = document.getElementById('bgm-result');
+  try {
+    const res = await fetch('/api/bgm?include_disabled=true');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+    _bgmLoaded = true;
+    const items = data.items || [];
+    if (!items.length) {
+      list.innerHTML = '<p class="hint">登録済みBGMはありません。</p>';
+      return;
+    }
+    list.innerHTML = `<table class="status-table">
+      <tr><th>名前</th><th>音量</th><th>ループ</th><th>状態</th><th>操作</th></tr>
+      ${items.map(b => `<tr>
+        <td>${esc(b.display_name)}</td>
+        <td>${Number(b.default_volume_db).toFixed(1)} dB</td>
+        <td>${b.loop_enabled ? '有効' : '無効'}</td>
+        <td>${b.is_enabled ? (b.is_default ? '<span class="badge badge-ok">既定</span>' : '有効') : '<span class="badge badge-ng">無効</span>'}</td>
+        <td>
+          ${b.is_enabled ? `<button class="btn btn-xs btn-secondary" onclick="setDefaultBgm('${esc(b.bgm_id)}')">既定</button>
+          <button class="btn btn-xs btn-danger" onclick="deleteBgm('${esc(b.bgm_id)}')">無効化</button>` : ''}
+        </td>
+      </tr>`).join('')}
+    </table>`;
+    result.textContent = '';
+  } catch(e) {
+    result.textContent = '読み込みエラー: ' + e;
+  }
+}
+
+async function uploadBgm() {
+  const fileEl = document.getElementById('bgm-file');
+  if (!fileEl.files.length) { showToast('BGMファイルを選択してください', true); return; }
+  const form = new FormData();
+  form.append('audio_file', fileEl.files[0]);
+  form.append('display_name', document.getElementById('bgm-name').value);
+  form.append('default_volume_db', document.getElementById('bgm-volume').value);
+  form.append('loop_enabled', document.getElementById('bgm-loop').checked ? 'true' : 'false');
+  form.append('is_default', document.getElementById('bgm-default').checked ? 'true' : 'false');
+  try {
+    const res = await fetch('/api/bgm', {method: 'POST', body: form});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+    showToast('BGMを登録しました', false);
+    fileEl.value = '';
+    await loadBgm();
+  } catch(e) {
+    showToast('BGM登録エラー: ' + e, true);
+  }
+}
+
+async function setDefaultBgm(id) {
+  const res = await fetch(`/api/bgm/${encodeURIComponent(id)}/default`, {method: 'POST'});
+  const data = await res.json();
+  if (!res.ok) { showToast('既定設定エラー: ' + (data.detail || JSON.stringify(data)), true); return; }
+  showToast('既定BGMを更新しました', false);
+  await loadBgm();
+}
+
+async function deleteBgm(id) {
+  if (!confirm('このBGMを無効化します。よろしいですか？')) return;
+  const res = await fetch(`/api/bgm/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({confirmed: true}),
+  });
+  const data = await res.json();
+  if (!res.ok) { showToast('無効化エラー: ' + (data.detail || JSON.stringify(data)), true); return; }
+  showToast('BGMを無効化しました', false);
+  await loadBgm();
 }
 
 async function saveSecrets() {

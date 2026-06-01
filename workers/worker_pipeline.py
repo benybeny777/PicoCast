@@ -71,6 +71,9 @@ def main() -> None:
             long_thumbnail_ab_test=params.get("long_thumbnail_ab_test"),
             long_budget_mode=params.get("long_budget_mode"),
             sd_size_mode=params.get("sd_size_mode", False),
+            bgm_mode=params.get("bgm_mode", "profile_default"),
+            bgm_id=params.get("bgm_id"),
+            bgm_volume_db=params.get("bgm_volume_db"),
         )
 
         if _cancel_event.is_set():
