@@ -67,18 +67,21 @@ def test_strip_video_folder_prefix_accepts_legacy_short_prefixes():
 
 
 def test_resolution_label_shows_final_size_and_quality():
-    assert main._resolution_label(1080, 1920, True) == "1080x1920 (SD)"
+    # SD（縮小生成）は「縮小生成解像度(SD) → 最終解像度(FHD)」の矢印表示。
+    # 既定 SD_SIZE_IMAGE_SCALE=0.5 → 1080x1920 の生成は 540x960。
+    assert main._resolution_label(1080, 1920, True) == "540x960 (SD) → 1080x1920 (FHD)"
+    # FHD（高画質生成）は生成＝保存なので単体表示。
     assert main._resolution_label(1920, 1080, False) == "1920x1080 (FHD)"
 
 
-def test_nanobanana_summary_uses_pixel_resolution_not_api_size_label():
+def test_nanobanana_summary_shows_sd_to_fhd_arrow():
     from core.image_generator import ImageGenerator
 
     assert ImageGenerator(width=1080, height=1920, sd_size_mode=True).nanobanana_request_summary() == (
-        "Google送信設定: Nano Banana SD: 解像度: 1080x1920 (SD)"
+        "Google送信設定: Nano Banana 540x960 (SD) → 保存 1080x1920 (FHD)"
     )
     assert ImageGenerator(width=1920, height=1080, sd_size_mode=False).nanobanana_request_summary() == (
-        "Google送信設定: Nano Banana FHD: 解像度: 1920x1080 (FHD)"
+        "Google送信設定: Nano Banana 1920x1080 (FHD)"
     )
 
 
@@ -128,6 +131,6 @@ if __name__ == "__main__":
     test_effective_background_count_ignores_reuse_markers()
     test_strip_video_folder_prefix_accepts_legacy_short_prefixes()
     test_resolution_label_shows_final_size_and_quality()
-    test_nanobanana_summary_uses_pixel_resolution_not_api_size_label()
+    test_nanobanana_summary_shows_sd_to_fhd_arrow()
     test_opening_review_warning_label_for_70s_without_must_fix()
     print("ALL TESTS PASSED")

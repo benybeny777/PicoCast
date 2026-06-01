@@ -1024,7 +1024,7 @@ Web UI の **「高画質（FHD）生成」チェックボックス**（デフ�
 - **チェックなし（デフォルト）**: 縮小生成 ON。Nano Banana は `NANOBANANA_SD_IMAGE_SIZE`（デフォルト `1K`）で生成し、アプリ側で最終解像度へ拡大する。Stable Diffusion WebUI は `SD_SIZE_IMAGE_SCALE`（デフォルト 0.5）倍で生成し、アプリ側で最終解像度へ拡大する。生成時間・APIトークン消費・コストを削減できる反面、解像度が粗くなる。
 - **チェックあり**: 高画質生成 ON。Nano Banana は `NANOBANANA_FHD_IMAGE_SIZE`（デフォルト `2K`）で生成し、アプリ側で最終解像度へ調整する。Stable Diffusion WebUI は最終解像度で生成する。品質は高いがコスト・時間がかかる。
 
-Nano Banana 使用時は、通常生成・サムネイル生成・画像確認からの再生成ログに `Google送信設定: Nano Banana SD(1K)` または `Google送信設定: Nano Banana FHD(2K)` を表示し、Googleへどちらの画像サイズで送っているか確認できるようにする。
+解像度ログは「縮小生成解像度(SD) → 最終保存解像度(FHD)」を矢印で示す。SD（縮小生成）では `540x960 (SD) → 1080x1920 (FHD)` のように縮小して生成し最終解像度へ拡大することが分かる形にし、FHD（高画質生成）では `1920x1080 (FHD)` のように単体表示する（縮小生成解像度は `SD_SIZE_IMAGE_SCALE` 倍）。Nano Banana の送信設定ログも同様に `Google送信設定: Nano Banana 540x960 (SD) → 保存 1080x1920 (FHD)` / `Google送信設定: Nano Banana 1920x1080 (FHD)` と表示する。
 
 `WEB_DEFAULT_SD_SIZE_MODE` のデフォルトは `"1"`（縮小生成 ON）。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
 

@@ -55,6 +55,7 @@ from config import (
     NATIVE_SHORTS_TARGET_CHARS_MIN,
     OLLAMA_REWRITE_FALLBACK_MODEL,
     OLLAMA_REWRITE_MODEL,
+    SD_SIZE_IMAGE_SCALE,
     OPENING_SCORE_HARD_ABORT_THRESHOLD,
     OPENING_SCORE_ABORT_THRESHOLD,
     OPENING_REWRITE_MAX_FALLBACKS,
@@ -219,9 +220,19 @@ def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
     return "\n".join(cleaned).strip(), len(cleaned) != len(lines)
 
 
+def _scaled_gen_size(width: int, height: int) -> tuple[int, int]:
+    """SD（縮小生成）モードで実際に生成する縮小解像度を返す（ImageGenerator と同じ計算）。"""
+    scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
+    return max(64, round(width * scale)), max(64, round(height * scale))
+
+
 def _resolution_label(width: int, height: int, sd_size_mode: bool) -> str:
-    quality = "SD" if sd_size_mode else "FHD"
-    return f"{width}x{height} ({quality})"
+    # SD（縮小生成）のときは「縮小して生成 → 最終解像度へ拡大保存」を矢印で表示する。
+    # FHD（高画質生成）のときは生成＝保存なので単体表示。
+    if sd_size_mode:
+        gw, gh = _scaled_gen_size(width, height)
+        return f"{gw}x{gh} (SD) → {width}x{height} (FHD)"
+    return f"{width}x{height} (FHD)"
 
 
 def _format_review_list(items) -> str:

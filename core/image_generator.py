@@ -159,8 +159,14 @@ class ImageGenerator:
         return "SD" if self.sd_size_mode else "FHD"
 
     def nanobanana_request_summary(self):
-        label = self.nanobanana_request_label()
-        return f"Google送信設定: Nano Banana {label}: 解像度: {self.width}x{self.height} ({label})"
+        # SD（縮小生成）は「縮小して生成 → 最終解像度へ拡大保存」を矢印表示。
+        # FHD（高画質生成）は生成＝保存なので単体表示。
+        if self.sd_size_mode:
+            return (
+                f"Google送信設定: Nano Banana {self.request_width}x{self.request_height} (SD)"
+                f" → 保存 {self.width}x{self.height} (FHD)"
+            )
+        return f"Google送信設定: Nano Banana {self.width}x{self.height} (FHD)"
 
     def _save_prompt_log(self, save_dir, fname, prompt):
         log_path = os.path.join(save_dir, "image_prompts.txt")
