@@ -204,8 +204,21 @@ def main():
         import threading
         import webbrowser
         import time
+        import urllib.error
+        import urllib.request
         def _open():
-            time.sleep(1.5)
+            health_url = f"{url}/health"
+            for _ in range(50):
+                try:
+                    with urllib.request.urlopen(health_url, timeout=0.3) as res:
+                        if res.status == 200:
+                            webbrowser.open(url)
+                            return
+                except (OSError, TimeoutError, urllib.error.URLError):
+                    # フォールバック許可: サーバー起動待ちの疎通失敗は短時間リトライする
+                    time.sleep(0.2)
+                    continue
+                time.sleep(0.2)
             webbrowser.open(url)
         threading.Thread(target=_open, daemon=True).start()
 
