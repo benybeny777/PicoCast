@@ -237,7 +237,10 @@ def main():
         )
         server = uvicorn.Server(uv_config)
         set_uvicorn_server(server)
-        asyncio.run(server.serve())
+        try:
+            asyncio.run(server.serve())
+        except KeyboardInterrupt:
+            pass
 
 
 if __name__ == "__main__":
