@@ -58,6 +58,7 @@
       <div class="action-row" style="gap:6px;flex-wrap:wrap">
         <input type="file" id="replace-{{ img.key | replace('/', '-') }}" accept=".png,.jpg,.jpeg,.webp" style="max-width:210px">
         <button class="btn btn-xs btn-secondary" onclick="replaceImage('{{ img.key }}')">手動差し替え</button>
+        <button class="btn btn-xs btn-secondary" onclick="pasteReplace('{{ img.key }}')" title="クリップボードの画像で差し替え">📋 貼り付け</button>
         {% if img.last_replacement_id %}<button class="btn btn-xs btn-secondary" onclick="restoreImage({{ img.last_replacement_id }})">元に戻す</button>{% endif %}
       </div>
     </div>
@@ -84,6 +85,7 @@
         <div class="action-row" style="gap:6px;flex-wrap:wrap">
           <input type="file" id="replace-{{ img.key | replace('/', '-') }}" accept=".png,.jpg,.jpeg,.webp" style="max-width:210px">
           <button class="btn btn-xs btn-secondary" onclick="replaceImage('{{ img.key }}')">手動差し替え</button>
+          <button class="btn btn-xs btn-secondary" onclick="pasteReplace('{{ img.key }}')" title="クリップボードの画像で差し替え">📋 貼り付け</button>
           {% if img.last_replacement_id %}<button class="btn btn-xs btn-secondary" onclick="restoreImage({{ img.last_replacement_id }})">元に戻す</button>{% endif %}
         </div>
       </div>
@@ -231,21 +233,70 @@ function replaceInputId(key) {
   return 'replace-' + key.replaceAll('/', '-');
 }
 
-async function replaceImage(key) {
-  const input = document.getElementById(replaceInputId(key));
-  if (!input || !input.files.length) { alert('差し替える画像を選択してください'); return; }
+async function _doReplace(key, fileOrBlob, filename) {
   if (!confirm(`${key} を手動差し替えしますか？\nMP4には未反映です。必要に応じて再レンダーしてください。`)) return;
   const historyName = '{{ selected_history }}';
   const form = new FormData();
   form.append('target_key', key);
   form.append('confirmed', 'true');
-  form.append('image_file', input.files[0]);
+  form.append('image_file', fileOrBlob, filename || fileOrBlob.name || 'pasted.png');
   const res = await fetch(`/api/images/${encodeURIComponent(historyName)}/replace`, { method: 'POST', body: form });
   const data = await res.json();
   if (!res.ok) { alert('差し替えエラー: ' + (data.detail || JSON.stringify(data))); return; }
   alert('差し替えました。MP4に反映するには再レンダーしてください。');
   location.reload();
 }
+
+async function replaceImage(key) {
+  const input = document.getElementById(replaceInputId(key));
+  if (!input || !input.files.length) { alert('差し替える画像を選択するか、「📋 貼り付け」でクリップボードから貼り付けてください'); return; }
+  await _doReplace(key, input.files[0], input.files[0].name);
+}
+
+// クリップボードの画像で差し替え（コピペ対応）
+let _armedPasteKey = null;
+
+function _blobExtFromType(type) {
+  return 'pasted.' + ((type || 'image/png').split('/')[1] || 'png');
+}
+
+async function pasteReplace(key) {
+  // モダンブラウザ: Clipboard API で直接読む（ワンクリック貼り付け）
+  if (navigator.clipboard && navigator.clipboard.read) {
+    try {
+      const items = await navigator.clipboard.read();
+      for (const it of items) {
+        const t = it.types.find(x => x.startsWith('image/'));
+        if (t) {
+          const blob = await it.getType(t);
+          return _doReplace(key, blob, _blobExtFromType(t));
+        }
+      }
+      alert('クリップボードに画像がありません。画像をコピーしてから押してください。');
+      return;
+    } catch (e) {
+      // 権限拒否などは Ctrl+V フォールバックへ
+    }
+  }
+  // フォールバック: このキーを貼り付け待ちにして Ctrl+V を促す
+  _armedPasteKey = key;
+  alert('この画像を貼り付け対象にしました。Ctrl+V で画像を貼り付けてください。');
+}
+
+document.addEventListener('paste', (e) => {
+  if (!_armedPasteKey) return;
+  const items = (e.clipboardData && e.clipboardData.items) || [];
+  for (const it of items) {
+    if (it.type && it.type.startsWith('image/')) {
+      const blob = it.getAsFile();
+      const key = _armedPasteKey;
+      _armedPasteKey = null;
+      e.preventDefault();
+      _doReplace(key, blob, _blobExtFromType(it.type));
+      return;
+    }
+  }
+});
 
 async function loadReplacementHistory() {
   const historyName = '{{ selected_history }}';

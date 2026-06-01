@@ -1292,7 +1292,7 @@ AI編集者向けルール:
 
 確認画面で再生成したい画像だけ選ぶと、同じファイル名で上書きします。A案を個別再生成した場合は `thumbnail.png` もA案に同期します。
 
-手動差し替えでは、対象画像と同じサイズへ中央トリミングして上書きします。差し替え前の画像は `output/{profile_id}/000_backups/image_replacements/{local_id}/` に保存し、`metadata.db` の `image_replacements` テーブルに対象パス・バックアップパス・適用サイズ・日時を記録します。復元操作も同じ履歴テーブルへ `restore` として追記します。MP4へ反映するには差し替え後にレンダーのみ再作成が必要です。
+手動差し替えは、ファイル選択のほか「📋 貼り付け」ボタンでクリップボードの画像からも行える（Clipboard API、未対応時は対象を選んで Ctrl+V のフォールバック。送信は同じ multipart の `image_file` でバックエンド変更なし）。対象画像と同じサイズへ中央トリミングして上書きします。差し替え前の画像は `output/{profile_id}/000_backups/image_replacements/{local_id}/` に保存し、`metadata.db` の `image_replacements` テーブルに対象パス・バックアップパス・適用サイズ・日時を記録します。復元操作も同じ履歴テーブルへ `restore` として追記します。MP4へ反映するには差し替え後にレンダーのみ再作成が必要です。
 
 ### 動画出力
 
