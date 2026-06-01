@@ -52,6 +52,44 @@ def _video_format(name: str, value: str | None) -> str:
     return ""
 
 
+def _build_metadata_txt(db_info: dict[str, Any]) -> str:
+    """metadata.db の video_metadata から、履歴詳細「メタデータ」欄の表示文字列を組み立てる。
+
+    旧 `_meta/metadata.txt`（廃止済み）と同じ体裁を DB から再構築する。
+    """
+    import json as _json
+
+    def _tags_str(raw: Any) -> str:
+        if not raw:
+            return ""
+        if isinstance(raw, str):
+            try:
+                parsed = _json.loads(raw)
+            except Exception:
+                return raw
+        else:
+            parsed = raw
+        if isinstance(parsed, (list, tuple)):
+            return ", ".join(str(t) for t in parsed if t)
+        return str(parsed)
+
+    sections: list[tuple[str, str]] = [
+        ("動画タイトル", str(db_info.get("video_title") or "")),
+        ("サムネ文字", str(db_info.get("thumbnail_text") or "")),
+        ("説明文", str(db_info.get("description") or "")),
+        ("タグ", _tags_str(db_info.get("tags"))),
+        ("生成区分", str(db_info.get("generation_type") or "")),
+        ("元動画", str(db_info.get("source_video_title") or "")),
+        ("目的", str(db_info.get("purpose") or "")),
+        ("固定コメント", str(db_info.get("fixed_comment") or "")),
+    ]
+    lines: list[str] = []
+    for label, value in sections:
+        if value.strip():
+            lines += [f"【{label}】", value, ""]
+    return "\n".join(lines).rstrip()
+
+
 def _history_db_info(local_id: str) -> dict[str, Any]:
     with ManagedConnection() as conn:
         row = conn.execute(
@@ -64,6 +102,9 @@ def _history_db_info(local_id: str) -> dict[str, Any]:
                    vm.source_video_title,
                    vm.purpose,
                    vm.fixed_comment,
+                   vm.thumbnail_text,
+                   vm.description,
+                   vm.tags,
                    sq.opening_score,
                    sq.actual_duration,
                    sq.actual_duration_status,
@@ -227,6 +268,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
     from core.metadata_db import get_script_content
     script_txt = get_script_content(history_name) or ""
     db_info = _history_db_info(history_name)
+    metadata_txt = _build_metadata_txt(db_info)
     opening_review = {"final_score": db_info.get("opening_score")} if db_info.get("opening_score") is not None else {}
     duration_review = {
         "actual_duration": db_info.get("actual_duration"),
@@ -285,7 +327,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         "name": history_name,
         "theme_dir": theme_dir,
         "script_txt": script_txt,
-        "metadata_txt": "",
+        "metadata_txt": metadata_txt,
         "opening_review": opening_review,
         "duration_review": duration_review,
         "final_review": final_review,
