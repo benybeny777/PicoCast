@@ -66,6 +66,28 @@ def test_strip_video_folder_prefix_accepts_legacy_short_prefixes():
     assert main._strip_video_folder_prefix("Shorts_テスト") == "テスト"
 
 
+def test_cleanup_orphan_audio(tmp_path):
+    # 期待ファイル名に無い .wav（台本変更で不要になった旧音声）だけ削除する
+    for name in ("001_001_a.wav", "001_002_b.wav", "099_009_old.wav", "memo.txt"):
+        (tmp_path / name).write_bytes(b"x")
+    expected = {"001_001_a.wav", "001_002_b.wav"}
+    removed = main._cleanup_orphan_audio(str(tmp_path), expected)
+    assert removed == 1
+    assert not (tmp_path / "099_009_old.wav").exists()
+    assert (tmp_path / "001_001_a.wav").exists()
+    assert (tmp_path / "memo.txt").exists()  # 非WAVは触らない
+    # expected が空なら安全側に倒して何も消さない
+    assert main._cleanup_orphan_audio(str(tmp_path), set()) == 0
+    assert (tmp_path / "001_001_a.wav").exists()
+
+
+def test_sd_webui_error_carries_code():
+    from core.image_generator import ImageGenerationError
+    # SD WebUI 経路の失敗もカテゴリ→コードに分類される
+    assert ImageGenerationError("x", category="api_busy", backend="sd_webui").code == "E-IMG-BUSY"
+    assert ImageGenerationError("x", category="generic", backend="sd_webui").code == "E-IMG-FAIL"
+
+
 def test_resolution_label_shows_final_size_and_quality():
     # SD（縮小生成）は「縮小生成解像度(SD) → 最終解像度(FHD)」の矢印表示。
     # 既定 SD_SIZE_IMAGE_SCALE=0.5 → 1080x1920 の生成は 540x960。

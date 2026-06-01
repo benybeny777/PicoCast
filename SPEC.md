@@ -246,7 +246,7 @@ for item in dialogue_items:
 ### 背景・音声の再利用ロジック
 
 - **背景再利用**（履歴詳細「背景を再利用する」/ `reuse_backgrounds`）: 再生成時、退避済みバックアップの `bg_*.png` を復元して使い回し、未生成分だけ生成する。
-- **音声再利用**（履歴詳細「音声を再利用する」/ `reuse_audio`、既定OFF）: 再生成時、退避済みバックアップの `audio/*.wav` を復元し、**同じ台本でファイル名が一致する音声は VOICEVOX 合成をスキップ**して使い回す（変わった行だけ再合成）。音声の再生成コスト・時間を節約できる。
+- **音声再利用**（履歴詳細「音声を再利用する」/ `reuse_audio`、既定OFF）: 再生成時、退避済みバックアップの `audio/*.wav` を復元し、**同じ台本でファイル名が一致する音声は VOICEVOX 合成をスキップ**して使い回す（変わった行だけ再合成）。音声の再生成コスト・時間を節約できる。台本変更で不要になった旧WAV（孤児）は `_cleanup_orphan_audio()` で削除し、字幕数とWAV数の不一致を防ぐ。
 - **台本変更により必要な背景枚数が変わった場合**: 既存の背景（サムネ除く）を全削除して再生成。音声もファイル名が変わるため一致しない分は再合成される。
 - 503混雑などで一部背景が未生成のまま終わった場合は、履歴詳細の「⚠ 背景生成の失敗」カードの **「失敗した背景だけ再生成」** ボタンから、保存済みプロンプトで該当背景のみ作り直せる（`image_generation_failures` を参照、成功でその記録を消す）。
 
@@ -1062,9 +1062,9 @@ Web UI の **「高画質（FHD）生成」チェックボックス**（デフ�
 
 ### 画像生成APIエラーの扱い（503混雑など）
 
-背景画像生成（Gemini / Nano Banana）の失敗は HTTP ステータスで分類し、表示と記録を分ける。**自動フォールバックは禁止**（別モデル・別バックエンド・ローカル生成へ切り替えない）。
+背景画像生成（Gemini / Nano Banana・Stable Diffusion WebUI の両バックエンド）の失敗は HTTP ステータスで分類し、表示と記録を分ける。**自動フォールバックは禁止**（別モデル・別バックエンド・ローカル生成へ切り替えない）。
 
-- `core/image_generator.py` の `classify_image_api_error()` が例外から `(category, status)` を判定し、`ImageGenerationError(category, status_code, model, backend)` を送出する。
+- `core/image_generator.py` の `classify_image_api_error()` が例外から `(category, status)` を判定し、`ImageGenerationError(category, status_code, model, backend)` を送出する（nanobanana / sd_webui 両経路でラップ）。
   - `401/403` → `auth`（認証・権限）
   - `429` → `quota`（レート制限・クォータ）
   - `503` → `api_busy`（API混雑。台本・プロンプトの問題ではない。後で再実行推奨）

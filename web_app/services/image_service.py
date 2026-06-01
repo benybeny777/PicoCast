@@ -90,7 +90,7 @@ def _image_meta(path: str, replacement: dict[str, Any] | None = None) -> dict[st
         with Image.open(path) as img:
             width, height = img.size
     except Exception:
-        pass
+        pass  # フォールバック許可: 画像サイズ取得失敗時は既定サイズで継続
     return {
         "width": width,
         "height": height,

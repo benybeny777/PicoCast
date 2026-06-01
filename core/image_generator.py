@@ -385,10 +385,17 @@ class ImageGenerator:
                 gen.generate_image(en_prompt, output_path, prompt_suffix=prompt_suffix)
                 if self.sd_size_mode:
                     self._resize_image_file(output_path, (final_width, final_height))
+            except ImageGenerationError:
+                raise  # 既に分類済み
             except Exception as e:
-                print(f"❌ SD WebUI 背景生成に失敗しました。自動フォールバックは行いません。")
+                # 自動フォールバック禁止。HTTPステータスで分類してコード付き例外にする。
+                category, status = classify_image_api_error(e)
+                print(f"❌ SD WebUI 背景生成に失敗しました（category={category} / status={status}）。自動フォールバックは行いません。")
                 print(f"❌ エラー詳細: {e}")
-                raise
+                raise ImageGenerationError(
+                    f"Stable Diffusion WebUI が失敗しました: {e}",
+                    category=category, status_code=status, model="sd_webui", backend="sd_webui",
+                ) from e
 
         if self.debug:
             print(f"  [AI] SD WebUI 完了: {fname}")

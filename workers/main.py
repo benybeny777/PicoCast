@@ -305,6 +305,23 @@ def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status) -> N
 
 _PUNCT = set("。！？")
 
+def _cleanup_orphan_audio(audio_dir: str, expected_filenames: set[str]) -> int:
+    """audio_dir 内の .wav のうち expected_filenames に無いもの（台本変更で不要に
+    なった旧音声＝孤児）を削除し、削除件数を返す。reuse_audio 時の WAV/字幕数の
+    不一致を防ぐ。expected が空のときは安全側に倒して何も削除しない。"""
+    if not expected_filenames or not os.path.isdir(audio_dir):
+        return 0
+    removed = 0
+    for f in os.listdir(audio_dir):
+        if f.lower().endswith(".wav") and f not in expected_filenames:
+            try:
+                os.remove(os.path.join(audio_dir, f))
+                removed += 1
+            except OSError:
+                pass  # フォールバック許可: 個別削除失敗は掃除全体を止めない
+    return removed
+
+
 def _split_at_punctuation(text):
     """Shorts用: 句読点(。！？)でセリフを文節に分割する。
     「！？」など連続句読点は前チャンクに結合して単体句読点チャンクを作らない。"""
@@ -1522,6 +1539,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # フェーズ1a: チャンクリストを事前収集
     _voice_chunks = []
     _reused_audio = 0  # reuse_audio で既存WAVを使い回した本数
+    _expected_audio_files: set[str] = set()  # 今回の台本で必要なWAVファイル名
     _v = 0
     _a = 0
     for item in items:
@@ -1541,6 +1559,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             _a += 1
             _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
             audio_filename = f"{item['_bg_num']:03d}_{_a:03d}_{_safe_text}.wav"
+            _expected_audio_files.add(audio_filename)
             # 音声再利用: 同じ台本で既存WAVが復元済みなら合成をスキップして使い回す
             if reuse_audio and _has_saved_audio and os.path.isfile(os.path.join(theme_audio_dir, audio_filename)):
                 _reused_audio += 1
@@ -1557,6 +1576,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     if _reused_audio:
         update_status(f"🎤 音声再利用: {_reused_audio}件はスキップ、新規合成 {len(_voice_chunks)}件")
+        # 台本変更で不要になった古いWAV（孤児）を掃除（字幕数とWAV数の不一致を防ぐ）
+        _orphans = _cleanup_orphan_audio(theme_audio_dir, _expected_audio_files)
+        if _orphans:
+            update_status(f"🎤 不要な旧音声を {_orphans}件削除しました（台本変更分）")
 
     # フェーズ1b: audio_query を並列取得
     _QUERY_WORKERS = min(VOICEVOX_QUERY_WORKERS, len(_voice_chunks)) if _voice_chunks else 1

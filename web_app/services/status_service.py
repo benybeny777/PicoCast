@@ -191,7 +191,7 @@ def get_dashboard_summary() -> dict[str, Any]:
             ).fetchone()
         latest_analytics = row["collected_at"] if row else None
     except Exception:
-        pass
+        pass  # フォールバック許可: 補助情報(最新Analytics)の取得失敗は無視（表示のみ）
 
     # output/ 配下の履歴数とMP4有無カウント
     from web_app.security import is_video_folder

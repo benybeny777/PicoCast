@@ -148,7 +148,7 @@ def _save_variant(
         try:
             del image
         except Exception:
-            pass
+            pass  # フォールバック許可: 画像リソース解放の失敗は無視
         close = getattr(psd, "close", None)
         if callable(close):
             close()
@@ -194,7 +194,7 @@ def _save_difference_overlay(base_path: str, variant_path: str, out_path: str, p
         try:
             del base, variant, diff, cropped_variant, cropped_diff, mask, original_alpha, overlay
         except Exception:
-            pass
+            pass  # フォールバック許可: 画像リソース解放の失敗は無視
         gc.collect()
 
 
@@ -238,7 +238,7 @@ def _save_manual_blink_overlay(name: str, base_path: str, out_path: str) -> str 
         try:
             del base, overlay, draw
         except Exception:
-            pass
+            pass  # フォールバック許可: 画像リソース解放の失敗は無視
         gc.collect()
 
 

@@ -83,7 +83,7 @@ def cancel_all_workers(timeout: float = 10.0) -> None:
         try:
             proc.terminate()
         except Exception:
-            pass
+            pass  # フォールバック許可: shutdown 時の terminate 失敗は後続の kill で対応
         try:
             proc.wait(timeout=3)
             continue

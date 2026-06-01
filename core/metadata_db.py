@@ -118,7 +118,7 @@ class ManagedConnection:
                 try:
                     self._conn.rollback()
                 except Exception:
-                    pass
+                    pass  # フォールバック許可: クリーンアップ中の rollback 失敗は無視
             release_connection(self._conn)
             self._conn = None
         return False
@@ -959,13 +959,13 @@ def get_render_info(local_id: str) -> dict:
             try:
                 d[key] = _json.loads(val)
             except Exception:
-                pass
+                pass  # フォールバック許可: JSON列のパース失敗時は生値を保持
     nr = d.pop("native_renderer_json", None)
     if nr:
         try:
             d["native_renderer"] = _json.loads(nr)
         except Exception:
-            pass
+            pass  # フォールバック許可: JSON列のパース失敗時は生値を保持
     return d
 
 

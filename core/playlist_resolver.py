@@ -33,7 +33,7 @@ def _get_standard_categories() -> tuple[str, ...]:
             if cats:
                 return cats
     except Exception:
-        pass
+        pass  # フォールバック許可: 再生リスト解決失敗時は未解決として扱う
     return _DEFAULT_CATEGORIES
 
 
@@ -46,7 +46,7 @@ def _get_suffix_shorts() -> str:
             cfg = load_genre_profile_config(profile.genre_profile)
             return cfg.get("playlist_suffix_shorts", " Shorts")
     except Exception:
-        pass
+        pass  # フォールバック許可: 再生リスト解決失敗時は未解決として扱う
     return " Shorts"
 
 
@@ -59,7 +59,7 @@ def _get_suffix_long() -> str:
             cfg = load_genre_profile_config(profile.genre_profile)
             return cfg.get("playlist_suffix_long", "【じっくり解説】")
     except Exception:
-        pass
+        pass  # フォールバック許可: 再生リスト解決失敗時は未解決として扱う
     return "【じっくり解説】"
 
 

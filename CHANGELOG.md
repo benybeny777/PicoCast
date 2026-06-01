@@ -6,6 +6,14 @@
 
 ## 2026-06-01
 
+### コード整理（バッチ削除・音声孤児掃除・SDエラー分類・例外コメント）
+
+- 到達不能な死にコードのバッチ背景生成経路（`use_batch_api` / `generate_backgrounds_batch`）を削除。完了タイムアウト無しのポーリングによるハングリスクも併せて解消。
+- `reuse_audio` 時、台本変更で不要になった旧WAV（孤児）を `_cleanup_orphan_audio()` で掃除し、字幕数とWAV数の不一致を防止。
+- Stable Diffusion WebUI 経路の背景生成失敗も `classify_image_api_error` で分類し `ImageGenerationError`（エラーコード付き）として扱うよう統一。
+- サイレントに握りつぶしていた `except Exception: pass` 13箇所に `# フォールバック許可:` 理由コメントを付与（no-silent-fallback ルール準拠の明確化）。
+- `_cleanup_orphan_audio` と SD WebUI エラーコードの単体テストを追加。
+
 ### 失敗背景の再生成導線・音声再利用・エラーコード全面適用
 
 - 履歴詳細に「⚠ 背景生成の失敗」カード（背景番号 / エラーコード / HTTP / モデル）と **「失敗した背景だけ再生成」** ボタンを追加。`image_generation_failures`（DB）を参照し、保存済みプロンプトで該当背景のみ再生成、成功でその失敗記録を消す。
