@@ -11,7 +11,7 @@ CHANNEL_DEFAULT_TAGS = [
     "料理の歴史",
 ]
 
-# Safe default: sushi-specific tags are added by build_topic_tags() only.
+# 安全な既定タグ。寿司など題材別タグは build_topic_tags() でのみ追加する。
 VIDEO_DEFAULT_TAGS = [
     "ずんだもん",
     "ゆっくり解説",
@@ -47,7 +47,7 @@ LOW_PRIORITY_TAGS = [
     "豆知識",
 ]
 
-# Backward-compatible name used by older tests/imports.
+# 旧テスト/旧importとの後方互換のための別名。
 DEFAULT_YOUTUBE_TAGS = VIDEO_DEFAULT_TAGS
 
 DEFAULT_HASHTAGS = [
