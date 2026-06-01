@@ -1244,6 +1244,18 @@ def clear_image_generation_failures(local_id: str) -> None:
         conn.commit()
 
 
+def clear_image_generation_failure(local_id: str, failed_index: int) -> None:
+    """指定背景番号の失敗記録だけをクリアする（その背景の再生成成功時に呼ぶ）。"""
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        conn.execute(
+            "DELETE FROM image_generation_failures WHERE local_id=? AND failed_index=?",
+            (local_id, failed_index),
+        )
+        conn.commit()
+
+
 def upsert_final_review(local_id: str, review: dict | None) -> None:
     """final_review データを script_quality に upsert する。"""
     r = review or {"skipped": True}

@@ -144,9 +144,8 @@ class ImageGenerator:
             from core.secret_store import current_profile_id_or_default, has_secret, load_secret
             profile_id = current_profile_id_or_default()
             if not has_secret("google_api_key", profile_id=profile_id):
-                raise RuntimeError(
-                    "Google API キーが未登録です。設定画面の「認証情報」から登録してください。"
-                )
+                from core.error_codes import format_error
+                raise RuntimeError(format_error("E-SECRET-MISSING", "Google API キー（設定画面の「認証情報」から登録）"))
             self.client = genai.Client(api_key=load_secret("google_api_key", profile_id=profile_id))
 
     def close(self):
@@ -490,7 +489,8 @@ class ImageGenerator:
         注意: スタイル参照（1枚目を基準にする機能）はバッチモードでは無効。
         """
         if not self.client:
-            raise Exception("Google API キーが未設定です")
+            from core.error_codes import format_error
+            raise Exception(format_error("E-SECRET-MISSING", "Google API キー"))
 
         save_dir = target_dir or "output/backgrounds"
         os.makedirs(save_dir, exist_ok=True)

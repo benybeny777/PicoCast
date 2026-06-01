@@ -81,8 +81,14 @@ def main() -> None:
             }
     except Exception as e:
         tb = traceback.format_exc()
-        result = {"status": "failed", "error": str(e)}
-        _emit("error", f"レンダリングエラー: {e}")
+        # 台本未検出(E-SCRIPT-MISSING)など既にコード付きのメッセージはそのまま、
+        # それ以外はレンダー失敗(E-RENDER-FAIL)として分類する。
+        msg = str(e)
+        if not msg.lstrip().startswith("[E-"):
+            from core.error_codes import format_error
+            msg = format_error("E-RENDER-FAIL", msg)
+        result = {"status": "failed", "error": msg}
+        _emit("error", f"レンダリングエラー: {msg}")
         if tb:
             _emit("error", tb)  # トレースバックを stdout JSONL 経由でジョブログに渡す
     finally:

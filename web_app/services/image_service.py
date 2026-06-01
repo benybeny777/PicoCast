@@ -213,6 +213,12 @@ def _run_regenerate(
                     img_gen.generate_background(prompt, target_dir=bg_dir, fname=fname)
                 _log(job, f"背景再生成完了: {fname}", "success")
                 regenerated.append(key)
+                # 再生成に成功した背景の失敗記録を消す（履歴詳細の「失敗」表示から除く）
+                try:
+                    from core.metadata_db import clear_image_generation_failure
+                    clear_image_generation_failure(os.path.basename(theme_dir.rstrip("/\\")), bg_num)
+                except Exception:
+                    pass  # フォールバック許可: 記録クリア失敗は再生成本体を妨げない
 
             elif key.startswith("thumbnails/"):
                 _log(job, "サムネイル再生成中...", "info")

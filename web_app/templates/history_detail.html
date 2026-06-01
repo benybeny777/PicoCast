@@ -54,6 +54,27 @@
   </div>
 </div>
 
+{% if detail.image_failures %}
+<!-- 背景生成の失敗（503混雑など）。失敗した背景だけ再生成できる導線。 -->
+<div class="card" style="border-left:4px solid #e67e22;margin-top:1rem">
+  <h2>⚠ 背景生成の失敗（{{ detail.image_failures | length }}件）</h2>
+  <p>以下の背景がAPIエラーで未生成です。コード <code>E-IMG-BUSY</code>（API混雑/503）の場合は <strong>台本・プロンプトの問題ではありません</strong>。時間を置いて再生成してください（生成済みの背景は保持されます）。</p>
+  <table class="status-table">
+    <tr><th>背景</th><th>コード</th><th>HTTP</th><th>モデル</th></tr>
+    {% for f in detail.image_failures %}
+    <tr>
+      <td>{{ f.failed_index }}/{{ f.total_backgrounds }}</td>
+      <td>{{ f.error_code or f.category or '—' }}</td>
+      <td>{{ f.status_code or '—' }}</td>
+      <td>{{ f.model or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <button class="btn btn-primary mt-sm" id="regen-failed-btn" onclick="regenerateFailedBackgrounds()">🔁 失敗した背景だけ再生成</button>
+  <span id="regen-failed-msg" style="margin-left:8px;font-size:0.85em"></span>
+</div>
+{% endif %}
+
 <!-- 再生成設定と実行 -->
 <div class="card mt">
   <h2>動画・全工程の再生成</h2>
@@ -196,6 +217,37 @@
 {% block scripts %}
 <script>
 const historyName = {{ detail.name | tojson }};
+
+// 背景生成に失敗した背景番号（重複あり得るのでJS側で一意化）
+const FAILED_BG_INDICES = {{ detail.image_failures | map(attribute='failed_index') | list | tojson }};
+
+async function regenerateFailedBackgrounds() {
+  const uniq = [...new Set(FAILED_BG_INDICES)].filter(n => Number.isInteger(n));
+  if (uniq.length === 0) return;
+  const keys = uniq.map(n => `backgrounds/bg_${String(n).padStart(3, '0')}_001.png`);
+  if (!confirm(`失敗した背景 ${uniq.length} 枚を再生成します。\n（保存済みのプロンプトを使い、生成済みの他の背景は変更しません）\nよろしいですか？`)) return;
+  const btn = document.getElementById('regen-failed-btn');
+  const msg = document.getElementById('regen-failed-msg');
+  if (btn) btn.disabled = true;
+  if (msg) msg.textContent = '再生成ジョブを登録中…';
+  try {
+    const res = await fetch(`/api/images/${encodeURIComponent(historyName)}/regenerate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({history_name: historyName, image_keys: keys, prompts: {}}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (msg) msg.textContent = 'エラー: ' + (data.detail || JSON.stringify(data));
+      if (btn) btn.disabled = false;
+      return;
+    }
+    if (msg) msg.textContent = `ジョブ登録しました（${(data.job_id || '').slice(0, 8)}…）。ログ画面で進捗を確認できます。`;
+  } catch (e) {
+    if (msg) msg.textContent = '通信エラー: ' + e;
+    if (btn) btn.disabled = false;
+  }
+}
 
 async function openFolder() {
   await fetch(`/api/history/${encodeURIComponent(historyName)}/open-folder`, {method: 'POST'});

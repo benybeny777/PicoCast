@@ -272,10 +272,12 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         return None
 
     # 台本本文は metadata.db (videos.script_content) を正本とする。
-    from core.metadata_db import get_script_content
+    from core.metadata_db import get_script_content, get_image_generation_failures
     script_txt = get_script_content(history_name) or ""
     db_info = _history_db_info(history_name)
     metadata_txt = _build_metadata_txt(db_info)
+    # 背景画像生成の失敗記録（503混雑など）。再生成導線の表示に使う。
+    image_failures = get_image_generation_failures(history_name)
     opening_review = {"final_score": db_info.get("opening_score")} if db_info.get("opening_score") is not None else {}
     duration_review = {
         "actual_duration": db_info.get("actual_duration"),
@@ -346,6 +348,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         "thumbnail_rel": thumb_rel,
         "long_thumbnails": long_thumbnails,
         "backgrounds": backgrounds,
+        "image_failures": image_failures,
         "has_poll_copy": has_poll_copy,
         "has_fixed_comment": has_fixed_comment,
     }

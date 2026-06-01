@@ -148,3 +148,20 @@ def test_image_generation_failure_persisted_to_db(monkeypatch):
     # 再生成開始時のクリアで消える
     m.clear_image_generation_failures("Shorts_天津飯")
     assert m.get_image_generation_failures("Shorts_天津飯") == []
+
+
+def test_clear_single_failure_index(monkeypatch):
+    """指定背景番号だけ失敗記録をクリアできること（その背景の再生成成功時に使う）。"""
+    import core.metadata_db as m
+    db_path = os.path.join(tempfile.mkdtemp(), "metadata.db")
+    monkeypatch.setattr(m, "get_db_path", lambda: db_path)
+    m.initialize_db()
+    for idx in (4, 6):
+        m.record_image_generation_failure("Shorts_x", {
+            "failed_index": idx, "total_backgrounds": 8, "model": "g", "backend": "nanobanana",
+            "status_code": 503, "category": "api_busy", "error_code": "E-IMG-BUSY",
+            "error_message": "503", "prompt": "p", "retry_recommended": True,
+        })
+    m.clear_image_generation_failure("Shorts_x", 4)
+    remaining = [f["failed_index"] for f in m.get_image_generation_failures("Shorts_x")]
+    assert remaining == [6]

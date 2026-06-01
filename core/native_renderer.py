@@ -1059,7 +1059,8 @@ def render_native_test(
     local_id = os.path.basename(output_dir.rstrip("/\\"))
     script_text = get_script_content(local_id)
     if not script_text:
-        raise FileNotFoundError(f"台本がDB(metadata.db)に見つかりません: {local_id}")
+        from core.error_codes import format_error
+        raise FileNotFoundError(format_error("E-SCRIPT-MISSING", local_id))
     if not os.path.isdir(audio_dir):
         raise FileNotFoundError(f"audio フォルダが見つかりません: {audio_dir}")
     if not os.path.isdir(bg_dir):

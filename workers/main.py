@@ -673,7 +673,8 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     local_id = os.path.basename(os.path.abspath(output_dir).rstrip("/\\"))
     script_content = get_script_content(local_id)
     if not script_content:
-        raise Exception(f"台本がDB(metadata.db)に見つかりません: {local_id}")
+        from core.error_codes import format_error
+        raise Exception(format_error("E-SCRIPT-MISSING", local_id))
 
     is_shorts = _detect_is_shorts(script_content)
     width = 1080 if is_shorts else 1920
@@ -1853,10 +1854,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         return cancel_result()
     if report.voices_failed:
         report.elapsed_sec = time.time() - pipeline_start
+        from core.error_codes import format_error
         msg = (
-            f"❌ 音声生成に失敗したセリフがあるためnative MP4化を中止しました"
-            f"（生成={report.voices_generated} / 失敗={report.voices_failed}）\n"
-            "VOICEVOXの失敗行を修正して再実行してください。"
+            "❌ " + format_error(
+                "E-VOICE-FAIL",
+                f"生成={report.voices_generated} / 失敗={report.voices_failed}",
+            )
+            + "\nnative MP4化を中止しました。VOICEVOXの失敗行を修正して再実行してください。"
         )
         update_status(msg, "error")
         return finish_result(msg)
