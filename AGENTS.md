@@ -87,7 +87,7 @@
 
 - Windows / Mac を想定する。動画出力は ffmpeg/native 生成を主経路とする。
 - Python 仮想環境: `.venv/`
-- 起動: 通常は `start.bat` 推奨（手動起動時は `python -m web_app.app --open-browser`）
+- 起動: 通常は `start.ps1`（Windows）/ `start.command`（macOS）推奨（手動起動時は `python -m web_app.app --open-browser`）
 - VOICEVOX をローカルで起動しておく必要がある（`http://localhost:50021`）
 
 ## 主要ファイル

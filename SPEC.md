@@ -431,7 +431,7 @@ Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook`
 ### 起動
 
 ```text
-Windows: start.bat
+Windows: start.ps1
 macOS: ./start.command
 # 手動起動する場合:
 python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
@@ -879,9 +879,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `CHARACTER_UPPER_BODY_SHORTS_SCALE` | 1.15 | 腰から上モード時のキャラ拡大倍率（Shorts用。縦画面は幅が狭いため Long より小さく） |
 | `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
 | `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 400 | 腰から上モード: Long の下方向シフト量(px) |
-| `VOICE_READING_NORMALIZE_ENABLED` | `True` | よみがな正規化の有効/無効 |
-| `VOICE_READING_NORMALIZE_MODEL` | `qwen2.5:7b-instruct` | よみがな正規化に使うOllamaモデル |
-| `VOICE_READING_NORMALIZE_OLLAMA_URL` | `http://localhost:11434` | よみがな正規化用Ollama URL |
+| `VOICE_READING_MODE` | `safe_auto` | よみがな補正モード（`off` / `dictionary` / `safe_auto`）。`safe_auto` は SudachiPy + 自前辞書。Ollama は使わない |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
@@ -1485,7 +1483,7 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 | Nano Banana (Gemini) | 背景・サムネ画像生成（`IMAGE_BACKEND=gemini` のとき） | `GOOGLE_API_KEY` |
 | **Stable Diffusion WebUI** | **背景・サムネ画像生成（`IMAGE_BACKEND=sd_webui` のとき）** | **ローカル起動（`--api` 必須）** |
 | Ollama (qwen3:8b) | 冒頭品質レビュー・リライト | ローカル起動 |
-| Ollama (qwen2.5:7b-instruct) | よみがな正規化（VOICEVOX誤読対策） | ローカル起動 |
+| SudachiPy / sudachidict_core | よみがな正規化（VOICEVOX誤読対策。`VOICE_READING_MODE=safe_auto`） | ローカル（pip） |
 | OpenAI API | ChatGPT生成前レビュー | `OPENAI_API_KEY` |
 | YouTube Data API v3 | 動画アップロード | OAuth2（`encrypted_secrets` DB） |
 
