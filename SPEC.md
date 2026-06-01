@@ -676,8 +676,7 @@ register_shutdown_hook("my_module", my_close_function)
 
 ### SQLite 接続管理方針 (`core/metadata_db.py`)
 
-- 現時点では shutdown hook 登録用の stub のみ。将来テーブル定義・upsert・query を追加予定
-- DB ファイル: `output/000_data/metadata.db`
+- DB ファイル: `output/{profile_id}/000_data/metadata.db`
 - DB 更新は `with ManagedConnection() as conn:` または明示的 `commit()` / `close()` で短時間に完了させる
 - アプリ起動中に DB 接続を長期保持しない。処理単位で取得・コミット・closeする
 - shutdown hook `close_all_connections()` が登録済みのため、アプリ終了時に未closeの接続があっても安全に解放される
@@ -1787,7 +1786,7 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 | `created_at` | TEXT | ISO8601 UTC |
 | `updated_at` | TEXT | ISO8601 UTC |
 
-**ルール:**
+**仕様:**
 - `load_secret()` 以外では復号しない
 - 復号した値をログ・レスポンス・例外メッセージに含めない
 - OAuth/API 呼び出し直前にのみ復号する
@@ -1795,17 +1794,20 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 - OAuth refresh 後のトークンは `save_secret()` で DB へ再保存する
 - `token.json` / `token_analytics.json` を恒久ファイルとして新規作成しない
 
-### DB 正本ルール
+### DB 正本仕様
 
 - 動画メタ・YouTube 状態・Analytics・ジョブ履歴は `metadata.db` が正本。
 - アプリ設定と認証情報は `data/settings.db` が正本。
-- 認証情報を含むファイルは Git 管理外とし、値をログ・レスポンス・例外メッセージに含めない。
+- 認証情報の値をログ・レスポンス・例外メッセージに含めない。
+
+| 旧ファイル | 現行の保存先 | 状態 |
+|---|---|---|
 | `.env`（認証情報） | `data/settings.db`（`encrypted_secrets` テーブル・AES-GCM暗号化） | 廃止完了 |
 | `client_secrets.json` / `token.json` / `token_analytics.json` | `data/settings.db`（`encrypted_secrets` テーブル） | 廃止完了 |
 
 ---
 
-### `output/000_data/metadata.db` テーブル定義
+### `output/{profile_id}/000_data/metadata.db` テーブル定義
 
 現在のスキーマバージョン: **4**
 

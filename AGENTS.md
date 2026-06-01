@@ -116,7 +116,6 @@
 output/{profile_id}/          ← active profile の output_root
 ├── videos/
 │   └── {テーマ名}/           ← 生成中・未アップロード
-│       ├── script.txt
 │       ├── {テーマ名}_native.mp4
 │       ├── thumbnails/
 │       ├── audio/
@@ -142,7 +141,6 @@ output/{profile_id}/          ← active profile の output_root
 
 - Shorts: 毎日 7/12/21時
 - Long: 毎日 22時
-- スロット定数は `LONG_SLOTS_WEEKDAY` / `LONG_SLOTS_WEEKEND`（`LONG_SLOTS` という名前は廃止）
 - 投稿予約スロットは `data/settings.db` の `channel_schedule_settings` で profile_id ごとに管理し、既定値は全チャンネル共通（タイムゾーン Asia/Tokyo）
 - 予約枠の空き判断と詰め直しはYouTube側の予約状態を正として扱う
 
