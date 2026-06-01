@@ -208,7 +208,6 @@ def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
     """LongサムネA/Bのローカルマニフェスト管理は廃止済み。"""
     return None
 
-_CHANNEL_URL = "https://www.youtube.com/@zunkami"
 _VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
 
 
@@ -216,14 +215,23 @@ def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
     lines = text.splitlines()
     cleaned = [l for l in lines if "VOICEVOX:" not in l and "使用音声合成" not in l]
     return "\n".join(cleaned).strip(), len(cleaned) != len(lines)
-_CHANNEL_FOOTER = (
-    "\n\n"
-    "👍 いいね＆チャンネル登録お願いします！\n"
-    "💬 感想はコメントで！\n"
-    "🔔 通知オンで見逃しなし！\n"
-    f"\n▶ チャンネル登録はこちら → {_CHANNEL_URL}\n"
-    "\n#ずんだもん #ゆっくり解説 #食べ物雑学 #食べ物の歴史 #VOICEVOX #雑学ショート"
-)
+def _build_channel_footer() -> str:
+    from core.channel_info import get_channel_info
+
+    info = get_channel_info()
+    handle = info["handle"]
+    channel_url = f"https://www.youtube.com/{handle}"
+    hashtags = (info.get("hashtags") or "").strip()
+    footer = (
+        "\n\n"
+        "👍 いいね＆チャンネル登録お願いします！\n"
+        "💬 感想はコメントで！\n"
+        "🔔 通知オンで見逃しなし！\n"
+        f"\n▶ チャンネル登録はこちら → {channel_url}\n"
+    )
+    if hashtags:
+        footer += f"\n{hashtags}"
+    return footer
 
 
 
@@ -236,7 +244,7 @@ def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status) -> N
             update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
         _desc = re.sub(r'#\S+', '', _desc).strip()
         _desc = optimize_description(apply_ng_word_replacements(_desc), is_shorts=is_shorts, keep_hashtags=False)
-        meta["description"] = _desc + _VOICEVOX_CREDIT + _CHANNEL_FOOTER
+        meta["description"] = _desc + _VOICEVOX_CREDIT + _build_channel_footer()
     if "tags" in meta:
         meta["tags"] = optimize_tags(
             meta["tags"],

@@ -75,29 +75,29 @@ async function pollCheckJob(jobId) {
 function renderResults(results) {
   const container = document.getElementById('check-results');
   container.innerHTML = results.map(r => {
-    const score = r.opening_score;
-    const scoreClass = score >= 80 ? 'badge-ok' : score >= 70 ? 'badge-warn' : 'badge-ng';
-    const mustFix = (r.must_fix || []).map(m => `<li class="error-text">${m}</li>`).join('');
-    const warnings = (r.warnings || []).map(w => `<li class="warning-text">${w}</li>`).join('');
     const estSec = r.estimated_seconds ? `${r.estimated_seconds.toFixed(1)}秒` : '—';
+    const durationText = r.duration_error
+      ? `<span class="badge badge-ng">尺エラー</span> ${esc(r.duration_error)}`
+      : `${estSec} <span class="badge">${esc(r.duration_label)}</span>`;
+    const scoreBadge = (label, score, status, model, error) => {
+      if (error) return `<tr><td>${label}</td><td><span class="badge badge-ng">エラー</span> ${esc(error)}</td></tr>`;
+      if (score === null || score === undefined || score === '') return '';
+      const cls = score >= 80 ? 'badge-ok' : score >= 70 ? 'badge-warn' : 'badge-ng';
+      const modelText = model ? ` <small style="color:var(--text-muted)">(${esc(model)})</small>` : '';
+      return `<tr><td>${label}</td><td><span class="badge ${cls}">${score}点</span> ${esc(status || '')}${modelText}</td></tr>`;
+    };
+    const ollamaRow = r.ollama_enabled ? scoreBadge('Ollama', r.ollama_score, r.ollama_status, r.ollama_model, r.ollama_error) : '';
+    const chatgptRow = r.chatgpt_enabled ? scoreBadge('ChatGPT', r.chatgpt_score, r.chatgpt_status, r.chatgpt_model, r.chatgpt_error) : '';
     return `<div class="card">
-      <h3>${esc(r.title)} <span class="badge ${scoreClass}">${score != null ? score : '—'}点</span></h3>
-      <p>形式: ${esc(r.video_format)} / セリフ数: ${r.dialogue_count} / 推定尺: ${estSec} <span class="badge">${esc(r.duration_label)}</span></p>
-      ${mustFix ? `<ul class="fix-list">${mustFix}</ul>` : ''}
-      ${warnings ? `<ul class="warn-list">${warnings}</ul>` : ''}
-      ${score >= 70 && !mustFix ? '<p class="ok-text">問題なし</p>' : ''}
-      <details>
-        <summary>AI修正依頼文コピー</summary>
-        <button onclick="copyFix(this)" data-script="${esc(r.script)}">クリップボードにコピー</button>
-      </details>
+      <h3>${esc(r.title)}</h3>
+      <table class="status-table">
+        <tr><td>形式</td><td>${esc(r.video_format)} / セリフ数: ${r.dialogue_count}</td></tr>
+        <tr><td>推定尺</td><td>${durationText}</td></tr>
+        ${ollamaRow}
+        ${chatgptRow}
+      </table>
     </div>`;
   }).join('');
-}
-
-function copyFix(btn) {
-  const script = btn.dataset.script;
-  const text = `以下の台本を改善してください:\n\n${script}`;
-  navigator.clipboard.writeText(text).then(() => { btn.textContent = 'コピーしました！'; });
 }
 
 function esc(s) {

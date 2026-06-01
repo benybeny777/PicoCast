@@ -195,23 +195,32 @@
 {% endblock %}
 {% block scripts %}
 <script>
+const historyName = {{ detail.name | tojson }};
+
 async function openFolder() {
   await fetch(`/api/history/${encodeURIComponent(historyName)}/open-folder`, {method: 'POST'});
 }
 
 async function deleteHistory() {
   if (!confirm(`履歴「${historyName}」を削除します。\nフォルダとDBレコードが削除されます。よろしいですか？`)) return;
-  const res = await fetch(`/api/history/${encodeURIComponent(historyName)}`, {
-    method: 'DELETE',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({confirmed: true}),
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    alert('削除エラー: ' + (data.detail || JSON.stringify(data)));
-    return;
+  try {
+    const res = await fetch(`/api/history/${encodeURIComponent(historyName)}`, {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirmed: true}),
+    });
+    const text = await res.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; }
+    catch(e) { data = {detail: text || `HTTP ${res.status}`}; }
+    if (!res.ok) {
+      alert('削除エラー: ' + (data.detail || JSON.stringify(data)));
+      return;
+    }
+    location.href = '/history';
+  } catch(e) {
+    alert('削除エラー: ' + e.message);
   }
-  location.href = '/history';
 }
 
 document.querySelectorAll('.score-badge').forEach(el => {
@@ -223,7 +232,6 @@ document.querySelectorAll('.score-badge').forEach(el => {
 
 let activeJobIds = [];
 let pollTimer = null;
-const historyName = {{ detail.name | tojson }};
 
 function appendLog(msg, tag) {
   const el = document.getElementById('job-status-msg');

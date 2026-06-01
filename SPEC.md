@@ -1,6 +1,6 @@
-# ずんかみ自動生成システム 仕様書
+# Native Video Factory 仕様書
 
-チャンネル: [ずんだもんとめたんの食べ物雑学堂](https://www.youtube.com/@zunkami)  
+対象: 複数YouTubeチャンネル共通
 最終更新: 2026-06-01
 
 ---
@@ -19,12 +19,8 @@
 
 ---
 
-## 開発運用メモ
+## バージョン表示
 
-- コミットメッセージは、基本的に日本語で書く。
-- `feat` / `fix` / `docs` / `chore` など、日本人でもすぐ分かる短い英語プレフィックスは使ってよい。
-- 例: `feat: 固定コメント投稿画面を追加`、`fix: 非公開動画へのコメント投稿をスキップ`、`docs: 運用ルールを追記`
-- 運用や品質に影響する大きめの変更は [CHANGELOG.md](CHANGELOG.md) に残す。
 - アプリのタイトルバーにはGitのコミット数・短縮ハッシュを自動表示する。未コミット変更がある場合は `dirty` を付ける。
 
 ---
@@ -108,7 +104,7 @@ yukkurijidou/
 │   ├── requirements.txt
 │   └── prompt_profiles/
 │       └── genres/          # ジャンル別プロンプトファイル（seed 用）
-│           ├── zunkami/
+│           ├── food_trivia/
 │           └── zundamon_kowai/
 └── output/                 # 生成物出力先
 ```
@@ -632,6 +628,8 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 | アナリティクス取得・表示 | `/analytics` |
 | 設定（即時反映 / APIキー変更） | `/settings` |
 | Stable Diffusion WebUI モデル管理 | `/sd-models` |
+
+`/check` の LLM/尺チェックは、台本本文を保存・生成せずに確認だけ行う。基本表示は推定尺のみで、`OPENING_REVIEW_USE_LLM=1` の場合だけ Ollama 点数、`OPENAI_FINAL_REVIEW_ENABLED=1` の場合だけ ChatGPT 点数を追加表示する。ローカル冒頭レビューの詳細、警告一覧、修正依頼文、台本本文は結果表示に出さない。
 
 `/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI）と **高画質（FHD）生成**（`sd_size_mode` の反転、チェックなし=縮小生成ON）の選択が含まれる。`/images` 再生成にも同様のエンジン選択と高画質（FHD）生成チェックボックスがある。
 
@@ -1508,10 +1506,6 @@ YouTube OAuth:
 - `data/settings.db` / `data/settings.db-wal` / `data/settings.db-shm` の `encrypted_secrets` 登録値
 - `data/secret_master.key`
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json`
-- `dev/` — 動作確認用の一時画像・動画・スクリプトなど開発用テストファイルの置き場（`assets/` 直下へのテスト画像配置は禁止）
-
-これらはGit管理外です。コミットしないでください。
-
 ### 設定ファイルで変えられること
 
 主な設定は設定画面（`/settings`）から設定DBへ保存します。定数定義と初期値は [config/config.py](config/config.py) にあり、`.env` は起動時の初期移行・環境依存値の補助として扱います。
@@ -1723,7 +1717,7 @@ Analytics データは `metadata.db` の `analytics_snapshots` テーブルに�
 ```
 config/prompt_profiles/
   genres/
-    zunkami/
+    food_trivia/
       profile.yaml          ← genre_profile 設定（hashtag / playlist suffix 等）
       script_context.md     ← チャンネルコンテキスト・方針・タグルール
       title_context.md      ← タイトル案生成プロンプト
@@ -1738,9 +1732,9 @@ config/prompt_profiles/
 ### 設定例（.env）
 
 ```
-CHANNEL_PROFILE=zunkami
-CHANNEL_NAME=ずんだもんとめたんの食べ物雑学堂
-CHANNEL_HANDLE=@zunkami
+CHANNEL_PROFILE=channel_handle_without_at
+CHANNEL_NAME=チャンネル名
+CHANNEL_HANDLE=@channel_handle
 CHANNEL_THEME=食べ物雑学
 CHANNEL_ACCENT_COLOR=#7c2d12
 DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
@@ -1752,7 +1746,6 @@ DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
 - 切替ボタン押下 → `POST /api/channels/{id}/activate` → 成功後 `location.reload()` で全画面更新。
 - active channel がない場合は「チャンネル未設定」エラーをバナーに表示。YouTube 操作（アップロード・Analytics）は不可。
 - 設定画面の「チャンネル」タブ（`/settings#channels`）でチャンネルの追加・編集・削除・切替が可能。
-- 特定チャンネル名・ハンドルをコードにハードコードしない。未設定時に特定チャンネルへフォールバックしない（fail closed）。
 - アップロード API（`POST /api/upload`、`POST /api/upload/batch`）はチャンネル未設定時に `400` を返す。
 
 ## DB アーキテクチャ

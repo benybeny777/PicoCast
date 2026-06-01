@@ -466,6 +466,32 @@ def test_api_history_delete_requires_confirmation(client):
     assert res.status_code == 400
 
 
+def test_history_delete_service_removes_folder_and_db(tmp_path, monkeypatch):
+    import core.metadata_db as m
+    import web_app.services.history_service as hs
+
+    fake_output = tmp_path / "output"
+    theme_dir = fake_output / "videos" / "Shorts_削除テスト"
+    theme_dir.mkdir(parents=True)
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(hs, "find_history_dir", lambda name: str(theme_dir) if name == "Shorts_削除テスト" else None)
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    with m.ManagedConnection() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO videos(local_id, output_dir, title, video_type) VALUES(?,?,?,?)",
+            ("Shorts_削除テスト", str(theme_dir), "削除テスト", "Shorts"),
+        )
+        conn.commit()
+
+    result = hs.delete_history("Shorts_削除テスト", confirmed=True)
+
+    assert result["deleted"] == "Shorts_削除テスト"
+    assert not theme_dir.exists()
+    with m.ManagedConnection() as conn:
+        row = conn.execute("SELECT 1 FROM videos WHERE local_id=?", ("Shorts_削除テスト",)).fetchone()
+    assert row is None
+
+
 # ── 外部APIなしでもWebアプリが起動できる ──────────────────────────────────
 def test_app_starts_without_external_apis(client):
     """VOICEVOX/YouTube未接続でも /health と / が返ることを確認。"""

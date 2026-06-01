@@ -10,6 +10,8 @@
 - **ドキュメントは常に最新を保つ。コード・スクリプト・設定・依存関係・フォルダ構成など、README や SPEC.md に記載のある内容を変更したら、必ず同じ作業内でドキュメントも更新してコミットする。ユーザーから指摘されてから直すのは禁止。**
 - 対象ドキュメントの目安: 仕様・画面・プロンプト・設定・生成フロー → `SPEC.md`、大きな変更 → `CHANGELOG.md`、起動手順・セットアップ・スクリプト名・APIキー・依存関係 → `README.md`。
 - ドキュメント更新が本当に不要な軽微修正の場合のみ、不要と判断した理由を作業完了時に明記する。
+- コミットメッセージは基本的に日本語で書く。`feat` / `fix` / `docs` / `chore` など、日本人でもすぐ分かる短い英語プレフィックスは使ってよい。
+- 運用や品質に影響する大きめの変更は `CHANGELOG.md` に残す。
 - PowerShellで日本語ファイルを確認するときは、文字化けを避けるためUTF-8を明示する。`$OutputEncoding=[Text.UTF8Encoding]::new($false); Get-Content -Encoding UTF8 ...`、`$env:PYTHONIOENCODING='utf-8'; python -c "... Path(...).read_text(encoding='utf-8') ..."`（Windowsは `py -3`）、`rg`、`git diff` を優先する。
 - PowerShell表示が文字化けしても、すぐにソース破損と判断しない。UTF-8で読み直してから判断する。
 - 常に Codex / Claude の利用クレジット消費を抑えて作業する。不要な長文出力、重複調査、過剰なファイル読み込み、不要な並列探索、同じ確認のやり直しを避ける。
@@ -39,6 +41,7 @@
 - 複数チャンネル・ジャンルは `channel_profiles` テーブル（`data/settings.db`）で管理する。is_active=1 が active profile。
 - `profile_id` / `genre_profile` / `output_root` はチャンネルハンドルから `@` を除いた値に統一する。既存値が違う場合は関連テーブルと output フォルダも移行する。
 - すべての出力パス・metadata.db・プロンプト・Analytics・再生リストは active profile を基準に解決する。
+- 特定チャンネル名・ハンドル・URLをコードにハードコードしない。未設定時に特定チャンネルへフォールバックしない。
 - `require_active_profile()` は未設定なら例外。`get_active_profile()` なら None。フォールバックで food_trivia や default を使わない。
 - 別 profile の output_root へのアクセスは `safe_output_path()` が 403 で拒否する。profile 間で output が混ざることを防ぐ。
 - genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
