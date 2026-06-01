@@ -331,7 +331,7 @@ for item in dialogue_items:
 
 動画メタ・レビュー結果は `metadata.db` に保存する。ローカルJSON/TXTを正本・補完元として使わない。
 
-- `videos.script_content` が台本本文の正本。履歴からの再生成は `metadata_db.get_script_content(local_id)` で DB から取得する（ディスクの `script.txt` は参照しない）。
+- `videos.script_content` が台本本文の**唯一の正本**。`script.txt` ファイルは生成・参照しない。生成パイプラインは `sync_folder_to_db(theme_dir, script_content=...)` で DB に直接保存し、再生成・レンダー（`native_renderer`）・アップロードのタグ抽出・履歴詳細表示・is_shorts 判定・CTA候補カウントはすべて `metadata_db.get_script_content(local_id)` で DB から読む。既存フォルダの取り込み（`import_output_dir` / `sync_folder_to_db` の引数省略時）に限り、後方互換として既存の `script.txt` を読む。
 - `videos.output_dir` は `sync_folder_to_db()` のたびに同期フォルダの実体パスへ更新（`ON CONFLICT` で上書き）する。フォルダ移動（`videos/` → `000_uploaded/`）や旧パスからの移行に追随し、古いパスが残り続けないようにする。
 
 | 保存先 | 内容 |
@@ -1012,9 +1012,10 @@ Gemini AIがロング台本からYouTube概要欄用チャプターマーカー�
 
 動画フォルダは `output/{profile_id}/videos/{テーマ名}/` に生成される。アップロード後は `output/{profile_id}/000_uploaded/{テーマ名}/` へ移動する。
 
+台本本文（旧 `script.txt`）はファイルとして出力しない。`metadata.db` の `videos.script_content` が正本。
+
 ```
 output/{profile_id}/videos/{テーマ名}/
-├── script.txt              # 台本
 ├── {テーマ名}_native.mp4   # native MP4
 ├── thumbnails/
 │   ├── thumbnail.png                       # サムネイル（Upload はこの A 案を使用）

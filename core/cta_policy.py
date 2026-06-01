@@ -104,34 +104,24 @@ def _script_meta_from_text(script_text: str) -> dict[str, str]:
         return {}
 
 
-def _script_meta_from_path(script_path: str) -> dict[str, str]:
-    try:
-        from core.parser import ScriptParser
-
-        return {
-            item["type"]: item["text"]
-            for item in ScriptParser.parse(script_path)
-            if item["type"] in ScriptParser.META_TYPES
-        }
-    except Exception:
-        return {}
-
-
 def count_existing_topic_request_candidates(output_dir: str | None = None) -> int:
-    base_dir = os.path.abspath(output_dir or cfg.OUTPUT_DIR)
-    if not os.path.isdir(base_dir):
-        return 0
-    count = 0
-    skip_root_dirs = {"000_backups", "000_data", "000_debug", "000_legacy"}
-    for root, dirs, files in os.walk(base_dir):
-        if os.path.abspath(root) == base_dir:
-            dirs[:] = [name for name in dirs if name not in skip_root_dirs]
-        if "script.txt" not in files:
-            continue
-        meta = _script_meta_from_path(os.path.join(root, "script.txt"))
-        if is_topic_request_cta_candidate(meta.get("video_format"), meta.get("generation_kind")):
-            count += 1
-    return count
+    """既存のネタ募集CTA候補（新規/横展開 の Shorts）の本数を metadata.db から数える。
+
+    台本本文・メタは DB（`video_metadata`）を正本とし、ディスクの script.txt は走査しない。
+    `output_dir` 引数は後方互換のため受けるが未使用（DB は active profile 単位）。
+    """
+    del output_dir
+    from core.metadata_db import ManagedConnection, initialize_db, is_initialized
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        rows = conn.execute(
+            "SELECT video_format, generation_type FROM video_metadata"
+        ).fetchall()
+    return sum(
+        1 for r in rows
+        if is_topic_request_cta_candidate(r["video_format"], r["generation_type"])
+    )
 
 
 def apply_topic_request_cta_policy_to_scripts(

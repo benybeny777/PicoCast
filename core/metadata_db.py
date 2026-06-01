@@ -481,7 +481,8 @@ def _screen_format_from_video_type(video_type: str | None) -> str | None:
 # ── upsert 関数 ──────────────────────────────────────────────────────────────
 
 def upsert_video(conn: sqlite3.Connection, local_id: str, output_dir: str,
-                 render_info: dict, upload_record: dict) -> None:
+                 render_info: dict, upload_record: dict,
+                 script_content: str | None = None) -> None:
     title = (render_info.get("video_title")
              or upload_record.get("title")
              or local_id)
@@ -490,28 +491,30 @@ def upsert_video(conn: sqlite3.Connection, local_id: str, output_dir: str,
                   or "")
     mp4 = _find_mp4(output_dir)
     thumb = _find_thumbnail(output_dir)
-    script_path_val = os.path.join(output_dir, "script.txt")
-    script = script_path_val if os.path.isfile(script_path_val) else None
-    script_content: str | None = None
-    if script:
-        try:
-            with open(script, encoding="utf-8") as f:
-                script_content = f.read()
-        except Exception as e:
-            _logger.warning("script.txt 読み込み失敗 %s: %s", local_id, e)
+    # 台本本文は呼び出し元（生成パイプライン）から DB へ直接渡すのが正本経路。
+    # script_content が未指定のときに限り、既存フォルダ取り込みの後方互換として
+    # ディスクの script.txt を読む（新規生成では script.txt は作らない）。
+    if script_content is None:
+        script_path_val = os.path.join(output_dir, "script.txt")
+        if os.path.isfile(script_path_val):
+            try:
+                with open(script_path_val, encoding="utf-8") as f:
+                    script_content = f.read()
+            except Exception as e:
+                _logger.warning("script.txt 読み込み失敗 %s: %s", local_id, e)
     now = _now_jst()
     conn.execute("""
         INSERT INTO videos(local_id, output_dir, title, video_type,
-                           created_at, updated_at, script_path, mp4_path, thumbnail_path,
+                           created_at, updated_at, mp4_path, thumbnail_path,
                            script_content)
-        VALUES(?,?,?,?,?,?,?,?,?,?)
+        VALUES(?,?,?,?,?,?,?,?,?)
         ON CONFLICT(local_id) DO UPDATE SET
             output_dir=excluded.output_dir,
             title=excluded.title, video_type=excluded.video_type,
             updated_at=excluded.updated_at, mp4_path=excluded.mp4_path,
-            thumbnail_path=excluded.thumbnail_path, script_path=excluded.script_path,
+            thumbnail_path=excluded.thumbnail_path,
             script_content=COALESCE(excluded.script_content, script_content)
-    """, (local_id, output_dir, title, video_type, now, now, script, mp4, thumb, script_content))
+    """, (local_id, output_dir, title, video_type, now, now, mp4, thumb, script_content))
 
 
 def upsert_video_metadata(conn: sqlite3.Connection, local_id: str,
@@ -1208,11 +1211,15 @@ def delete_video(local_id: str) -> None:
 
 # ── フォルダ同期 ─────────────────────────────────────────────────────────────
 
-def sync_folder_to_db(output_dir: str) -> None:
+def sync_folder_to_db(output_dir: str, script_content: str | None = None) -> None:
     """
     output_dir 配下を DB に同期する。
     DB を正本とし、旧メタJSONは参照しない。
     失敗時はログに出して例外を伝播させる（サイレントスキップ禁止）。
+
+    script_content: 生成パイプラインが台本本文を渡す正本経路。
+      未指定のときは DB 既存値 → ディスクの script.txt（既存フォルダ取り込みの
+      後方互換）の順で補う。新規生成では script.txt は作らない。
     """
     local_id = _local_id_from_dir(output_dir)
 
@@ -1234,19 +1241,28 @@ def sync_folder_to_db(output_dir: str) -> None:
         if _row2 and _row2[0] is not None:
             opening_rev = {"final_score": _row2[0]}
 
-    # 台本メタを ScriptParser で取得
+    # 台本本文を確定する: 引数 → DB既存値 → script.txt（後方互換）の順。
+    if script_content is None:
+        script_content = get_script_content(local_id)
+    if script_content is None:
+        script_path = os.path.join(output_dir, "script.txt")
+        if os.path.isfile(script_path):
+            try:
+                with open(script_path, encoding="utf-8") as f:
+                    script_content = f.read()
+            except Exception as e:
+                _logger.warning("script.txt 読み込み失敗 %s: %s", local_id, e)
+
+    # 台本メタを ScriptParser で取得（台本本文から）
     script_meta: dict = {}
-    script_path = os.path.join(output_dir, "script.txt")
-    if os.path.isfile(script_path):
+    if script_content:
         try:
             from core.parser import ScriptParser
-            with open(script_path, encoding="utf-8") as f:
-                content = f.read()
-            items = ScriptParser.parse_string(content)
+            items = ScriptParser.parse_string(script_content)
             script_meta = {it["type"]: it["text"] for it in items
                            if it["type"] in ScriptParser.META_TYPES}
         except Exception as e:
-            _logger.warning("script.txt パース失敗 %s: %s", local_id, e)
+            _logger.warning("台本パース失敗 %s: %s", local_id, e)
 
     render_info_for_video = dict(render_info)
     if script_meta:
@@ -1255,7 +1271,8 @@ def sync_folder_to_db(output_dir: str) -> None:
         render_info_for_video.setdefault("screen_format", script_meta.get("screen_format"))
 
     with ManagedConnection() as conn:
-        upsert_video(conn, local_id, output_dir, render_info_for_video, upload_rec)
+        upsert_video(conn, local_id, output_dir, render_info_for_video, upload_rec,
+                     script_content=script_content)
         upsert_video_metadata(conn, local_id, render_info_for_video, script_meta)
         if upload_rec:
             upsert_youtube_status(conn, local_id, upload_rec)

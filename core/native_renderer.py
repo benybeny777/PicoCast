@@ -398,10 +398,9 @@ def _audio_stem_key(text: str) -> str:
     return re.sub(r'[\\/:*?"<>|]', "", str(text or ""))[:20].strip()
 
 
-def _dialogue_captions(script_path: str) -> list[CaptionChunk]:
+def _dialogue_captions(script_text: str) -> list[CaptionChunk]:
     try:
-        with open(script_path, "r", encoding="utf-8") as f:
-            items = ScriptParser.parse_string(f.read())
+        items = ScriptParser.parse_string(script_text or "")
     except Exception:
         return []
     captions: list[CaptionChunk] = []
@@ -413,10 +412,9 @@ def _dialogue_captions(script_path: str) -> list[CaptionChunk]:
     return captions
 
 
-def _dialogue_caption_events(script_path: str) -> list[tuple[CaptionChunk, str | None]]:
+def _dialogue_caption_events(script_text: str) -> list[tuple[CaptionChunk, str | None]]:
     try:
-        with open(script_path, "r", encoding="utf-8") as f:
-            items = ScriptParser.parse_string(f.read())
+        items = ScriptParser.parse_string(script_text or "")
     except Exception:
         return []
     events: list[tuple[CaptionChunk, str | None]] = []
@@ -440,8 +438,8 @@ def _dialogue_caption_events(script_path: str) -> list[tuple[CaptionChunk, str |
     return events
 
 
-def _captions_for_audio_files(script_path: str, audio_files: list[str]) -> list[CaptionChunk]:
-    script_captions = _dialogue_captions(script_path)
+def _captions_for_audio_files(script_text: str, audio_files: list[str]) -> list[CaptionChunk]:
+    script_captions = _dialogue_captions(script_text)
     result: list[CaptionChunk] = []
     search_from = 0
     for audio_path in audio_files:
@@ -460,8 +458,8 @@ def _captions_for_audio_files(script_path: str, audio_files: list[str]) -> list[
     return result
 
 
-def _effects_for_audio_files(script_path: str, audio_files: list[str], is_shorts: bool) -> list[SegmentEffect]:
-    events = _dialogue_caption_events(script_path)
+def _effects_for_audio_files(script_text: str, audio_files: list[str], is_shorts: bool) -> list[SegmentEffect]:
+    events = _dialogue_caption_events(script_text)
     result: list[SegmentEffect] = []
     search_from = 0
     shake_count = 0
@@ -1013,14 +1011,12 @@ def _write_subtitles(
         f.write("\n".join(lines))
 
 
-def _video_size(output_dir: str, script_path: str) -> tuple[int, int]:
+def _video_size(output_dir: str, script_text: str) -> tuple[int, int]:
     from config import config as _cfg
     if os.path.basename(output_dir).startswith(_cfg.FOLDER_PREFIX_SHORTS):
         return 1080, 1920
     try:
-        with open(script_path, "r", encoding="utf-8") as f:
-            content = f.read()
-        items = ScriptParser.parse_string(content)
+        items = ScriptParser.parse_string(script_text or "")
         format_val = ""
         screen_format = ""
         for it in items:
@@ -1055,11 +1051,14 @@ def render_native_test(
 ) -> NativeRenderResult:
     """生成済み音声・背景アセットからネイティブMP4を生成する。"""
     output_dir = os.path.abspath(output_dir)
-    script_path = os.path.join(output_dir, "script.txt")
     audio_dir = os.path.join(output_dir, "audio")
     bg_dir = os.path.join(output_dir, "backgrounds")
-    if not os.path.exists(script_path):
-        raise FileNotFoundError(f"script.txt が見つかりません: {script_path}")
+    # 台本本文は metadata.db (videos.script_content) を正本として取得する。
+    from core.metadata_db import get_script_content
+    local_id = os.path.basename(output_dir.rstrip("/\\"))
+    script_text = get_script_content(local_id)
+    if not script_text:
+        raise FileNotFoundError(f"台本がDB(metadata.db)に見つかりません: {local_id}")
     if not os.path.isdir(audio_dir):
         raise FileNotFoundError(f"audio フォルダが見つかりません: {audio_dir}")
     if not os.path.isdir(bg_dir):
@@ -1093,9 +1092,9 @@ def render_native_test(
         progress_callback(f"🎞 native MP4: 音声{len(audio_files)}件 / 背景{len(bg_files)}枚を結合します")
         progress_callback(f"   🎬 エンコーダ: {_encoder_name}")
 
-    width, height = _video_size(output_dir, script_path)
+    width, height = _video_size(output_dir, script_text)
     characters = _character_inputs(width, height)
-    script_captions_raw = _dialogue_captions(script_path)
+    script_captions_raw = _dialogue_captions(script_text)
     script_caption_count = len(script_captions_raw)
     script_char_count = sum(len(text) for text, _style, _expression in script_captions_raw)
     if script_caption_count != len(audio_files):
@@ -1104,9 +1103,9 @@ def render_native_test(
             f"字幕数とWAV数が一致しません（台本由来{script_caption_count}件 / WAV{len(audio_files)}件 / 差分{missing:+d}）。"
             "音声生成失敗の可能性があるため、欠けた音声を修正してから再実行してください。"
         )
-    captions = _captions_for_audio_files(script_path, audio_files)
+    captions = _captions_for_audio_files(script_text, audio_files)
     is_shorts = height > width
-    effects = _effects_for_audio_files(script_path, audio_files, is_shorts)
+    effects = _effects_for_audio_files(script_text, audio_files, is_shorts)
 
     segment_paths: list[str] = []
     if is_shorts:

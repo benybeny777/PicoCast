@@ -73,6 +73,33 @@ def test_sync_folder_upsert(tmp_db, tmp_folder):
     assert cnt == 1
 
 
+def test_sync_stores_script_content_without_file(tmp_db, tmp_path):
+    """script.txt ファイルが無くても script_content 引数から DB に台本を保存できること。"""
+    folder = tmp_path / "Shorts_DB直接_20260601_def456"
+    folder.mkdir(parents=True)
+    # script.txt は作らない（新規生成の挙動）
+    assert not (folder / "script.txt").exists()
+
+    script_text = (
+        "動画形式: Shorts\n動画タイトル: DB直接保存のテスト\n生成区分: 新規\n\n"
+        "背景: テスト\nずんだもん(ノーマル): DBに入るのだ！\n"
+    )
+    tmp_db.sync_folder_to_db(str(folder), script_content=script_text)
+
+    local_id = os.path.basename(str(folder))
+    assert tmp_db.get_script_content(local_id) == script_text
+    with tmp_db.ManagedConnection() as conn:
+        v = conn.execute("SELECT title FROM videos WHERE local_id=?", (local_id,)).fetchone()
+    assert v["title"] == "DB直接保存のテスト"
+    # 同期しても script.txt ファイルは生成されない
+    assert not (folder / "script.txt").exists()
+
+
+def test_get_script_content_missing_returns_none(tmp_db):
+    """未登録 local_id では get_script_content が None を返すこと。"""
+    assert tmp_db.get_script_content("存在しないID") is None
+
+
 # ── analytics_snapshot ───────────────────────────────────────────────────────
 
 def test_insert_analytics_snapshot(tmp_db, tmp_folder):

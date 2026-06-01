@@ -444,13 +444,12 @@ def create_playlist(name: str, description: str = "", privacy: str = "public") -
 
 
 def _read_script_text_for_tags(mp4_path: str) -> str:
+    # 台本本文は metadata.db (videos.script_content) を正本とする。
     output_dir = os.path.dirname(os.path.abspath(mp4_path))
-    script_path = os.path.join(output_dir, "script.txt")
-    if not os.path.exists(script_path):
-        return ""
+    local_id = os.path.basename(output_dir.rstrip("/\\"))
     try:
-        with open(script_path, "r", encoding="utf-8") as f:
-            return f.read()
+        from core.metadata_db import get_script_content
+        return get_script_content(local_id) or ""
     except Exception:
         return ""
 
