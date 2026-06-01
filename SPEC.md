@@ -380,9 +380,13 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 |---|---|
 | 90〜100 | そのまま出せる強い台本 |
 | 80〜89 | 出せるが軽微な改善あり |
-| 70〜79 | 弱点あり、修正推奨 |
+| 70〜79 | 明確な弱点あり。ただし `must_fix` が空なら生成継続可 / 軽微改善推奨として扱い、「中止不要。冒頭改善余地あり」とログ表示する |
 | 60〜69 | 伸びにくい、修正必須 |
 | 59以下 | 作り直し候補 |
+
+Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook` / `title_match` / `tempo` / `clarity` / `loop` / `cta`、`must_fix`、`warnings`、`fix_target` を表示する。70〜79点の warning は単なる warning ではなく、人間が「台本修正が必要か、レビューAIの採点癖か」を判断できるように補足文を出す。
+
+78点付近への偏りを検証するため、Ollamaレビュー実行時は `metadata.db` のレビュー保存データ内に `review_debug` として `model` / `prompt_version` / `raw_response` / `parsed_score` / `parsed_subscores` / `warning_text` を保存する。ローカルJSONファイルでのデータ管理は行わない。
 
 ---
 

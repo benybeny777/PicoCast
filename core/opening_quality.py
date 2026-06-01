@@ -22,6 +22,8 @@ from config import (
     LONG_FULL_SCRIPT_REVIEW,
 )
 
+OLLAMA_OPENING_REVIEW_PROMPT_VERSION = "ollama_opening_review_v2"
+
 
 SURPRISE_WORDS = (
     "昔", "実は", "だった", "毒扱い", "日本生まれ", "禁止", "薬", "高級品",
@@ -369,10 +371,16 @@ def _build_opening_review_prompt(local_review: dict[str, Any], title: str, thumb
 
 採点基準:
 90-100: そのまま出せる強い台本
-80-89: 出せるが軽微な改善あり
-70-79: 弱点あり、修正推奨
+80-89: そのまま出せるが軽微改善あり。warnings には改善点を1つ以上具体的に書く
+70-79: 明確な弱点あり。どの行をどう直すかを必ず具体化する
 60-69: 伸びにくい、修正必須
 59以下: 作り直し候補
+
+追加ルール:
+- 78点を出す場合は、必ず「1行目〜3行目のどこをどう変えるべきか」を具体例付きで warnings に書く
+- 抽象的な「引きが弱い」「テンポが悪い」だけは禁止。修正対象の行番号・置き換え例・狙いを含める
+- must_fix が空で70〜79点にする場合は、publish_ok=true にしてよいが、fix_target と warnings は必須
+- scores は hook / title_match / tempo / clarity / loop / cta を必ずすべて 0〜100 の整数で返す
 
 返答形式（JSONのみ）:
 {{"overall_score":78,"publish_ok":true,"rewrite_recommended":true,"must_fix":[],"warnings":["冒頭の意外性はあるが3秒以内の引きがやや弱い"],"scores":{{"hook":82,"title_match":90,"tempo":76,"clarity":85,"loop":72,"cta":70}},"fix_target":"hook"}}
@@ -395,6 +403,8 @@ def _normalize_review_result(result: dict[str, Any], provider: str, model: str) 
         "mode": "llm",
         "provider": provider,
         "model": model,
+        "prompt_version": OLLAMA_OPENING_REVIEW_PROMPT_VERSION if provider == "ollama" else None,
+        "overall_score": max(0, min(100, score)),
         "score": max(0, min(100, score)),
         "status": "pass" if score >= 80 and not critical_errors else "warning" if score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not critical_errors else "llm_review_required",
         "rewrite_needed": bool(result.get("rewrite_recommended") or result.get("rewrite_needed")) or score < OPENING_SCORE_HARD_ABORT_THRESHOLD or bool(critical_errors),
@@ -409,14 +419,45 @@ def _normalize_review_result(result: dict[str, Any], provider: str, model: str) 
     }
 
 
+def review_human_status(review: dict[str, Any]) -> str:
+    score = int(review.get("overall_score") or review.get("score") or 0)
+    must_fix = review.get("must_fix") or []
+    if must_fix or score < OPENING_SCORE_HARD_ABORT_THRESHOLD:
+        return "中止候補 / 要修正"
+    if 70 <= score <= 79:
+        return "生成継続可 / 軽微改善推奨"
+    if score >= 80:
+        return "生成継続可"
+    return "要確認"
+
+
+def review_warning_text(review: dict[str, Any]) -> str:
+    score = int(review.get("overall_score") or review.get("score") or 0)
+    must_fix = review.get("must_fix") or []
+    if 70 <= score <= 79 and not must_fix:
+        return "中止不要。冒頭改善余地あり"
+    return review_human_status(review)
+
+
 def ollama_opening_review(local_review: dict[str, Any], title: str, thumbnail_text: str, video_type: str, target_duration: str) -> dict[str, Any] | None:
     prompt = _build_opening_review_prompt(local_review, title, thumbnail_text, video_type, target_duration)
     last_error = None
+    last_text = ""
     for attempt in range(OPENING_REVIEW_MAX_LLM_RETRIES + 1):
         try:
             text = _post_ollama(prompt, OLLAMA_REVIEW_MODEL, json_only=True)
+            last_text = text
             result = json.loads(_strip_json_text(text))
-            return _normalize_review_result(result, "ollama", OLLAMA_REVIEW_MODEL)
+            normalized = _normalize_review_result(result, "ollama", OLLAMA_REVIEW_MODEL)
+            normalized["review_debug"] = {
+                "model": OLLAMA_REVIEW_MODEL,
+                "prompt_version": OLLAMA_OPENING_REVIEW_PROMPT_VERSION,
+                "raw_response": text,
+                "parsed_score": normalized.get("overall_score"),
+                "parsed_subscores": normalized.get("scores") or {},
+                "warning_text": review_warning_text(normalized),
+            }
+            return normalized
         except Exception as exc:
             last_error = exc
             prompt = (
@@ -439,6 +480,14 @@ def ollama_opening_review(local_review: dict[str, Any], title: str, thumbnail_te
         "fix_target": None,
         "suggested_opening": None,
         "fallback_to_local": True,
+        "review_debug": {
+            "model": OLLAMA_REVIEW_MODEL,
+            "prompt_version": OLLAMA_OPENING_REVIEW_PROMPT_VERSION,
+            "raw_response": last_text,
+            "parsed_score": local_review.get("score", 0),
+            "parsed_subscores": local_review.get("scores", {}),
+            "warning_text": f"Ollamaレビュー失敗: {last_error}",
+        },
     }
 
 

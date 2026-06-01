@@ -2,7 +2,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from core.opening_quality import opening_score_tag
+from core.opening_quality import opening_score_tag, review_human_status, review_warning_text
 from workers import main
 
 
@@ -82,6 +82,44 @@ def test_nanobanana_summary_uses_pixel_resolution_not_api_size_label():
     )
 
 
+def test_opening_review_warning_label_for_70s_without_must_fix():
+    review = {"overall_score": 78, "score": 78, "must_fix": []}
+    assert review_human_status(review) == "生成継続可 / 軽微改善推奨"
+    assert review_warning_text(review) == "中止不要。冒頭改善余地あり"
+
+
+def test_save_opening_review_keeps_debug_in_db_payload(tmp_path, monkeypatch):
+    import core.metadata_db as m
+    from core.opening_quality import save_opening_review
+
+    saved = {}
+    monkeypatch.setattr(m, "is_initialized", lambda: True)
+    monkeypatch.setattr(m, "upsert_opening_review", lambda local_id, data: saved.update({"local_id": local_id, "data": data}))
+    theme_dir = tmp_path / "Shorts_test"
+    theme_dir.mkdir()
+    save_opening_review(
+        str(theme_dir),
+        {"score": 80, "status": "pass"},
+        {
+            "score": 78,
+            "status": "warning",
+            "review_debug": {
+                "model": "qwen-test",
+                "prompt_version": "ollama_opening_review_v2",
+                "raw_response": "{\"overall_score\":78}",
+                "parsed_score": 78,
+                "parsed_subscores": {"hook": 70},
+                "warning_text": "中止不要。冒頭改善余地あり",
+            },
+        },
+        None,
+    )
+
+    debug_path = theme_dir / "_meta" / "review_debug.json"
+    assert not debug_path.exists()
+    assert saved["data"]["llm_review"]["review_debug"]["model"] == "qwen-test"
+
+
 if __name__ == "__main__":
     test_opening_score_tag()
     test_normalize_meta_empty()
@@ -91,4 +129,5 @@ if __name__ == "__main__":
     test_strip_video_folder_prefix_accepts_legacy_short_prefixes()
     test_resolution_label_shows_final_size_and_quality()
     test_nanobanana_summary_uses_pixel_resolution_not_api_size_label()
+    test_opening_review_warning_label_for_70s_without_must_fix()
     print("ALL TESTS PASSED")

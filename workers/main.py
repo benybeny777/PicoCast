@@ -25,6 +25,8 @@ from core.opening_quality import (
     llm_opening_review,
     local_opening_review,
     opening_score_tag,
+    review_human_status,
+    review_warning_text,
     rewrite_opening_with_ollama,
     save_duration_review,
     save_final_review,
@@ -220,6 +222,36 @@ def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
 def _resolution_label(width: int, height: int, sd_size_mode: bool) -> str:
     quality = "SD" if sd_size_mode else "FHD"
     return f"{width}x{height} ({quality})"
+
+
+def _format_review_list(items) -> str:
+    if not items:
+        return "なし"
+    if isinstance(items, list):
+        return " / ".join(str(i) for i in items[:5])
+    return str(items)
+
+
+def _log_ollama_review_detail(update_status, review: dict) -> None:
+    scores = review.get("scores") or {}
+    overall = review.get("overall_score", review.get("score", "—"))
+    update_status(
+        "  🤖 Ollama冒頭レビュー詳細: "
+        f"overall_score={overall} / "
+        f"hook={scores.get('hook', '—')} / "
+        f"title_match={scores.get('title_match', '—')} / "
+        f"tempo={scores.get('tempo', '—')} / "
+        f"clarity={scores.get('clarity', '—')} / "
+        f"loop={scores.get('loop', '—')} / "
+        f"cta={scores.get('cta', '—')}"
+    )
+    update_status(f"    判定: {review_human_status(review)}")
+    warning_text = review_warning_text(review)
+    if warning_text:
+        update_status(f"    補足: {warning_text}")
+    update_status(f"    must_fix: {_format_review_list(review.get('must_fix'))}")
+    update_status(f"    warnings: {_format_review_list(review.get('warnings'))}")
+    update_status(f"    fix_target: {review.get('fix_target') or 'なし'}")
 
 
 def _build_channel_footer() -> str:
@@ -959,6 +991,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 update_status(
                     f"  🤖 Ollama冒頭レビュー完了: {llm_review.get('score')}点 / {llm_review.get('status')}"
                 )
+                _log_ollama_review_detail(update_status, llm_review)
                 if llm_review.get("fallback_to_local"):
                     opening_review_path = save_opening_review(theme_dir, opening_review, llm_review, None)
                     msg = (
