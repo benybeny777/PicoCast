@@ -1679,12 +1679,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status(msg, "error")
         return finish_result(msg)
 
-    if _has_saved_bgs:
-        # 既存サムネイルをそのまま使用
-        thumb_path = os.path.join(theme_dir, "thumbnails", "thumbnail.png") if os.path.exists(os.path.join(theme_dir, "thumbnails", "thumbnail.png")) else None
-        if thumb_path:
-            update_status("  📌 既存サムネイルを再利用")
+    _existing_thumb = os.path.join(theme_dir, "thumbnails", "thumbnail.png")
+    if _has_saved_bgs and os.path.exists(_existing_thumb):
+        # 背景再利用時で既存サムネイルがあればそのまま使う
+        thumb_path = _existing_thumb
+        update_status("  📌 既存サムネイルを再利用")
     else:
+        # 新規生成、または再利用指定でもサムネイルが欠けている（503失敗など）場合は生成する。
+        # 以前は再利用時にサムネが無いと thumb_path=None のまま中止していた。
         if is_cancelled():
             return cancel_result()
         thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,

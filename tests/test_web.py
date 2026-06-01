@@ -826,3 +826,52 @@ def test_worker_runner_serializes_concurrent_workers(tmp_path, monkeypatch):
     # 並行実行なら約0.3秒で終わってしまう。
     total_elapsed = max(e for _s, e in intervals) - min(s for s, _e in intervals)
     assert total_elapsed >= 0.6, f"workers ran concurrently (total={total_elapsed:.2f}s): {intervals}"
+
+
+# ── reuse_audio の配管（サービス層） ──────────────────────────────────────────
+def test_run_generate_threads_reuse_audio_to_worker(monkeypatch):
+    """generation_service._run_generate が reuse_audio / reuse_backgrounds を
+    worker_pipeline へ渡す params に正しく載せること（位置引数ズレの回帰防止）。"""
+    import web_app.services.generation_service as gs
+    from web_app.job_manager import Job
+
+    captured = {}
+
+    def _fake_run_in_worker(worker_name, params, job):
+        captured.update(params)
+        return {"status": "cancelled"}  # 早期returnでDB/パス解決を回避
+
+    monkeypatch.setattr(gs, "run_in_worker", _fake_run_in_worker)
+    job = Job("t1", "generate")
+    gs._run_generate(
+        job, "動画形式: Shorts\n動画タイトル: t\n", "通常", "", False,
+        False, False, False, False, "profile_default", None, None, True,
+    )
+    assert captured.get("reuse_audio") is True
+    assert captured.get("reuse_backgrounds") is False
+
+
+# ── 再生成エンドポイント ──────────────────────────────────────────────────────
+def test_history_regenerate_accepts_reuse_audio(client):
+    """reuse_audio を含むリクエストがスキーマで受理される（422にならない）こと。
+    台本がDBに無いので 404（E-SCRIPT-MISSING）になるが、それはスキーマ通過の証拠。"""
+    res = client.post("/api/history/regenerate", json={
+        "history_names": ["Shorts_存在しない"],
+        "reuse_audio": True,
+        "reuse_backgrounds": True,
+        "confirmed": True,
+    })
+    assert res.status_code == 404  # 422(バリデーション失敗)ではない
+
+
+def test_image_regenerate_route_returns_job_id(client, monkeypatch):
+    """画像再生成エンドポイントが image_keys を受けて job_id を返すこと。"""
+    import web_app.routes.api_images as api_images
+    monkeypatch.setattr(api_images, "submit_regenerate_job", lambda *a, **k: "job-xyz-1234")
+    res = client.post("/api/images/Shorts_test/regenerate", json={
+        "history_name": "Shorts_test",
+        "image_keys": ["backgrounds/bg_004_001.png"],
+        "prompts": {},
+    })
+    assert res.status_code == 200
+    assert res.json().get("job_id") == "job-xyz-1234"
