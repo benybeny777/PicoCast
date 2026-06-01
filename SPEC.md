@@ -190,9 +190,9 @@ yukkurijidou/
 9. よみがな正規化（SudachiPy + 自前辞書で補正）
    └── 変換後テキストをVOICEVOXに渡す。字幕・ファイル名は元テキストのまま
 10. VOICEVOX音声生成（セリフ1行ずつ）
-11. 背景画像生成（Nano Banana または Stable Diffusion WebUI）
+11. サムネイル生成（Nano Banana または Stable Diffusion WebUI）
+12. 背景画像生成（Nano Banana または Stable Diffusion WebUI）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
-12. サムネイル生成（Nano Banana または Stable Diffusion WebUI）
 13. 旧タイムライン互換ヘルパーで素材タイミングを組立
 14. BGM追加
 15. native MP4出力
@@ -845,6 +845,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `false` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `false` | Web UI生成画面のLong節約既定値 |
 | `WEB_DEFAULT_SD_SIZE_MODE` | `"1"` | Web UI生成画面の縮小生成既定値。`"1"` = 縮小生成ON（チェックボックス表記は「高画質（FHD）生成」でチェックなし） |
+| `NANOBANANA_SD_IMAGE_SIZE` | `"1K"` | Nano Banana縮小生成時の画像サイズ |
+| `NANOBANANA_FHD_IMAGE_SIZE` | `"2K"` | Nano Banana高画質生成時の画像サイズ |
 | `WEB_JOB_POLL_INTERVAL_MS` | 2000 | Web UIジョブ状態更新間隔(ms) |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | 1500 | Web UIジョブ成功後再読み込み待ち時間(ms) |
 | `WEB_TOAST_VISIBLE_MS` | 2000 | Web UIトースト表示時間(ms) |
@@ -960,8 +962,10 @@ YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案�
 
 Web UI の **「高画質（FHD）生成」チェックボックス**（デフォルト OFF = 縮小生成）または `WEB_DEFAULT_SD_SIZE_MODE` で制御する。Shorts / Long 両方に適用される。
 
-- **チェックなし（デフォルト）**: 縮小生成 ON。`SD_SIZE_IMAGE_SCALE`（デフォルト 0.5、`.env` で変更可）倍の小サイズで画像を生成し、元の解像度に拡大してセットする。生成時間・APIトークン消費・コストを削減できる反面、解像度が粗くなる。
-- **チェックあり**: FHD（フルHD）生成 ON。元の解像度で画像を生成する。品質は高いがコスト・時間がかかる。
+- **チェックなし（デフォルト）**: 縮小生成 ON。Nano Banana は `NANOBANANA_SD_IMAGE_SIZE`（デフォルト `1K`）で生成し、アプリ側で最終解像度へ拡大する。Stable Diffusion WebUI は `SD_SIZE_IMAGE_SCALE`（デフォルト 0.5）倍で生成し、アプリ側で最終解像度へ拡大する。生成時間・APIトークン消費・コストを削減できる反面、解像度が粗くなる。
+- **チェックあり**: 高画質生成 ON。Nano Banana は `NANOBANANA_FHD_IMAGE_SIZE`（デフォルト `2K`）で生成し、アプリ側で最終解像度へ調整する。Stable Diffusion WebUI は最終解像度で生成する。品質は高いがコスト・時間がかかる。
+
+Nano Banana 使用時は、通常生成・サムネイル生成・画像確認からの再生成ログに `Google送信設定: Nano Banana SD(1K)` または `Google送信設定: Nano Banana FHD(2K)` を表示し、Googleへどちらの画像サイズで送っているか確認できるようにする。
 
 `WEB_DEFAULT_SD_SIZE_MODE` のデフォルトは `"1"`（縮小生成 ON）。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
 
@@ -1475,6 +1479,8 @@ YouTube OAuth:
 | `GEMINI_MODEL` | `.env` / `config.py` | 台本生成で使うGeminiモデル |
 | `NANOBANANA_PRO_MODEL` | `.env` / `config.py` | 高品質画像生成モデル |
 | `NANOBANANA_FLASH_MODEL` | `.env` / `config.py` | 速い画像生成モデル |
+| `NANOBANANA_SD_IMAGE_SIZE` | `.env` / `config.py` | Nano Banana縮小生成時の画像サイズ |
+| `NANOBANANA_FHD_IMAGE_SIZE` | `.env` / `config.py` | Nano Banana高画質生成時の画像サイズ |
 | `IMAGE_BACKEND` | `.env` / `config.py` | 画像生成バックエンド主スイッチ。`gemini`（デフォルト）または `sd_webui` |
 | `SD_WEBUI_BASE_URL` | `.env` / `config.py` | Stable Diffusion WebUI API URL |
 | `SD_WEBUI_TIMEOUT_SEC` | `.env` / `config.py` | Stable Diffusion WebUI API タイムアウト(秒) |

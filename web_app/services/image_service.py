@@ -171,6 +171,8 @@ def _run_regenerate(
 
                 _log(job, f"背景再生成中: {fname}", "info")
                 with ImageGenerator(width=width, height=height, background_engine=engine, sd_size_mode=sd_size_mode) as img_gen:
+                    if img_gen.background_engine == "nanobanana":
+                        _log(job, img_gen.nanobanana_request_summary(), "info")
                     img_gen.generate_background(prompt, target_dir=bg_dir, fname=fname)
                 _log(job, f"背景再生成完了: {fname}", "success")
                 regenerated.append(key)
@@ -181,6 +183,7 @@ def _run_regenerate(
                     theme_dir,
                     progress_callback=lambda msg, tag="info": _log(job, msg, tag),
                     background_engine=engine,
+                    sd_size_mode=sd_size_mode,
                 )
                 _log(job, f"サムネイル再生成完了: {os.path.basename(thumb_path)}", "success")
                 regenerated.append(key)

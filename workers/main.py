@@ -422,6 +422,8 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
 
     def _generate_one(one_prompt, final_path, label):
         _log(f"サムネイル生成中: {label}")
+        if thumb_img_gen.background_engine == "nanobanana":
+            _log(f"  🖼 {thumb_img_gen.nanobanana_request_summary()}")
         if debug_mode:
             _log(f"  [DEBUG] サムネイルプロンプト保存: {prompt_path}")
         generated_name = thumb_img_gen.generate_background(
@@ -1328,34 +1330,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     )
 
     thumbnail_title = meta.get("video_title", topic)
-    if _has_saved_bgs:
-        # 既存サムネイルをそのまま使用
-        thumb_path = os.path.join(theme_dir, "thumbnails", "thumbnail.png") if os.path.exists(os.path.join(theme_dir, "thumbnails", "thumbnail.png")) else None
-        if thumb_path:
-            update_status("  📌 既存サムネイルを再利用")
-    else:
-        if is_cancelled():
-            return cancel_result()
-        thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
-                                        script_content=script_content, debug_mode=debug_mode,
-                                        long_thumbnail_ab_test=long_thumbnail_ab_test)
-        if is_cancelled():
-            return cancel_result()
+    thumb_path = None
 
-    if thumb_path is None:
-        raise Exception(
-            "サムネイル画像を生成できませんでした。\n"
-            "IMAGE_BACKEND=gemini の場合: Nano Banana の接続・残高を確認してください。\n"
-            "IMAGE_BACKEND=sd_webui の場合: Stable Diffusion WebUI の起動状態を確認してください。"
-        )
-
-    if is_shorts:
-        update_status("  📌 サムネイルをショート先頭に挿入予定(native)")
-    # ロングの場合は theme_dir に保存済み
-
-    if sd_size_mode:
+    if img_gen.background_engine == "nanobanana":
+        update_status(f"🖼  {img_gen.nanobanana_request_summary()}")
+    elif sd_size_mode:
         from config import SD_SIZE_IMAGE_SCALE
-        update_status(f"🖼  縮小生成モード: 画像を {int(float(SD_SIZE_IMAGE_SCALE or 0.5) * 100)}% サイズで生成→ffmpegで拡大")
+        update_status(f"🖼  縮小生成モード: 画像を {int(float(SD_SIZE_IMAGE_SCALE or 0.5) * 100)}% サイズで生成→アプリで最終サイズへ拡大")
     update_status(f"🎬 アセット生成を開始します...")
 
     voice_num = 0
@@ -1363,49 +1344,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     bg_num = 0
     total_voices = len(dialogue_items)
     total_bgs = len(bg_items)
-
-
-    # Batch API: メインループ前に全背景を一括生成
     batch_bg_results = {}  # {bg_num(1-indexed): filename}
-    if use_batch_api and not _has_saved_bgs:
-        _temp_num = 0
-        _batch_items = []  # (bg_num, bg_name)
-        for item in items:
-            if item["type"] == "background":
-                _temp_num += 1
-                if _temp_num <= max_backgrounds:
-                    bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
-                    _batch_items.append((_temp_num, bg_name))
-
-        if _batch_items:
-            if is_cancelled():
-                return cancel_result()
-            update_status(f"🖼  Batch API: {len(_batch_items)}枚を一括送信中 (完了まで数分かかります)...")
-            batch_requests = [
-                {
-                    "description": (
-                        f"以下の台本を参考に、「{name}」のシーンの背景画像を生成してください。\n\n"
-                        f"【台本】\n{script_content}"
-                    ),
-                    "raw": False,
-                }
-                for _, name in _batch_items
-            ]
-            batch_fnames = [f"bg_{n:03d}_001.png" for n, _ in _batch_items]
-            try:
-                batch_results = img_gen.generate_backgrounds_batch(batch_requests, target_dir=theme_bg_dir, fnames=batch_fnames)
-                if is_cancelled():
-                    return cancel_result()
-                for (bg_n, _), filename in zip(_batch_items, batch_results):
-                    if filename:
-                        batch_bg_results[bg_n] = filename
-                        report.backgrounds_generated += 1
-                    else:
-                        report.backgrounds_failed += 1
-                ok_count = sum(1 for r in batch_results if r)
-                update_status(f"  ✅ Batch API 完了: {ok_count}/{len(batch_results)}枚生成")
-            except Exception as e:
-                raise Exception(f"Batch API エラー: {e}")
 
     # ── 前処理: 各 dialogue に対応する bg_num を先読み割り当て ──────────────────
     # 音声ファイル名に bg_num を埋め込む必要があるため、
@@ -1549,6 +1488,72 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         )
         update_status(msg, "error")
         return finish_result(msg)
+
+    if _has_saved_bgs:
+        # 既存サムネイルをそのまま使用
+        thumb_path = os.path.join(theme_dir, "thumbnails", "thumbnail.png") if os.path.exists(os.path.join(theme_dir, "thumbnails", "thumbnail.png")) else None
+        if thumb_path:
+            update_status("  📌 既存サムネイルを再利用")
+    else:
+        if is_cancelled():
+            return cancel_result()
+        thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
+                                        script_content=script_content, debug_mode=debug_mode,
+                                        long_thumbnail_ab_test=long_thumbnail_ab_test)
+        if is_cancelled():
+            return cancel_result()
+
+    if thumb_path is None:
+        raise Exception(
+            "サムネイル画像を生成できませんでした。\n"
+            "IMAGE_BACKEND=gemini の場合: Nano Banana の接続・残高を確認してください。\n"
+            "IMAGE_BACKEND=sd_webui の場合: Stable Diffusion WebUI の起動状態を確認してください。"
+        )
+
+    if is_shorts:
+        update_status("  📌 サムネイルをショート先頭に挿入予定(native)")
+    # ロングの場合は theme_dir に保存済み
+
+    # Batch API: 背景生成フェーズの直前に全背景を一括生成
+    if use_batch_api and not _has_saved_bgs:
+        _temp_num = 0
+        _batch_items = []  # (bg_num, bg_name)
+        for item in items:
+            if item["type"] == "background":
+                _temp_num += 1
+                if _temp_num <= max_backgrounds:
+                    bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
+                    _batch_items.append((_temp_num, bg_name))
+
+        if _batch_items:
+            if is_cancelled():
+                return cancel_result()
+            update_status(f"🖼  Batch API: {len(_batch_items)}枚を一括送信中 (完了まで数分かかります)...")
+            batch_requests = [
+                {
+                    "description": (
+                        f"以下の台本を参考に、「{name}」のシーンの背景画像を生成してください。\n\n"
+                        f"【台本】\n{script_content}"
+                    ),
+                    "raw": False,
+                }
+                for _, name in _batch_items
+            ]
+            batch_fnames = [f"bg_{n:03d}_001.png" for n, _ in _batch_items]
+            try:
+                batch_results = img_gen.generate_backgrounds_batch(batch_requests, target_dir=theme_bg_dir, fnames=batch_fnames)
+                if is_cancelled():
+                    return cancel_result()
+                for (bg_n, _), filename in zip(_batch_items, batch_results):
+                    if filename:
+                        batch_bg_results[bg_n] = filename
+                        report.backgrounds_generated += 1
+                    else:
+                        report.backgrounds_failed += 1
+                ok_count = sum(1 for r in batch_results if r)
+                update_status(f"  ✅ Batch API 完了: {ok_count}/{len(batch_results)}枚生成")
+            except Exception as e:
+                raise Exception(f"Batch API エラー: {e}")
 
     # ══════════════════════════════════════════════════════════════════════════
     # パス2: 全背景生成（Gemini / SD WebUI）

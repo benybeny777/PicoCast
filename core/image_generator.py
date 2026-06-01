@@ -4,7 +4,9 @@ from google import genai
 from config import config
 from config import (
     NANOBANANA_FLASH_MODEL,
+    NANOBANANA_FHD_IMAGE_SIZE,
     NANOBANANA_PRO_MODEL,
+    NANOBANANA_SD_IMAGE_SIZE,
     SD_SIZE_IMAGE_SCALE,
 )
 # IMAGE_BACKEND は実行時に config から直接参照する（monkeypatch対応）
@@ -146,8 +148,18 @@ class ImageGenerator:
         aspect_ratio = "9:16" if self.height > self.width else "16:9"
         return types.GenerateContentConfig(
             response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
+            image_config=types.ImageConfig(aspect_ratio=aspect_ratio, image_size=self.nanobanana_image_size()),
         )
+
+    def nanobanana_image_size(self):
+        return NANOBANANA_SD_IMAGE_SIZE if self.sd_size_mode else NANOBANANA_FHD_IMAGE_SIZE
+
+    def nanobanana_request_label(self):
+        mode = "SD" if self.sd_size_mode else "FHD"
+        return f"{mode}({self.nanobanana_image_size()})"
+
+    def nanobanana_request_summary(self):
+        return f"Google送信設定: Nano Banana {self.nanobanana_request_label()} → 保存 {self.width}x{self.height}"
 
     def _save_prompt_log(self, save_dir, fname, prompt):
         log_path = os.path.join(save_dir, "image_prompts.txt")
@@ -171,15 +183,7 @@ class ImageGenerator:
         with open(path, "wb") as f:
             f.write(part.inline_data.data)
         with Image.open(path) as img:
-            if self.sd_size_mode:
-                small = img.resize((self.request_width, self.request_height), Image.LANCZOS)
-                resized = small.resize((self.width, self.height), Image.LANCZOS)
-                try:
-                    resized.save(path)
-                finally:
-                    small.close()
-                    resized.close()
-            elif img.size != (self.width, self.height):
+            if img.size != (self.width, self.height):
                 resized = img.resize((self.width, self.height), Image.LANCZOS)
                 try:
                     resized.save(path)
@@ -192,6 +196,17 @@ class ImageGenerator:
 
     def _write_image_generation_meta(self, save_dir, entry):
         return None
+
+    def _resize_image_file(self, path, size):
+        from PIL import Image
+        with Image.open(path) as img:
+            if img.size == size:
+                return
+            resized = img.resize(size, Image.LANCZOS)
+            try:
+                resized.save(path)
+            finally:
+                resized.close()
 
     def _prepare_sd_webui_model(self) -> None:
         """SD_WEBUI_MODEL が設定されている場合、インストール確認・ダウンロード・モデル切り替えを行う。
@@ -288,11 +303,19 @@ class ImageGenerator:
         # Shorts の場合は縦長サイズに切り替え
         is_shorts = self.height > self.width
         if is_shorts:
-            gen_width = self.height   # Shorts: 縦長のため幅・高さを入れ替え
-            gen_height = self.width
+            final_width = self.height   # Shorts: 縦長のため幅・高さを入れ替え
+            final_height = self.width
         else:
-            gen_width = self.width
-            gen_height = self.height
+            final_width = self.width
+            final_height = self.height
+
+        if self.sd_size_mode:
+            scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
+            gen_width = max(64, int(round(final_width * scale)))
+            gen_height = max(64, int(round(final_height * scale)))
+        else:
+            gen_width = final_width
+            gen_height = final_height
 
         prompt_suffix = _THUMB_PROMPT_SUFFIX if is_thumbnail else _BG_PROMPT_SUFFIX
 
@@ -308,6 +331,8 @@ class ImageGenerator:
         with StableDiffusionWebUIGenerator(width=gen_width, height=gen_height) as gen:
             try:
                 gen.generate_image(en_prompt, output_path, prompt_suffix=prompt_suffix)
+                if self.sd_size_mode:
+                    self._resize_image_file(output_path, (final_width, final_height))
             except Exception as e:
                 print(f"❌ SD WebUI 背景生成に失敗しました。自動フォールバックは行いません。")
                 print(f"❌ エラー詳細: {e}")
@@ -338,7 +363,7 @@ class ImageGenerator:
         model_name = NANOBANANA_PRO_MODEL if (force_nanobanana_pro or "pro" in self.image_style) else NANOBANANA_FLASH_MODEL
 
         if self.debug:
-            size_note = f" 縮小サイズ生成({self.request_width}x{self.request_height}→{self.width}x{self.height})" if self.sd_size_mode else f" {self.width}x{self.height}"
+            size_note = f" {self.nanobanana_request_label()}生成→{self.width}x{self.height}"
             print(f"  [AI] Google {model_name} (Nano Banana){size_note} で描画を開始します: {description[:40]}...")
 
         try:
@@ -416,19 +441,20 @@ class ImageGenerator:
         batch_prompts = []
         batch_job = None
         aspect_ratio = "9:16" if self.height > self.width else "16:9"
+        image_size = self.nanobanana_image_size()
         for req in requests_list:
             prompt = self._build_full_prompt(req["description"], req.get("raw", False))
             inline_requests.append({
                 "contents": [{"role": "user", "parts": [{"text": prompt}]}],
                 "config": {
                     "response_modalities": ["IMAGE"],
-                    "image_config": {"aspect_ratio": aspect_ratio},
+                    "image_config": {"aspect_ratio": aspect_ratio, "image_size": image_size},
                 },
             })
             batch_prompts.append(prompt)
 
         if self.debug:
-            print(f"  [Batch] {len(inline_requests)}件を送信: {model_name}")
+            print(f"  [Batch] {len(inline_requests)}件を送信: {model_name} / Nano Banana {self.nanobanana_request_label()}")
 
         batch_job = self.client.batches.create(model=model_name, src=inline_requests)
         if self.debug:
