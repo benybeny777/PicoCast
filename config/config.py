@@ -450,5 +450,4 @@ AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_C
 # ジョブログ永続化
 # ───────────────────────────────────────────────
 JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))  # 保持する最大ジョブ件数
-JOB_MIN_CONCURRENT_WORKERS = int(os.environ.get("JOB_MIN_CONCURRENT_WORKERS", "1"))  # 同時起動ワーカーsubprocess数の下限。待ち行列が無いときの基準並列数（1 <= min <= max）。変更は再起動後に反映
-JOB_MAX_CONCURRENT_WORKERS = int(os.environ.get("JOB_MAX_CONCURRENT_WORKERS", "1"))  # 同時起動ワーカーsubprocess数の上限。待ち行列（負荷）が出ると min→max まで自動スケールアップ。既定1=直列。上げるとWeb無応答リスクが上がるので注意。変更は再起動後に反映
+JOB_MAX_CONCURRENT_WORKERS = int(os.environ.get("JOB_MAX_CONCURRENT_WORKERS", "1"))  # 同時起動ワーカーsubprocess数。既定1=直列実行（生成・レンダーを1本ずつ処理しWeb無応答を防ぐ）。超過分は順番待ち（キュー）。値はこの config に置く（.env には置かない）。変更は再起動後に反映

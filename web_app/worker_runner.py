@@ -21,75 +21,13 @@ from web_app.job_manager import Job, _log
 # worker スクリプトが置いてあるプロジェクトルート（web_app/ の一つ上）
 _WORKER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# ワーカーsubprocess の同時起動数を制御するキュー用ゲート。
+# ワーカーsubprocess の同時起動数を制限するキュー用セマフォ。
 # 複数ジョブを同時実行すると Web プロセスが応答不能（ブロック）になり UI のログ更新が
-# 止まる事象を防ぐため、起動数を制限してキューイングする。
+# 止まる事象を防ぐため、起動数を JOB_MAX_CONCURRENT_WORKERS（既定1=直列）に制限し、
+# 超過分は順番待ち（キュー）にする。
 # 追加インフラ不要・純Python実装なので配布物にそのまま同梱できる。
-#
-# Apache MPM 風に下限(min)・上限(max)を config で定義し、待ち行列（負荷）に応じて
-# min↔max の範囲で同時実行数を自動増減する。
-from config import (  # noqa: E402
-    JOB_MIN_CONCURRENT_WORKERS as _MIN_CONCURRENT_WORKERS,
-    JOB_MAX_CONCURRENT_WORKERS as _MAX_CONCURRENT_WORKERS,
-)
-if _MIN_CONCURRENT_WORKERS < 1 or _MAX_CONCURRENT_WORKERS < _MIN_CONCURRENT_WORKERS:
-    raise ValueError(
-        "JOB_MIN/MAX_CONCURRENT_WORKERS が不正です: "
-        f"min={_MIN_CONCURRENT_WORKERS}, max={_MAX_CONCURRENT_WORKERS}（1 <= min <= max が必要）"
-    )
-
-
-class _ConcurrencyGate:
-    """同時実行数を min↔max で自動増減するゲート（Apache MPM 風）。
-
-    - 待ち行列（acquire 待ち）が出ると上限 max まで段階的にスケールアップする。
-    - 待ちが無くなると下限 min まで段階的にスケールダウンする。
-    - `BoundedSemaphore` と異なり実行中に許容数を変えられる。
-    - `with gate:` で1枠を確保し、ブロックを抜けると解放する。
-    """
-
-    def __init__(self, min_workers: int, max_workers: int):
-        self._min = min_workers
-        self._max = max_workers
-        self._limit = min_workers   # 現在の許容同時実行数
-        self._active = 0            # 実行中の枠数
-        self._waiting = 0           # acquire 待ちの数（=負荷）
-        self._cond = threading.Condition()
-
-    def would_queue(self) -> bool:
-        """今 acquire したら（スケールアップしても）順番待ちになるか（ログ表示用・概算）。"""
-        with self._cond:
-            return self._active >= self._limit and self._limit >= self._max
-
-    def _scale_up_locked(self) -> None:
-        if self._waiting > 0 and self._limit < self._max:
-            self._limit += 1
-            self._cond.notify_all()
-
-    def _scale_down_locked(self) -> None:
-        if self._waiting == 0 and self._limit > self._min:
-            self._limit -= 1
-
-    def __enter__(self):
-        with self._cond:
-            self._waiting += 1
-            self._scale_up_locked()
-            while self._active >= self._limit:
-                self._cond.wait()
-                self._scale_up_locked()
-            self._waiting -= 1
-            self._active += 1
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        with self._cond:
-            self._active -= 1
-            self._scale_down_locked()
-            self._cond.notify_all()
-        return False
-
-
-_worker_gate = _ConcurrencyGate(_MIN_CONCURRENT_WORKERS, _MAX_CONCURRENT_WORKERS)
+from config import JOB_MAX_CONCURRENT_WORKERS as _MAX_CONCURRENT_WORKERS  # noqa: E402
+_worker_slots = threading.BoundedSemaphore(max(1, _MAX_CONCURRENT_WORKERS))
 
 # subprocess に渡す環境変数（PYTHONIOENCODING を強制して文字化けを防ぐ）
 _WORKER_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
@@ -189,13 +127,15 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
     if not os.path.isfile(worker_script):
         raise FileNotFoundError(f"ワーカースクリプトが見つかりません: {worker_script}")
 
-    # 同時実行上限(max)に達していれば、この先の `with _worker_gate` で順番待ち（キュー）になる。
-    # 待ちになりそうなときだけ待機メッセージをログに出す。
-    if _worker_gate.would_queue():
+    # 同時実行上限に達していれば、この先の `with _worker_slots` で順番待ち（キュー）になる。
+    # 空きが無いときだけ待機メッセージをログに出す（非ブロッキングの試行取得で判定）。
+    if not _worker_slots.acquire(blocking=False):
         _log(job, f"⏳ 他のジョブ実行中のため順番待ちです（同時実行 上限{_MAX_CONCURRENT_WORKERS}）", "info")
+    else:
+        _worker_slots.release()
 
-    # _worker_gate の1枠を保持している間だけ subprocess を起動・実行する（負荷で min↔max に自動増減）
-    with _worker_gate, tempfile.TemporaryDirectory(prefix="yjworker_") as tmpdir:
+    # _worker_slots を保持している間だけ subprocess を起動・実行する（既定は直列＝1本ずつ）
+    with _worker_slots, tempfile.TemporaryDirectory(prefix="yjworker_") as tmpdir:
         input_path = os.path.join(tmpdir, "input.json")
         result_path = os.path.join(tmpdir, "result.json")
 
