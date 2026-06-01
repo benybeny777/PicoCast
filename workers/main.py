@@ -1335,9 +1335,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     if img_gen.background_engine == "nanobanana":
         update_status(f"🖼  {img_gen.nanobanana_request_summary()}")
+    elif img_gen.background_engine == "sd_webui" and not sd_size_mode:
+        update_status(f"🖼  SD WebUI 高画質生成: 解像度: {width}x{height}")
     elif sd_size_mode:
         from config import SD_SIZE_IMAGE_SCALE
-        update_status(f"🖼  縮小生成モード: 画像を {int(float(SD_SIZE_IMAGE_SCALE or 0.5) * 100)}% サイズで生成→アプリで最終サイズへ拡大")
+        scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
+        gen_width = max(64, int(round(width * scale)))
+        gen_height = max(64, int(round(height * scale)))
+        update_status(
+            f"🖼  SD WebUI 縮小生成: 解像度: {gen_width}x{gen_height}→{width}x{height}"
+        )
     update_status(f"🎬 アセット生成を開始します...")
 
     voice_num = 0
