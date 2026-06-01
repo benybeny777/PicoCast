@@ -66,6 +66,22 @@ def test_strip_video_folder_prefix_accepts_legacy_short_prefixes():
     assert main._strip_video_folder_prefix("Shorts_テスト") == "テスト"
 
 
+def test_resolution_label_shows_final_size_and_quality():
+    assert main._resolution_label(1080, 1920, True) == "1080x1920 (SD)"
+    assert main._resolution_label(1920, 1080, False) == "1920x1080 (FHD)"
+
+
+def test_nanobanana_summary_uses_pixel_resolution_not_api_size_label():
+    from core.image_generator import ImageGenerator
+
+    assert ImageGenerator(width=1080, height=1920, sd_size_mode=True).nanobanana_request_summary() == (
+        "Google送信設定: Nano Banana SD: 解像度: 1080x1920 (SD)"
+    )
+    assert ImageGenerator(width=1920, height=1080, sd_size_mode=False).nanobanana_request_summary() == (
+        "Google送信設定: Nano Banana FHD: 解像度: 1920x1080 (FHD)"
+    )
+
+
 if __name__ == "__main__":
     test_opening_score_tag()
     test_normalize_meta_empty()
@@ -73,4 +89,6 @@ if __name__ == "__main__":
     test_normalize_meta_tags()
     test_effective_background_count_ignores_reuse_markers()
     test_strip_video_folder_prefix_accepts_legacy_short_prefixes()
+    test_resolution_label_shows_final_size_and_quality()
+    test_nanobanana_summary_uses_pixel_resolution_not_api_size_label()
     print("ALL TESTS PASSED")

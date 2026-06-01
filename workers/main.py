@@ -215,6 +215,13 @@ def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
     lines = text.splitlines()
     cleaned = [l for l in lines if "VOICEVOX:" not in l and "使用音声合成" not in l]
     return "\n".join(cleaned).strip(), len(cleaned) != len(lines)
+
+
+def _resolution_label(width: int, height: int, sd_size_mode: bool) -> str:
+    quality = "SD" if sd_size_mode else "FHD"
+    return f"{width}x{height} ({quality})"
+
+
 def _build_channel_footer() -> str:
     from core.channel_info import get_channel_info
 
@@ -791,7 +798,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             width, height = 1920, 1080
         else:
             width, height = 1080, 1920  # Shorts / デフォルト（縦）
-    update_status(f"   📐 解像度: {width}x{height}")
+    update_status(f"   📐 解像度: {_resolution_label(width, height, sd_size_mode)}")
 
     # Step 4: 既存フォルダは削除せず、先にバックアップへ退避する。
     # 開きっぱなしで退避できない場合は、Web UI側で警告して同じ生成を再試行する。
@@ -1411,14 +1418,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if img_gen.background_engine == "nanobanana":
         update_status(f"🖼  {img_gen.nanobanana_request_summary()}")
     elif img_gen.background_engine == "sd_webui" and not sd_size_mode:
-        update_status(f"🖼  SD WebUI 高画質生成: 解像度: {width}x{height}")
+        update_status(f"🖼  SD WebUI 高画質生成: 解像度: {_resolution_label(width, height, sd_size_mode)}")
     elif sd_size_mode:
         from config import SD_SIZE_IMAGE_SCALE
         scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
         gen_width = max(64, int(round(width * scale)))
         gen_height = max(64, int(round(height * scale)))
         update_status(
-            f"🖼  SD WebUI 縮小生成: 解像度: {gen_width}x{gen_height}→{width}x{height}"
+            f"🖼  SD WebUI 縮小生成: 解像度: {_resolution_label(width, height, sd_size_mode)} / 生成: {gen_width}x{gen_height}"
         )
     update_status(f"🎬 アセット生成を開始します...")
 
