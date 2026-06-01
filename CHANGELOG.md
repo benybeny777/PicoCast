@@ -6,6 +6,11 @@
 
 ## 2026-06-01
 
+### ログ画面のコピペ改善（更新間隔を長く・選択中は再描画停止）
+
+- `/logs` の自動更新間隔を固定2秒から `WEB_LOG_POLL_INTERVAL_MS`（既定8秒）に変更し、設定画面からも調整可能にした。
+- ログをテキスト選択している間は、その回のポーリング再描画をスキップしてコピー操作が途切れないようにした。
+
 ### Ollama冒頭レビューの可視化を改善
 
 - Ollama冒頭レビュー完了時に、`overall_score` と hook / title_match / tempo / clarity / loop / cta の詳細スコア、`must_fix`、`warnings`、`fix_target` をGUIログへ出すようにした。

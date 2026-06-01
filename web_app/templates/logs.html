@@ -187,11 +187,20 @@ function _buildJobCard(job) {
     </div>`;
 }
 
-// 常時ポーリング（2秒間隔）: 新しいジョブが登録されても自動反映
+// 常時ポーリング: 新しいジョブが登録されても自動反映。
+// 間隔は WEB_LOG_POLL_INTERVAL_MS（既定8秒）。頻繁な再描画でログのコピペが
+// 途切れないよう長めにし、さらにテキスト選択中はこの回の更新をスキップする。
+const _LOG_POLL_INTERVAL_MS = {{ web_log_poll_interval_ms | default(8000) }};
+function _hasTextSelection() {
+  const sel = window.getSelection && window.getSelection();
+  return !!(sel && sel.toString().trim().length > 0);
+}
 let _pollTimer = null;
 function _startPolling() {
   if (_pollTimer) return;
   _pollTimer = setInterval(async () => {
+    // ユーザーがログを選択中（コピー操作中）は再描画しない
+    if (_hasTextSelection()) return;
     try {
       const res = await fetch('/api/jobs');
       const jobs = await res.json();
@@ -208,7 +217,7 @@ function _startPolling() {
         }
       });
     } catch(e) {}
-  }, 2000);
+  }, _LOG_POLL_INTERVAL_MS);
 }
 _startPolling();
 

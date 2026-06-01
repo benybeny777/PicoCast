@@ -417,6 +417,7 @@ WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST = os.environ.get("WEB_DEFAULT_LONG_THUMBNAIL_
 WEB_DEFAULT_LONG_BUDGET_MODE = os.environ.get("WEB_DEFAULT_LONG_BUDGET_MODE", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のLong節約既定値
 WEB_DEFAULT_SD_SIZE_MODE = os.environ.get("WEB_DEFAULT_SD_SIZE_MODE", "1").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時の縮小生成既定値（デフォルトON）
 WEB_JOB_POLL_INTERVAL_MS = int(os.environ.get("WEB_JOB_POLL_INTERVAL_MS", "2000"))  # Web UI のジョブポーリング間隔(ms)
+WEB_LOG_POLL_INTERVAL_MS = int(os.environ.get("WEB_LOG_POLL_INTERVAL_MS", "8000"))  # ログ画面(/logs)のポーリング間隔(ms)。頻繁な再描画でログのコピペが途切れるのを避けるため長め。テキスト選択中はさらにポーリングを一時停止する
 WEB_SUCCESS_RELOAD_DELAY_MS = int(os.environ.get("WEB_SUCCESS_RELOAD_DELAY_MS", "1500"))  # Web UI ジョブ成功後の再読み込み待ち時間(ms)
 WEB_TOAST_VISIBLE_MS = int(os.environ.get("WEB_TOAST_VISIBLE_MS", "2000"))  # Web UI トースト表示時間(ms)
 WEB_TOAST_HIDE_DELAY_MS = int(os.environ.get("WEB_TOAST_HIDE_DELAY_MS", "420"))  # Web UI トースト非表示待ち時間(ms)
