@@ -126,6 +126,8 @@ output/{profile_id}/          ← active profile の output_root
 
 動画生成・履歴・画像確認・再レンダー・アップロード候補・Analytics・固定コメント・スケジュールは、必ず active profile の `output_root` 配下だけを参照する。別 profile の `output_root` へのアクセスは `safe_output_path()` が拒否する。
 
+**例外: よみがな辞書は全チャンネル共通（プロファイル非依存）。** `data/reading_dictionary_base.json` / `data/reading_dictionary_user.json` / `data/reading_candidates.json` はプロジェクト直下の単一 `data/` に置き、`output/{profile_id}/` 配下に分けない。チャンネル別にしないこと（登録した読みは全チャンネルで共有する仕様）。
+
 ## 重要な規約・注意点
 
 ### ScriptParser
