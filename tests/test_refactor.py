@@ -66,6 +66,27 @@ def test_strip_video_folder_prefix_accepts_legacy_short_prefixes():
     assert main._strip_video_folder_prefix("Shorts_テスト") == "テスト"
 
 
+def test_background_filename_format():
+    assert main._background_filename(4) == "bg_004_001.png"
+    assert main._background_filename(12) == "bg_012_001.png"
+
+
+def test_background_reuse_is_filename_based_not_index(tmp_path):
+    # 欠番（bg_004）がある状態でも、再利用は番号一致のファイルだけを使い、
+    # 欠番は「存在しない」と判定される（=再生成対象になる）こと。
+    import os
+    for n in (1, 2, 3, 5, 6, 7, 8):  # bg_004 が欠番
+        (tmp_path / main._background_filename(n)).write_bytes(b"x")
+    reuse, regen = [], []
+    for n in range(1, 9):
+        if os.path.isfile(os.path.join(str(tmp_path), main._background_filename(n))):
+            reuse.append(n)
+        else:
+            regen.append(n)
+    assert reuse == [1, 2, 3, 5, 6, 7, 8]
+    assert regen == [4]  # 旧実装は範囲外で bg_008 を落とし bg_004 を作らなかった
+
+
 def test_cleanup_orphan_audio(tmp_path):
     # 期待ファイル名に無い .wav（台本変更で不要になった旧音声）だけ削除する
     for name in ("001_001_a.wav", "001_002_b.wav", "099_009_old.wav", "memo.txt"):

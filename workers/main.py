@@ -305,6 +305,12 @@ def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status) -> N
 
 _PUNCT = set("。！？")
 
+def _background_filename(bg_num: int) -> str:
+    """背景画像の標準ファイル名。生成時と再利用判定で必ず同じ名前を使う
+    （以前は再利用が並び順インデックス基準で、欠番があると番号がズレていた）。"""
+    return f"bg_{bg_num:03d}_001.png"
+
+
 def _cleanup_orphan_audio(audio_dir: str, expected_filenames: set[str]) -> int:
     """audio_dir 内の .wav のうち expected_filenames に無いもの（台本変更で不要に
     なった旧音声＝孤児）を削除し、削除件数を返す。reuse_audio 時の WAV/字幕数の
@@ -1723,19 +1729,17 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
         bg_name = _bg_raw or "default_background"
 
+        # 背景再利用: 該当番号の既存ファイル（bg_NNN_001.png）が有れば使い回し、
+        # 無ければ（503失敗などの欠番）下のタスクに積んで再生成する。
+        # ※ 以前は並び順インデックスで判定していたため、欠番があると番号がズレ、
+        #   欠番自体は決して再生成されないバグがあった（ファイル名基準に修正）。
         if _has_saved_bgs:
-            existing_bgs = sorted(
-                f for f in os.listdir(theme_bg_dir)
-                if f.lower().endswith(".png") and f.lower().startswith("bg_")
-            )
-            bg_idx = bg_num - 1
-            if bg_idx < len(existing_bgs):
-                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 再利用: {existing_bgs[bg_idx]}")
+            _expected_bg = _background_filename(bg_num)
+            if os.path.isfile(os.path.join(theme_bg_dir, _expected_bg)):
+                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 再利用: {_expected_bg}")
                 report.backgrounds_generated += 1
-            else:
-                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 既存ファイル不足 — スキップ")
-                report.backgrounds_failed += 1
-            continue
+                continue
+            update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 欠番のため再生成します: {_expected_bg}")
 
         # 実生成が必要 — プロンプトを保存してタスクリストに追加
         bg_description = (
@@ -1754,7 +1758,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "bg_num": bg_num,
             "bg_name": bg_name,
             "bg_description": bg_description,
-            "fname": f"bg_{bg_num:03d}_001.png",
+            "fname": _background_filename(bg_num),
         })
 
     if is_cancelled():
