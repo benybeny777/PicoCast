@@ -386,7 +386,7 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook` / `title_match` / `tempo` / `clarity` / `loop` / `cta`、`must_fix`、`warnings`、`fix_target` を表示する。70〜79点の warning は単なる warning ではなく、人間が「台本修正が必要か、レビューAIの採点癖か」を判断できるように補足文を出す。
 
-78点付近への偏りを検証するため、Ollamaレビュー実行時は `metadata.db` のレビュー保存データ内に `review_debug` として `model` / `prompt_version` / `raw_response` / `parsed_score` / `parsed_subscores` / `warning_text` を保存する。ローカルJSONファイルでのデータ管理は行わない。
+78点付近への偏りを検証するため、Ollamaレビュー実行時は `metadata.db` の `script_quality.opening_review_debug`（JSON）に `review_debug` として `model` / `prompt_version` / `raw_response` / `parsed_score` / `parsed_subscores` / `warning_text` / `fix_target` / `created_at` を保存する（`upsert_opening_review` 経由、取得は `get_opening_review_debug`）。ローカルJSONファイルでのデータ管理は行わない。
 
 ---
 
@@ -2001,6 +2001,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 | `final_review_reason` | TEXT | （v4） |
 | `final_review_stage` | TEXT | （v4） |
 | `final_review_model` | TEXT | （v4） |
+| `opening_review_debug` | TEXT | Ollama冒頭レビューの採点デバッグ情報JSON（v5）。model / prompt_version / raw_response / parsed_score / parsed_subscores / warning_text / fix_target / created_at |
 
 #### `jobs` — バックグラウンドジョブ履歴
 
@@ -2044,6 +2045,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 | 2 | `videos.script_content` 追加 |
 | 3 | `analytics_snapshots` に dislikes / impressions / ctr など 11 列追加 |
 | 4 | `render_info` / `jobs` テーブル新設。`video_metadata` に CTA 列追加。`script_quality` に opening/final review 列追加 |
+| 5 | `script_quality.opening_review_debug` 追加（Ollama冒頭レビューの採点デバッグJSON） |
 
 マイグレーションは `initialize_db()` が起動時に自動適用する。
 

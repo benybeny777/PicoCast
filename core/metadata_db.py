@@ -37,7 +37,7 @@ _logger = logging.getLogger(__name__)
 _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 # ── パス ────────────────────────────────────────────────────────────────────
@@ -249,7 +249,8 @@ CREATE TABLE IF NOT EXISTS script_quality (
     final_review_skipped   INTEGER,
     final_review_reason    TEXT,
     final_review_stage     TEXT,
-    final_review_model     TEXT
+    final_review_model     TEXT,
+    opening_review_debug   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS render_info (
@@ -379,6 +380,7 @@ def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
         ("final_review_reason",   "TEXT"),
         ("final_review_stage",    "TEXT"),
         ("final_review_model",    "TEXT"),
+        ("opening_review_debug",  "TEXT"),  # v5: 冒頭レビューの採点デバッグ情報(JSON)
     ]:
         _add_column(conn, "script_quality", col, typedef)
 
@@ -1128,22 +1130,46 @@ def get_cta_policy(local_id: str) -> dict:
 
 
 def upsert_opening_review(local_id: str, data: dict) -> None:
-    """opening_review データを script_quality に upsert する。"""
-    final = data.get("local_review", {}) if not data.get("llm_review") else data.get("llm_review", {})
+    """opening_review データを script_quality に upsert する。
+
+    LLMレビューの採点デバッグ情報（model / raw_response / サブスコア等）は
+    `opening_review_debug` 列に JSON で保存する（78点頻発などの採点癖を後から検証するため）。
+    ローカルJSONファイルは作成しない。
+    """
+    llm_review = data.get("llm_review") or {}
+    final = data.get("local_review", {}) if not llm_review else llm_review
     score = data.get("final_score") or final.get("score")
     status = data.get("final_status") or final.get("status")
     rewrite = int(bool(data.get("rewrite_needed")))
+    review_debug = llm_review.get("review_debug")
+    debug_json = json.dumps(review_debug, ensure_ascii=False) if review_debug else None
     with ManagedConnection() as conn:
         conn.execute("INSERT OR IGNORE INTO videos(local_id, output_dir) VALUES(?, ?)", (local_id, f"output/{local_id}"))
         conn.execute("""
-            INSERT INTO script_quality(local_id, opening_score, opening_score_status, opening_rewrite_needed)
-            VALUES(?,?,?,?)
+            INSERT INTO script_quality(local_id, opening_score, opening_score_status,
+                                       opening_rewrite_needed, opening_review_debug)
+            VALUES(?,?,?,?,?)
             ON CONFLICT(local_id) DO UPDATE SET
                 opening_score=COALESCE(excluded.opening_score, opening_score),
                 opening_score_status=excluded.opening_score_status,
-                opening_rewrite_needed=excluded.opening_rewrite_needed
-        """, (local_id, score, status, rewrite))
+                opening_rewrite_needed=excluded.opening_rewrite_needed,
+                opening_review_debug=COALESCE(excluded.opening_review_debug, opening_review_debug)
+        """, (local_id, score, status, rewrite, debug_json))
         conn.commit()
+
+
+def get_opening_review_debug(local_id: str) -> dict | None:
+    """script_quality.opening_review_debug（冒頭レビュー採点デバッグ情報）を返す。未保存なら None。"""
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT opening_review_debug FROM script_quality WHERE local_id=?", (local_id,)
+        ).fetchone()
+    if row is None or not row["opening_review_debug"]:
+        return None
+    try:
+        return json.loads(row["opening_review_debug"])
+    except (ValueError, TypeError):
+        return None
 
 
 def upsert_final_review(local_id: str, review: dict | None) -> None:

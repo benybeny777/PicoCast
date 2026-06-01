@@ -10,7 +10,7 @@
 
 - Ollama冒頭レビュー完了時に、`overall_score` と hook / title_match / tempo / clarity / loop / cta の詳細スコア、`must_fix`、`warnings`、`fix_target` をGUIログへ出すようにした。
 - 70〜79点で `must_fix` が空の場合は「生成継続可 / 軽微改善推奨」「中止不要。冒頭改善余地あり」と表示し、停止対象ではないことを分かるようにした。
-- 78点付近への採点癖を検証できるよう、Ollama の `raw_response`、パース後スコア、サブスコア、警告文を `metadata.db` のレビュー保存データ内に保存するようにした。ローカルJSONファイルは作成しない。
+- 78点付近への採点癖を検証できるよう、Ollama の `model` / `prompt_version` / `raw_response` / パース後スコア / サブスコア / 警告文 / `fix_target` / `created_at` を `metadata.db` の `script_quality.opening_review_debug`（JSON、スキーマ v5）へ保存するようにした（`get_opening_review_debug` で取得）。ローカルJSONファイルは作成しない。
 - Ollamaレビューのプロンプトに、80〜89点と70〜79点の使い分け、78点時の具体的修正例必須、抽象的な「引きが弱い」だけの禁止を明記した。
 
 ### 生成ログの解像度表記を整理

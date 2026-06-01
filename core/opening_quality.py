@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -377,7 +378,7 @@ def _build_opening_review_prompt(local_review: dict[str, Any], title: str, thumb
 59以下: 作り直し候補
 
 追加ルール:
-- 78点を出す場合は、必ず「1行目〜3行目のどこをどう変えるべきか」を具体例付きで warnings に書く
+- 78点を出す場合は、必ず「1行目〜3行目のどこをどう変えるべきか」を具体例付きで warnings に書き、なぜ80点ではないのか（80点に届かない理由）も明示する
 - 抽象的な「引きが弱い」「テンポが悪い」だけは禁止。修正対象の行番号・置き換え例・狙いを含める
 - must_fix が空で70〜79点にする場合は、publish_ok=true にしてよいが、fix_target と warnings は必須
 - scores は hook / title_match / tempo / clarity / loop / cta を必ずすべて 0〜100 の整数で返す
@@ -456,6 +457,8 @@ def ollama_opening_review(local_review: dict[str, Any], title: str, thumbnail_te
                 "parsed_score": normalized.get("overall_score"),
                 "parsed_subscores": normalized.get("scores") or {},
                 "warning_text": review_warning_text(normalized),
+                "fix_target": normalized.get("fix_target"),
+                "created_at": datetime.now(timezone.utc).astimezone().isoformat(),
             }
             return normalized
         except Exception as exc:
