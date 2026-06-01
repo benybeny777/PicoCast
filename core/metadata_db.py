@@ -37,7 +37,7 @@ _logger = logging.getLogger(__name__)
 _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 # ── パス ────────────────────────────────────────────────────────────────────
@@ -310,6 +310,21 @@ CREATE TABLE IF NOT EXISTS jobs (
     created_at    TEXT
 );
 
+CREATE TABLE IF NOT EXISTS image_generation_failures (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    local_id          TEXT NOT NULL,
+    failed_index      INTEGER,
+    total_backgrounds INTEGER,
+    model             TEXT,
+    backend           TEXT,
+    status_code       INTEGER,
+    category          TEXT,
+    error_message     TEXT,
+    prompt            TEXT,
+    retry_recommended INTEGER,
+    failed_at         TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_youtube_status_vid ON youtube_status(youtube_video_id);
 CREATE INDEX IF NOT EXISTS idx_analytics_vid ON analytics_snapshots(youtube_video_id);
 CREATE INDEX IF NOT EXISTS idx_topic_key ON topic_history(topic_key);
@@ -319,6 +334,7 @@ CREATE INDEX IF NOT EXISTS idx_videos_created ON videos(created_at);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_started ON jobs(started_at);
 CREATE INDEX IF NOT EXISTS idx_image_replacements_local_id ON image_replacements(local_id);
+CREATE INDEX IF NOT EXISTS idx_image_gen_failures_local_id ON image_generation_failures(local_id);
 """
 
 
@@ -1170,6 +1186,56 @@ def get_opening_review_debug(local_id: str) -> dict | None:
         return json.loads(row["opening_review_debug"])
     except (ValueError, TypeError):
         return None
+
+
+def record_image_generation_failure(local_id: str, failure: dict) -> None:
+    """背景画像生成の失敗を image_generation_failures に記録する（_meta JSONは作らない）。
+
+    failure: failed_index / total_backgrounds / model / backend / status_code /
+             category / error_message / prompt / retry_recommended
+    """
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        conn.execute("INSERT OR IGNORE INTO videos(local_id, output_dir) VALUES(?, ?)", (local_id, f"output/{local_id}"))
+        conn.execute("""
+            INSERT INTO image_generation_failures(
+                local_id, failed_index, total_backgrounds, model, backend,
+                status_code, category, error_message, prompt, retry_recommended, failed_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            local_id,
+            failure.get("failed_index"),
+            failure.get("total_backgrounds"),
+            failure.get("model"),
+            failure.get("backend"),
+            failure.get("status_code"),
+            failure.get("category"),
+            failure.get("error_message"),
+            failure.get("prompt"),
+            int(bool(failure.get("retry_recommended"))),
+            failure.get("failed_at") or _now_jst(),
+        ))
+        conn.commit()
+
+
+def get_image_generation_failures(local_id: str) -> list[dict]:
+    """指定動画の背景生成失敗記録を新しい順に返す。"""
+    with ManagedConnection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM image_generation_failures WHERE local_id=? ORDER BY id DESC",
+            (local_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def clear_image_generation_failures(local_id: str) -> None:
+    """再生成開始時などに、対象動画の失敗記録をクリアする。"""
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        conn.execute("DELETE FROM image_generation_failures WHERE local_id=?", (local_id,))
+        conn.commit()
 
 
 def upsert_final_review(local_id: str, review: dict | None) -> None:

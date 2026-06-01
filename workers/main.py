@@ -15,7 +15,7 @@ from core.parser import ScriptParser
 from core.ai_generator import AIGenerator
 from core.ng_words import apply_ng_word_replacements
 from core.youtube_metadata import optimize_description, optimize_tags
-from core.image_generator import ImageGenerator
+from core.image_generator import ImageGenerator, ImageGenerationError
 from core.opening_quality import (
     apply_opening_rewrite_to_script,
     check_openai_final_review_connection,
@@ -1772,7 +1772,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             task["bg_description"], target_dir=theme_bg_dir, fname=task["fname"],
         )
 
+    # 再生成に備え、対象動画の過去の背景生成失敗記録はここでクリアする
+    _local_id_for_fail = os.path.basename(os.path.abspath(theme_dir).rstrip("/\\"))
+    try:
+        from core.metadata_db import clear_image_generation_failures
+        clear_image_generation_failures(_local_id_for_fail)
+    except Exception:
+        pass  # フォールバック許可: 失敗記録クリアの失敗は生成本体を妨げない
+
     _bg_lock = threading.Lock()
+    _api_busy_hit = False
     with ThreadPoolExecutor(max_workers=_BG_WORKERS) as _bgex:
         _bgfuts = {_bgex.submit(_do_generate_bg, t): t for t in _bg_gen_tasks}
         for _bgfut in as_completed(_bgfuts):
@@ -1792,7 +1801,50 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             except Exception as _be:
                 with _bg_lock:
                     report.backgrounds_failed += 1
-                update_status(f"  ❌ 背景生成失敗 [{_bt['bg_num']}/{total_bgs}]: {_be}", "error")
+                # HTTPステータス別に分類して表示と記録を分ける（自動フォールバックはしない）
+                _category = getattr(_be, "category", "generic")
+                _status = getattr(_be, "status_code", None)
+                _model = getattr(_be, "model", "") or ""
+                _backend = getattr(_be, "backend", img_gen.background_engine)
+                _label = {
+                    "api_busy": "🚧 画像生成API混雑 / 後で再実行推奨",
+                    "auth":     "🔑 画像生成API 認証・権限エラー",
+                    "quota":    "⏳ 画像生成API レート制限・クォータ超過",
+                }.get(_category, "❌ 背景生成失敗")
+                if _category == "api_busy":
+                    _api_busy_hit = True
+                # 詳細ログ: タイトル / 背景番号 / モデル / status / message / 再利用可否
+                update_status(
+                    f"  {_label} [{_bt['bg_num']}/{total_bgs}]｜動画「{topic}」"
+                    f"｜model={_model}｜HTTP={_status}｜既存背景は再利用可（未生成分のみ再生成されます）",
+                    "error",
+                )
+                update_status(f"    error: {_be}", "error")
+                # 失敗を metadata.db に記録（_meta JSON は作らない）
+                try:
+                    from core.metadata_db import record_image_generation_failure
+                    record_image_generation_failure(_local_id_for_fail, {
+                        "failed_index": _bt["bg_num"],
+                        "total_backgrounds": total_bgs,
+                        "model": _model,
+                        "backend": _backend,
+                        "status_code": _status,
+                        "category": _category,
+                        "error_message": str(_be),
+                        "prompt": _bt.get("bg_description", ""),
+                        "retry_recommended": getattr(_be, "retry_recommended", _category in ("api_busy", "quota")),
+                    })
+                except Exception as _rec_e:
+                    update_status(f"    ⚠ 失敗記録の保存に失敗: {_rec_e}", "warning")
+
+    # 503（API混雑）が出た場合は、原因がユーザー側でないことを目立つ形で明示する
+    if _api_busy_hit and not is_cancelled():
+        update_status(
+            "🚧🚧 背景生成APIが混雑しています（503 / high demand）。"
+            "台本やプロンプトの問題ではありません。"
+            "生成済みの背景は保持されているので、時間を置いて『背景再利用』で再生成すれば未生成分だけ作り直せます。",
+            "error",
+        )
 
     if is_cancelled():
         return cancel_result()

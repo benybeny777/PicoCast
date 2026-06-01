@@ -1,4 +1,5 @@
 import os
+import re
 import time
 from google import genai
 from config import config
@@ -10,6 +11,46 @@ from config import (
     SD_SIZE_IMAGE_SCALE,
 )
 # IMAGE_BACKEND は実行時に config から直接参照する（monkeypatch対応）
+
+
+class ImageGenerationError(Exception):
+    """画像生成APIの失敗。HTTPステータスとカテゴリを保持する（自動フォールバックはしない）。
+
+    category:
+      "auth"     … 401/403 認証・権限
+      "quota"    … 429 レート制限・クォータ
+      "api_busy" … 503 API混雑（後で再実行推奨。台本/プロンプトの問題ではない）
+      "generic"  … その他
+    """
+
+    def __init__(self, message, *, category="generic", status_code=None, model=None, backend=None):
+        super().__init__(message)
+        self.category = category
+        self.status_code = status_code
+        self.model = model
+        self.backend = backend
+
+    @property
+    def retry_recommended(self) -> bool:
+        # 混雑(503)・レート制限(429)は時間を置いた再実行で回復する見込みがある
+        return self.category in ("api_busy", "quota")
+
+
+def classify_image_api_error(exc: Exception) -> tuple[str, int | None]:
+    """画像生成APIの例外から (category, http_status) を判定する。"""
+    status = getattr(exc, "code", None)
+    if not isinstance(status, int):
+        status = getattr(exc, "status_code", None)
+    if not isinstance(status, int):
+        m = re.search(r"\b(400|401|403|404|429|500|503)\b", str(exc))
+        status = int(m.group(1)) if m else None
+    if status in (401, 403):
+        return "auth", status
+    if status == 429:
+        return "quota", status
+    if status == 503:
+        return "api_busy", status
+    return "generic", status
 
 
 def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
@@ -422,9 +463,16 @@ class ImageGenerator:
 
             raise Exception("No image part found in response.")
 
+        except ImageGenerationError:
+            raise  # 既に分類済み（二重ラップしない）
         except Exception as e:
-            print(f"  [AI] Nano Banana エラー: {e}")
-            raise Exception(f"Nano Banana ({model_name}) が失敗しました: {e}")
+            category, status = classify_image_api_error(e)
+            print(f"  [AI] Nano Banana エラー(category={category} / status={status}): {e}")
+            # 自動フォールバック禁止: 別モデル・別バックエンド・ローカル生成へ切り替えない。
+            raise ImageGenerationError(
+                f"Nano Banana ({model_name}) が失敗しました: {e}",
+                category=category, status_code=status, model=model_name, backend="nanobanana",
+            ) from e
         finally:
             response = None
             parts = None

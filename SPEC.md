@@ -1028,6 +1028,19 @@ Web UI の **「高画質（FHD）生成」チェックボックス**（デフ�
 
 `WEB_DEFAULT_SD_SIZE_MODE` のデフォルトは `"1"`（縮小生成 ON）。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
 
+### 画像生成APIエラーの扱い（503混雑など）
+
+背景画像生成（Gemini / Nano Banana）の失敗は HTTP ステータスで分類し、表示と記録を分ける。**自動フォールバックは禁止**（別モデル・別バックエンド・ローカル生成へ切り替えない）。
+
+- `core/image_generator.py` の `classify_image_api_error()` が例外から `(category, status)` を判定し、`ImageGenerationError(category, status_code, model, backend)` を送出する。
+  - `401/403` → `auth`（認証・権限）
+  - `429` → `quota`（レート制限・クォータ）
+  - `503` → `api_busy`（API混雑。台本・プロンプトの問題ではない。後で再実行推奨）
+  - その他 → `generic`
+- ログ表示はカテゴリ別。**503 は「🚧 画像生成API混雑 / 後で再実行推奨」**とし、失敗ログに 動画タイトル / 背景番号(例 4/8) / モデル / HTTPステータス / エラーメッセージ / 既存背景の再利用可否 を出す。1本でも 503 があれば「背景生成APIが混雑しています。台本やプロンプトの問題ではありません。…」を目立つ形で出す。
+- **生成済み背景は破棄しない。** 失敗背景は記録のみで、再生成時に台本・背景数・プロンプトが変わっていなければ『背景再利用』で既存を再利用し未生成分だけ生成する。
+- 失敗は `metadata.db` の `image_generation_failures` テーブルに記録する（`failed_index` / `total_backgrounds` / `model` / `backend` / `status_code` / `category` / `error_message` / `prompt` / `retry_recommended` / `failed_at`）。**`_meta/*.json` などローカルJSONは作らない。** 背景生成開始時に対象動画の旧失敗記録を `clear_image_generation_failures()` でクリアする（`record_image_generation_failure` / `get_image_generation_failures` で保存・取得）。
+
 ### Long画像節約モード
 
 Web UI の **「Long節約」チェックボックス**（デフォルト OFF）または `WEB_DEFAULT_LONG_BUDGET_MODE` で制御する。Shorts には影響しない。
@@ -2020,6 +2033,23 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 
 保持件数は `JOB_LOG_MAX_JOBS`（既定 300）。古い順に自動削除される。
 
+#### `image_generation_failures` — 背景画像生成の失敗記録（v6）
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `local_id` | TEXT | 動画フォルダ名 |
+| `failed_index` / `total_backgrounds` | INTEGER | 失敗した背景番号 / 総数（例 4/8） |
+| `model` / `backend` | TEXT | 使用モデル / バックエンド（nanobanana 等） |
+| `status_code` | INTEGER | HTTP ステータス（503 など） |
+| `category` | TEXT | auth / quota / api_busy / generic |
+| `error_message` | TEXT | エラーメッセージ |
+| `prompt` | TEXT | 失敗時の背景プロンプト |
+| `retry_recommended` | INTEGER | 0/1（503・429 は 1） |
+| `failed_at` | TEXT | JST ISO 8601 |
+
+背景生成開始時に対象動画の旧記録をクリアし、失敗ごとに追記する。`_meta/*.json` には保存しない。
+
 ---
 
 ### `data/settings.db` テーブル定義
@@ -2047,6 +2077,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 | 3 | `analytics_snapshots` に dislikes / impressions / ctr など 11 列追加 |
 | 4 | `render_info` / `jobs` テーブル新設。`video_metadata` に CTA 列追加。`script_quality` に opening/final review 列追加 |
 | 5 | `script_quality.opening_review_debug` 追加（Ollama冒頭レビューの採点デバッグJSON） |
+| 6 | `image_generation_failures` テーブル新設（背景画像生成の失敗記録／503混雑など） |
 
 マイグレーションは `initialize_db()` が起動時に自動適用する。
 
