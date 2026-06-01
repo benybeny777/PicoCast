@@ -6,6 +6,11 @@
 
 ## 2026-06-01
 
+### エラーコードの中央管理とデバッグログ拡充
+
+- エラーコードと文言を `core/error_codes.py` の `ERROR_CATALOG` で一元管理するようにした（`E-IMG-BUSY` / `E-IMG-AUTH` / `E-IMG-QUOTA` / `E-IMG-FAIL` / `E-SECRET-MISSING` / `E-SCRIPT-MISSING` / `E-VOICE-FAIL` / `E-RENDER-FAIL` / `E-UNKNOWN`）。`format_error()` / `AppError` / `image_error_code()` を追加。背景生成失敗ログ・`image_generation_failures.error_code`（スキーマ v7）にコードを付与する。
+- `app_debug.log` を拡充: 全ジョブのログ（ワーカー subprocess の stdout/stderr 転送分を含む）を `job_manager._log()` から `yj.job` ロガー経由でミラーし、生成・レンダーの進捗とエラーが永続デバッグログにも残るようにした。ジョブ開始/終了/所要時間、ワーカー起動/終了 exit code、結果ファイル無しクラッシュも記録。ログ書式に関数名:行番号を追加。
+
 ### 画像生成API 503混雑のエラー表示・再実行導線を改善
 
 - 背景画像生成（Gemini / Nano Banana）の失敗を HTTP ステータスで分類するようにした（`401/403`=認証・権限、`429`=レート制限・クォータ、`503`=API混雑、その他=通常）。`core/image_generator.py` に `ImageGenerationError` / `classify_image_api_error()` を追加。

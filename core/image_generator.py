@@ -31,6 +31,12 @@ class ImageGenerationError(Exception):
         self.backend = backend
 
     @property
+    def code(self) -> str:
+        """中央カタログのエラーコード（E-IMG-BUSY など）。"""
+        from core.error_codes import image_error_code
+        return image_error_code(self.category)
+
+    @property
     def retry_recommended(self) -> bool:
         # 混雑(503)・レート制限(429)は時間を置いた再実行で回復する見込みがある
         return self.category in ("api_busy", "quota")

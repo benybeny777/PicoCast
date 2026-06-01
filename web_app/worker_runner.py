@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import atexit
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -17,6 +18,8 @@ import time
 from typing import Any
 
 from web_app.job_manager import Job, _log
+
+_logger = logging.getLogger("yj.worker")
 
 # worker スクリプトが置いてあるプロジェクトルート（web_app/ の一つ上）
 _WORKER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -156,6 +159,7 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
 
         with _procs_lock:
             _running_procs.add(proc)
+        _logger.info("worker起動: %s pid=%s job=%s", worker_name, proc.pid, job.job_id[:8])
 
         def _cancel_monitor() -> None:
             """cancel_event を監視して stdin に cancel を送り、タイムアウト後にツリーごと kill する。
@@ -212,6 +216,7 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
             with _procs_lock:
                 _running_procs.discard(proc)
         stderr_thread.join(timeout=2)
+        _logger.info("worker終了: %s pid=%s exit=%s job=%s", worker_name, proc.pid, proc.returncode, job.job_id[:8])
 
         if os.path.exists(result_path):
             with open(result_path, "r", encoding="utf-8") as f:
@@ -224,4 +229,6 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
 
         # result ファイルがない＝ worker がクラッシュした
         err_tail = "\n".join(stderr_lines[-30:]) if stderr_lines else "(stderr なし)"
+        _logger.error("worker異常終了（結果ファイルなし）: %s exit=%s job=%s\n%s",
+                      worker_name, proc.returncode, job.job_id[:8], err_tail)
         raise RuntimeError(f"ワーカーが結果ファイルを生成しませんでした\n{err_tail}")

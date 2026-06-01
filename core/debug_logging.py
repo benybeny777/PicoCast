@@ -38,7 +38,7 @@ def setup_debug_logging() -> str | None:
         )
         handler.setLevel(getattr(logging, config.DEBUG_LOG_LEVEL, logging.DEBUG))
         handler.setFormatter(logging.Formatter(
-            "%(asctime)s %(levelname)s [%(process)d] %(name)s: %(message)s"
+            "%(asctime)s %(levelname)s [%(process)d] %(name)s %(funcName)s:%(lineno)d: %(message)s"
         ))
         handler.addFilter(_SecretRedactingFilter())
         root.addHandler(handler)

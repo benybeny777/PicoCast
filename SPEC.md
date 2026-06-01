@@ -1037,7 +1037,21 @@ Web UI の **「高画質（FHD）生成」チェックボックス**（デフ�
   - その他 → `generic`
 - ログ表示はカテゴリ別。**503 は「🚧 画像生成API混雑 / 後で再実行推奨」**とし、失敗ログに 動画タイトル / 背景番号(例 4/8) / モデル / HTTPステータス / エラーメッセージ / 既存背景の再利用可否 を出す。1本でも 503 があれば「背景生成APIが混雑しています。台本やプロンプトの問題ではありません。…」を目立つ形で出す。
 - **生成済み背景は破棄しない。** 失敗背景は記録のみで、再生成時に台本・背景数・プロンプトが変わっていなければ『背景再利用』で既存を再利用し未生成分だけ生成する。
-- 失敗は `metadata.db` の `image_generation_failures` テーブルに記録する（`failed_index` / `total_backgrounds` / `model` / `backend` / `status_code` / `category` / `error_message` / `prompt` / `retry_recommended` / `failed_at`）。**`_meta/*.json` などローカルJSONは作らない。** 背景生成開始時に対象動画の旧失敗記録を `clear_image_generation_failures()` でクリアする（`record_image_generation_failure` / `get_image_generation_failures` で保存・取得）。
+- 失敗は `metadata.db` の `image_generation_failures` テーブルに記録する（`failed_index` / `total_backgrounds` / `model` / `backend` / `status_code` / `category` / `error_code` / `error_message` / `prompt` / `retry_recommended` / `failed_at`）。**`_meta/*.json` などローカルJSONは作らない。** 背景生成開始時に対象動画の旧失敗記録を `clear_image_generation_failures()` でクリアする（`record_image_generation_failure` / `get_image_generation_failures` で保存・取得）。
+- エラーコードは下記「エラーコード」の中央カタログ（`E-IMG-BUSY` / `E-IMG-AUTH` / `E-IMG-QUOTA` / `E-IMG-FAIL`）を使い、ログ表示にも `[E-IMG-BUSY]` のように付与する。
+
+### エラーコード
+
+エラーコードと文言は `core/error_codes.py` の `ERROR_CATALOG` で一元管理する（コードは安定IDとして維持し、文言変更はここだけで行う）。
+
+- `ErrorDef(code, message, category, retry_recommended)` を保持し、`format_error(code, detail)` が `[CODE] 文言（detail）` を返す。`AppError(code, detail)` はコード付き例外。
+- 未登録コードは `E-UNKNOWN` にフォールバックする（参照で落とさない）。
+- 主なコード: `E-IMG-BUSY`（503混雑・再実行推奨）/ `E-IMG-AUTH`（401/403）/ `E-IMG-QUOTA`（429）/ `E-IMG-FAIL`（画像生成その他）/ `E-SECRET-MISSING` / `E-SCRIPT-MISSING` / `E-VOICE-FAIL` / `E-RENDER-FAIL` / `E-UNKNOWN`。
+- 画像APIの `category` → コードは `image_error_code()` で変換する。新種別を増やすときは `ERROR_CATALOG` に追記する。
+
+### デバッグログの内容
+
+`app_debug.log`（`output/000_data/debug_logs/`、`TimedRotatingFileHandler` で日次ローテート）には、Web プロセスの logging に加えて**全ジョブのログをミラー**する。`job_manager._log()` が `yj.job` ロガーへ `[<type> job=<id>] <message>` 形式で出力し、ワーカー subprocess の stdout/stderr も `run_in_worker` 経由で同関数を通るため、生成・レンダーの進捗とエラー（エラーコード付き）が永続ログにも残る。ジョブの開始・終了・所要時間、ワーカーの起動/終了 exit code、結果ファイル無しのクラッシュも記録する。フォーマットは `%(asctime)s %(levelname)s [pid] %(name)s %(funcName)s:%(lineno)d: %(message)s`。秘密値は `_SecretRedactingFilter` でマスクする。
 
 ### Long画像節約モード
 
@@ -2041,6 +2055,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 | `model` / `backend` | TEXT | 使用モデル / バックエンド（nanobanana 等） |
 | `status_code` | INTEGER | HTTP ステータス（503 など） |
 | `category` | TEXT | auth / quota / api_busy / generic |
+| `error_code` | TEXT | 中央カタログのエラーコード（`E-IMG-BUSY` など。v7） |
 | `error_message` | TEXT | エラーメッセージ |
 | `prompt` | TEXT | 失敗時の背景プロンプト |
 | `retry_recommended` | INTEGER | 0/1（503・429 は 1） |
@@ -2076,6 +2091,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 | 4 | `render_info` / `jobs` テーブル新設。`video_metadata` に CTA 列追加。`script_quality` に opening/final review 列追加 |
 | 5 | `script_quality.opening_review_debug` 追加（Ollama冒頭レビューの採点デバッグJSON） |
 | 6 | `image_generation_failures` テーブル新設（背景画像生成の失敗記録／503混雑など） |
+| 7 | `image_generation_failures.error_code` 追加（中央カタログのエラーコード） |
 
 マイグレーションは `initialize_db()` が起動時に自動適用する。
 

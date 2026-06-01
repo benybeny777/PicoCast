@@ -37,7 +37,7 @@ _logger = logging.getLogger(__name__)
 _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 # ── パス ────────────────────────────────────────────────────────────────────
@@ -319,6 +319,7 @@ CREATE TABLE IF NOT EXISTS image_generation_failures (
     backend           TEXT,
     status_code       INTEGER,
     category          TEXT,
+    error_code        TEXT,
     error_message     TEXT,
     prompt            TEXT,
     retry_recommended INTEGER,
@@ -399,6 +400,9 @@ def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
         ("opening_review_debug",  "TEXT"),  # v5: 冒頭レビューの採点デバッグ情報(JSON)
     ]:
         _add_column(conn, "script_quality", col, typedef)
+
+    # v7: image_generation_failures にエラーコード列
+    _add_column(conn, "image_generation_failures", "error_code", "TEXT")
 
     # render_info / jobs テーブルは DDL の CREATE TABLE IF NOT EXISTS で作成済み
     for col, typedef in [
@@ -1201,8 +1205,9 @@ def record_image_generation_failure(local_id: str, failure: dict) -> None:
         conn.execute("""
             INSERT INTO image_generation_failures(
                 local_id, failed_index, total_backgrounds, model, backend,
-                status_code, category, error_message, prompt, retry_recommended, failed_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                status_code, category, error_code, error_message, prompt,
+                retry_recommended, failed_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             local_id,
             failure.get("failed_index"),
@@ -1211,6 +1216,7 @@ def record_image_generation_failure(local_id: str, failure: dict) -> None:
             failure.get("backend"),
             failure.get("status_code"),
             failure.get("category"),
+            failure.get("error_code"),
             failure.get("error_message"),
             failure.get("prompt"),
             int(bool(failure.get("retry_recommended"))),

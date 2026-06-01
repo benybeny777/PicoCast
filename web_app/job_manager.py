@@ -5,6 +5,7 @@
 """
 import atexit
 import json
+import logging
 import os
 import pathlib
 import threading
@@ -15,6 +16,17 @@ from datetime import datetime, timedelta, timezone
 
 _JST = timezone(timedelta(hours=9))
 from typing import Any, Callable
+
+# ジョブの全ログ（ワーカーの stdout/stderr 転送分を含む）を app_debug.log にも残すための logger。
+# 進捗・エラーがメモリ上の job.logs にしか残らず永続デバッグログが薄かったのを補う。
+_job_logger = logging.getLogger("yj.job")
+_TAG_TO_LEVEL = {
+    "error": logging.ERROR,
+    "stderr": logging.ERROR,
+    "warning": logging.WARNING,
+    "success": logging.INFO,
+    "info": logging.INFO,
+}
 
 
 class JobStatus:
@@ -166,6 +178,7 @@ class JobManager:
         def _run():
             job.status = JobStatus.RUNNING
             job.started_at = datetime.now(_JST)
+            _job_logger.info("[%s job=%s] ▶ 開始", job.type, job.job_id[:8])
             try:
                 result = fn(job, *args, **kwargs)
                 if job.cancel_event.is_set():
@@ -187,19 +200,36 @@ class JobManager:
                 manager_ref._save_jobs(notify_job=job)
             finally:
                 job.finished_at = datetime.now(_JST)
+                _dur = (job.finished_at - job.started_at).total_seconds() if job.started_at else 0.0
+                _job_logger.info(
+                    "[%s job=%s] ■ 終了 status=%s 所要=%.1fs", job.type, job.job_id[:8], job.status, _dur,
+                )
                 manager_ref._save_jobs(notify_job=job)  # 成功・失敗・キャンセルすべてで保存
 
         self._executor.submit(_run)
 
 
 def _log(job: Job, message: str, tag: str = "info") -> None:
-    """ジョブのログに追記する。呼び出し側からも使える。"""
+    """ジョブのログに追記する。呼び出し側からも使える。
+
+    同じ内容を app_debug.log（Python logging）へもジョブ文脈付きでミラーする。
+    ワーカー subprocess の stdout/stderr も run_in_worker 経由でこの関数を通るため、
+    生成・レンダーの進捗とエラーが永続デバッグログにも残る。
+    """
+    tag = tag or "info"
     job.logs.append({
         "time": datetime.now(_JST).isoformat(),
-        "tag": tag or "info",  # None が渡された場合は "info" にフォールバック
+        "tag": tag,
         "message": message,
     })
     job.progress_text = message
+    try:
+        _job_logger.log(
+            _TAG_TO_LEVEL.get(tag, logging.INFO),
+            "[%s job=%s] %s", job.type, job.job_id[:8], message,
+        )
+    except Exception:
+        pass  # フォールバック許可: デバッグログへのミラー失敗は本処理を妨げない
 
 
 # アプリケーション全体で共有するシングルトン

@@ -1806,6 +1806,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 _status = getattr(_be, "status_code", None)
                 _model = getattr(_be, "model", "") or ""
                 _backend = getattr(_be, "backend", img_gen.background_engine)
+                from core.error_codes import image_error_code
+                _code = getattr(_be, "code", None) or image_error_code(_category)
                 _label = {
                     "api_busy": "🚧 画像生成API混雑 / 後で再実行推奨",
                     "auth":     "🔑 画像生成API 認証・権限エラー",
@@ -1813,9 +1815,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 }.get(_category, "❌ 背景生成失敗")
                 if _category == "api_busy":
                     _api_busy_hit = True
-                # 詳細ログ: タイトル / 背景番号 / モデル / status / message / 再利用可否
+                # 詳細ログ: コード / タイトル / 背景番号 / モデル / status / message / 再利用可否
                 update_status(
-                    f"  {_label} [{_bt['bg_num']}/{total_bgs}]｜動画「{topic}」"
+                    f"  [{_code}] {_label} [{_bt['bg_num']}/{total_bgs}]｜動画「{topic}」"
                     f"｜model={_model}｜HTTP={_status}｜既存背景は再利用可（未生成分のみ再生成されます）",
                     "error",
                 )
@@ -1830,6 +1832,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                         "backend": _backend,
                         "status_code": _status,
                         "category": _category,
+                        "error_code": _code,
                         "error_message": str(_be),
                         "prompt": _bt.get("bg_description", ""),
                         "retry_recommended": getattr(_be, "retry_recommended", _category in ("api_busy", "quota")),
