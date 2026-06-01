@@ -472,6 +472,82 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 保存タイミング: 成功・失敗・キャンセル時（ `JOB_LOG_DIR/jobs.json` ）。
 保存失敗はジョブ自身のログに warning として記録する（ジョブ実行は妨げない）。
 
+### ジョブキュー設計（Kafka）— 計画
+
+> ステータス: **設計（未実装）**。本節は将来の実装方針を定める設計資料。現行は下記「現行方式」で動作する。
+
+#### 背景・課題
+
+現行は `JobManager`（`ThreadPoolExecutor(max_workers=4)`）が Web プロセス内でジョブを実行し、各ジョブが `run_in_worker()` で subprocess（`worker_pipeline.py` / `worker_render.py`）を起動して **その stdout/stderr を Web プロセス内のスレッドでブロッキング読み取り**している。
+
+複数ジョブを同時実行（複数生成）すると、Web プロセスが応答不能（`/` すら数十秒タイムアウト・CPU はフラットで I/O/ロック待ち）になり、UI のジョブログ・ステータスのポーリングが返らず「ログが進まない」状態になる。生成自体（subprocess）は独立プロセスのため進行する。
+
+原因の本質は **「ジョブの投入・実行・進捗配信が Web プロセスに密結合している」** こと。
+
+#### 目標
+
+- ジョブの **投入（Web）** と **実行（ワーカー）** を疎結合化し、Web プロセスは投入と表示だけを担う。
+- 同時実行数をキューで制御し、リソース枯渇と Web 無応答を防ぐ。
+- 投入はノンブロッキング（即時受付）。実行はコンシューマがプル方式で順次処理。
+- 進捗・ログ・結果はトピック経由で Web に戻し、UI 表示と `metadata.db` 永続化に使う。
+
+#### アーキテクチャ
+
+```
+[Web (FastAPI)]                     [Kafka]                      [Job Consumer (別プロセス)]
+  POST /api/generate  --produce-->  jobs.requests  --consume-->   run_pipeline / render
+  (即時 202 + job_id)                 (key=profile_id)             worker_pipeline.py を直接 import
+       ^                            jobs.events    <--produce--    進捗JSONL/結果をイベント化
+       |  --consume(背景スレッド)-->  (key=job_id)
+  job状態更新 + metadata.db永続化
+  UI はDB/メモリをポーリング
+```
+
+#### トピック設計
+
+| トピック | 役割 | key | パーティション | 備考 |
+|---|---|---|---|---|
+| `jobs.requests` | ジョブ投入（generate/render/check 等） | `profile_id` | 1（直列）〜N | 同時実行数 = パーティション数 ×コンシューマ数。直列化したい場合は1 |
+| `jobs.events` | 進捗ログ・ステータス・結果 | `job_id` | 1〜N | 現行 stdout JSONL（`{tag,message}`）をイベント化して流す |
+| `jobs.control` | キャンセル等の制御 | `job_id` | 1 | コンシューマが購読し対象ジョブを停止 |
+
+- **順序保証**: 同一 key（`job_id` / `profile_id`）は同一パーティションに入り順序保証される。
+- **同時実行制御**: `jobs.requests` のパーティション数とコンシューマ並列度で決まる。`JOB_MAX_CONCURRENT_WORKERS` 相当をここで表現する（既定は直列＝1）。
+
+#### プロデューサ / コンシューマ
+
+- **プロデューサ（Web）**: `JobManager.submit()` を「Kafka へ produce」に置き換え。即座に `job_id` を返し、ジョブは `queued` 状態で `metadata.db` に記録。Web スレッドは subprocess を起動・待機しない。
+- **コンシューマ（`workers/job_consumer.py` 新設・別プロセス）**: `jobs.requests` を consumer group で購読し、既存の `run_pipeline()` / `render_native_test()` をそのまま呼ぶ。進捗 callback を `jobs.events` への produce に差し替える。完了後にオフセットコミット（at-least-once）。`job_id` で冪等化（処理済みはスキップ）。
+- **イベント consumer（Web 内の背景スレッド or 別スレッド）**: `jobs.events` を購読し、`job.logs` 更新と `metadata.db` への永続化を行う。UI は従来どおりポーリング。
+
+#### 障害・キャンセル
+
+- コンシューマは完了時のみオフセットコミット。途中クラッシュ時は再配信され、`job_id` 冪等チェックで二重実行を防ぐ。
+- キャンセルは `jobs.control` に `{job_id, action:cancel}` を produce。コンシューマが受信して当該 subprocess をツリー kill（現行 `_kill_tree` 相当）。
+- Kafka ブローカー未起動時は produce 失敗 → ジョブ投入をエラーにする（サイレントフォールバック禁止）。
+
+#### インフラ
+
+- Kafka は **KRaft モード単一ブローカー**（Zookeeper 不要）。ローカルは Docker Compose もしくは同梱バイナリ。JVM 必須。
+- Python クライアントは `confluent-kafka`（librdkafka）を第一候補。
+- 設定（`config.py`）: `JOB_QUEUE_BACKEND`（`thread` / `kafka`）、`KAFKA_BOOTSTRAP_SERVERS`、`KAFKA_TOPIC_REQUESTS` / `_EVENTS` / `_CONTROL`、`KAFKA_CONSUMER_GROUP`、`JOB_MAX_CONCURRENT_WORKERS`。すべて `os.environ.get` 付き定数＋末尾コメント。
+
+#### 段階移行
+
+1. `JobManager.submit()` の内部にプロデューサ抽象を導入（`JOB_QUEUE_BACKEND=thread` では現行どおり）。
+2. `jobs.events` 配信と Web 側イベント consumer を実装し、`job.logs` をイベント経由へ。
+3. `workers/job_consumer.py` を実装し、`run_pipeline` / `render` をコンシューマから実行。
+4. `JOB_QUEUE_BACKEND=kafka` を既定化。`ThreadPoolExecutor` 経路は互換のため残置 → 安定後に削除。
+
+#### 考慮事項・代替案
+
+- 本ツールは **ローカル単一ユーザー**。Kafka はブローカー（JVM）運用・起動順序・監視のコストが大きく、オーバースペックになりやすい。**分散・多ノード化・永続キューを将来見据える場合に妥当**。
+- 同じ「キュー化＋UI 応答性維持」は軽量手段でも達成可能:
+  - **(a) プロセス内セマフォ / 単一ワーカー Executor**: `run_in_worker` を `JOB_MAX_CONCURRENT_WORKERS` で直列化。最小実装。ただし Web プロセス分離はしない。
+  - **(b) SQLite ジョブキュー表 + 別コンシューマプロセス**: 追加ミドルウェア不要で Web 分離も可能。
+  - **(c) Redis + RQ / Celery**: Kafka より軽量なジョブキュー定番。
+- 採用判断: スケール要件が無ければ (a)/(b) を推奨。Kafka 採用時は本節の設計に従う。
+
 ### 主要画面
 
 | URL | 画面 |
