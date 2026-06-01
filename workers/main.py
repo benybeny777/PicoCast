@@ -703,7 +703,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
                  long_budget_mode=None, sd_size_mode=False,
                  background_engine=None, bgm_mode="profile_default",
-                 bgm_id=None, bgm_volume_db=None):
+                 bgm_id=None, bgm_volume_db=None, reuse_audio=False):
     report = GenerationReport()
     pipeline_start = time.time()
     img_gen = None
@@ -850,6 +850,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     _existing_theme_backup = None
     _saved_bg_dir = None
     _saved_thumb_path = None
+    _saved_audio_dir = None
     if os.path.exists(theme_dir):
         backup_base = os.path.join("output", "000_backups")
         backup_name = f"{safe_topic}_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
@@ -908,6 +909,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     ]
                     if reusable_bgs:
                         _saved_bg_dir = _old_bg_dir
+            if reuse_audio:
+                _old_audio_dir = os.path.join(_existing_theme_backup, "audio")
+                if os.path.isdir(_old_audio_dir) and any(
+                    f.lower().endswith(".wav") for f in os.listdir(_old_audio_dir)
+                ):
+                    _saved_audio_dir = _old_audio_dir
             # サムネイルは再生成の有無に関係なく常に退避（再生成失敗時のフォールバック用）
             _thumb_candidate = os.path.join(_existing_theme_backup, "thumbnails", "thumbnail.png")
             if os.path.exists(_thumb_candidate):
@@ -946,6 +953,18 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             update_status(f"🖼  既存の背景を再利用します: {restored_bg_count}枚")
     if _saved_thumb_path and os.path.exists(_saved_thumb_path):
         shutil.copy2(_saved_thumb_path, os.path.join(_thumbs_dir(theme_dir), "thumbnail.png"))
+
+    # 音声再利用: バックアップの WAV を復元（同じ台本なら音声合成をスキップして使い回す）
+    _has_saved_audio = False
+    if _saved_audio_dir:
+        restored_audio = 0
+        for f in os.listdir(_saved_audio_dir):
+            if f.lower().endswith(".wav"):
+                shutil.copy2(os.path.join(_saved_audio_dir, f), theme_audio_dir)
+                restored_audio += 1
+        _has_saved_audio = restored_audio > 0
+        if _has_saved_audio:
+            update_status(f"🎤 既存の音声を再利用します: {restored_audio}件")
 
     # 台本本文は script.txt ファイルではなく metadata.db (videos.script_content) を
     # 正本とする。パイプライン末尾の sync_folder_to_db(..., script_content=...) で
@@ -1503,6 +1522,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     # フェーズ1a: チャンクリストを事前収集
     _voice_chunks = []
+    _reused_audio = 0  # reuse_audio で既存WAVを使い回した本数
     _v = 0
     _a = 0
     for item in items:
@@ -1522,6 +1542,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             _a += 1
             _safe_text = re.sub(r'[\\/:*?"<>|]', '', chunk_text)[:20]
             audio_filename = f"{item['_bg_num']:03d}_{_a:03d}_{_safe_text}.wav"
+            # 音声再利用: 同じ台本で既存WAVが復元済みなら合成をスキップして使い回す
+            if reuse_audio and _has_saved_audio and os.path.isfile(os.path.join(theme_audio_dir, audio_filename)):
+                _reused_audio += 1
+                report.voices_generated += 1
+                continue
             _voice_chunks.append({
                 "voice_num": _v, "audio_num": _a,
                 "char_key": char_key, "emotion": emotion,
@@ -1530,6 +1555,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 "chunk_text": chunk_text,
                 "audio_path": os.path.join(theme_audio_dir, audio_filename),
             })
+
+    if _reused_audio:
+        update_status(f"🎤 音声再利用: {_reused_audio}件はスキップ、新規合成 {len(_voice_chunks)}件")
 
     # フェーズ1b: audio_query を並列取得
     _QUERY_WORKERS = min(VOICEVOX_QUERY_WORKERS, len(_voice_chunks)) if _voice_chunks else 1

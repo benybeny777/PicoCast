@@ -66,6 +66,7 @@ def main() -> None:
             image_style=params.get("image_style", "通常"),
             background_engine=params.get("background_engine"),
             reuse_backgrounds=params.get("reuse_backgrounds", False),
+            reuse_audio=params.get("reuse_audio", False),
             cancel_event=_cancel_event,
             progress_callback=progress,
             long_thumbnail_ab_test=params.get("long_thumbnail_ab_test"),

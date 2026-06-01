@@ -92,6 +92,9 @@
       <label><input type="checkbox" id="reuse-backgrounds" {% if default_reuse_backgrounds %}checked{% endif %}> 背景を再利用する</label>
     </div>
     <div class="form-group check-group">
+      <label><input type="checkbox" id="reuse-audio"> 音声を再利用する</label>
+    </div>
+    <div class="form-group check-group">
       <label><input type="checkbox" id="long-thumbnail-ab" {% if default_long_thumbnail_ab_test %}checked{% endif %}> LongサムネAB</label>
     </div>
     <div class="form-group check-group">
@@ -467,6 +470,7 @@ function _readPipelineParams() {
     imageStyle:       {{ default_image_style | tojson }},
     backgroundEngine: document.getElementById('background-engine').value,
     reuseBg:          document.getElementById('reuse-backgrounds').checked,
+    reuseAudio:       document.getElementById('reuse-audio').checked,
     longThumbnailAb:  document.getElementById('long-thumbnail-ab').checked,
     longBudgetMode:   document.getElementById('long-budget-mode').checked,
     fhdMode:          document.getElementById('sd-size-mode').checked,
@@ -474,7 +478,7 @@ function _readPipelineParams() {
   };
 }
 
-async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longThumbnailAb, longBudgetMode, fhdMode, bgm }) {
+async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, reuseAudio, longThumbnailAb, longBudgetMode, fhdMode, bgm }) {
   return fetch('/api/history/regenerate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -483,6 +487,7 @@ async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, longT
       image_style: imageStyle,
       background_engine: backgroundEngine,
       reuse_backgrounds: reuseBg,
+      reuse_audio: reuseAudio,
       long_thumbnail_ab_test: longThumbnailAb,
       long_budget_mode: longBudgetMode,
       sd_size_mode: !fhdMode,

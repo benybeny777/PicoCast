@@ -113,6 +113,7 @@ def api_regenerate_histories(req: HistoryRegenerateRequest):
         req.bgm_mode,
         req.bgm_id,
         req.bgm_volume_db,
+        req.reuse_audio,
     )
     if not job_ids:
         from core.error_codes import format_error

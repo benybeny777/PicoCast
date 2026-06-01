@@ -6,6 +6,12 @@
 
 ## 2026-06-01
 
+### 失敗背景の再生成導線・音声再利用・エラーコード全面適用
+
+- 履歴詳細に「⚠ 背景生成の失敗」カード（背景番号 / エラーコード / HTTP / モデル）と **「失敗した背景だけ再生成」** ボタンを追加。`image_generation_failures`（DB）を参照し、保存済みプロンプトで該当背景のみ再生成、成功でその失敗記録を消す。
+- 再生成時に既存音声を使い回す **「音声を再利用する」**（`reuse_audio`、既定OFF）を追加。バックアップの WAV を復元し、同じ台本でファイル名が一致する音声は VOICEVOX 合成をスキップする。
+- エラーコードを画像生成以外にも適用: `E-SECRET-MISSING`（APIキー未登録）/ `E-SCRIPT-MISSING`（台本なし）/ `E-VOICE-FAIL`（音声失敗）/ `E-RENDER-FAIL`（レンダー失敗）を該当例外・メッセージに付与。
+
 ### エラーコードの中央管理とデバッグログ拡充
 
 - エラーコードと文言を `core/error_codes.py` の `ERROR_CATALOG` で一元管理するようにした（`E-IMG-BUSY` / `E-IMG-AUTH` / `E-IMG-QUOTA` / `E-IMG-FAIL` / `E-SECRET-MISSING` / `E-SCRIPT-MISSING` / `E-VOICE-FAIL` / `E-RENDER-FAIL` / `E-UNKNOWN`）。`format_error()` / `AppError` / `image_error_code()` を追加。背景生成失敗ログ・`image_generation_failures.error_code`（スキーマ v7）にコードを付与する。

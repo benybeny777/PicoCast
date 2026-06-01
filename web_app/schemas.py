@@ -18,6 +18,7 @@ class GenerateRequest(BaseModel):
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
     background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
+    reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
     sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
@@ -39,6 +40,7 @@ class BatchGenerateRequest(BaseModel):
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
     background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
+    reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
     sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
@@ -53,6 +55,7 @@ class HistoryRegenerateRequest(BaseModel):
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
     background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
+    reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
     sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE

@@ -30,6 +30,7 @@ def api_generate(req: GenerateRequest):
             req.bgm_mode,
             req.bgm_id,
             req.bgm_volume_db,
+            req.reuse_audio,
         )
         return {"job_ids": [job_id], "count": 1}
     else:
@@ -45,6 +46,7 @@ def api_generate(req: GenerateRequest):
             req.bgm_mode,
             req.bgm_id,
             req.bgm_volume_db,
+            req.reuse_audio,
         )
         return {"job_ids": job_ids, "count": len(job_ids)}
 
@@ -66,5 +68,6 @@ def api_batch_generate(req: BatchGenerateRequest):
         req.bgm_mode,
         req.bgm_id,
         req.bgm_volume_db,
+        req.reuse_audio,
     )
     return {"job_ids": job_ids, "count": len(job_ids)}

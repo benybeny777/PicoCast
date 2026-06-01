@@ -25,6 +25,7 @@ def submit_generate_job(
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
     bgm_volume_db: float | None = None,
+    reuse_audio: bool = False,
 ) -> str:
     """台本1本分の生成ジョブを登録してjob_idを返す。"""
     prepared = apply_topic_request_cta_policy_to_scripts([script])
@@ -41,6 +42,7 @@ def submit_generate_job(
         bgm_mode,
         bgm_id,
         bgm_volume_db,
+        reuse_audio,
     )
 
 
@@ -56,12 +58,13 @@ def _submit_generate_job_prepared(
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
     bgm_volume_db: float | None = None,
+    reuse_audio: bool = False,
 ) -> str:
     """CTA方針反映済み台本を生成ジョブへ登録する。"""
     mgr = get_job_manager()
     job = mgr.create_job("generate")
     _log(job, "生成ジョブを登録しました", "info")
-    mgr.submit(job, _run_generate, script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db)
+    mgr.submit(job, _run_generate, script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db, reuse_audio)
     return job.job_id
 
 
@@ -77,11 +80,12 @@ def submit_batch_generate_jobs(
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
     bgm_volume_db: float | None = None,
+    reuse_audio: bool = False,
 ) -> list[str]:
     """複数台本の生成ジョブを登録してjob_id一覧を返す。"""
     job_ids = []
     for script in apply_topic_request_cta_policy_to_scripts(scripts):
-        job_ids.append(_submit_generate_job_prepared(script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db))
+        job_ids.append(_submit_generate_job_prepared(script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db, reuse_audio))
     return job_ids
 
 
@@ -97,6 +101,7 @@ def submit_history_regenerate_jobs(
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
     bgm_volume_db: float | None = None,
+    reuse_audio: bool = False,
 ) -> list[str]:
     from core.metadata_db import get_script_content
 
@@ -110,7 +115,7 @@ def submit_history_regenerate_jobs(
         text = get_script_content(name)
         if text and text.strip():
             scripts.append(text.strip())
-    return submit_batch_generate_jobs(scripts, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db)
+    return submit_batch_generate_jobs(scripts, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db, reuse_audio)
 
 
 def _run_generate(
@@ -126,6 +131,7 @@ def _run_generate(
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
     bgm_volume_db: float | None = None,
+    reuse_audio: bool = False,
 ) -> dict[str, Any]:
     """バックグラウンドスレッドから呼ばれる。worker_pipeline.py をサブプロセスで起動する。"""
     from core.parser import ScriptParser
@@ -148,6 +154,7 @@ def _run_generate(
             "image_style": image_style,
             "background_engine": background_engine,
             "reuse_backgrounds": reuse_backgrounds,
+            "reuse_audio": reuse_audio,
             "long_thumbnail_ab_test": long_thumbnail_ab_test,
             "long_budget_mode": long_budget_mode,
             "sd_size_mode": sd_size_mode,
