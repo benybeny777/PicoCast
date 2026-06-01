@@ -561,6 +561,48 @@ def normalize_background_order(items):
     return normalized
 
 
+_REUSE_MARKERS = ("前と同じ", "[前と同じ]", "[再利用]", "再利用")
+
+
+def _is_background_reuse_marker(value: str) -> bool:
+    raw = str(value or "").strip()
+    return any(raw == marker or raw.startswith(marker) for marker in _REUSE_MARKERS)
+
+
+def _background_text(item: dict) -> str:
+    return str(item.get("text", item.get("file", "")) or "").strip()
+
+
+def _effective_background_count(items, max_backgrounds: int) -> int:
+    count = 0
+    for item in items:
+        if item.get("type") != "background":
+            continue
+        if _is_background_reuse_marker(_background_text(item)):
+            continue
+        count += 1
+        if count >= max_backgrounds:
+            return max_backgrounds
+    return count
+
+
+def _strip_video_folder_prefix(name: str) -> str:
+    from config import config as _cfg
+    prefixes = (
+        _cfg.FOLDER_PREFIX_SHORTS,
+        _cfg.FOLDER_PREFIX_LONG,
+        _cfg.FOLDER_PREFIX_MEETING,
+        "short_",
+        "shorts_",
+        "long_",
+        "meeting_",
+    )
+    for prefix in sorted(prefixes, key=len, reverse=True):
+        if name.lower().startswith(prefix.lower()):
+            return name[len(prefix):].strip("_ ")
+    return name
+
+
 def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None, sd_size_mode=False, long_thumbnail_ab_test=None, background_engine=None):
     """既存の出力フォルダのサムネイルのみ再生成する。"""
     def update_status(msg, tag="info"):
@@ -722,12 +764,13 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     safe_topic = re.sub(r'[\\/:*?"<>|]', '_', folder_base)
     from config import config as _cfg
     _pfx_s, _pfx_l, _pfx_m = _cfg.FOLDER_PREFIX_SHORTS, _cfg.FOLDER_PREFIX_LONG, _cfg.FOLDER_PREFIX_MEETING
-    if is_shorts and not safe_topic.startswith(_pfx_s):
-        safe_topic = f"{_pfx_s}{safe_topic}"
-    elif is_netakaigi and not safe_topic.startswith(_pfx_m):
-        safe_topic = f"{_pfx_m}{safe_topic}"
-    elif not is_shorts and not is_netakaigi and not safe_topic.startswith(_pfx_l):
-        safe_topic = f"{_pfx_l}{safe_topic}"
+    safe_topic_body = _strip_video_folder_prefix(safe_topic)
+    if is_shorts:
+        safe_topic = f"{_pfx_s}{safe_topic_body}"
+    elif is_netakaigi:
+        safe_topic = f"{_pfx_m}{safe_topic_body}"
+    else:
+        safe_topic = f"{_pfx_l}{safe_topic_body}"
 
     from core.output_paths import get_output_videos_dir
     theme_dir = os.path.join(get_output_videos_dir(), safe_topic)
@@ -815,6 +858,21 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     theme_bg_dir = os.path.join(theme_dir, "backgrounds")
     os.makedirs(theme_audio_dir, exist_ok=True)
     os.makedirs(theme_bg_dir, exist_ok=True)
+
+    local_id = os.path.basename(theme_dir)
+    try:
+        from core.metadata_db import save_script_content
+        save_script_content(
+            local_id,
+            theme_dir,
+            script_content,
+            title=_early_title or folder_base,
+            video_type="Shorts" if is_shorts else ("ネタ会議" if is_netakaigi else "Long"),
+        )
+        update_status("💾 台本をDBへ保存しました")
+    except Exception as e:
+        update_status(f"⚠ 台本DB保存に失敗: {e}", "error")
+        raise
 
     # 背景再利用: バックアップへ退避したファイルを復元（新規作成時は_saved_bg_dir=Noneなので通常生成へ）
     _has_saved_bgs = False
@@ -995,7 +1053,18 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 if candidate_score >= OPENING_SCORE_HARD_ABORT_THRESHOLD and not candidate_critical_errors:
                     rewrite_text = candidate_rewrite_text
                     script_content = candidate_script_content
-                    # 確定した台本本文は末尾の sync_folder_to_db で DB へ保存する。
+                    try:
+                        from core.metadata_db import save_script_content
+                        save_script_content(
+                            os.path.basename(theme_dir),
+                            theme_dir,
+                            script_content,
+                            title=candidate_meta.get("video_title") or opening_title,
+                            video_type=candidate_meta.get("video_format") or ("Shorts" if is_shorts else "Long"),
+                        )
+                    except Exception as e:
+                        update_status(f"⚠ リライト後台本のDB保存に失敗: {e}", "error")
+                        raise
                     items = candidate_items
                     meta = candidate_meta
                     ai_thumbnail_prompt = meta.get("thumbnail")
@@ -1250,7 +1319,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             f for f in os.listdir(theme_bg_dir)
             if f.lower().endswith(".png") and f.lower().startswith("bg_")
         )
-        _expected_bg_count = min(len(bg_items), max_backgrounds)
+        _expected_bg_count = _effective_background_count(items, max_backgrounds)
         if len(_saved_bg_files) != _expected_bg_count:
             update_status(
                 f"⚠ 背景枚数が台本と一致しないため再生成します"
@@ -1355,12 +1424,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # ── 前処理: 各 dialogue に対応する bg_num を先読み割り当て ──────────────────
     # 音声ファイル名に bg_num を埋め込む必要があるため、
     # 2パス化（音声→背景の順）に先立って対応する背景番号を確定しておく。
-    _REUSE_MARKERS = ("前と同じ", "[前と同じ]", "[再利用]", "再利用")
     _pre_bg = 0
     for _it in items:
         if _it["type"] == "background":
-            _raw = _it.get("text", _it.get("file", "")).strip()
-            if not any(_raw == m or _raw.startswith(m) for m in _REUSE_MARKERS):
+            _raw = _background_text(_it)
+            if not _is_background_reuse_marker(_raw):
                 _pre_bg += 1
         elif _it["type"] == "dialogue":
             _it["_bg_num"] = _pre_bg  # この時点での背景番号を一時保持
@@ -1526,10 +1594,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         _batch_items = []  # (bg_num, bg_name)
         for item in items:
             if item["type"] == "background":
+                bg_name = _background_text(item)
+                if _is_background_reuse_marker(bg_name):
+                    continue
                 _temp_num += 1
                 if _temp_num <= max_backgrounds:
-                    bg_name = item.get("text", item.get("file", "")).strip() or "default_background"
-                    _batch_items.append((_temp_num, bg_name))
+                    _batch_items.append((_temp_num, bg_name or "default_background"))
 
         if _batch_items:
             if is_cancelled():
@@ -1574,8 +1644,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if item["type"] != "background":
             continue
 
-        _bg_raw = item.get("text", item.get("file", "")).strip()
-        if any(_bg_raw == m or _bg_raw.startswith(m) for m in _REUSE_MARKERS):
+        _bg_raw = _background_text(item)
+        if _is_background_reuse_marker(_bg_raw):
             update_status(f"🖼  背景 再利用指定 — 前の背景を継続")
             continue
 
@@ -1631,7 +1701,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         return cancel_result()
 
     # フェーズ2b: 並列生成
-    _BG_WORKERS = min(NANOBANANA_BG_WORKERS, len(_bg_gen_tasks)) if _bg_gen_tasks else 1
+    if img_gen.background_engine == "sd_webui":
+        _BG_WORKERS = 1
+    else:
+        _BG_WORKERS = min(NANOBANANA_BG_WORKERS, len(_bg_gen_tasks)) if _bg_gen_tasks else 1
     if _bg_gen_tasks:
         update_status(f"🖼  背景並列生成開始（{len(_bg_gen_tasks)}件、{_BG_WORKERS}並列）...")
 

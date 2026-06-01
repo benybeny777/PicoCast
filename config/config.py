@@ -378,7 +378,7 @@ FOLDER_PREFIX_SHORTS  = os.environ.get("FOLDER_PREFIX_SHORTS",  "Shorts_")   # �
 FOLDER_PREFIX_LONG    = os.environ.get("FOLDER_PREFIX_LONG",    "Long_")     # 長動画フォルダプレフィックス
 FOLDER_PREFIX_MEETING = os.environ.get("FOLDER_PREFIX_MEETING", "ネタ会議_") # ネタ会議フォルダプレフィックス
 # フォルダ名から動画種別プレフィックスを除去する際に使う
-_LEGACY_FOLDER_PREFIXES = ("Shorts_", "Long_", "ネタ会議_")
+_LEGACY_FOLDER_PREFIXES = ("Shorts_", "shorts_", "short_", "Long_", "long_", "ネタ会議_", "meeting_")
 
 # ───────────────────────────────────────────────
 # YouTube / アップロード設定

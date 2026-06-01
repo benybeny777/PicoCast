@@ -3,13 +3,18 @@ import subprocess
 import sys
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from web_app.schemas import HistoryRegenerateRequest, RenderRequest
-from web_app.services.history_service import list_histories, get_history_detail
+from web_app.services.history_service import list_histories, get_history_detail, delete_history
 from web_app.services.generation_service import submit_history_regenerate_jobs
 from web_app.services.render_service import submit_render_job
 from web_app.security import safe_output_path
 
 router = APIRouter(prefix="/api/history", tags=["history"])
+
+
+class HistoryDeleteRequest(BaseModel):
+    confirmed: bool = False
 
 
 @router.get("")
@@ -29,6 +34,18 @@ def api_get_history(history_name: str):
     if detail is None:
         raise HTTPException(status_code=404, detail="履歴が見つかりません")
     return detail
+
+
+@router.delete("/{history_name}")
+def api_delete_history(history_name: str, req: HistoryDeleteRequest):
+    if not req.confirmed:
+        raise HTTPException(status_code=400, detail="confirmed=trueが必要です")
+    try:
+        return delete_history(history_name, confirmed=True)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/{history_name}/render")

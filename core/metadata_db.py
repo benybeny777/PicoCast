@@ -964,6 +964,63 @@ def get_script_content(local_id: str) -> str | None:
     return text if text else None
 
 
+def save_script_content(local_id: str, output_dir: str, script_content: str, *, title: str | None = None, video_type: str | None = None) -> None:
+    """生成途中でも台本本文を videos.script_content へ保存する。"""
+    if not is_initialized():
+        initialize_db()
+    now = _now_jst()
+    with ManagedConnection() as conn:
+        conn.execute(
+            """
+            INSERT INTO videos(local_id, output_dir, title, video_type,
+                               created_at, updated_at, script_content)
+            VALUES(?,?,?,?,?,?,?)
+            ON CONFLICT(local_id) DO UPDATE SET
+                output_dir=excluded.output_dir,
+                title=COALESCE(excluded.title, videos.title),
+                video_type=COALESCE(excluded.video_type, videos.video_type),
+                updated_at=excluded.updated_at,
+                script_content=excluded.script_content
+            """,
+            (local_id, output_dir, title or local_id, video_type or "", now, now, script_content),
+        )
+        conn.commit()
+
+
+def delete_history_record(local_id: str) -> dict[str, int]:
+    """履歴 local_id に紐づく metadata.db レコードを削除する。"""
+    if not is_initialized():
+        initialize_db()
+    deleted: dict[str, int] = {}
+    with ManagedConnection() as conn:
+        yt_rows = conn.execute(
+            "SELECT youtube_video_id FROM youtube_status WHERE local_id=?",
+            (local_id,),
+        ).fetchall()
+        video_ids = [str(r["youtube_video_id"]).strip() for r in yt_rows if r["youtube_video_id"]]
+        for video_id in video_ids:
+            deleted["analytics_snapshots"] = deleted.get("analytics_snapshots", 0) + conn.execute(
+                "DELETE FROM analytics_snapshots WHERE youtube_video_id=?",
+                (video_id,),
+            ).rowcount
+        for table in (
+            "render_info",
+            "script_quality",
+            "playlists",
+            "youtube_status",
+            "video_metadata",
+            "topic_history",
+            "image_replacements",
+            "videos",
+        ):
+            deleted[table] = conn.execute(
+                f"DELETE FROM {table} WHERE local_id=?",
+                (local_id,),
+            ).rowcount
+        conn.commit()
+    return deleted
+
+
 def insert_image_replacement(entry: dict) -> int:
     """画像差し替え履歴をDBへ保存し、履歴IDを返す。"""
     if not is_initialized():

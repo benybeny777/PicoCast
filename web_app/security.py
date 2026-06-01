@@ -85,6 +85,14 @@ def find_history_dir(history_name: str) -> str | None:
 def is_video_folder(name: str) -> bool:
     """動画フォルダのプレフィックスがあるフォルダのみ動画フォルダとみなす。"""
     from config import config
-    return name.startswith((
-        config.FOLDER_PREFIX_SHORTS, config.FOLDER_PREFIX_LONG, config.FOLDER_PREFIX_MEETING,
-    ))
+    low = str(name or "").lower()
+    prefixes = (
+        config.FOLDER_PREFIX_SHORTS,
+        config.FOLDER_PREFIX_LONG,
+        config.FOLDER_PREFIX_MEETING,
+        "short_",
+        "shorts_",
+        "long_",
+        "meeting_",
+    )
+    return any(low.startswith(prefix.lower()) for prefix in prefixes)

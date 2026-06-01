@@ -235,6 +235,22 @@ def test_history_excludes_management_dirs(tmp_path, monkeypatch):
     assert "Long_テスト動画" in names
 
 
+def test_history_accepts_legacy_short_prefix(tmp_path, monkeypatch):
+    import web_app.services.history_service as hs
+
+    fake_output = tmp_path / "output"
+    videos_dir = fake_output / "videos"
+    (videos_dir / "short_テスト動画").mkdir(parents=True)
+
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
+
+    result = hs.list_histories(include_management=False)
+
+    assert [r["name"] for r in result] == ["short_テスト動画"]
+    assert result[0]["video_format"] == "Shorts"
+
+
 def test_history_includes_management_when_requested(tmp_path, monkeypatch):
     import web_app.services.history_service as hs
 
@@ -431,6 +447,11 @@ def test_api_history_missing(client):
 
 def test_api_history_regenerate_requires_confirmation(client):
     res = client.post("/api/history/regenerate", json={"history_names": ["x"], "confirmed": False})
+    assert res.status_code == 400
+
+
+def test_api_history_delete_requires_confirmation(client):
+    res = client.request("DELETE", "/api/history/Shorts_x", json={"confirmed": False})
     assert res.status_code == 400
 
 

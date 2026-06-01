@@ -1013,7 +1013,8 @@ def _write_subtitles(
 
 def _video_size(output_dir: str, script_text: str) -> tuple[int, int]:
     from config import config as _cfg
-    if os.path.basename(output_dir).startswith(_cfg.FOLDER_PREFIX_SHORTS):
+    base_name = os.path.basename(output_dir).lower()
+    if base_name.startswith(_cfg.FOLDER_PREFIX_SHORTS.lower()) or base_name.startswith(("short_", "shorts_")):
         return 1080, 1920
     try:
         items = ScriptParser.parse_string(script_text or "")

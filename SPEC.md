@@ -331,7 +331,7 @@ for item in dialogue_items:
 
 動画メタ・レビュー結果は `metadata.db` に保存する。ローカルJSON/TXTを正本・補完元として使わない。
 
-- `videos.script_content` が台本本文の**唯一の正本**。`script.txt` ファイルは生成・参照しない。生成パイプラインは `sync_folder_to_db(theme_dir, script_content=...)` で DB に直接保存し、再生成・レンダー（`native_renderer`）・アップロードのタグ抽出・履歴詳細表示・is_shorts 判定・CTA候補カウントはすべて `metadata_db.get_script_content(local_id)` で DB から読む。既存フォルダの取り込み（`import_output_dir` / `sync_folder_to_db` の引数省略時）に限り、後方互換として既存の `script.txt` を読む。
+- `videos.script_content` が台本本文の**唯一の正本**。`script.txt` ファイルは生成・参照しない。生成パイプラインは出力ディレクトリ準備直後に `save_script_content()` で台本本文を DB へ先行保存し、終盤の `sync_folder_to_db(theme_dir, script_content=...)` でメタデータと合わせて同期する。再生成・レンダー（`native_renderer`）・アップロードのタグ抽出・履歴詳細表示・is_shorts 判定・CTA候補カウントはすべて `metadata_db.get_script_content(local_id)` で DB から読む。既存フォルダの取り込み（`import_output_dir` / `sync_folder_to_db` の引数省略時）に限り、後方互換として既存の `script.txt` を読む。
 - `videos.output_dir` は `sync_folder_to_db()` のたびに同期フォルダの実体パスへ更新（`ON CONFLICT` で上書き）する。フォルダ移動（`videos/` → `000_uploaded/`）や旧パスからの移行に追随し、古いパスが残り続けないようにする。
 
 | 保存先 | 内容 |
@@ -1616,6 +1616,8 @@ output/{profile_id}/
   000_backups/   ← バックアップ
   000_data/      ← metadata.db（動画メタ・Analytics・youtube_status 等すべて格納）
 ```
+
+生成時のフォルダ名は設定値 `FOLDER_PREFIX_SHORTS` / `FOLDER_PREFIX_LONG` / `FOLDER_PREFIX_MEETING` に正規化する。旧表記の `short_` / `shorts_` / `long_` / `meeting_` は読み取り・履歴・アップロード判定では後方互換として受け入れるが、新規生成では設定済みプレフィックスへ直す。
 
 Analytics データは `metadata.db` の `analytics_snapshots` テーブルに格納する。
 

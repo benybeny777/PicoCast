@@ -48,9 +48,29 @@ def test_normalize_meta_tags():
     print("_normalize_meta tags: OK")
 
 
+def test_effective_background_count_ignores_reuse_markers():
+    items = [
+        {"type": "background", "text": "古い台所"},
+        {"type": "background", "text": "前と同じ"},
+        {"type": "background", "text": "[再利用] 直前の背景"},
+        {"type": "dialogue", "text": "これはテストなのだ"},
+        {"type": "background", "text": "夜の路地"},
+    ]
+    assert main._effective_background_count(items, max_backgrounds=10) == 2
+    assert main._effective_background_count(items, max_backgrounds=1) == 1
+
+
+def test_strip_video_folder_prefix_accepts_legacy_short_prefixes():
+    assert main._strip_video_folder_prefix("short_テスト") == "テスト"
+    assert main._strip_video_folder_prefix("shorts_テスト") == "テスト"
+    assert main._strip_video_folder_prefix("Shorts_テスト") == "テスト"
+
+
 if __name__ == "__main__":
     test_opening_score_tag()
     test_normalize_meta_empty()
     test_normalize_meta_description()
     test_normalize_meta_tags()
+    test_effective_background_count_ignores_reuse_markers()
+    test_strip_video_folder_prefix_accepts_legacy_short_prefixes()
     print("ALL TESTS PASSED")

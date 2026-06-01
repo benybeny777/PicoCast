@@ -3,11 +3,12 @@
 output/ 配下の生成物を走査し、メタ情報は metadata.db から取得する。
 """
 import os
+import shutil
 from typing import Any
 
 from core.output_paths import get_output_videos_dir, get_uploaded_dir, get_output_root
 from core.metadata_db import ManagedConnection, initialize_db
-from web_app.security import is_video_folder, safe_output_path
+from web_app.security import find_history_dir, is_video_folder, safe_output_path
 
 def _is_management(name: str) -> bool:
     """[Shorts]/[Long] プレフィックスがないフォルダは管理用として扱う。"""
@@ -43,13 +44,19 @@ def _video_format(name: str, value: str | None) -> str:
             return "Long"
         return value
     from config import config
-    if name.startswith(config.FOLDER_PREFIX_SHORTS):
+    low = name.lower()
+    if low.startswith(config.FOLDER_PREFIX_SHORTS.lower()) or low.startswith(("short_", "shorts_")):
         return "Shorts"
-    if name.startswith(config.FOLDER_PREFIX_LONG):
+    if low.startswith(config.FOLDER_PREFIX_LONG.lower()) or low.startswith("long_"):
         return "Long"
-    if name.startswith(config.FOLDER_PREFIX_MEETING):
+    if low.startswith(config.FOLDER_PREFIX_MEETING.lower()) or low.startswith("meeting_"):
         return "ネタ会議"
     return ""
+
+
+def _delete_db_records(local_id: str) -> dict[str, int]:
+    from core.metadata_db import delete_history_record
+    return delete_history_record(local_id)
 
 
 def _build_metadata_txt(db_info: dict[str, Any]) -> str:
@@ -342,3 +349,19 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         "has_poll_copy": has_poll_copy,
         "has_fixed_comment": has_fixed_comment,
     }
+
+
+def delete_history(history_name: str, confirmed: bool = False) -> dict[str, Any]:
+    """履歴フォルダと metadata.db の関連レコードを削除する。"""
+    initialize_db()
+    if not confirmed:
+        raise ValueError("confirmed=trueが必要です")
+    if not history_name or ".." in history_name or "/" in history_name or "\\" in history_name:
+        raise ValueError("無効な履歴名です")
+    theme_dir = find_history_dir(history_name)
+    if not theme_dir:
+        raise FileNotFoundError("履歴フォルダが見つかりません")
+    local_id = os.path.basename(theme_dir.rstrip("/\\"))
+    shutil.rmtree(theme_dir)
+    deleted = _delete_db_records(local_id)
+    return {"deleted": local_id, "folder": theme_dir, "db": deleted}

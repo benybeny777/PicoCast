@@ -94,8 +94,14 @@ def detect_video_type(item: dict[str, Any]) -> str:
     if video_type in ("shorts", "short", "ショート"):
         return "Shorts"
     title = str(item.get("title") or "")
+    title_lower = title.lower()
     from config import config as _cfg
-    if _cfg.FOLDER_PREFIX_SHORTS in title or "#shorts" in title.lower() or "ショート" in title:
+    if (
+        title_lower.startswith(_cfg.FOLDER_PREFIX_SHORTS.lower())
+        or title_lower.startswith(("short_", "shorts_"))
+        or "#shorts" in title_lower
+        or "ショート" in title
+    ):
         return "Shorts"
     return "Long"
 

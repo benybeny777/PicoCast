@@ -35,9 +35,10 @@ def upsert_upload_record(record: dict[str, Any]) -> str:
 
 def _norm_title(value: str) -> str:
     value = str(value or "").strip()
+    lower_value = value.lower()
     from config import config as _cfg
     for prefix in _cfg._LEGACY_FOLDER_PREFIXES:
-        if value.startswith(prefix):
+        if lower_value.startswith(str(prefix).lower()):
             return value[len(prefix):].strip()
     return value
 

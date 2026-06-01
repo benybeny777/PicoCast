@@ -19,6 +19,7 @@
     {% endif %}
     <a href="/images?history={{ detail.name | urlencode }}" class="btn btn-secondary mt-sm">画像確認・再生成</a>
     <button class="btn btn-secondary mt-sm" onclick="openFolder()">フォルダを開く</button>
+    <button class="btn btn-danger mt-sm" onclick="deleteHistory()">履歴を削除</button>
     {% if detail.has_fixed_comment %}
     <button class="btn btn-secondary mt-sm" id="fc-copy-btn" onclick="copyFixedComment()">固定コメントをコピー</button>
     <span id="fc-copy-msg" style="margin-left:8px;font-size:0.85em;display:none"></span>
@@ -196,6 +197,21 @@
 <script>
 async function openFolder() {
   await fetch(`/api/history/${encodeURIComponent(historyName)}/open-folder`, {method: 'POST'});
+}
+
+async function deleteHistory() {
+  if (!confirm(`履歴「${historyName}」を削除します。\nフォルダとDBレコードが削除されます。よろしいですか？`)) return;
+  const res = await fetch(`/api/history/${encodeURIComponent(historyName)}`, {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({confirmed: true}),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert('削除エラー: ' + (data.detail || JSON.stringify(data)));
+    return;
+  }
+  location.href = '/history';
 }
 
 document.querySelectorAll('.score-badge').forEach(el => {

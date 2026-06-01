@@ -6,6 +6,14 @@
 
 ## 2026-06-01
 
+### 履歴削除・prefix正規化・台本先行保存を追加
+
+- 履歴画面と履歴詳細から、確認付きで履歴フォルダと `metadata.db` の関連レコードを削除できるようにした。
+- 旧 `short_` / `shorts_` / `long_` / `meeting_` 系のフォルダ名を読み取り時に後方互換として扱い、新規生成では設定済みの `Shorts_` / `Long_` / `ネタ会議_` 系へ正規化するようにした。
+- 生成パイプライン開始直後に台本本文を `videos.script_content` へ保存するようにし、途中失敗時も台本が DB に残るようにした。
+- 背景画像の「前と同じ」「再利用」指定を生成枚数から除外し、Nano Banana の不要な追加生成を防ぐようにした。Stable Diffusion WebUI 背景生成は直列化し、WebUI 側の詰まりを避けるようにした。
+- 既存の profile 別 `metadata.db` で旧 `output_root` や移動前フォルダを指していた `videos.output_dir` を、実在する `output/{profile_id}/...` 配下へ補正した。
+
 ### 複数同時実行でWebが無応答になる問題をジョブ直列化（キュー）で解消
 
 - 複数ジョブ同時実行時に Web プロセスが応答不能になり UI のログ更新が止まる事象を修正。`worker_runner.py` で `threading.BoundedSemaphore` によりワーカー subprocess を **直列実行（同時1本、`JOB_MAX_CONCURRENT_WORKERS` 既定1）** にし、超過分は順番待ち（キュー）にした。

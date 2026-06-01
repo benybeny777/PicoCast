@@ -34,9 +34,10 @@ THUMB_MAX_BYTES = 2 * 1024 * 1024  # YouTube 上限 2MB
 
 def _strip_video_type_prefix(title):
     title = str(title or "").strip()
+    lower_title = title.lower()
     from config import config as _cfg
     for prefix in _cfg._LEGACY_FOLDER_PREFIXES:
-        if title.startswith(prefix):
+        if lower_title.startswith(str(prefix).lower()):
             return title[len(prefix):].strip()
     return title
 
@@ -189,10 +190,11 @@ def _duration_seconds(duration: str | None) -> int | None:
 
 def infer_video_type(title: str | None = None, duration: str | None = None) -> str:
     text = str(title or "").strip()
+    low = text.lower()
     from config import config as _cfg
-    if text.startswith(_cfg.FOLDER_PREFIX_LONG):
+    if low.startswith(_cfg.FOLDER_PREFIX_LONG.lower()) or low.startswith("long_"):
         return "long"
-    if text.startswith(_cfg.FOLDER_PREFIX_SHORTS):
+    if low.startswith(_cfg.FOLDER_PREFIX_SHORTS.lower()) or low.startswith(("short_", "shorts_")):
         return "shorts"
     seconds = _duration_seconds(duration)
     if seconds is not None and seconds <= 60:
