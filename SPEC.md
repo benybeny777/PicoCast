@@ -505,94 +505,94 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 ### API概要
 
 ```
-GET  /health
-GET  /api/health
-GET  /api/status
-GET  /api/dashboard
-GET  /api/jobs
-GET  /api/jobs/{job_id}
-POST /api/jobs/{job_id}/cancel
+GET  /health                            # ヘルスチェック（プレーン応答）
+GET  /api/health                        # ヘルスチェック（JSON）
+GET  /api/status                        # 外部サービス稼働状況・設定診断
+GET  /api/dashboard                     # ダッシュボード集計（予約数・状態など）
+GET  /api/jobs                          # ジョブ一覧
+GET  /api/jobs/{job_id}                 # ジョブ詳細・ログ
+POST /api/jobs/{job_id}/cancel          # ジョブの中止要求
 
-GET  /api/history
-GET  /api/history/{history_name}
+GET  /api/history                       # 生成履歴一覧（videos/ と 000_uploaded/ を走査）
+GET  /api/history/{history_name}        # 履歴詳細（台本・メタデータ・画像・アップロード状態）
 DELETE /api/history/{history_name}      # confirmed=true 必須。履歴フォルダとDB関連行を削除
-POST /api/history/regenerate
+POST /api/history/regenerate            # 履歴から全工程を再生成（台本はDBから取得、confirmed=true）
 
-POST /api/generate
-POST /api/generate/batch
-POST /api/check
+POST /api/generate                      # 台本から動画を生成（1本）
+POST /api/generate/batch                # 複数台本を一括生成
+POST /api/check                         # 台本のLLM/尺チェック（生成・保存はしない）
 
-GET  /api/images/{history_name}
-GET  /api/images/{history_name}/file/{file_path}
-POST /api/images/{history_name}/save-prompts
-POST /api/images/{history_name}/regenerate
+GET  /api/images/{history_name}                   # 背景・サムネイル画像の一覧
+GET  /api/images/{history_name}/file/{file_path}  # 履歴フォルダ配下のファイル配信（画像/動画）
+POST /api/images/{history_name}/save-prompts      # 背景プロンプトの保存
+POST /api/images/{history_name}/regenerate        # 選択した画像（背景/サムネ）の再生成
 
-GET  /api/analytics
-GET  /api/analytics/tsv
-POST /api/analytics/refresh
-GET  /api/analytics/retention?video_id=...&duration=...
+GET  /api/analytics                     # Analytics 一覧・評価スコア
+GET  /api/analytics/tsv                 # Analytics の TSV エクスポート
+POST /api/analytics/refresh             # YouTube から最新の視聴データを取得
+GET  /api/analytics/retention?video_id=...&duration=...  # 視聴維持率（動画ID・尺指定）
 
-GET  /api/schedule
-POST /api/schedule/sync
+GET  /api/schedule                   # 予約スケジュール一覧（YouTube 側の状態が正）
+POST /api/schedule/sync              # YouTube の予約・公開状態を metadata.db へ同期
 POST /api/schedule/rebalance         # dry-run（YouTube APIへの書き込みなし）
 POST /api/schedule/rebalance/apply   # 計算して YouTube へ適用（confirmed=true 必須）
-POST /api/schedule/update            # confirmed=true 必須
+POST /api/schedule/update            # 個別の公開予定を変更（confirmed=true 必須）
 POST /api/schedule/delete            # Web UIでは無効化、YouTube Studioで手動操作
 
-GET  /api/upload/candidates
-POST /api/upload
-POST /api/upload/batch
+GET  /api/upload/candidates             # アップロード候補（videos/ 配下で MP4 のある履歴）
+POST /api/upload                        # 選択動画を YouTube へ予約投稿（confirmed=true 必須）
+POST /api/upload/batch                  # 複数動画を一括アップロード（confirmed=true 必須）
 
-GET  /api/fixed-comment/candidates
-POST /api/fixed-comment
+GET  /api/fixed-comment/candidates       # 固定コメント未投稿の公開済み動画候補
+POST /api/fixed-comment                  # 公開済み動画へ固定コメントを投稿（confirmed=true 必須）
 
-GET  /api/prompt/script
-GET  /api/prompt/title
-GET  /api/settings/status
-POST /api/settings/status/refresh
-GET  /api/settings/config
-POST /api/settings/config
-POST /api/settings/secrets
-POST /api/settings/secrets/api-key
-POST /api/settings/secrets/client-secrets
-GET  /api/settings/ollama-models
-GET  /api/settings/bgm-files
-GET  /api/settings/reading-dict
-POST /api/settings/reading-dict/{dict_type}
-DELETE /api/settings/reading-dict/{dict_type}/{word}
+GET  /api/prompt/script                  # 台本生成プロンプトを取得（実績ベース）
+GET  /api/prompt/title                   # タイトル生成プロンプトを取得
+GET  /api/settings/status                # 設定診断（秘密値は返さない）
+POST /api/settings/status/refresh        # 外部サービスチェックを再実行
+GET  /api/settings/config                # 編集可能な設定項目と現在値を取得
+POST /api/settings/config                # 設定を DB 保存し現在プロセスへ即時反映
+POST /api/settings/secrets               # APIキー一括保存（後方互換エンドポイント）
+POST /api/settings/secrets/api-key       # APIキーを個別に暗号化保存（profile別）
+POST /api/settings/secrets/client-secrets # YouTube client_secrets(JSON) を暗号化保存
+GET  /api/settings/ollama-models         # Ollama で利用可能なモデル一覧
+GET  /api/settings/bgm-files             # assets/bgm/ 内の音源ファイル一覧
+GET  /api/settings/reading-dict          # よみがな辞書（同梱・ユーザー）を取得
+POST /api/settings/reading-dict/{dict_type}        # よみがな辞書にエントリ追加/上書き
+DELETE /api/settings/reading-dict/{dict_type}/{word}  # よみがな辞書からエントリ削除
 
-GET  /api/channels
-GET  /api/channels/current
-POST /api/channels
-PUT  /api/channels/{profile_id}
-POST /api/channels/{profile_id}/activate
-POST /api/channels/{profile_id}/validate
-DELETE /api/channels/{profile_id}
-GET  /api/channels/prompt-profiles
+GET  /api/channels                       # チャンネルプロファイル一覧
+GET  /api/channels/current               # アクティブなプロファイル
+POST /api/channels                       # プロファイル新規作成
+PUT  /api/channels/{profile_id}          # プロファイル更新（APIキー・client_secrets含む）
+POST /api/channels/{profile_id}/activate # アクティブプロファイルを切替
+POST /api/channels/{profile_id}/validate # プロファイル設定の検証
+DELETE /api/channels/{profile_id}        # プロファイル削除
+GET  /api/channels/prompt-profiles       # 利用可能な genre_profile 一覧
 
-GET  /api/bgm
-POST /api/bgm
-POST /api/bgm/{bgm_id}/default
-DELETE /api/bgm/{bgm_id}
+GET  /api/bgm                            # 登録BGM一覧（active profile）
+POST /api/bgm                            # BGMを登録
+POST /api/bgm/{bgm_id}/default           # 既定BGMに設定
+DELETE /api/bgm/{bgm_id}                 # BGMを削除
 
-GET  /api/prompt-templates
-POST /api/prompt-templates
-GET  /api/prompt-templates/{template_id}
-PUT  /api/prompt-templates/{template_id}
-POST /api/prompt-templates/{template_id}/set-default
-POST /api/prompt-templates/{template_id}/clone
-DELETE /api/prompt-templates/{template_id}
-POST /api/prompt-templates/seed
+GET  /api/prompt-templates               # プロンプトテンプレート一覧（active profile）
+POST /api/prompt-templates               # テンプレート新規作成
+GET  /api/prompt-templates/{template_id}             # テンプレート取得
+PUT  /api/prompt-templates/{template_id}             # テンプレート更新
+POST /api/prompt-templates/{template_id}/set-default # 種別ごとの既定テンプレートに設定
+POST /api/prompt-templates/{template_id}/clone       # テンプレート複製
+DELETE /api/prompt-templates/{template_id}           # テンプレート削除
+POST /api/prompt-templates/seed          # seed ファイルから初期テンプレートを投入
 
-GET  /api/sd-models
-GET  /api/sd-models/webui
-GET  /api/sd-models/current
-GET  /api/sd-models/progress
-POST /api/sd-models/download
-POST /api/sd-models/delete          # confirmed=true 必須
-POST /api/sd-models/delete-redownload  # confirmed=true 必須、バックグラウンド
-POST /api/sd-models/use
-POST /api/sd-models/rescan
+GET  /api/sd-models                     # モデルマニフェスト一覧
+GET  /api/sd-models/webui               # Stable Diffusion WebUI 導入済みモデル一覧
+GET  /api/sd-models/current             # 現在選択中のモデル
+GET  /api/sd-models/progress            # ダウンロード進捗
+POST /api/sd-models/download            # モデルのダウンロード開始
+POST /api/sd-models/delete              # モデル削除（confirmed=true 必須）
+POST /api/sd-models/delete-redownload   # 削除して再ダウンロード（confirmed=true 必須、バックグラウンド）
+POST /api/sd-models/use                 # 指定モデルに切替
+POST /api/sd-models/rescan              # モデル一覧を再スキャン
 
 POST /api/shutdown                  # confirmed=true 必須。force=true でworker実行中も強制終了
 GET  /api/shutdown/status           # 終了処理中フラグを返す
