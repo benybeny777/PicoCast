@@ -33,7 +33,7 @@
 - [品質レビュー](#品質レビュー-coreopeningqualitypy)（冒頭3段階・中止条件・ChatGPT）／ [Ollamaレビュースキーマ](#ollamaレビュースキーマ)
 - [よみがな正規化](#よみがな正規化-corereadingnormalizerpy)／ [VOICEVOX音声生成](#voicevox音声生成-corevoicevoxpy)
 - [ffmpeg ネイティブレンダラー](#ffmpeg-ネイティブレンダラー-corenativerendererpy-本番レンダラー)（本番レンダラー）
-- [Long動画専用機能](#long動画専用機能)／ [CTA/Long動画の運用ポリシー](#ctalong動画の運用ポリシー)
+- [Long動画専用機能](#long動画専用機能)／ [CTA/Long動画の運用ポリシー](#-ctalong動画の運用ポリシー)
 
 **台本**
 - [台本フォーマット](#台本フォーマット)（記法一覧・例）／ [台本作成ルール](#台本作成ルール)
