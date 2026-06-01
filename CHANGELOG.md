@@ -6,6 +6,11 @@
 
 ## 2026-06-01
 
+### 複数同時実行でWebが無応答になる問題をジョブ直列化（キュー）で解消
+
+- 複数ジョブ同時実行時に Web プロセスが応答不能になり UI のログ更新が止まる事象を修正。`worker_runner.py` で `threading.BoundedSemaphore` を用いてワーカー subprocess の同時起動数を `JOB_MAX_CONCURRENT_WORKERS`（既定1）に制限し、超過分は順番待ち（キュー）にした。
+- 追加インフラ不要・純Python実装（配布・販売を想定し外部ミドルウェアに依存しない）。Kafka/Redis 等は配布に不向きなため将来の選択肢として SPEC に記載。
+
 ### 履歴詳細の「メタデータ」欄を DB から再構築して復活
 
 - `_meta/metadata.txt` 廃止（metadata.db 正本化）の際に履歴詳細の「メタデータ」欄が空（`metadata_txt=""`）になっていた回帰を修正。`video_metadata`（動画タイトル・サムネ文字・説明文・タグ・生成区分・元動画・目的・固定コメント）から旧 `metadata.txt` と同じ体裁で再構築するようにした。

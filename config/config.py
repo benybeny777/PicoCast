@@ -450,3 +450,4 @@ AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_C
 # ジョブログ永続化
 # ───────────────────────────────────────────────
 JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))  # 保持する最大ジョブ件数
+JOB_MAX_CONCURRENT_WORKERS = int(os.environ.get("JOB_MAX_CONCURRENT_WORKERS", "1"))  # 同時に起動するワーカーsubprocess数（生成・レンダー）。複数同時実行時のリソース枯渇・Web無応答を防ぐためセマフォで直列化（既定1=順次キュー実行）。変更は再起動後に反映

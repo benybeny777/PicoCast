@@ -721,3 +721,54 @@ def test_auto_fixed_comment_scope_active_only(monkeypatch):
     afc._run_once()
 
     assert calls == [("active_video", True, None)]
+
+
+# ── ジョブ同時実行制御（キュー） ──
+_DUMMY_WORKER = (
+    "import sys, json, time\n"
+    "a = sys.argv\n"
+    "res = a[a.index('--result') + 1]\n"
+    "print(json.dumps({'tag': 'info', 'message': 'start'}), flush=True)\n"
+    "time.sleep(0.3)\n"
+    "open(res, 'w', encoding='utf-8').write(json.dumps({'status': 'success', 'message': 'ok'}))\n"
+)
+
+
+def test_worker_runner_serializes_concurrent_workers(tmp_path, monkeypatch):
+    """JOB_MAX_CONCURRENT_WORKERS=1 のとき、複数ジョブの subprocess が同時に走らず直列化されること。"""
+    import threading
+    import time
+    import uuid
+    import web_app.worker_runner as wr
+    from web_app.job_manager import Job
+
+    (tmp_path / "dummy_worker.py").write_text(_DUMMY_WORKER, encoding="utf-8")
+    monkeypatch.setattr(wr, "_WORKER_DIR", str(tmp_path))
+    monkeypatch.setattr(wr, "_MAX_CONCURRENT_WORKERS", 1)
+    monkeypatch.setattr(wr, "_worker_slots", threading.BoundedSemaphore(1))
+
+    intervals: list[tuple[float, float]] = []
+    lock = threading.Lock()
+
+    def run_one():
+        job = Job(uuid.uuid4().hex, "test")
+        t0 = time.monotonic()
+        wr.run_in_worker("dummy_worker.py", {}, job)
+        t1 = time.monotonic()
+        with lock:
+            intervals.append((t0, t1))
+
+    threads = [threading.Thread(target=run_one) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    assert len(intervals) == 3
+    # 各ダミーワーカーは約0.3秒。直列化されていれば全体で約0.9秒（>=0.6秒）かかる。
+    # 並行実行なら約0.3秒で終わってしまう。
+    total_elapsed = max(e for _s, e in intervals) - min(s for s, _e in intervals)
+    assert total_elapsed >= 0.6, f"workers ran concurrently (total={total_elapsed:.2f}s): {intervals}"
+    # 終了時刻が約0.3秒間隔で階段状に並ぶ（=順次実行）
+    ends = sorted(e for _s, e in intervals)
+    assert ends[1] - ends[0] >= 0.2 and ends[2] - ends[1] >= 0.2, f"ends not staggered: {ends}"

@@ -472,6 +472,19 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 保存タイミング: 成功・失敗・キャンセル時（ `JOB_LOG_DIR/jobs.json` ）。
 保存失敗はジョブ自身のログに warning として記録する（ジョブ実行は妨げない）。
 
+### ジョブの同時実行制御（キュー）
+
+複数ジョブ（複数生成など）を同時実行すると、`run_in_worker()` が各 worker subprocess の stdout を Web プロセス内スレッドでブロッキング読み取りするため、Web プロセスが応答不能になり UI のログ・ステータス更新が止まる事象が起きる（生成 subprocess 自体は独立プロセスのため進行する）。
+
+これを防ぐため、`worker_runner.py` で **`threading.BoundedSemaphore` によりワーカー subprocess の同時起動数を制限**する。
+
+- 上限は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列実行）。
+- 上限に達している間は後続ジョブが `with _worker_slots` で順番待ち（キュー）になり、待機開始時に `⏳ …順番待ち` をジョブログへ出す。
+- 投入自体はブロックしない（`JobManager` がジョブを受け付け、実行枠が空き次第 subprocess を起動）。
+- 純 Python・追加インフラ不要のため配布物にそのまま同梱できる（販売・配布を想定し、外部ミドルウェアに依存しない方針）。
+
+> **将来の選択肢（未実装）**: 多ノード・分散実行や永続キューが必要になった場合は Kafka / Redis(RQ・Celery) / SQLite ジョブキュー表＋別コンシューマ等への置き換えを検討する。ただしこれらはブローカー/サーバ運用が必要で**ローカル配布には不向き**なため、現行は上記の軽量なプロセス内キューを採用する。
+
 ### 主要画面
 
 | URL | 画面 |
@@ -871,6 +884,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
 | `JOB_LOG_DIR` | `output/000_data/job_logs` | ジョブログ永続化ファイルの保存ディレクトリ |
 | `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`jobs.json` 1ファイルに全ジョブを保存し、超過分は古い順に切り捨て（ファイルローテーションなし）。デバッグログ（`app_debug.log`）は別途 `TimedRotatingFileHandler` で毎日0時にローテートし `DEBUG_LOG_RETENTION_DAYS` 日分を保持する |
+| `JOB_MAX_CONCURRENT_WORKERS` | 1 | 同時に起動するワーカーsubprocess数（生成・レンダー）。複数同時実行時のリソース枯渇・Web無応答を防ぐためセマフォで直列化。超過分は順番待ち（キュー）。変更は再起動後に反映 |
 
 ---
 

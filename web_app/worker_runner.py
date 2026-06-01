@@ -21,6 +21,13 @@ from web_app.job_manager import Job, _log
 # worker スクリプトが置いてあるプロジェクトルート（web_app/ の一つ上）
 _WORKER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# ワーカーsubprocess の同時起動数を制限するキュー用セマフォ。
+# 複数ジョブを同時実行すると Web プロセスが応答不能（ブロック）になり UI のログ更新が
+# 止まる事象を防ぐため、ここで起動を直列化（既定1本ずつ）してキューイングする。
+# 追加インフラ不要・純Python実装なので配布物にそのまま同梱できる。
+from config import JOB_MAX_CONCURRENT_WORKERS as _MAX_CONCURRENT_WORKERS  # noqa: E402
+_worker_slots = threading.BoundedSemaphore(max(1, _MAX_CONCURRENT_WORKERS))
+
 # subprocess に渡す環境変数（PYTHONIOENCODING を強制して文字化けを防ぐ）
 _WORKER_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
 
@@ -119,7 +126,15 @@ def run_in_worker(worker_name: str, params: dict[str, Any], job: Job) -> dict[st
     if not os.path.isfile(worker_script):
         raise FileNotFoundError(f"ワーカースクリプトが見つかりません: {worker_script}")
 
-    with tempfile.TemporaryDirectory(prefix="yjworker_") as tmpdir:
+    # 同時実行上限に達していれば、この先の `with _worker_slots` で順番待ち（キュー）になる。
+    # 空きが無いときだけ待機メッセージをログに出す（非ブロッキングの試行取得で判定）。
+    if not _worker_slots.acquire(blocking=False):
+        _log(job, f"⏳ 他のジョブ実行中のため順番待ちです（同時実行上限 {_MAX_CONCURRENT_WORKERS}）", "info")
+    else:
+        _worker_slots.release()
+
+    # _worker_slots を保持している間だけ subprocess を起動・実行する（直列化＝キューイング）
+    with _worker_slots, tempfile.TemporaryDirectory(prefix="yjworker_") as tmpdir:
         input_path = os.path.join(tmpdir, "input.json")
         result_path = os.path.join(tmpdir, "result.json")
 
