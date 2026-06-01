@@ -152,3 +152,30 @@ def test_safe_output_path_rejects_other_profile(profile_env):
     with pytest.raises(HTTPException) as exc_info:
         safe_output_path(urban_video_dir)
     assert exc_info.value.status_code == 403
+
+
+# ── find_history_dir が videos/ → 000_uploaded/ の順で実体解決する ──────────────
+
+def test_find_history_dir_resolves_videos_and_uploaded(profile_env):
+    cp, tmp_path, food, urban = profile_env
+    from web_app.security import find_history_dir
+
+    cp.activate_profile("food_trivia")
+    food_root = str(tmp_path / "output" / "food_trivia")
+
+    # videos/ 配下のフォルダを解決できる（output_root 直下では解決しない）
+    videos_name = "Shorts_in_videos"
+    videos_dir = os.path.join(food_root, "videos", videos_name)
+    os.makedirs(videos_dir, exist_ok=True)
+    assert find_history_dir(videos_name) == os.path.realpath(videos_dir)
+
+    # 000_uploaded/ 配下のフォルダも解決できる
+    uploaded_name = "Shorts_in_uploaded"
+    uploaded_dir = os.path.join(food_root, "000_uploaded", uploaded_name)
+    os.makedirs(uploaded_dir, exist_ok=True)
+    assert find_history_dir(uploaded_name) == os.path.realpath(uploaded_dir)
+
+    # 存在しない名前 / 不正名は None
+    assert find_history_dir("Shorts_not_exist") is None
+    assert find_history_dir("../evil") is None
+    assert find_history_dir("a/b") is None

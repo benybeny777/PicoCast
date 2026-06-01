@@ -56,6 +56,8 @@
 - Web UI を唯一の操作入口とする。`workers/main.py` は生成パイプラインとしてのみ使う。
 - 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
 - output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
+- 履歴フォルダ名（`history_name`）から実体パスを引くときは `security.py: find_history_dir()` に統一する（`videos/` → `000_uploaded/` の順で解決）。テーマフォルダは `output_root` 直下ではなく `videos/`・`000_uploaded/` 配下にあるため、`safe_output_path(history_name)`（base=`output_root`）で直接引かない。
+- 台本本文の正本は `metadata.db` の `videos.script_content`。再生成など台本を読む処理は `metadata_db.get_script_content(local_id)` を使い、ディスクの `script.txt` を正本にしない。`videos.output_dir` は `sync_folder_to_db()` のたびに実体パスへ更新する。
 - 破壊的操作（アップロード・固定コメント・スケジュール変更）は `confirmed=true` 必須 + 画面確認ダイアログ必須。
 - 画像手動差し替え・復元は `confirmed=true` 必須。元画像は `000_backups/image_replacements/` に退避し、履歴は active profile の `metadata.db:image_replacements` に記録する。
 - 実装が不安定な機能は `[DISABLED]` / `[dry-run]` として画面とコードコメントに明記し、無効ではなくユーザーに理由を提示する。

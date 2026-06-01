@@ -10,7 +10,6 @@ from core.cta_policy import apply_topic_request_cta_policy_to_scripts
 from core.gui_support import split_input_scripts
 from core.output_paths import get_output_videos_dir
 from web_app.job_manager import Job, _log, get_job_manager
-from web_app.security import safe_output_path
 from web_app.worker_runner import run_in_worker
 
 
@@ -99,18 +98,18 @@ def submit_history_regenerate_jobs(
     bgm_id: str | None = None,
     bgm_volume_db: float | None = None,
 ) -> list[str]:
+    from core.metadata_db import get_script_content
+
     scripts: list[str] = []
     for name in history_names:
         if ".." in name or "/" in name or "\\" in name:
             continue
-        theme_dir = safe_output_path(name)
-        script_path = os.path.join(theme_dir, "script.txt")
-        if not os.path.isfile(script_path):
-            continue
-        with open(script_path, "r", encoding="utf-8") as f:
-            text = f.read().strip()
-        if text:
-            scripts.append(text)
+        # 台本本文は metadata.db (videos.script_content) を正本として取得する。
+        # 旧実装はディスクの script.txt を読んでいたが、DB の output_dir が
+        # 旧パスのままだと参照先が外れて 404 になっていた（local_id=フォルダ名で引く）。
+        text = get_script_content(name)
+        if text and text.strip():
+            scripts.append(text.strip())
     return submit_batch_generate_jobs(scripts, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db)
 
 

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from web_app.schemas import ImageRegenerateRequest
 from web_app.services.image_service import list_images, submit_regenerate_job, save_bg_prompts
 from web_app.services.image_replace_service import list_replacements, replace_image, restore_image
-from web_app.security import safe_output_path
+from web_app.security import find_history_dir, safe_output_path
 
 
 class SavePromptsRequest(BaseModel):
@@ -75,9 +75,11 @@ def api_restore_image(history_name: str, req: RestoreImageRequest):
 
 @router.get("/{history_name}/file/{file_path:path}")
 def serve_file(history_name: str, file_path: str):
-    """output/{history_name}/{file_path} を返す。画像・動画どちらも対応。output配下のみ許可。"""
-    rel = f"{history_name}/{file_path}"
-    full_path = safe_output_path(rel)
+    """履歴フォルダ配下の {file_path} を返す。画像・動画どちらも対応。output配下のみ許可。"""
+    theme_dir = find_history_dir(history_name)
+    if theme_dir is None:
+        raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
+    full_path = safe_output_path(file_path, output_base=theme_dir)
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=404, detail="ファイルが見つかりません")
     media_type, _ = mimetypes.guess_type(full_path)

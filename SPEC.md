@@ -331,6 +331,9 @@ for item in dialogue_items:
 
 動画メタ・レビュー結果は `metadata.db` に保存する。ローカルJSON/TXTを正本・補完元として使わない。
 
+- `videos.script_content` が台本本文の正本。履歴からの再生成は `metadata_db.get_script_content(local_id)` で DB から取得する（ディスクの `script.txt` は参照しない）。
+- `videos.output_dir` は `sync_folder_to_db()` のたびに同期フォルダの実体パスへ更新（`ON CONFLICT` で上書き）する。フォルダ移動（`videos/` → `000_uploaded/`）や旧パスからの移行に追随し、古いパスが残り続けないようにする。
+
 | 保存先 | 内容 |
 |---|---|
 | `script_quality` | ローカル・Ollamaレビュー結果、final_score、final_status、尺レビュー、ChatGPT生成前レビュー要約 |
@@ -559,6 +562,7 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 - APIキー設定（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）は active profile ごとの有無（bool）のみ返す。値をレスポンス・ログに含めない
 - 設定DB書き込みAPIは許可キーだけを受け付け、値に改行を含む場合は拒否する
 - パストラバーサル拒否（`output/` 配下 / `SD_WEBUI_ROOT` 配下の実パス検査を実施）
+- 履歴フォルダ名（`history_name`）から実体パスを引くときは `security.find_history_dir()` に統一する。`videos/` → `000_uploaded/` の順で探し、active profile の `output_root` 配下に限定する。テーマフォルダは `output_root` 直下ではなく `videos/`・`000_uploaded/` 配下にあるため、`safe_output_path(history_name)`（base=`output_root`）で直接引いてはならない（画像配信・画像再生成・差し替え・再レンダーの参照先ズレの原因になる）
 - 破壊的操作（アップロード・固定コメント投稿・モデル削除）は `confirmed=true` が必須
 - 例外時に秘密値をログへ出さない（HF_TOKEN 付き URL はログに含めない）
 
@@ -1166,7 +1170,7 @@ AI編集者向けルール:
 
 ### 履歴から複数生成
 
-`履歴から複数生成` を押すと、`output/` 配下の履歴を複数選択できます。`script.txt` がない履歴は再生成対象にできません。
+`履歴から複数生成` を押すと、`output/` 配下の履歴を複数選択できます。再生成に使う台本本文は `metadata.db` の `videos.script_content`（正本）から取得します。DB に台本本文が無い履歴は再生成対象になりません。
 
 ### 画像確認
 
