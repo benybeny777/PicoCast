@@ -93,7 +93,7 @@ def test_token_file_not_created(oauth_env, monkeypatch, tmp_path):
     _token_path = os.path.join(_ROOT, "token.json")
     _pre_mtime = os.path.getmtime(_token_path) if os.path.isfile(_token_path) else None
 
-    uploader.get_youtube_client()
+    uploader.get_youtube_client(profile_id="food_trivia")
 
     # tmp_path には token.json が作られていない
     assert not os.path.isfile(os.path.join(str(tmp_path), "token.json"))
@@ -133,7 +133,7 @@ def test_token_analytics_file_not_created(oauth_env, monkeypatch, tmp_path):
     _analytics_path = os.path.join(_ROOT, "token_analytics.json")
     _pre_mtime = os.path.getmtime(_analytics_path) if os.path.isfile(_analytics_path) else None
 
-    analytics._get_credentials()
+    analytics._get_credentials(profile_id="food_trivia")
 
     assert not os.path.isfile(os.path.join(str(tmp_path), "token_analytics.json"))
     if _pre_mtime is None:
@@ -189,7 +189,7 @@ def test_refresh_saves_updated_token_to_db(oauth_env, monkeypatch):
     monkeypatch.setattr("core.youtube_uploader.build", mock_build)
     monkeypatch.setattr("core.youtube_uploader.Request", mock.MagicMock)
 
-    uploader.get_youtube_client()
+    uploader.get_youtube_client(profile_id="food_trivia")
 
     # DB に新しいトークンが保存されている
     recovered = json.loads(ss.load_secret("youtube_upload_token", profile_id="food_trivia"))

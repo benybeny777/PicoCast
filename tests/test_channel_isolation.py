@@ -57,11 +57,12 @@ def dual_profile_env(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ppl, "_PROFILES_DIR", profiles_dir)
     monkeypatch.setattr(ppl, "_GENRES_DIR", genres_dir)
+    monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
 
     food = cp.ChannelProfile(
         profile_id="food_trivia",
         channel_name="食べ物チャンネル",
-        channel_handle="@food",
+        channel_handle="@food_trivia",
         genre_profile="food_trivia",
         output_root=str(tmp_path / "output" / "food_trivia"),
         default_hashtags="#ずんだもん #食べ物雑学",
@@ -69,7 +70,7 @@ def dual_profile_env(tmp_path, monkeypatch):
     urban = cp.ChannelProfile(
         profile_id="urban_legend",
         channel_name="都市伝説チャンネル",
-        channel_handle="@urban",
+        channel_handle="@urban_legend",
         genre_profile="urban_legend",
         output_root=str(tmp_path / "output" / "urban_legend"),
         default_hashtags="#ずんだもん #都市伝説",
@@ -173,4 +174,3 @@ def test_script_context_urban_legend(dual_profile_env):
     result = ppl.build_script_prompt_context("urban_legend")
     assert "URBAN_SCRIPT" in result
     assert "FOOD_SCRIPT" not in result
-

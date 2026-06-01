@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from web_app.services.status_service import get_settings_status
 from web_app.services.config_service import get_editable_config, save_config
+from web_app.services.status_service import invalidate_settings_status_cache
 from web_app.services.secrets_service import (
     save_secrets,
     save_api_key,
@@ -53,6 +54,7 @@ def api_save_secrets(updates: dict[str, str]):
     errors = save_secrets(updates)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
+    invalidate_settings_status_cache()
     return {"saved": list(updates.keys())}
 
 
@@ -61,16 +63,17 @@ def api_save_secrets(updates: dict[str, str]):
 class ApiKeyRequest(BaseModel):
     secret_type: str
     value: str
+    profile_id: str | None = None
 
 
 class ClientSecretsRequest(BaseModel):
     json_text: str
-    profile_id: str = "default"
+    profile_id: str | None = None
 
 
 class DeleteSecretRequest(BaseModel):
     secret_type: str
-    profile_id: str = "default"
+    profile_id: str | None = None
     confirmed: bool = False
 
 
@@ -80,7 +83,7 @@ class DeleteLegacyFileRequest(BaseModel):
 
 
 @router.get("/secrets/status")
-def api_secret_status(profile_id: str = "default"):
+def api_secret_status(profile_id: str | None = None):
     """各シークレットの登録状態を返す（値は一切返さない）。"""
     db_status = get_secret_status(profile_id=profile_id)
     legacy_status = get_legacy_file_status()
@@ -93,10 +96,11 @@ def api_secret_status(profile_id: str = "default"):
 @router.post("/secrets/api-key")
 def api_save_api_key(req: ApiKeyRequest):
     """APIキー（google_api_key / openai_api_key / hf_token）を DB へ暗号化保存する。"""
-    errors = save_api_key(req.secret_type, req.value)
+    errors = save_api_key(req.secret_type, req.value, profile_id=req.profile_id)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
-    return {"saved": req.secret_type}
+    invalidate_settings_status_cache()
+    return {"saved": req.secret_type, "profile_id": req.profile_id}
 
 
 @router.post("/secrets/client-secrets")
@@ -105,6 +109,7 @@ def api_save_client_secrets(req: ClientSecretsRequest):
     errors = save_client_secrets(req.json_text, profile_id=req.profile_id)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
+    invalidate_settings_status_cache()
     return {"saved": "youtube_client_secrets", "profile_id": req.profile_id}
 
 
@@ -113,9 +118,10 @@ def api_delete_api_key(req: DeleteSecretRequest):
     """APIキーを DB から削除する。confirmed=true 必須。"""
     if not req.confirmed:
         raise HTTPException(status_code=422, detail="confirmed=true が必要です")
-    errors = delete_api_key(req.secret_type)
+    errors = delete_api_key(req.secret_type, profile_id=req.profile_id)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
+    invalidate_settings_status_cache()
     return {"deleted": req.secret_type}
 
 
@@ -127,6 +133,7 @@ def api_delete_youtube_secret(req: DeleteSecretRequest):
     errors = delete_youtube_secret(req.secret_type, profile_id=req.profile_id)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
+    invalidate_settings_status_cache()
     return {"deleted": req.secret_type, "profile_id": req.profile_id}
 
 

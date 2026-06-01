@@ -27,21 +27,22 @@ def profile_env(tmp_path, monkeypatch):
     import core.channel_profile as cp
 
     monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
 
     # food_trivia profile
     food = cp.ChannelProfile(
         profile_id="food_trivia",
         channel_name="食べ物チャンネル",
-        channel_handle="@food",
+        channel_handle="@food_trivia",
         genre_profile="food_trivia",
-        output_root=str(tmp_path / "output" / "food_trivia"),
+        output_root="food_trivia",
     )
     urban = cp.ChannelProfile(
         profile_id="urban_legend",
         channel_name="都市伝説チャンネル",
-        channel_handle="@urban",
+        channel_handle="@urban_legend",
         genre_profile="urban_legend",
-        output_root=str(tmp_path / "output" / "urban_legend"),
+        output_root="urban_legend",
     )
     cp.save_profile(food)
     cp.save_profile(urban)

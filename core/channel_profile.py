@@ -12,10 +12,12 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shutil
 import sqlite3
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 
 _logger = logging.getLogger(__name__)
 
@@ -34,7 +36,7 @@ class ChannelProfile:
     channel_name: str
     channel_handle: str
     genre_profile: str
-    output_root: str                       # 例: "output/food_trivia"
+    output_root: str                       # profile_id と同じ値を保存する
     default_hashtags: str = ""
     channel_theme: str = ""
     channel_accent_color: str = ""
@@ -47,6 +49,8 @@ class ChannelProfile:
         """output_root の絶対パスを返す。"""
         if os.path.isabs(self.output_root):
             return self.output_root
+        if self.output_root == self.profile_id:
+            return os.path.join(_ROOT, "output", self.profile_id)
         return os.path.join(_ROOT, self.output_root)
 
     @property
@@ -104,6 +108,9 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
             updated_at          TEXT NOT NULL
         )
     """)
+    _migrate_profile_ids_to_handles(conn)
+    conn.execute("UPDATE channel_profiles SET output_root = profile_id WHERE output_root != profile_id")
+    _copy_legacy_default_secrets(conn)
     conn.commit()
 
 
@@ -125,6 +132,152 @@ def _row_to_profile(row: sqlite3.Row) -> ChannelProfile:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def profile_id_from_handle(channel_handle: str) -> str:
+    """チャンネルハンドルから profile_id を作る（@なし・小文字）。"""
+    handle = channel_handle.strip()
+    if handle.startswith("@"):
+        handle = handle[1:]
+    return handle.strip().lower()
+
+
+def _migrate_profile_ids_to_handles(conn: sqlite3.Connection) -> None:
+    rows = conn.execute("SELECT profile_id, channel_handle FROM channel_profiles").fetchall()
+    for row in rows:
+        old_id = row["profile_id"]
+        new_id = profile_id_from_handle(row["channel_handle"] or "")
+        if not new_id:
+            continue
+        if not re.match(r"^[a-z0-9_-]{1,50}$", new_id):
+            _logger.warning("[ChannelProfile] profile_id移行スキップ: handle=%s", row["channel_handle"])
+            continue
+
+        old_row = conn.execute(
+            "SELECT genre_profile FROM channel_profiles WHERE profile_id=?", (old_id,)
+        ).fetchone()
+        source_genre = old_row["genre_profile"] if old_row else ""
+        _ensure_handle_genre_profile(source_genre, new_id)
+
+        if new_id != old_id:
+            conflict = conn.execute(
+                "SELECT 1 FROM channel_profiles WHERE profile_id=?", (new_id,)
+            ).fetchone()
+            if conflict:
+                _logger.warning("[ChannelProfile] profile_id移行スキップ: %s -> %s は既存です", old_id, new_id)
+                continue
+
+            conn.execute(
+                "UPDATE channel_profiles SET profile_id=?, output_root=?, genre_profile=? WHERE profile_id=?",
+                (new_id, new_id, new_id, old_id),
+            )
+            for table in ("encrypted_secrets", "bgm_assets"):
+                exists = conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
+                ).fetchone()
+                if exists:
+                    conn.execute(f"UPDATE {table} SET profile_id=? WHERE profile_id=?", (new_id, old_id))
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='prompt_templates'"
+            ).fetchone()
+            if exists:
+                conn.execute(
+                    "UPDATE prompt_templates SET profile_id=?, genre_profile=? WHERE profile_id=?",
+                    (new_id, new_id, old_id),
+                )
+            _migrate_output_dir(old_id, new_id)
+            _logger.info("[ChannelProfile] profile_id移行: %s -> %s", old_id, new_id)
+        elif source_genre != new_id:
+            conn.execute(
+                "UPDATE channel_profiles SET output_root=?, genre_profile=? WHERE profile_id=?",
+                (new_id, new_id, old_id),
+            )
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='prompt_templates'"
+            ).fetchone()
+            if exists:
+                conn.execute(
+                    "UPDATE prompt_templates SET genre_profile=? WHERE profile_id=?",
+                    (new_id, old_id),
+                )
+            _logger.info("[ChannelProfile] genre_profile移行: %s -> %s", source_genre, new_id)
+
+
+def _ensure_handle_genre_profile(source_genre: str, target_genre: str) -> None:
+    """handle 名の genre_profile フォルダがなければ既存 genre からコピーする。"""
+    if not target_genre:
+        return
+    genres_dir = os.path.join(_ROOT, "config", "prompt_profiles", "genres")
+    target_dir = os.path.join(genres_dir, target_genre)
+    if os.path.isdir(target_dir):
+        return
+    source_dir = os.path.join(genres_dir, source_genre)
+    if not source_genre or not os.path.isdir(source_dir):
+        return
+    shutil.copytree(source_dir, target_dir)
+    _logger.info("[ChannelProfile] genre_profileフォルダ作成: %s <- %s", target_genre, source_genre)
+
+
+def _migrate_output_dir(old_id: str, new_id: str) -> None:
+    old_path = os.path.join(_ROOT, "output", old_id)
+    new_path = os.path.join(_ROOT, "output", new_id)
+    if not os.path.isdir(old_path) or os.path.exists(new_path):
+        return
+    os.replace(old_path, new_path)
+
+
+def _copy_legacy_default_secrets(conn: sqlite3.Connection) -> None:
+    """
+    旧仕様で default に保存されていた共通認証情報を各 profile へコピーする。
+    値は復号せず、暗号化済み blob をそのまま複製する。
+    """
+    exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='encrypted_secrets'"
+    ).fetchone()
+    if not exists:
+        return
+    profiles = [r["profile_id"] for r in conn.execute("SELECT profile_id FROM channel_profiles").fetchall()]
+    if not profiles:
+        return
+    legacy_types = ("google_api_key", "openai_api_key", "hf_token", "youtube_client_secrets")
+    placeholders = ",".join("?" * len(legacy_types))
+    rows = conn.execute(
+        f"""
+        SELECT secret_type, encrypted_value, nonce, salt, key_version, created_at, updated_at
+        FROM encrypted_secrets
+        WHERE profile_id='default' AND secret_type IN ({placeholders})
+        """,
+        legacy_types,
+    ).fetchall()
+    now = _now_iso()
+    for profile_id in profiles:
+        for row in rows:
+            found = conn.execute(
+                "SELECT 1 FROM encrypted_secrets WHERE profile_id=? AND secret_type=?",
+                (profile_id, row["secret_type"]),
+            ).fetchone()
+            if found:
+                continue
+            secret_id = hashlib.sha256(f"{profile_id}:{row['secret_type']}".encode()).hexdigest()[:32]
+            conn.execute(
+                """
+                INSERT INTO encrypted_secrets(
+                    secret_id, profile_id, secret_type, encrypted_value, nonce,
+                    salt, key_version, created_at, updated_at
+                ) VALUES(?,?,?,?,?,?,?,?,?)
+                """,
+                (
+                    secret_id,
+                    profile_id,
+                    row["secret_type"],
+                    row["encrypted_value"],
+                    row["nonce"],
+                    row["salt"],
+                    row["key_version"],
+                    row["created_at"] or now,
+                    now,
+                ),
+            )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -187,6 +340,11 @@ def get_profile(profile_id: str) -> ChannelProfile | None:
 
 def save_profile(profile: ChannelProfile) -> None:
     """プロファイルを保存する（新規 or 上書き）。バリデーション後に保存。"""
+    source_genre = profile.genre_profile
+    profile.profile_id = profile_id_from_handle(profile.channel_handle)
+    profile.output_root = profile.profile_id
+    profile.genre_profile = profile.profile_id
+    _ensure_handle_genre_profile(source_genre, profile.genre_profile)
     validate_profile(profile)
     now = _now_iso()
     with _lock:
@@ -287,6 +445,9 @@ def validate_profile(profile: ChannelProfile) -> None:
 
     if not profile.channel_name:
         errors.append("channel_name は必須です")
+
+    if not profile.channel_handle:
+        errors.append("channel_handle は必須です")
 
     if not profile.genre_profile:
         errors.append("genre_profile は必須です")

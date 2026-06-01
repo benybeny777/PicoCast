@@ -747,10 +747,11 @@ def _filter_obsolete_dialogue_must_fix(must_fix: list[str], dialogue_count: int)
 
 
 def check_openai_final_review_connection(timeout: int = 10) -> dict[str, Any]:
-    from core.secret_store import has_secret, load_secret
+    from core.secret_store import current_profile_id_or_default, has_secret, load_secret
+    profile_id = current_profile_id_or_default()
     if not OPENAI_FINAL_REVIEW_ENABLED:
         return {"ok": True, "skipped": True, "reason": "OPENAI_FINAL_REVIEW_ENABLED is false"}
-    if not has_secret("openai_api_key"):
+    if not has_secret("openai_api_key", profile_id=profile_id):
         return {
             "ok": False,
             "error": "OPENAI_API_KEY is not set",
@@ -759,7 +760,7 @@ def check_openai_final_review_connection(timeout: int = 10) -> dict[str, Any]:
     try:
         with requests.get(
             "https://api.openai.com/v1/models",
-            headers={"Authorization": f"Bearer {load_secret('openai_api_key')}"},
+            headers={"Authorization": f"Bearer {load_secret('openai_api_key', profile_id=profile_id)}"},
             timeout=timeout,
         ) as response:
             response.raise_for_status()
@@ -786,20 +787,21 @@ def final_chatgpt_review(
     duration_result: dict[str, Any],
     render_engine: str = "native",
 ) -> dict[str, Any] | None:
-    from core.secret_store import has_secret, load_secret
+    from core.secret_store import current_profile_id_or_default, has_secret, load_secret
+    profile_id = current_profile_id_or_default()
     if not OPENAI_FINAL_REVIEW_ENABLED:
         return {
             "skipped": True,
             "reason": "OPENAI_FINAL_REVIEW_ENABLED is false",
             "model": OPENAI_FINAL_REVIEW_MODEL,
         }
-    if not has_secret("openai_api_key"):
+    if not has_secret("openai_api_key", profile_id=profile_id):
         return {
             "skipped": True,
             "reason": "OPENAI_API_KEY is not set",
             "model": OPENAI_FINAL_REVIEW_MODEL,
         }
-    openai_api_key = load_secret("openai_api_key")
+    openai_api_key = load_secret("openai_api_key", profile_id=profile_id)
     prompt = _build_final_review_prompt(
         title=title,
         thumbnail_text=thumbnail_text,

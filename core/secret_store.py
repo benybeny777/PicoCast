@@ -241,6 +241,18 @@ def _profile_id(profile_id: str | None) -> str:
     return profile_id or "default"
 
 
+def current_profile_id_or_default() -> str:
+    """active profile があればその profile_id、未設定なら default を返す。"""
+    try:
+        from core.channel_profile import get_active_profile
+        profile = get_active_profile()
+        if profile is not None:
+            return profile.profile_id
+    except Exception as e:
+        _logger.warning("[SecretStore] active profile 取得失敗: %s", e)
+    return "default"
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 

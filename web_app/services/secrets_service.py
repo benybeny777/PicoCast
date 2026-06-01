@@ -19,7 +19,20 @@ _ALLOWED_YOUTUBE_TYPES = {
 }
 
 
-def save_api_key(secret_type: str, value: str) -> list[str]:
+def _resolve_profile_id(profile_id: str | None = None) -> str:
+    if profile_id:
+        return profile_id
+    try:
+        from core.channel_profile import get_active_profile
+        profile = get_active_profile()
+        if profile is not None:
+            return profile.profile_id
+    except Exception as e:
+        _logger.warning("[SecretsService] active profile 取得失敗: %s", e)
+    return "default"
+
+
+def save_api_key(secret_type: str, value: str, profile_id: str | None = None) -> list[str]:
     """
     APIキー（google_api_key / openai_api_key / hf_token）を DB へ保存する。
     値をレスポンスやログに含めない。
@@ -35,13 +48,14 @@ def save_api_key(secret_type: str, value: str) -> list[str]:
     if errors:
         return errors
 
+    pid = _resolve_profile_id(profile_id)
     from core.secret_store import save_secret
-    save_secret(secret_type, value)
-    _logger.info("[SecretsService] %s を DB に保存しました", secret_type)
+    save_secret(secret_type, value, profile_id=pid)
+    _logger.info("[SecretsService] %s を DB に保存しました (profile=%s)", secret_type, pid)
     return []
 
 
-def save_secrets(updates: dict[str, str]) -> list[str]:
+def save_secrets(updates: dict[str, str], profile_id: str | None = None) -> list[str]:
     """
     複数の APIキーをまとめて保存する。
     空文字は「変更なし」として無視する。
@@ -57,12 +71,12 @@ def save_secrets(updates: dict[str, str]) -> list[str]:
         secret_type = _env_to_secret.get(raw_key, raw_key)
         if not value.strip():
             continue
-        errs = save_api_key(secret_type, value)
+        errs = save_api_key(secret_type, value, profile_id=profile_id)
         errors.extend(errs)
     return errors
 
 
-def save_client_secrets(json_text: str, profile_id: str = "default") -> list[str]:
+def save_client_secrets(json_text: str, profile_id: str | None = None) -> list[str]:
     """
     YouTube client_secrets の JSON テキストを DB へ保存する。
     JSON 妥当性チェックしてから保存する。値をログに出さない。
@@ -78,42 +92,45 @@ def save_client_secrets(json_text: str, profile_id: str = "default") -> list[str
         errors.append(f"JSON 解析エラー: {e.msg}")
         return errors
 
+    pid = _resolve_profile_id(profile_id)
     from core.secret_store import save_secret
-    save_secret("youtube_client_secrets", json_text, profile_id=profile_id)
-    _logger.info("[SecretsService] youtube_client_secrets を DB に保存しました (profile=%s)", profile_id)
+    save_secret("youtube_client_secrets", json_text, profile_id=pid)
+    _logger.info("[SecretsService] youtube_client_secrets を DB に保存しました (profile=%s)", pid)
     return []
 
 
-def delete_api_key(secret_type: str) -> list[str]:
+def delete_api_key(secret_type: str, profile_id: str | None = None) -> list[str]:
     """APIキーを DB から削除する。"""
     errors: list[str] = []
     if secret_type not in _ALLOWED_API_KEY_TYPES:
         errors.append(f"不正なキー種別: {secret_type}")
         return errors
+    pid = _resolve_profile_id(profile_id)
     from core.secret_store import delete_secret
-    delete_secret(secret_type)
-    _logger.info("[SecretsService] %s を DB から削除しました", secret_type)
+    delete_secret(secret_type, profile_id=pid)
+    _logger.info("[SecretsService] %s を DB から削除しました (profile=%s)", secret_type, pid)
     return []
 
 
-def delete_youtube_secret(secret_type: str, profile_id: str = "default") -> list[str]:
+def delete_youtube_secret(secret_type: str, profile_id: str | None = None) -> list[str]:
     """YouTube 関連シークレットを DB から削除する。"""
     errors: list[str] = []
     if secret_type not in _ALLOWED_YOUTUBE_TYPES:
         errors.append(f"不正なキー種別: {secret_type}")
         return errors
+    pid = _resolve_profile_id(profile_id)
     from core.secret_store import delete_secret
-    delete_secret(secret_type, profile_id=profile_id)
-    _logger.info("[SecretsService] %s を DB から削除しました (profile=%s)", secret_type, profile_id)
+    delete_secret(secret_type, profile_id=pid)
+    _logger.info("[SecretsService] %s を DB から削除しました (profile=%s)", secret_type, pid)
     return []
 
 
-def get_secret_status(profile_id: str = "default") -> dict[str, bool]:
+def get_secret_status(profile_id: str | None = None) -> dict[str, bool]:
     """
     各シークレットの登録状態を返す（値は返さない）。
     """
     from core.secret_store import list_secret_status
-    return list_secret_status(profile_id=profile_id)
+    return list_secret_status(profile_id=_resolve_profile_id(profile_id))
 
 
 def get_legacy_file_status() -> dict[str, bool]:
@@ -169,20 +186,21 @@ def _check_migration_before_delete(filename: str) -> dict:
     未移行の値がある場合は削除を拒否する。
     """
     from core.secret_store import has_secret
+    profile_id = _resolve_profile_id()
 
     if filename == ".env":
         pass  # .env への auth キー書き込みは廃止済み
 
     elif filename == "client_secrets.json":
-        if not has_secret("youtube_client_secrets"):
+        if not has_secret("youtube_client_secrets", profile_id=profile_id):
             return {"ok": False, "error": "youtube_client_secrets が DB 未移行です"}
 
     elif filename == "token.json":
-        if not has_secret("youtube_upload_token"):
+        if not has_secret("youtube_upload_token", profile_id=profile_id):
             return {"ok": False, "error": "youtube_upload_token が DB 未移行です"}
 
     elif filename == "token_analytics.json":
-        if not has_secret("youtube_analytics_token"):
+        if not has_secret("youtube_analytics_token", profile_id=profile_id):
             return {"ok": False, "error": "youtube_analytics_token が DB 未移行です"}
 
     return {"ok": True}

@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 from core.output_paths import get_output_videos_dir, get_uploaded_dir, get_output_root
-from core.metadata_db import ManagedConnection
+from core.metadata_db import ManagedConnection, initialize_db
 from web_app.security import is_video_folder, safe_output_path
 
 def _is_management(name: str) -> bool:
@@ -121,6 +121,7 @@ def list_histories(include_management: bool = False, include_uploaded: bool = Fa
     同名フォルダは videos/ 優先。
     アップロード状態は youtube_status テーブルから取得する。
     """
+    initialize_db()
     output_root = get_output_root()
     known_video_ids = _fetch_known_video_ids()
     uploaded_ids_with_youtube = _fetch_uploaded_video_ids_with_youtube_id()
@@ -189,6 +190,7 @@ def list_histories(include_management: bool = False, include_uploaded: bool = Fa
 
 
 def get_history_detail(history_name: str) -> dict[str, Any] | None:
+    initialize_db()
     if ".." in history_name or "/" in history_name or "\\" in history_name:
         return None
 

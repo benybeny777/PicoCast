@@ -27,11 +27,14 @@ if _ROOT not in sys.path:
 def patch_secret_store(tmp_path, monkeypatch):
     """全テストで secret_store を一時ディレクトリ + 固定キーでモックする。"""
     import core.secret_store as ss
+    import core.channel_profile as cp
 
     _key = b"\x04" * 32
     monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
     monkeypatch.setattr(ss, "_MASTER_KEY_PATH", str(tmp_path / "key"))
     monkeypatch.setattr(ss, "_get_master_key", lambda: _key)
+    monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
 
 
 @pytest.fixture()
@@ -60,6 +63,50 @@ def test_status_shows_registered_after_save(client):
     )
     resp = client.get("/api/settings/secrets/status")
     assert resp.json()["secrets"]["google_api_key"] is True
+
+
+def test_api_key_status_is_profile_scoped(client):
+    """APIキーは profile_id ごとに登録状態が分離される。"""
+    client.post(
+        "/api/settings/secrets/api-key",
+        json={
+            "secret_type": "google_api_key",
+            "value": "AIzaProfileA",
+            "profile_id": "profile_a",
+        },
+    )
+
+    profile_a = client.get("/api/settings/secrets/status?profile_id=profile_a").json()
+    profile_b = client.get("/api/settings/secrets/status?profile_id=profile_b").json()
+
+    assert profile_a["secrets"]["google_api_key"] is True
+    assert profile_b["secrets"]["google_api_key"] is False
+
+
+def test_channel_list_includes_profile_scoped_api_key_status(client):
+    from core.channel_profile import ChannelProfile, save_profile
+
+    save_profile(ChannelProfile(
+        profile_id="profile_auth",
+        channel_name="認証状態テスト",
+        channel_handle="@profile_auth",
+        genre_profile="food_trivia",
+        output_root="output/profile_auth",
+    ))
+    client.post(
+        "/api/settings/secrets/api-key",
+        json={
+            "secret_type": "google_api_key",
+            "value": "AIzaProfileAuth",
+            "profile_id": "profile_auth",
+        },
+    )
+
+    resp = client.get("/api/channels")
+    profile = next(p for p in resp.json()["profiles"] if p["profile_id"] == "profile_auth")
+
+    assert profile["auth"]["google_api_key"] is True
+    assert profile["auth"]["openai_api_key"] is False
 
 
 def test_status_does_not_contain_key_value(client):

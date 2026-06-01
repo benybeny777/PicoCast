@@ -110,6 +110,8 @@ def test_history_page(client):
 def test_settings_page(client):
     res = client.get("/settings")
     assert res.status_code == 200
+    assert "chf-google_api_key" in res.text
+    assert "chf-youtube_client_secrets" in res.text
 
 
 def test_dashboard_scheduled_count_only_future_scheduled(monkeypatch):
@@ -271,6 +273,25 @@ def test_history_excludes_uploaded_orphans(tmp_path, monkeypatch):
     assert "Shorts_DBあり" in names
     assert "Shorts_DBなし" not in names
     assert "Shorts_IDなし" not in names
+
+
+def test_history_initializes_empty_metadata_db(tmp_path, monkeypatch):
+    import core.metadata_db as m
+    import web_app.services.history_service as hs
+
+    fake_output = tmp_path / "output"
+    videos_dir = fake_output / "videos"
+    (videos_dir / "Shorts_初期化テスト").mkdir(parents=True)
+    db_path = tmp_path / "metadata.db"
+    db_path.write_bytes(b"")
+
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(m, "get_db_path", lambda: str(db_path))
+    monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
+
+    result = hs.list_histories()
+
+    assert [row["name"] for row in result] == ["Shorts_初期化テスト"]
 
 
 def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, monkeypatch):

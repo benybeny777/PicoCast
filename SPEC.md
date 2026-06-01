@@ -108,8 +108,8 @@ yukkurijidou/
 │   ├── requirements.txt
 │   └── prompt_profiles/
 │       └── genres/          # ジャンル別プロンプトファイル（seed 用）
-│           ├── food_trivia/
-│           └── urban_legend/
+│           ├── zunkami/
+│           └── zundamon_kowai/
 └── output/                 # 生成物出力先
 ```
 
@@ -556,7 +556,7 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 - `127.0.0.1` のみバインド
 - output/ 配下のみファイルアクセス可（`security.py` で検証）
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の内容は返さない
-- APIキー設定（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）は有無（bool）のみ返す。値をレスポンス・ログに含めない
+- APIキー設定（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN`）は active profile ごとの有無（bool）のみ返す。値をレスポンス・ログに含めない
 - `.env` 書き込みAPIは許可キーだけを受け付け、値に改行を含む場合は拒否する
 - パストラバーサル拒否（`output/` 配下 / `SD_WEBUI_ROOT` 配下の実パス検査を実施）
 - 破壊的操作（アップロード・固定コメント投稿・モデル削除）は `confirmed=true` が必須
@@ -587,7 +587,11 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 
 `/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI）と **高画質（FHD）生成**（`sd_size_mode` の反転、チェックなし=縮小生成ON）の選択が含まれる。`/images` 再生成にも同様のエンジン選択と高画質（FHD）生成チェックボックスがある。
 
-`/settings` のAPIキー設定タブ（「APIキー設定」）は画面最下部に置く。通常の設定変更欄には秘密値を含めない。APIキー設定欄には `GOOGLE_API_KEY`・`OPENAI_API_KEY`・`HF_TOKEN`（Hugging Face アクセストークン）が含まれ、いずれも有無（bool）のみ画面に表示する。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
+`/settings` のAPIキー設定タブ（「APIキー設定」）は画面最下部に置く。通常の設定変更欄には秘密値を含めない。APIキー設定欄には `GOOGLE_API_KEY`・`OPENAI_API_KEY`・`HF_TOKEN`（Hugging Face アクセストークン）が含まれ、いずれも active profile ごとの有無（bool）のみ画面に表示する。保存した値は active profile の `encrypted_secrets` に紐づき、チャンネル切替後は切替先 profile の登録状態を表示・使用する。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
+
+`/settings` のチャンネル管理タブには、各 channel profile の `GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` / YouTube client_secrets / Upload OAuth / Analytics OAuth の登録状態を bool バッジで表示する。値そのものは表示しない。
+
+チャンネル詳細フォームには、そのチャンネル専用の `GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` / YouTube client_secrets 登録欄を置く。保存時は編集中のチャンネルの `profile_id` に紐づけて `encrypted_secrets` へ保存し、空欄は変更なしとして扱う。共通設定画面のAPIキー欄も active profile に対する編集として扱い、認証情報はチャンネルごとに分離する。
 
 ナビゲーションバーの「設定」リンクは常にナビゲーション最右端に固定する（CSS `margin-left: auto`）。
 
@@ -1419,7 +1423,7 @@ NGワードは自動でマイルド表現へ変換されるが、タイトルや
 
 ### APIキー・OAuth取得
 
-認証情報は設定画面（`/settings`）の「APIキー」タブから登録します。APIキー・OAuthトークン・YouTube client_secrets は `data/settings.db` の `encrypted_secrets` テーブルへ AES-GCM で暗号化保存します。
+認証情報は設定画面（`/settings`）の「APIキー」タブから登録します。APIキー・OAuthトークン・YouTube client_secrets は active profile ごとに `data/settings.db` の `encrypted_secrets` テーブルへ AES-GCM で暗号化保存します。
 `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` は正本として使用しません。
 
 `GOOGLE_API_KEY`:
@@ -1571,11 +1575,11 @@ active profile によってすべての出力パス・DB・プロンプト・Ana
 
 | カラム | 型 | 説明 |
 |---|---|---|
-| `profile_id` | TEXT PK | 英小文字・数字・アンダースコア・ハイフン（例: `food_trivia`） |
+| `profile_id` | TEXT PK | チャンネルハンドルから `@` を除いた値（例: `zundamon_kowai`） |
 | `channel_name` | TEXT | チャンネル表示名（必須） |
 | `channel_handle` | TEXT | `@` で始まるハンドル |
-| `genre_profile` | TEXT | プロンプトプロファイル識別子（例: `food_trivia` / `urban_legend`） |
-| `output_root` | TEXT | 出力ルートパス（例: `output/food_trivia`） |
+| `genre_profile` | TEXT | `profile_id` と同じ値。保存時に既存ジャンルから `config/prompt_profiles/genres/{profile_id}/` を作成する |
+| `output_root` | TEXT | `profile_id` と同じ値。実パスは `output/{profile_id}` に解決する |
 | `default_hashtags` | TEXT | デフォルトハッシュタグ |
 | `channel_theme` | TEXT | テーマ説明（UI バナー表示用） |
 | `channel_accent_color` | TEXT | UI アクセント色（#RRGGBB） |
@@ -1604,6 +1608,9 @@ Analytics データは `metadata.db` の `analytics_snapshots` テーブルに�
 - `POST /api/channels/{id}/validate` — プロファイル + genre_profile の存在チェック
 - `DELETE /api/channels/{id}` — 削除（confirmed=true 必須。アクティブは削除不可）
 - `GET /api/channels/prompt-profiles` — 利用可能な genre_profile 一覧
+
+既存 DB で `profile_id` / `genre_profile` / `output_root` がチャンネルハンドルと異なる場合は、`channel_handle` を正として `@` なしのハンドル名へ移行する。関連する `encrypted_secrets` / `prompt_templates` / `bgm_assets` の `profile_id` も同時に移行し、既存の genre_profile フォルダはハンドル名へコピーする。
+旧仕様で `default` に保存されていた `google_api_key` / `openai_api_key` / `hf_token` / `youtube_client_secrets` は、未登録の各 channel profile へ暗号化済みのままコピーする。YouTube OAuth token はチャンネル固有のためコピーしない。
 
 ### `prompt_templates` テーブル（`data/settings.db`）
 
@@ -1647,14 +1654,14 @@ Analytics データは `metadata.db` の `analytics_snapshots` テーブルに�
 ```
 config/prompt_profiles/
   genres/
-    food_trivia/
+    zunkami/
       profile.yaml          ← genre_profile 設定（hashtag / playlist suffix 等）
       script_context.md     ← チャンネルコンテキスト・方針・タグルール
       title_context.md      ← タイトル案生成プロンプト
       meeting_context.md    ← ネタ会議プロンプト
       playlist_categories.md← 再生リストカテゴリ名
       used_topics.txt       ← 使用済みトピック
-    urban_legend/           ← 同構成
+    zundamon_kowai/         ← 同構成
 ```
 
 `genres/{genre_profile}/` ファイルは起動時 seed 専用。実行時は DB テンプレートを参照する。genre_profile が存在しない場合はエラー停止（別ジャンルへのフォールバック禁止）。
@@ -1662,9 +1669,9 @@ config/prompt_profiles/
 ### 設定例（.env）
 
 ```
-CHANNEL_PROFILE=food_trivia
+CHANNEL_PROFILE=zunkami
 CHANNEL_NAME=ずんだもんとめたんの食べ物雑学堂
-CHANNEL_HANDLE=@zundamon_food
+CHANNEL_HANDLE=@zunkami
 CHANNEL_THEME=食べ物雑学
 CHANNEL_ACCENT_COLOR=#7c2d12
 DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX

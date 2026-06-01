@@ -83,6 +83,7 @@
         const item = document.createElement('div');
         item.className = 'ch-menu-item' + (p.is_active ? ' active' : '');
         item.setAttribute('role', 'menuitem');
+        if (p.channel_accent_color) item.style.setProperty('--item-accent', p.channel_accent_color);
         item.innerHTML = `
           <div class="${p.is_active ? 'ch-menu-active-dot' : 'ch-menu-inactive-dot'}"></div>
           <div class="ch-menu-info">

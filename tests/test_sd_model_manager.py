@@ -367,6 +367,7 @@ class TestAuthDownload:
         from core.sd_model_manager import SDWebUIModelManager
         monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
         monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x05" * 32)
+        monkeypatch.setattr(ss, "current_profile_id_or_default", lambda: "default")
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
         manager = SDWebUIModelManager(sd_root=str(tmp_path / "sd_root"), manifest_path=manifest_path)
         with pytest.raises(RuntimeError, match="HF_TOKEN"):
@@ -380,6 +381,7 @@ class TestAuthDownload:
 
         monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
         monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x05" * 32)
+        monkeypatch.setattr(ss, "current_profile_id_or_default", lambda: "default")
         ss.save_secret("hf_token", "test_hf_token_xyz")
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
         sd_root = tmp_path / "sd_root"
@@ -417,6 +419,7 @@ class TestAuthDownload:
 
         monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
         monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x05" * 32)
+        monkeypatch.setattr(ss, "current_profile_id_or_default", lambda: "default")
         ss.save_secret("hf_token", "bad_token")
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
         sd_root = tmp_path / "sd_root"
@@ -448,6 +451,7 @@ class TestAuthDownload:
 
         monkeypatch.setattr(ss, "_DB_PATH", str(tmp_path / "settings.db"))
         monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x05" * 32)
+        monkeypatch.setattr(ss, "current_profile_id_or_default", lambda: "default")
         ss.save_secret("hf_token", "valid_token")
         manifest_path = _write_manifest(tmp_path, _auth_model_entry())
         sd_root = tmp_path / "sd_root"

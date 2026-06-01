@@ -24,6 +24,7 @@ from core.channel_profile import (
     get_active_profile,
     get_profile,
     list_profiles,
+    profile_id_from_handle,
     save_profile,
     validate_profile,
 )
@@ -32,11 +33,11 @@ router = APIRouter(prefix="/api/channels", tags=["channels"])
 
 
 class ChannelProfileRequest(BaseModel):
-    profile_id: str
+    profile_id: str = ""
     channel_name: str
     channel_handle: str = ""
     genre_profile: str
-    output_root: str
+    output_root: str = ""
     default_hashtags: str = ""
     channel_theme: str = ""
     channel_accent_color: str = ""
@@ -47,7 +48,7 @@ class DeleteRequest(BaseModel):
 
 
 def _profile_to_dict(p: ChannelProfile) -> dict:
-    return {
+    d = {
         "profile_id": p.profile_id,
         "channel_name": p.channel_name,
         "channel_handle": p.handle_normalized,
@@ -60,6 +61,26 @@ def _profile_to_dict(p: ChannelProfile) -> dict:
         "created_at": p.created_at,
         "updated_at": p.updated_at,
     }
+    try:
+        from core.secret_store import has_secret
+        d["auth"] = {
+            "google_api_key": has_secret("google_api_key", profile_id=p.profile_id),
+            "openai_api_key": has_secret("openai_api_key", profile_id=p.profile_id),
+            "hf_token": has_secret("hf_token", profile_id=p.profile_id),
+            "client_secrets": has_secret("youtube_client_secrets", profile_id=p.profile_id),
+            "upload_oauth": has_secret("youtube_upload_token", profile_id=p.profile_id),
+            "analytics_oauth": has_secret("youtube_analytics_token", profile_id=p.profile_id),
+        }
+    except Exception:
+        d["auth"] = {
+            "google_api_key": False,
+            "openai_api_key": False,
+            "hf_token": False,
+            "client_secrets": False,
+            "upload_oauth": False,
+            "analytics_oauth": False,
+        }
+    return d
 
 
 @router.get("")
@@ -78,28 +99,19 @@ def api_current_channel():
     if profile is None:
         return {"profile": None}
     d = _profile_to_dict(profile)
-    # OAuth token の登録状態（値は含めない）
-    try:
-        from core.secret_store import has_secret
-        d["auth"] = {
-            "upload_oauth":    has_secret("youtube_upload_token",    profile_id=profile.profile_id),
-            "analytics_oauth": has_secret("youtube_analytics_token", profile_id=profile.profile_id),
-            "client_secrets":  has_secret("youtube_client_secrets",  profile_id=profile.profile_id),
-        }
-    except Exception:
-        d["auth"] = {"upload_oauth": False, "analytics_oauth": False, "client_secrets": False}
     return {"profile": d}
 
 
 @router.post("")
 def api_create_channel(req: ChannelProfileRequest):
     """プロファイルを作成する。"""
+    derived_profile_id = profile_id_from_handle(req.channel_handle)
     profile = ChannelProfile(
-        profile_id=req.profile_id,
+        profile_id=derived_profile_id,
         channel_name=req.channel_name,
         channel_handle=req.channel_handle,
         genre_profile=req.genre_profile,
-        output_root=req.output_root,
+        output_root=derived_profile_id,
         default_hashtags=req.default_hashtags,
         channel_theme=req.channel_theme,
         channel_accent_color=req.channel_accent_color,
@@ -108,23 +120,24 @@ def api_create_channel(req: ChannelProfileRequest):
         save_profile(profile)
     except ProfileValidationError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    return {"saved": req.profile_id}
+    return {"saved": derived_profile_id}
 
 
 @router.put("/{profile_id}")
 def api_update_channel(profile_id: str, req: ChannelProfileRequest):
     """プロファイルを更新する。"""
-    if profile_id != req.profile_id:
-        raise HTTPException(status_code=422, detail="URLのprofile_idとリクエストのprofile_idが一致しません")
+    derived_profile_id = profile_id_from_handle(req.channel_handle)
+    if profile_id != derived_profile_id:
+        raise HTTPException(status_code=422, detail="チャンネルハンドルは既存プロファイルでは変更できません")
     existing = get_profile(profile_id)
     if existing is None:
         raise HTTPException(status_code=404, detail=f"プロファイルが見つかりません: {profile_id}")
     profile = ChannelProfile(
-        profile_id=req.profile_id,
+        profile_id=derived_profile_id,
         channel_name=req.channel_name,
         channel_handle=req.channel_handle,
         genre_profile=req.genre_profile,
-        output_root=req.output_root,
+        output_root=derived_profile_id,
         default_hashtags=req.default_hashtags,
         channel_theme=req.channel_theme,
         channel_accent_color=req.channel_accent_color,
@@ -134,7 +147,7 @@ def api_update_channel(profile_id: str, req: ChannelProfileRequest):
         save_profile(profile)
     except ProfileValidationError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    return {"saved": profile_id}
+    return {"saved": derived_profile_id}
 
 
 @router.post("/{profile_id}/activate")
@@ -144,6 +157,8 @@ def api_activate_channel(profile_id: str):
         activate_profile(profile_id)
     except ProfileNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    from web_app.services.status_service import invalidate_settings_status_cache
+    invalidate_settings_status_cache()
     return {"activated": profile_id}
 
 

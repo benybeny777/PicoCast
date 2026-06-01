@@ -37,11 +37,12 @@
 ## チャンネルプロファイル管理
 
 - 複数チャンネル・ジャンルは `channel_profiles` テーブル（`data/settings.db`）で管理する。is_active=1 が active profile。
+- `profile_id` / `genre_profile` / `output_root` はチャンネルハンドルから `@` を除いた値に統一する。既存値が違う場合は関連テーブルと output フォルダも移行する。
 - すべての出力パス・metadata.db・プロンプト・Analytics・再生リストは active profile を基準に解決する。
 - `require_active_profile()` は未設定なら例外。`get_active_profile()` なら None。フォールバックで food_trivia や default を使わない。
 - 別 profile の output_root へのアクセスは `safe_output_path()` が 403 で拒否する。profile 間で output が混ざることを防ぐ。
 - genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
-- OAuth token（`youtube_upload_token` / `youtube_analytics_token`）は profile_id 単位で encrypted_secrets に保存する。
+- APIキー（`google_api_key` / `openai_api_key` / `hf_token`）・YouTube client_secrets・OAuth token（`youtube_upload_token` / `youtube_analytics_token`）は profile_id 単位で encrypted_secrets に保存する。
 - BGM は `data/settings.db` の `bgm_assets` テーブルで profile_id 単位に管理する。旧 `BGM_FILE` は初回移行用としてのみ扱い、生成・再レンダー時は `profile_default` / `selected` / `none` の明示指定を使う。
 
 ## Web UI 作業時の注意点
@@ -74,7 +75,7 @@
 ## プロジェクト概要
 
 複数のYouTubeチャンネル向けに、台本生成・VOICEVOX音声・画像生成・native MP4・YouTubeアップロード・Analytics確認までを行うローカルWebツール。
-「食べ物雑学堂」「都市伝説」などは channel profile / genre_profile の一例。チャンネル固有の設定はすべて channel_profiles テーブルで管理する。
+「食べ物雑学堂」「都市伝説」などは channel profile の一例。チャンネル固有の設定はすべて channel_profiles テーブルで管理する。
 台本 → VOICEVOX音声 → Nano Banana背景画像 → native MP4 → YouTubeアップロード。
 
 ## 実行環境

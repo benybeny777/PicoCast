@@ -20,20 +20,22 @@ if _ROOT not in sys.path:
 def profile_db(tmp_path, monkeypatch):
     import core.channel_profile as cp
     monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
     yield cp
 
 
 def _make_profile(
     profile_id="test_ch", genre="food_trivia", output_root=None,
-    channel_handle="@test", **kw
+    channel_handle=None, **kw
 ):
     from core.channel_profile import ChannelProfile
+    handle = channel_handle or f"@{profile_id}"
     return ChannelProfile(
         profile_id=profile_id,
         channel_name="テストチャンネル",
-        channel_handle=channel_handle,
+        channel_handle=handle,
         genre_profile=genre,
-        output_root=output_root or f"output/{profile_id}",
+        output_root=output_root or profile_id,
         **kw,
     )
 
@@ -42,12 +44,13 @@ def _make_profile(
 
 def test_save_and_get(profile_db):
     cp = profile_db
-    p = _make_profile()
+    p = _make_profile(output_root="output/old_test_ch")
     cp.save_profile(p)
     got = cp.get_profile("test_ch")
     assert got is not None
     assert got.channel_name == "テストチャンネル"
-    assert got.genre_profile == "food_trivia"
+    assert got.genre_profile == "test_ch"
+    assert got.output_root == "test_ch"
 
 
 def test_list_profiles_empty(profile_db):
@@ -158,22 +161,97 @@ def test_validate_invalid_accent_color(profile_db):
 # ── handle_normalized ─────────────────────────────────────────────────────────
 
 def test_handle_normalized_adds_at(profile_db):
-    p = _make_profile(channel_handle="zunkami")
+    p = _make_profile(profile_id="zunkami", channel_handle="zunkami")
     assert p.handle_normalized == "@zunkami"
 
 
 def test_handle_normalized_keeps_at(profile_db):
-    p = _make_profile(channel_handle="@zunkami")
+    p = _make_profile(profile_id="zunkami", channel_handle="@zunkami")
     assert p.handle_normalized == "@zunkami"
 
 
 # ── output_root_abs ───────────────────────────────────────────────────────────
 
 def test_output_root_abs_relative(profile_db):
-    p = _make_profile(output_root="output/food_trivia")
+    p = _make_profile(profile_id="food_trivia")
     assert os.path.isabs(p.output_root_abs)
     # Windows/Unix どちらでも動くようにパス正規化して比較
     assert os.path.normpath("output/food_trivia") in os.path.normpath(p.output_root_abs)
+
+
+def test_existing_output_root_migrates_to_profile_id(profile_db):
+    cp = profile_db
+    conn = cp._open_db()
+    try:
+        conn.execute(
+            """
+            INSERT INTO channel_profiles(
+                profile_id, channel_name, channel_handle, genre_profile, output_root,
+                default_hashtags, channel_theme, channel_accent_color, is_active,
+                created_at, updated_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+            """,
+            (
+                "legacy_ch", "旧チャンネル", "@legacy", "food_trivia", "output/legacy_ch",
+                "", "", "", 0, "2026-06-01T00:00:00+00:00", "2026-06-01T00:00:00+00:00",
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    got = cp.get_profile("legacy")
+
+    assert got is not None
+    assert got.profile_id == "legacy"
+    assert got.output_root == "legacy"
+    assert got.genre_profile == "legacy"
+
+
+def test_default_api_keys_are_copied_to_profiles(profile_db):
+    cp = profile_db
+    conn = cp._open_db()
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS encrypted_secrets (
+                secret_id TEXT PRIMARY KEY,
+                profile_id TEXT NOT NULL DEFAULT 'default',
+                secret_type TEXT NOT NULL,
+                encrypted_value BLOB NOT NULL,
+                nonce BLOB NOT NULL,
+                salt BLOB,
+                key_version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(profile_id, secret_type)
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO encrypted_secrets(
+                secret_id, profile_id, secret_type, encrypted_value, nonce,
+                key_version, created_at, updated_at
+            ) VALUES(?,?,?,?,?,?,?,?)
+            """,
+            ("default_google", "default", "google_api_key", b"encrypted", b"nonce", 1, "old", "old"),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    cp.save_profile(_make_profile(profile_id="zunkami", channel_handle="@zunkami"))
+
+    conn = cp._open_db()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM encrypted_secrets WHERE profile_id=? AND secret_type=?",
+            ("zunkami", "google_api_key"),
+        ).fetchone()
+    finally:
+        conn.close()
+    assert row is not None
 
 
 # ── 初期プロファイル自動作成なし ────────────────────────────────────────────

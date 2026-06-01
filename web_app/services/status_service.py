@@ -113,6 +113,12 @@ def refresh_settings_status() -> dict[str, Any]:
     return _settings_status_cache
 
 
+def invalidate_settings_status_cache() -> None:
+    """設定ステータスのキャッシュを破棄する。"""
+    global _settings_status_cache
+    _settings_status_cache = None
+
+
 def get_cached_settings_status() -> dict[str, Any]:
     """キャッシュがあればそれを返す。なければ refresh_settings_status() を呼ぶ。"""
     if _settings_status_cache is not None:
@@ -136,7 +142,10 @@ def get_settings_status() -> dict[str, Any]:
 
     # 認証情報の登録状態は DB を正本とする（値は返さない）
     from core.secret_store import list_secret_status
-    secret_status = list_secret_status()
+    from core.channel_profile import get_active_profile
+    active_profile = get_active_profile()
+    secret_profile_id = active_profile.profile_id if active_profile is not None else "default"
+    secret_status = list_secret_status(profile_id=secret_profile_id)
 
     return {
         "voicevox": voicevox_result,

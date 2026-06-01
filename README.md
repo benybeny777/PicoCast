@@ -104,8 +104,10 @@ pip install --upgrade -r config/requirements.txt
 
 ### Step 2. 認証情報の登録
 
-認証情報はすべて **設定画面の「認証情報」セクション** から登録します。
-情報はデータベースへ暗号化保存されるため、安全に管理できます。
+認証情報はすべて **設定画面の「APIキー」タブ** から登録します。
+情報は active channel profile ごとにデータベースへ暗号化保存されるため、チャンネルを切り替えて個別に管理できます。
+チャンネルの `profile_id` / `genre_profile` / `output_root` はチャンネルハンドル（`@` なし）で統一されます。
+チャンネル詳細画面から、そのチャンネル専用の APIキー・YouTube Client Secrets を登録できます。
 
 | 項目 | 用途 |
 |:---|:---|

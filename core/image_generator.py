@@ -94,12 +94,13 @@ class ImageGenerator:
 
         self.client = None
         if self.background_engine == "nanobanana":
-            from core.secret_store import has_secret, load_secret, SecretNotFoundError
-            if not has_secret("google_api_key"):
+            from core.secret_store import current_profile_id_or_default, has_secret, load_secret
+            profile_id = current_profile_id_or_default()
+            if not has_secret("google_api_key", profile_id=profile_id):
                 raise RuntimeError(
                     "Google API キーが未登録です。設定画面の「認証情報」から登録してください。"
                 )
-            self.client = genai.Client(api_key=load_secret("google_api_key"))
+            self.client = genai.Client(api_key=load_secret("google_api_key", profile_id=profile_id))
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):
