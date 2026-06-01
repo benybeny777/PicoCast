@@ -476,14 +476,15 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 
 複数ジョブ（複数生成など）を同時実行すると、`run_in_worker()` が各 worker subprocess の stdout を Web プロセス内スレッドでブロッキング読み取りするため、Web プロセスが応答不能になり UI のログ・ステータス更新が止まる事象が起きる（生成 subprocess 自体は独立プロセスのため進行する）。
 
-これを防ぐため、`worker_runner.py` で **`threading.BoundedSemaphore` によりワーカー subprocess の同時起動数を制限**する。
+これを防ぐため、`worker_runner.py` の **`_ConcurrencyGate`（Apache MPM 風の自動増減ゲート）でワーカー subprocess の同時起動数を制御**する。
 
-- 上限は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列実行）。
-- 上限に達している間は後続ジョブが `with _worker_slots` で順番待ち（キュー）になり、待機開始時に `⏳ …順番待ち` をジョブログへ出す。
-- 投入自体はブロックしない（`JobManager` がジョブを受け付け、実行枠が空き次第 subprocess を起動）。
+- 下限 `JOB_MIN_CONCURRENT_WORKERS`（既定 `1`）・上限 `JOB_MAX_CONCURRENT_WORKERS`（既定 `1`）を config で定義（`1 <= min <= max`、不正値は起動時に `ValueError`）。
+- **負荷（acquire 待ち行列）に応じて min↔max を自動増減**する: 待ちが出れば上限 `max` まで段階的にスケールアップ、待ちが無くなれば下限 `min` まで段階的にスケールダウン。`BoundedSemaphore` と異なり実行中に許容数を変えられる。
+- 上限に達して順番待ちになるジョブは `with _worker_gate` でブロックし、待機開始時に `⏳ …順番待ち` をジョブログへ出す。投入自体はブロックしない（`JobManager` がジョブを受け付け、枠が空き次第 subprocess を起動）。
+- 既定 `min=max=1` は完全直列（最も安全）。`max` を上げると並行実行で生成は速くなるが、Web プロセスの並列飽和（無応答）リスクが上がる点に注意。
 - 純 Python・追加インフラ不要のため配布物にそのまま同梱できる（販売・配布を想定し、外部ミドルウェアに依存しない方針）。
 
-> **将来の選択肢（未実装）**: 多ノード・分散実行や永続キューが必要になった場合は Kafka / Redis(RQ・Celery) / SQLite ジョブキュー表＋別コンシューマ等への置き換えを検討する。ただしこれらはブローカー/サーバ運用が必要で**ローカル配布には不向き**なため、現行は上記の軽量なプロセス内キューを採用する。
+> **将来の選択肢（未実装）**: 多ノード・分散実行や永続キューが必要になった場合は Kafka / Redis(RQ・Celery) / SQLite ジョブキュー表＋別コンシューマ等への置き換えを検討する。ただしこれらはブローカー/サーバ運用が必要で**ローカル配布には不向き**なため、現行は上記の軽量なプロセス内ゲートを採用する。
 
 ### 主要画面
 
@@ -884,7 +885,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
 | `JOB_LOG_DIR` | `output/000_data/job_logs` | ジョブログ永続化ファイルの保存ディレクトリ |
 | `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`jobs.json` 1ファイルに全ジョブを保存し、超過分は古い順に切り捨て（ファイルローテーションなし）。デバッグログ（`app_debug.log`）は別途 `TimedRotatingFileHandler` で毎日0時にローテートし `DEBUG_LOG_RETENTION_DAYS` 日分を保持する |
-| `JOB_MAX_CONCURRENT_WORKERS` | 1 | 同時に起動するワーカーsubprocess数（生成・レンダー）。複数同時実行時のリソース枯渇・Web無応答を防ぐためセマフォで直列化。超過分は順番待ち（キュー）。変更は再起動後に反映 |
+| `JOB_MIN_CONCURRENT_WORKERS` | 1 | ワーカーsubprocess同時起動数の下限（待ち行列が無いときの基準並列数。`1 <= min <= max`）。変更は再起動後に反映 |
+| `JOB_MAX_CONCURRENT_WORKERS` | 1 | ワーカーsubprocess同時起動数の上限。待ち行列（負荷）が出ると min→max まで自動スケールアップし、空けば min へ戻る。既定1=直列。上げるとWeb無応答リスク増。変更は再起動後に反映 |
 
 ---
 

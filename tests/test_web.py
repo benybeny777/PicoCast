@@ -734,8 +734,8 @@ _DUMMY_WORKER = (
 )
 
 
-def test_worker_runner_serializes_concurrent_workers(tmp_path, monkeypatch):
-    """JOB_MAX_CONCURRENT_WORKERS=1 のとき、複数ジョブの subprocess が同時に走らず直列化されること。"""
+def _run_dummy_workers(tmp_path, monkeypatch, gate, n=3):
+    """ダミーワーカーを n 本同時投入し、各 (start, end) の実時間を返す。"""
     import threading
     import time
     import uuid
@@ -744,8 +744,7 @@ def test_worker_runner_serializes_concurrent_workers(tmp_path, monkeypatch):
 
     (tmp_path / "dummy_worker.py").write_text(_DUMMY_WORKER, encoding="utf-8")
     monkeypatch.setattr(wr, "_WORKER_DIR", str(tmp_path))
-    monkeypatch.setattr(wr, "_MAX_CONCURRENT_WORKERS", 1)
-    monkeypatch.setattr(wr, "_worker_slots", threading.BoundedSemaphore(1))
+    monkeypatch.setattr(wr, "_worker_gate", gate)
 
     intervals: list[tuple[float, float]] = []
     lock = threading.Lock()
@@ -758,17 +757,33 @@ def test_worker_runner_serializes_concurrent_workers(tmp_path, monkeypatch):
         with lock:
             intervals.append((t0, t1))
 
-    threads = [threading.Thread(target=run_one) for _ in range(3)]
+    threads = [threading.Thread(target=run_one) for _ in range(n)]
     for t in threads:
         t.start()
     for t in threads:
         t.join(timeout=30)
+    return intervals
+
+
+def test_worker_gate_serializes_when_max_is_one(tmp_path, monkeypatch):
+    """min=max=1 のとき、複数ジョブの subprocess が同時に走らず直列化されること。"""
+    import web_app.worker_runner as wr
+
+    intervals = _run_dummy_workers(tmp_path, monkeypatch, wr._ConcurrencyGate(1, 1), n=3)
 
     assert len(intervals) == 3
     # 各ダミーワーカーは約0.3秒。直列化されていれば全体で約0.9秒（>=0.6秒）かかる。
-    # 並行実行なら約0.3秒で終わってしまう。
     total_elapsed = max(e for _s, e in intervals) - min(s for s, _e in intervals)
     assert total_elapsed >= 0.6, f"workers ran concurrently (total={total_elapsed:.2f}s): {intervals}"
-    # 終了時刻が約0.3秒間隔で階段状に並ぶ（=順次実行）
-    ends = sorted(e for _s, e in intervals)
-    assert ends[1] - ends[0] >= 0.2 and ends[2] - ends[1] >= 0.2, f"ends not staggered: {ends}"
+
+
+def test_worker_gate_autoscales_up_to_max(tmp_path, monkeypatch):
+    """min=1,max=3 のとき、負荷（同時投入）に応じて max まで自動でスケールアップし並行実行されること。"""
+    import web_app.worker_runner as wr
+
+    intervals = _run_dummy_workers(tmp_path, monkeypatch, wr._ConcurrencyGate(1, 3), n=3)
+
+    assert len(intervals) == 3
+    # 3本が並行実行されれば全体は約0.3〜0.5秒で収まる（直列なら約0.9秒）。
+    total_elapsed = max(e for _s, e in intervals) - min(s for s, _e in intervals)
+    assert total_elapsed < 0.6, f"workers did not run in parallel (total={total_elapsed:.2f}s): {intervals}"

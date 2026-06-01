@@ -6,9 +6,10 @@
 
 ## 2026-06-01
 
-### 複数同時実行でWebが無応答になる問題をジョブ直列化（キュー）で解消
+### 複数同時実行でWebが無応答になる問題をジョブ並列数の自動制御（キュー）で解消
 
-- 複数ジョブ同時実行時に Web プロセスが応答不能になり UI のログ更新が止まる事象を修正。`worker_runner.py` で `threading.BoundedSemaphore` を用いてワーカー subprocess の同時起動数を `JOB_MAX_CONCURRENT_WORKERS`（既定1）に制限し、超過分は順番待ち（キュー）にした。
+- 複数ジョブ同時実行時に Web プロセスが応答不能になり UI のログ更新が止まる事象を修正。`worker_runner.py` に Apache MPM 風の `_ConcurrencyGate` を追加し、ワーカー subprocess の同時起動数を下限 `JOB_MIN_CONCURRENT_WORKERS` ↔ 上限 `JOB_MAX_CONCURRENT_WORKERS`（ともに既定1）の範囲で**負荷（待ち行列）に応じて自動増減**するようにした。超過分は順番待ち（キュー）。
+- 既定 `min=max=1`（直列）で最も安全。`max` を上げると並行実行で速くなるが Web 無応答リスクが上がる。
 - 追加インフラ不要・純Python実装（配布・販売を想定し外部ミドルウェアに依存しない）。Kafka/Redis 等は配布に不向きなため将来の選択肢として SPEC に記載。
 
 ### 履歴詳細の「メタデータ」欄を DB から再構築して復活
