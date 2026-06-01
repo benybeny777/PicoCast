@@ -506,6 +506,7 @@ def upsert_video(conn: sqlite3.Connection, local_id: str, output_dir: str,
                            script_content)
         VALUES(?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(local_id) DO UPDATE SET
+            output_dir=excluded.output_dir,
             title=excluded.title, video_type=excluded.video_type,
             updated_at=excluded.updated_at, mp4_path=excluded.mp4_path,
             thumbnail_path=excluded.thumbnail_path, script_path=excluded.script_path,
@@ -941,6 +942,23 @@ def get_render_info(local_id: str) -> dict:
         except Exception:
             pass
     return d
+
+
+def get_script_content(local_id: str) -> str | None:
+    """videos.script_content を DB から取得する（metadata.db 正本）。
+
+    未登録 / 空の場合は None を返す。値の読み取りはこの関数経由に統一する。
+    """
+    if not is_initialized():
+        initialize_db()
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT script_content FROM videos WHERE local_id=?", (local_id,)
+        ).fetchone()
+    if row is None:
+        return None
+    text = row["script_content"]
+    return text if text else None
 
 
 def insert_image_replacement(entry: dict) -> int:
@@ -1459,7 +1477,7 @@ def import_output_dir(output_dir_root: str | None = None) -> None:
         _import_one(entry.path, ok_ref := [ok], warn_ref := [warn], fail_ref := [fail])
         ok, warn, fail = ok_ref[0], warn_ref[0], fail_ref[0]
 
-    print(f"\n✅ 取り込み完了: 成功={ok} / 警告={warn} / 失敗={fail}")
+    print(f"\n[完了] 取り込み: 成功={ok} / 警告={warn} / 失敗={fail}")
 
 
 def _import_one(folder: str, ok_ref: list, warn_ref: list, fail_ref: list) -> None:
@@ -1469,10 +1487,10 @@ def _import_one(folder: str, ok_ref: list, warn_ref: list, fail_ref: list) -> No
     try:
         sync_folder_to_db(folder)
         ok_ref[0] += 1
-        print(f"  ✅ {os.path.basename(folder)}")
+        print(f"  [OK] {os.path.basename(folder)}")
     except Exception as e:
         fail_ref[0] += 1
-        print(f"  ❌ {os.path.basename(folder)}: {e}")
+        print(f"  [NG] {os.path.basename(folder)}: {e}")
 
 
 # ── __main__（コマンド実行） ─────────────────────────────────────────────────

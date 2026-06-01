@@ -58,6 +58,30 @@ def is_safe_output_path(path: str) -> bool:
         return False
 
 
+def find_history_dir(history_name: str) -> str | None:
+    """
+    履歴フォルダ名（basename）を実体パスへ解決する。
+    videos/ → 000_uploaded/ の順で探し、active profile の output_root 配下に限定する。
+    見つからない / 不正名の場合は None を返す（例外は投げない）。
+
+    注意: 履歴テーマフォルダは output_root 直下ではなく videos/・000_uploaded/ 配下に
+    あるため、`safe_output_path(history_name)`（base=output_root）では解決できない。
+    フォルダ名から実体を引く処理はこの関数に統一すること。
+    """
+    if not history_name or ".." in history_name or "/" in history_name or "\\" in history_name:
+        return None
+    from core.output_paths import get_output_videos_dir, get_uploaded_dir
+    output_base = _get_output_base()
+    for base in (get_output_videos_dir(), get_uploaded_dir()):
+        candidate = os.path.join(base, history_name)
+        if os.path.isdir(candidate):
+            try:
+                return safe_output_path(candidate, output_base=output_base)
+            except HTTPException:
+                return None
+    return None
+
+
 def is_video_folder(name: str) -> bool:
     """動画フォルダのプレフィックスがあるフォルダのみ動画フォルダとみなす。"""
     from config import config

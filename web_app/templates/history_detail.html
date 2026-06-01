@@ -56,7 +56,7 @@
 <!-- 再生成設定と実行 -->
 <div class="card mt">
   <h2>動画・全工程の再生成</h2>
-  <p class="hint">台本(script.txt)を元に、チェック・音声・画像・動画の全工程を再生成するか、既存の音声/画像から動画のみを再生成します。</p>
+  <p class="hint">保存済みの台本を元に、チェック・音声・画像・動画の全工程を再生成するか、既存の音声/画像から動画のみを再生成します。</p>
 
   <div class="form-row">
     <div class="form-group">
@@ -438,7 +438,7 @@ async function _startPipelineJob(onSuccess) {
 }
 
 async function regenerateFull() {
-  if (!confirm('台本(script.txt)を元に全工程を再生成し、最後にMP4化まで実施します。\n現在の生成物はすべて上書きされます。よろしいですか？')) return;
+  if (!confirm('保存済みの台本を元に全工程を再生成し、最後にMP4化まで実施します。\n現在の生成物はすべて上書きされます。よろしいですか？')) return;
 
   await _startPipelineJob(async () => {
     appendLog('アセット生成完了。MP4化を開始します...', 'info');
@@ -480,7 +480,7 @@ function readBgmParams() {
 }
 
 async function regenerateWithoutRender() {
-  if (!confirm('台本(script.txt)を元に、チェック・音声生成・画像生成の工程を再生成します（MP4化は除く）。\n現在の生成物はすべて上書きされます。よろしいですか？')) return;
+  if (!confirm('保存済みの台本を元に、チェック・音声生成・画像生成の工程を再生成します（MP4化は除く）。\n現在の生成物はすべて上書きされます。よろしいですか？')) return;
   await _startPipelineJob();
 }
 

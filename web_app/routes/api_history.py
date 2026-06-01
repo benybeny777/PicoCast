@@ -98,5 +98,5 @@ def api_regenerate_histories(req: HistoryRegenerateRequest):
         req.bgm_volume_db,
     )
     if not job_ids:
-        raise HTTPException(status_code=404, detail="再生成可能なscript.txtが見つかりません")
+        raise HTTPException(status_code=404, detail="再生成できる台本がDB(metadata.db)に見つかりません")
     return {"job_ids": job_ids, "count": len(job_ids)}

@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 from web_app.job_manager import Job, _log, get_job_manager
-from web_app.security import safe_output_path
+from web_app.security import find_history_dir
 from web_app.worker_runner import run_in_worker
 
 
@@ -18,8 +18,8 @@ def submit_render_job(
 ) -> str:
     """動画再レンダリングジョブを登録してjob_idを返す。"""
     _validate_name(history_name)
-    theme_dir = safe_output_path(history_name)
-    if not os.path.isdir(theme_dir):
+    theme_dir = find_history_dir(history_name)
+    if theme_dir is None:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
 
@@ -37,7 +37,10 @@ def _run_render(
     bgm_id: str | None,
     bgm_volume_db: float | None,
 ) -> dict[str, Any]:
-    theme_dir = safe_output_path(history_name)
+    theme_dir = find_history_dir(history_name)
+    if theme_dir is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
     _log(job, "audio/ と backgrounds/ から MP4 を再生成します", "info")
     _log(job, f"対象フォルダ: {theme_dir}", "info")
 

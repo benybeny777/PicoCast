@@ -8,7 +8,7 @@ from typing import Any
 
 from core.output_paths import get_output_videos_dir
 from web_app.job_manager import Job, _log, get_job_manager
-from web_app.security import safe_output_path
+from web_app.security import find_history_dir
 
 
 def _detect_is_shorts_from_dir(theme_dir: str) -> bool:
@@ -28,8 +28,7 @@ def _detect_is_shorts_from_dir(theme_dir: str) -> bool:
 
 def list_images(history_name: str) -> dict[str, Any]:
     """指定履歴の画像一覧を返す。"""
-    _validate_name(history_name)
-    theme_dir = safe_output_path(history_name)
+    theme_dir = _resolve_dir(history_name)
 
     replacements = _replacement_map(history_name)
     thumbnails = []
@@ -119,8 +118,7 @@ def save_bg_prompts(history_name: str, prompts: dict[str, str]) -> list[str]:
     {key: prompt_text} を受け取り backgrounds/prompt_bg_XXXX.txt に書き込む。
     保存済みキーの一覧を返す。
     """
-    _validate_name(history_name)
-    theme_dir = safe_output_path(history_name)
+    theme_dir = _resolve_dir(history_name)
     bg_dir = os.path.join(theme_dir, "backgrounds")
     saved = []
     for key, text in prompts.items():
@@ -168,7 +166,7 @@ def _run_regenerate(
     from core.image_generator import ImageGenerator
     from workers.main import regenerate_thumbnail_only
 
-    theme_dir = safe_output_path(history_name)
+    theme_dir = _resolve_dir(history_name)
     bg_dir = os.path.join(theme_dir, "backgrounds")
 
     is_shorts = _detect_is_shorts_from_dir(theme_dir)
@@ -244,3 +242,13 @@ def _validate_name(name: str) -> None:
     if ".." in name or "/" in name or "\\" in name:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")
+
+
+def _resolve_dir(history_name: str) -> str:
+    """履歴名を検証し、実体のテーマフォルダ（videos/・000_uploaded/）を解決する。"""
+    _validate_name(history_name)
+    theme_dir = find_history_dir(history_name)
+    if theme_dir is None:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="履歴フォルダが見つかりません")
+    return theme_dir

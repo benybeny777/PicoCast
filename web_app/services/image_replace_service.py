@@ -19,7 +19,7 @@ from core.metadata_db import (
     list_image_replacements,
 )
 from core.output_paths import get_backups_dir
-from web_app.security import safe_output_path
+from web_app.security import find_history_dir, safe_output_path
 
 _ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 
@@ -134,8 +134,8 @@ def restore_image(history_name: str, replacement_id: int, confirmed: bool) -> di
 def _validate_history(history_name: str) -> str:
     if not history_name or ".." in history_name or "/" in history_name or "\\" in history_name:
         raise ValueError("無効な履歴名です")
-    theme_dir = safe_output_path(history_name)
-    if not os.path.isdir(theme_dir):
+    theme_dir = find_history_dir(history_name)
+    if theme_dir is None:
         raise FileNotFoundError("履歴フォルダが見つかりません")
     return theme_dir
 
@@ -151,7 +151,7 @@ def _resolve_target(history_name: str, target_key: str) -> tuple[str, str, str]:
         or (normalized.startswith("backgrounds/bg_") and normalized.lower().endswith(".png"))
     ):
         raise ValueError("差し替え対象外の画像です")
-    target_path = safe_output_path(f"{history_name}/{normalized}")
+    target_path = safe_output_path(normalized, output_base=theme_dir)
     return theme_dir, target_path, os.path.basename(theme_dir)
 
 
