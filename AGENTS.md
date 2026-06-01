@@ -27,7 +27,7 @@
   - テンプレートが DB に未登録なら RuntimeError（フォールバックなし）。
   - 編集は設定画面「テンプレート」タブ または `POST /api/prompt-templates` で行う。
 - `config/prompt_profiles/genres/{genre_profile}/` はテンプレート seed 用ファイル置き場（`prompt_profile_loader.py` 経由）。seed 以外では参照しない。
-- `config/prompt_parts/` および `local/` オーバーライド層は廃止済み。ファイルは削除済み。
+- プロンプトテンプレートは DB を正本とし、ファイルは初期 seed 用としてのみ扱う。
 - genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
 - 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。必ず `config/config.py` に `os.environ.get(...)` 付きで定数として定義する。ループインデックスや内部カウンタなど実装上の定数は対象外。
 - `config/config.py` の各定数には必ず末尾コメント（`# 説明`）を付ける。新規追加・変更時もコメントを省略しない。
@@ -51,13 +51,13 @@
 - 認証情報の値をレスポンス・ログ・例外メッセージへ絶対に含めない。APIキー設定は bool（有無）のみ返す。
 - DB 復号失敗・master key 取得失敗は例外を上位に伝播させる（フォールバック禁止）。
 - OAuth refresh 後のトークンは `save_secret()` で DB へ再保存する。`token.json` / `token_analytics.json` を恒久ファイルとして新規作成しない。
-- Web UI を唯一の操作入口とする。`workers/main.py` は生成パイプラインとして使い、旧Tkinter GUI/CLI導線を復活させない。
+- Web UI を唯一の操作入口とする。`workers/main.py` は生成パイプラインとしてのみ使う。
 - 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
 - output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
 - 破壊的操作（アップロード・固定コメント・スケジュール変更）は `confirmed=true` 必須 + 画面確認ダイアログ必須。
 - 実装が不安定な機能は `[DISABLED]` / `[dry-run]` として画面とコードコメントに明記し、無効ではなくユーザーに理由を提示する。
 - テストは `tests/test_web.py` で行う。外部API実通信が必要なテストはモックまたはskip可能にする。
-- Starlette 1.1.0以降: `TemplateResponse(request, name, context)` の引数順に従う（旧API `TemplateResponse(name, {request: ...})` は使わない）。
+- Starlette 1.1.0以降: `TemplateResponse(request, name, context)` の引数順に従う。
 - 設定画面で保存した値はアプリ再起動なしで即時反映する。`config_service._apply_runtime_updates()` で `setattr(cfg, key, value)` と `sys.modules` 全走査による伝搬を行う。`WEB_UI_PORT` など「アプリ起動時に固定されるパラメータ」だけを例外とし、それらは EDITABLE_CONFIG から除外する。UI上に「再起動後に反映」という文言を出さない。
 
 ## Web UI チャンネル切替
@@ -76,7 +76,7 @@
 
 ## 実行環境
 
-- Windows / Mac を想定する。ffmpeg/native生成を主経路とし、YMM4プロジェクト出力は廃止済み。
+- Windows / Mac を想定する。動画出力は ffmpeg/native 生成を主経路とする。
 - Python 仮想環境: `.venv/`
 - 起動: 通常は `start.bat` 推奨（手動起動時は `python -m web_app.app --open-browser`）
 - VOICEVOX をローカルで起動しておく必要がある（`http://localhost:50021`）
@@ -113,7 +113,7 @@ output/{profile_id}/          ← active profile の output_root
 │       ├── audio/
 │       └── backgrounds/
 ├── 000_uploaded/             ← アップロード済みアーカイブ（履歴にも表示）
-├── 000_backups/              ← 生成時の旧フォルダバックアップ
+├── 000_backups/              ← 生成時のフォルダバックアップ
 └── 000_data/
     └── metadata.db           ← 動画メタ・youtube_status・Analytics・ジョブ履歴（正本）
 ```

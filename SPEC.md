@@ -42,7 +42,7 @@ yukkurijidou/
 │   ├── services/           # ビジネスロジック層
 │   │   ├── status_service.py       # 設定診断・ダッシュボード状態
 │   │   ├── config_service.py       # Web UIから編集できる非秘密設定
-│   │   ├── secrets_service.py      # 認証情報の DB 暗号化保存・削除・旧ファイル管理
+│   │   ├── secrets_service.py      # 認証情報の DB 暗号化保存・削除
 │   │   ├── history_service.py      # 生成履歴一覧・詳細
 │   │   ├── generation_service.py   # 動画生成ジョブ
 │   │   ├── script_check_service.py # LLM/尺チェックジョブ
@@ -94,7 +94,7 @@ yukkurijidou/
 │   ├── retention_analysis.py # 視聴者維持率の離脱・ループ点分析
 │   ├── comment_templates.py # 固定コメント自動生成テンプレート（めたん調）
 │   ├── upload_scheduler.py # YouTube Data API を正とするアップロードスケジュール管理
-│   ├── upload_records.py   # metadata.db の youtube_status + render_info からアップロード記録互換形式を構築
+│   ├── upload_records.py   # metadata.db の youtube_status + render_info からアップロード記録を構築
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
 │   ├── youtube_uploader.py # YouTube APIアップロード
 │   ├── playlist_resolver.py # 台本カテゴリ名＋動画形式 → YouTube再生リスト名の解決。`resolve_video_type(video_format, screen_format)` でネタ会議を含む全動画形式を "shorts"/"long" に統一判定する関数も提供
@@ -193,7 +193,7 @@ yukkurijidou/
 11. サムネイル生成（Nano Banana または Stable Diffusion WebUI）
 12. 背景画像生成（Nano Banana または Stable Diffusion WebUI）
    └── 再利用チェック: 台本変更で枚数が変わる場合は全再生成
-13. 旧タイムライン互換ヘルパーで素材タイミングを組立
+13. 素材タイミングを組立
 14. BGM追加
 15. native MP4出力
 16. 実尺レビュー + 完了レポート
@@ -324,7 +324,7 @@ for item in dialogue_items:
 - **自動修正なし** — ログ表示と `metadata.db` 保存のみ
 - `must_fix` がある場合、または `final_score` が `OPENING_SCORE_HARD_ABORT_THRESHOLD` 未満の場合は、音声・画像生成へ進まず中止する
 - `render_engine` を入力に含め、native Shorts では「31行以上のみ must_fix」の基準で判定させる（22〜28行は可、24〜27行は理想）
-- ChatGPT 応答に旧 YMM4 基準由来の「21行以上 must_fix」が返ってきた場合、native かつ dialogue_count <= 28 なら自動で除去する
+- ChatGPT 応答に現行基準外の行数指摘が返ってきた場合、native かつ dialogue_count <= 28 なら自動で除去する
 - 冒頭1行目の食べ物名チェック: タイトル由来キーワードだけでなく `FOOD_HINT_WORDS`（コーヒー・コーラ・牛乳・紅茶等の飲み物を含む）が初行に直接あればOKとする。N選型は初行に代表食材1つがあればOK（全食材の列挙は不要）
 
 ### DB保存
@@ -398,10 +398,10 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 - アップロード実行後:
   1. `assign_slots_from_youtube()` で YouTube 予約済み一覧を正として次の空きスロットを取得
   2. `update_video_publish_time()` で YouTube API に公開予定を設定（`_slot_lock` で複数本同時アップロード時の競合を防止）
-  3. `metadata.db` の `youtube_status` テーブルに書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=scheduled` / `publish_at=JST isoformat`）。スロット取得失敗時は `publish_status=private`。`_meta/upload_record.json` への書き込みは廃止済み。
+  3. `metadata.db` の `youtube_status` テーブルに書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=scheduled` / `publish_at=JST isoformat`）。スロット取得失敗時は `publish_status=private`。
   4. フォルダを `output/{profile_id}/000_uploaded/<フォルダ名>/` へ移動する。履歴画面は `videos/` と `000_uploaded/` の両方を走査するため、移動後も履歴に表示される
   5. `output/{profile_id}/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
-- スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。`upload_schedule_*.json` / `upload_records.json` / `upload_record.json` はすべて廃止済み。アップロード状態は `metadata.db` の `youtube_status` テーブルが正本
+- スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。アップロード状態は `metadata.db` の `youtube_status` テーブルが正本
 - `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す
 - `sync_schedule_from_youtube()`: YouTube API を正として `youtube_status` テーブルへ書き戻す。チャンネル全件取得に失敗した場合は既知 video_id のみでフォールバック
 - すべての日時（ジョブ起動時刻・ログタイムスタンプ・`publish_at`）はJST で統一する
@@ -409,13 +409,13 @@ Ollamaに接続できない場合、誤通過防止のため冒頭レビュー�
 
 ### 出力データディレクトリ
 
-すべてのデータは `output/{profile_id}/000_data/metadata.db`（SQLite）に格納する。ファイルベースの管理は廃止済み。
+すべてのデータは `output/{profile_id}/000_data/metadata.db`（SQLite）に格納する。
 
 | パス | 用途 |
 |---|---|
 | `output/{profile_id}/000_data/metadata.db` | 動画メタ・youtube_status・Analytics・ジョブ履歴（正本） |
 | `output/{profile_id}/000_uploaded/` | アップロード済み動画フォルダのアーカイブ |
-| `output/{profile_id}/000_backups/` | 生成時の旧フォルダバックアップ |
+| `output/{profile_id}/000_backups/` | 生成時のフォルダバックアップ |
 
 `core/output_paths.py` が active profile の `output_root` を基準にパスを解決して各モジュールへ提供する。
 
@@ -564,7 +564,7 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 
 ### Web一本化方針
 
-- 旧Tkinter GUI と `main.py` のCLI生成入口は廃止済み。操作入口はローカル Web UI のみ。
+- 操作入口はローカル Web UI のみ。
 - `main.py` は `run_pipeline()` を提供する生成パイプラインとして残し、Web UI のジョブから呼び出す。
 - `run_pipeline` / `ScriptParser` / `core/*` はWeb UIの共通基盤として維持する。
 
@@ -867,8 +867,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 
 Shorts / Long の本番レンダラー。通常の「生成」ボタンで native MP4 を出力する。
 
-- **デフォルト動作**: `run_pipeline()` は常にnative用素材を生成する。YMM4プロジェクト出力とYMM4本番レンダリングは廃止済み。
-- `.ymmp` プロジェクトは生成しない。素材生成後、Web UIジョブが `render_native_test()` を呼び出してnative MP4を作る。
+- **デフォルト動作**: `run_pipeline()` は常にnative用素材を生成する。
+- 素材生成後、Web UIジョブが `render_native_test()` を呼び出してnative MP4を作る。
 - `render_native_test(output_dir, voice_speed_intro, voice_speed_body, estimated_duration_sec)` が音声・背景を結合して `{履歴フォルダ名}_native.mp4` を出力する。固定ファイル名のため再生成時は上書き。
 - ffmpeg は常に `-nostdin` と `stdin=DEVNULL` で非対話実行し、履歴からの再作成で既存ファイルや入力待ちによりWebジョブがハングしないようにする。1コマンドの上限は `NATIVE_FFMPEG_TIMEOUT_SEC`、ffprobe は `NATIVE_FFPROBE_TIMEOUT_SEC` で制御する。
 - 最終MP4生成時は、VOICE+BGMミックス後の音声へ `loudnorm=I=-15:TP=-1.5:LRA=6` を適用する。`NATIVE_AUDIO_LOUDNORM_*` で `.env` 上書き可能。
@@ -1020,7 +1020,7 @@ output/{profile_id}/videos/{テーマ名}/
 
 タイトル・説明文・タグ・レビュー・アップロード状態などの管理データは `output/{profile_id}/000_data/metadata.db` に保存する。
 
-**アップロード記録は `metadata.db` の `youtube_status` テーブルが正本。`_meta/upload_record.json` への書き込みは廃止済み。**
+**アップロード記録は `metadata.db` の `youtube_status` テーブルが正本。**
 予約・公開状態の正は YouTube Data API 側（`publishAt` / `privacyStatus`）。生成時に退避した `000_backups/` の同一テーマバックアップは最新1世代のみ保持し、アップロード成功後に削除する。
 
 ---
@@ -1060,7 +1060,7 @@ output/{profile_id}/videos/{テーマ名}/
 
 初回セットアップでは、必ずプロンプト設定を確認します。
 
-プロンプトは `config/prompt_profiles/genres/{genre_profile}/` にジャンル固有設定を置く。個人上書きは `config/prompt_profiles/local/genres/{genre_profile}/` または `config/prompt_profiles/local/profiles/{profile_id}/` に置く（Git 管理外）。旧 `config/prompt_parts/local/` は廃止済み。
+プロンプトテンプレートは `data/settings.db` の `prompt_templates` テーブルが正本です。`config/prompt_profiles/genres/{genre_profile}/` は初期 seed 用のジャンル固有テンプレート置き場として使います。実行時のプロンプト組み立ては DB テンプレートから行います。
 
 ### 生成
 
@@ -1086,7 +1086,7 @@ output/{profile_id}/videos/{テーマ名}/
 - タイトル分類は A〜H。H は「名前・発祥の勘違い」（天津飯・ナポリタン・シュークリーム等）
 - 自分ごと化タイトル（勘違い破壊型・損回避型・日常の理由型・名前の罠型など）を20案中5〜7案混ぜる
 - TOP5は、タイトル単体ではなく実績データを加味して選定。事実確認ポイント欄を必ず記入
-- **採点は0〜100点満点**（旧：0〜10点）。点数の目安: 90〜100=逆転/勘違い破壊強・80〜89=興味はあるが弱め・70〜79=「理由」「歴史」止まり・69以下=汎用/既知ネタ
+- **採点は0〜100点満点**。点数の目安: 90〜100=逆転/勘違い破壊強・80〜89=興味はあるが弱め・70〜79=「理由」「歴史」止まり・69以下=汎用/既知ネタ
 - **78点止まり判定**: 「〇〇の理由」「〇〇の歴史」「〇〇の秘密」だけで成立するタイトルは原則78点以下。TOP5に入れない。改稿必須
 - **90点条件**: 名前の勘違い破壊・価値逆転・本物/偽物のズレ・海外ギャップ・身近な商品の構造・視聴者自身の勘違い・冒頭断言 のうち2つ以上を満たす場合のみ90点以上
 - **汎用性チェック**: 食べ物名を別食材に置き換えても成立するタイトルは汎用タイトルとして−10点・78点判定 yes
@@ -1137,7 +1137,7 @@ vidIQ/Analytics分析の反映として、食べ物雑学Shortsでは1行目を�
 
 コード上では `core/script_prompts.py` の `build_title_prompt()` / `build_script_generation_prompt()` / `build_meeting_script_prompt()` が、active profile のデフォルト DB テンプレートから組み立てます。実績データ未取得時の TSV 見出しは `TITLE_ANALYTICS_TSV_HEADER` で管理します。
 
-テンプレートの編集は設定画面「テンプレート」タブまたは `POST/PUT /api/prompt-templates` で行います。`config/prompt_parts/` および `local/` オーバーライド層は廃止済みです。
+テンプレートの編集は設定画面「テンプレート」タブまたは `POST/PUT /api/prompt-templates` で行います。
 
 AI編集者向けルール:
 
@@ -1175,11 +1175,11 @@ AI編集者向けルール:
 
 ### 動画出力
 
-動画出力は ffmpeg/native MP4 のみを対象にします。YMM4 GUI自動操作によるMP4出力と `.ymmp` プロジェクト出力は廃止済みです。
+動画出力は ffmpeg/native MP4 のみを対象にします。
 
 ### YouTubeアップロード
 
-`YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には `output/{profile_id}/videos/` 配下にある `.mp4` がある履歴フォルダだけを表示します（`000_uploaded/` 配下は表示しない）。各履歴フォルダから最新の `.mp4` を探し、`metadata.db` の `render_info` テーブルのタイトル・説明文・タグを使ってアップロードします。アップロードの可否判断はローカルステータスでブロックしない（YouTube Data API が正）。アップロード成功後は履歴フォルダを `output/{profile_id}/000_uploaded/` に移動し、`metadata.db` の `youtube_status` テーブルへ結果を記録します（`_meta/upload_record.json` への書き込みは廃止済み）。予約枠の空き判断はYouTube側の予約状態を参照します。再アップロードが必要な場合はフォルダを `videos/` に手動で戻せば候補に現れます。
+`YouTubeアップ` は履歴選択式です。複数の履歴を選択できます。アップロード選択画面には `output/{profile_id}/videos/` 配下にある `.mp4` がある履歴フォルダだけを表示します（`000_uploaded/` 配下は表示しない）。各履歴フォルダから最新の `.mp4` を探し、`metadata.db` の `render_info` テーブルのタイトル・説明文・タグを使ってアップロードします。アップロードの可否判断はローカルステータスでブロックしない（YouTube Data API が正）。アップロード成功後は履歴フォルダを `output/{profile_id}/000_uploaded/` に移動し、`metadata.db` の `youtube_status` テーブルへ結果を記録します。予約枠の空き判断はYouTube側の予約状態を参照します。再アップロードが必要な場合はフォルダを `videos/` に手動で戻せば候補に現れます。
 
 YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや `script.txt` から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
 
@@ -1196,7 +1196,7 @@ YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タ
 
 対象の再生リストが YouTube 上に存在しない場合は自動作成してから登録します。カンマ区切りで複数カテゴリを指定した場合はすべてに登録します。結果は `metadata.db` の `playlists` テーブルに保存します。
 
-**② 台本に `再生リスト:` がない場合（後方互換）**
+**② 台本に `再生リスト:` がない場合**
 
 Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リストへ動画を追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。Shortsには適用しません。
 
@@ -1208,7 +1208,7 @@ Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リス
 
 Analytics取得・画面表示・TSV出力には `dislikes`（低評価数）/ `like_dislike_total`（いいね+低評価合計）/ `dislike_rate`（低評価率 = dislikes / max(likes+dislikes, 1) × 100）を含める。`likes + dislikes < ANALYTICS_DISLIKE_RATE_MIN_REACTIONS`（デフォルト10）の場合は `dislike_rate_provisional=True` とし、画面では `*` を付けて参考値であることを示す。低評価はS/A/B/C/Dスコア判定には使わない。Analytics画面には `高評価率` に加えて `低評価(参考)` / `低評価率(参考)` / `生成区分` / `元動画` / `目的` を表示します。低評価はAPIから取得不能な場合は空欄扱いとなります。`AI分析用にコピー` と `Shortsタイトル案` / `Longタイトル案` には、対象期間・取得日時、再生数上位・平均視聴率上位・高評価率上位・data_wait注目動画をまとめた実績サマリーを付けます。`AI分析用にコピー` では `analysis_status=data_wait` の動画にも暫定評価コメントを入れるよう指示します。`Longタイトル案` はLong候補だけを出すプロンプトをコピーします。
 
-動画別列には `登録者増`（`subscribers_gained`）と `登録者減`（`subscribers_lost`）を個別表示し、`登録者増減`（純増 = gained - lost）も並べます。サマリーバーにはチャンネル全体の登録者増減（dimension なし API 取得）を `+gained -lost 純増net` 形式で表示します。AI分析コピーの実績サマリーにもチャンネル全体の登録者増減と旧チャンネル注記（`ANALYTICS_CHANNEL_LEGACY_NOTE`）を含めます。Analytics画面下部には固定の注記ラベルとして旧チャンネル時代の文脈（インド広告・リメイク開始日 `ANALYTICS_CHANNEL_REMAKE_DATE`）を常時表示します。
+動画別列には `登録者増`（`subscribers_gained`）と `登録者減`（`subscribers_lost`）を個別表示し、`登録者増減`（純増 = gained - lost）も並べます。サマリーバーにはチャンネル全体の登録者増減（dimension なし API 取得）を `+gained -lost 純増net` 形式で表示します。AI分析コピーの実績サマリーにもチャンネル全体の登録者増減とチャンネル注記（`ANALYTICS_CHANNEL_LEGACY_NOTE`）を含めます。Analytics画面下部には固定の注記ラベルとしてチャンネル文脈（インド広告・リメイク開始日 `ANALYTICS_CHANNEL_REMAKE_DATE`）を常時表示します。
 
 Analytics一覧は各列のヘッダークリックで昇順/降順ソートできます。数値列は数値として、公開日時は日時として、評価列は `A > B > C > D > E > 未計測 > 対象外` の順で並び替えます。
 
@@ -1318,7 +1318,7 @@ YouTube Studio 側で予約動画を手動公開した場合:
 
 未来の予約枠は、最も早い空きスロットから前詰めできる。`rebalance_slots_detailed()` は YouTube の `publishAt` / `video_id` を正として読み、`update_video_publish_time()` で YouTube 側の公開予定時刻を更新する。Shorts と Long は同じ `publishAt` を共有してよいが、同じ動画タイプ内で `publishAt` が重複している場合は詰め直し対象にする。
 
-native Shorts の立ち絵は、字幕との重なりを抑えるため旧来の下寄せ配置より小さめ・やや上寄せにする。Shorts通常字幕は中央寄せ、既定1.4倍のフォント倍率、白文字、話者色の内フチ（ずんだもん=濃緑 / めたん=濃い紫ピンク）、黒外フチ、任意の半透明黒帯（`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`）で可読性を優先する。字幕は `NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で少し下げる。調整は `NATIVE_CHARACTER_HEIGHT_SHORTS`、`NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`、`NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`、`NATIVE_SUBTITLE_FONT_SCALE`、`NATIVE_SUBTITLE_ALIGNMENT_SHORTS`、`NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で行う。
+native Shorts の立ち絵は、字幕との重なりを抑えるため小さめ・やや上寄せにする。Shorts通常字幕は中央寄せ、既定1.4倍のフォント倍率、白文字、話者色の内フチ（ずんだもん=濃緑 / めたん=濃い紫ピンク）、黒外フチ、任意の半透明黒帯（`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`）で可読性を優先する。字幕は `NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で少し下げる。調整は `NATIVE_CHARACTER_HEIGHT_SHORTS`、`NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`、`NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`、`NATIVE_SUBTITLE_FONT_SCALE`、`NATIVE_SUBTITLE_ALIGNMENT_SHORTS`、`NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で行う。
 
 ---
 
@@ -1445,7 +1445,7 @@ YouTube OAuth:
 秘密情報:
 - `data/settings.db` の `encrypted_secrets` 登録値
 - `data/secret_master.key`
-- 旧認証ファイル（残存している場合の `.env` / `client_secrets.json` / `token.json` / `token_analytics.json`）
+- `.env` / `client_secrets.json` / `token.json` / `token_analytics.json`
 - `dev/` — 動作確認用の一時画像・動画・スクリプトなど開発用テストファイルの置き場（`assets/` 直下へのテスト画像配置は禁止）
 
 これらはGit管理外です。コミットしないでください。
@@ -1556,11 +1556,6 @@ TOPIC_REQUEST_CTA_EVERY_N=5
 - Longでは関連動画誘導・vidIQタイトル調整・説明欄YouTubeチャプター追加を許可する。アップロード時に `チャプター:` 行または既定章立てから `【目次】` を説明欄末尾へ追加する。
 - CTA方針とアップロード時のYouTubeメタ方針は `metadata.db` に保存する。YouTube Analytics取得時は `ネタ募集CTA` / `ネタ募集CTA理由` を取り込み、Analytics画面とTSVで確認できるようにする。
 
-## ComfyUI（廃止済み）
-> ~~- ssets/comfyui/model_manifest.json に必要なモデルを定義。~~
-> ~~- Web UIから半自動ダウンロードおよび充足チェックが可能。不足時は自動フォールバックせずに停止する。~~
-
-
 ## チャンネルプロファイル管理（複数チャンネル対応）
 
 チャンネル単位の設定を `channel_profiles` テーブル（`data/settings.db`）で管理する。
@@ -1591,7 +1586,7 @@ output/{profile_id}/
   000_data/      ← metadata.db（動画メタ・Analytics・youtube_status 等すべて格納）
 ```
 
-Analytics データは `metadata.db` の `analytics_snapshots` テーブルに格納する（TSV/JSON ファイルは廃止済み）。
+Analytics データは `metadata.db` の `analytics_snapshots` テーブルに格納する。
 
 ### API
 
@@ -1678,17 +1673,11 @@ DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
 - 特定チャンネル名・ハンドルをコードにハードコードしない。未設定時に特定チャンネルへフォールバックしない（fail closed）。
 - アップロード API（`POST /api/upload`、`POST /api/upload/batch`）はチャンネル未設定時に `400` を返す。
 
-### 旧 API（後方互換のみ）
-
-`GET /api/channel-info` — 旧バナー用。active profile から読む。新規実装では `/api/channels/current` を使うこと。
-
----
-
 ## DB アーキテクチャ
 
 ### 概要
 
-ローカルファイル管理（JSON / TSV）を廃止し、すべての状態を SQLite で管理する。
+すべての状態を SQLite で管理する。
 
 | DB ファイル | 用途 |
 |---|---|
@@ -1698,7 +1687,7 @@ DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
 ### 認証情報管理 (`data/settings.db` — `encrypted_secrets` テーブル)
 
 APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保存する。
-`.env` / `client_secrets.json` / `token.json` / `token_analytics.json` は正本として使用しない。
+`.env` / `client_secrets.json` / `token.json` / `token_analytics.json` は認証情報の正本として使用しない。
 
 #### マスターキー管理
 
@@ -1731,26 +1720,11 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 - OAuth refresh 後のトークンは `save_secret()` で DB へ再保存する
 - `token.json` / `token_analytics.json` を恒久ファイルとして新規作成しない
 
-#### 既存ファイルからの移行（完了済み）
+### DB 正本ルール
 
-`core/secret_migration.py` による自動移行は 2026-05-31 に完了し、モジュールは削除済み。既存の `.env` / OAuth JSON ファイルは手動で削除できる（設定画面「APIキー」タブ）。
-`client_secrets.json` / `token.json` / `token_analytics.json` は自動削除しない。削除は設定画面の「旧認証ファイル削除」ボタンで行う。
-
-### 廃止したローカルファイル
-
-以下のファイルへの書き込み・読み取りはすべて廃止済み。`metadata.db` が正本。
-
-| 旧ファイル | 移行先 | 状態 |
-|---|---|---|
-| `_meta/upload_record.json` | `youtube_status` テーブル | 廃止完了 |
-| `_meta/render_info.json` | `render_info` テーブル | 廃止完了 |
-| `_meta/cta_policy.json` | `video_metadata` テーブル（CTA 列） | 廃止完了 |
-| `_meta/opening_review.json` / `final_review.json` | `script_quality` テーブル | 廃止完了 |
-| `output/000_data/jobs.json` | `jobs` テーブル | 廃止完了 |
-| `output/000_data/upload_records.json` | `youtube_status` + `render_info` | 廃止完了 |
-| `output/000_data/uploaded_titles.txt` | `videos` / `youtube_status` テーブル | 廃止完了 |
-| `output/000_analytics/*.json` / `*.tsv` | `analytics_snapshots` テーブル | 廃止完了・ディレクトリ削除済み |
-| `.env`（非認証設定） | `data/settings.db`（`settings` テーブル） | 廃止完了 |
+- 動画メタ・YouTube 状態・Analytics・ジョブ履歴は `metadata.db` が正本。
+- アプリ設定と認証情報は `data/settings.db` が正本。
+- 認証情報を含むファイルは Git 管理外とし、値をログ・レスポンス・例外メッセージに含めない。
 | `.env`（認証情報） | `data/settings.db`（`encrypted_secrets` テーブル・AES-GCM暗号化） | 廃止完了 |
 | `client_secrets.json` / `token.json` / `token_analytics.json` | `data/settings.db`（`encrypted_secrets` テーブル） | 廃止完了 |
 
@@ -1961,7 +1935,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 | 関数 | 用途 |
 |---|---|
 | `initialize_db()` | DB 初期化・スキーマ移行（起動時に自動呼び出し） |
-| `sync_folder_to_db(output_dir)` | 動画フォルダを全テーブルに同期（旧 JSON fallback 付き） |
+| `sync_folder_to_db(output_dir)` | 動画フォルダを全テーブルに同期 |
 | `upsert_render_info(local_id, data)` | render_info テーブルへの upsert |
 | `get_render_info(local_id)` | render_info をフォルダ名で取得 |
 | `upsert_cta_policy(local_id, policy)` | CTA ポリシーを video_metadata に保存 |
