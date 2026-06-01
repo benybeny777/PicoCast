@@ -875,3 +875,22 @@ def test_image_regenerate_route_returns_job_id(client, monkeypatch):
     })
     assert res.status_code == 200
     assert res.json().get("job_id") == "job-xyz-1234"
+
+
+def test_history_db_info_bulk(monkeypatch, tmp_path):
+    """_history_db_info_bulk が複数 local_id を1クエリでまとめて返すこと（N+1回避）。"""
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    import web_app.services.history_service as hs
+    with m.ManagedConnection() as conn:
+        for lid, title in [("Shorts_A", "タイトルA"), ("Shorts_B", "タイトルB")]:
+            conn.execute("INSERT INTO videos(local_id, output_dir, title, video_type) VALUES(?,?,?,?)",
+                         (lid, f"output/{lid}", title, "Shorts"))
+            conn.execute("INSERT INTO render_info(local_id, video_title, video_format) VALUES(?,?,?)",
+                         (lid, title, "Shorts"))
+        conn.commit()
+
+    info = hs._history_db_info_bulk(["Shorts_A", "Shorts_B", "存在しない"])
+    assert set(info.keys()) == {"Shorts_A", "Shorts_B"}
+    assert info["Shorts_A"]["video_title"] == "タイトルA"
+    assert info["Shorts_B"]["video_format"] == "Shorts"
+    assert hs._history_db_info_bulk([]) == {}

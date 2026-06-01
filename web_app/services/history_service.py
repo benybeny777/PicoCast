@@ -128,6 +128,48 @@ def _history_db_info(local_id: str) -> dict[str, Any]:
     return dict(row) if row else {}
 
 
+# 履歴一覧用: 全 local_id 分のメタを1クエリで取得する（N+1回避）
+_HISTORY_DB_INFO_COLUMNS = """
+    v.local_id AS local_id,
+    v.title,
+    COALESCE(ri.video_format, vm.video_format, v.video_type) AS video_format,
+    COALESCE(ri.video_title, v.title) AS video_title,
+    ri.render_engine,
+    vm.generation_type,
+    vm.source_video_title,
+    vm.purpose,
+    vm.fixed_comment,
+    vm.thumbnail_text,
+    vm.description,
+    vm.tags,
+    sq.opening_score,
+    sq.actual_duration,
+    sq.actual_duration_status,
+    sq.final_review_score,
+    sq.validation_status
+"""
+
+
+def _history_db_info_bulk(local_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """複数 local_id のメタ情報を1クエリで取得し local_id→dict で返す。"""
+    if not local_ids:
+        return {}
+    placeholders = ",".join("?" * len(local_ids))
+    with ManagedConnection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT {_HISTORY_DB_INFO_COLUMNS}
+            FROM videos v
+            LEFT JOIN render_info ri ON ri.local_id = v.local_id
+            LEFT JOIN video_metadata vm ON vm.local_id = v.local_id
+            LEFT JOIN script_quality sq ON sq.local_id = v.local_id
+            WHERE v.local_id IN ({placeholders})
+            """,
+            local_ids,
+        ).fetchall()
+    return {r["local_id"]: dict(r) for r in rows}
+
+
 def _fetch_yt_status_bulk(local_ids: list[str]) -> dict[str, dict]:
     """youtube_status テーブルを一括取得して local_id → dict で返す。"""
     if not local_ids:
@@ -175,6 +217,7 @@ def list_histories(include_management: bool = False, include_uploaded: bool = Fa
     uploaded_ids_with_youtube = _fetch_uploaded_video_ids_with_youtube_id()
     seen: set[str] = set()
     items: list[dict[str, Any]] = []
+    _valid: list[tuple[str, str, bool]] = []  # (name, theme_dir, is_mgmt)
 
     search_dirs = [get_output_videos_dir()]
     if include_uploaded:
@@ -203,29 +246,32 @@ def list_histories(include_management: bool = False, include_uploaded: bool = Fa
                 theme_dir = safe_output_path(entry.path, output_base=output_root)
             except Exception:
                 continue
+            _valid.append((name, theme_dir, is_mgmt))
 
-            db_info = _history_db_info(name)
+    # メタ情報は1クエリで一括取得（フォルダ数ぶんの個別クエリ＝N+1を回避）
+    db_info_map = _history_db_info_bulk([name for name, _, _ in _valid])
+    for name, theme_dir, is_mgmt in _valid:
+        db_info = db_info_map.get(name, {})
+        mp4_name = _find_mp4(theme_dir)
+        thumb_rel = _find_thumbnail(theme_dir)
+        video_format = _video_format(name, db_info.get("video_format"))
 
-            mp4_name = _find_mp4(theme_dir)
-            thumb_rel = _find_thumbnail(theme_dir)
-            video_format = _video_format(name, db_info.get("video_format"))
-
-            items.append({
-                "name": name,
-                "is_management": is_mgmt,
-                "title": db_info.get("video_title") or name,
-                "video_format": video_format,
-                "generation_kind": db_info.get("generation_type") or "",
-                "source_video_title": db_info.get("source_video_title") or "",
-                "generation_purpose": db_info.get("purpose") or "",
-                "render_engine": db_info.get("render_engine") or "",
-                "has_mp4": mp4_name is not None,
-                "mp4_name": mp4_name,
-                "has_thumbnail": thumb_rel is not None,
-                "thumbnail_rel": thumb_rel,
-                "opening_score": db_info.get("opening_score"),
-                "final_score": db_info.get("final_review_score"),
-            })
+        items.append({
+            "name": name,
+            "is_management": is_mgmt,
+            "title": db_info.get("video_title") or name,
+            "video_format": video_format,
+            "generation_kind": db_info.get("generation_type") or "",
+            "source_video_title": db_info.get("source_video_title") or "",
+            "generation_purpose": db_info.get("purpose") or "",
+            "render_engine": db_info.get("render_engine") or "",
+            "has_mp4": mp4_name is not None,
+            "mp4_name": mp4_name,
+            "has_thumbnail": thumb_rel is not None,
+            "thumbnail_rel": thumb_rel,
+            "opening_score": db_info.get("opening_score"),
+            "final_score": db_info.get("final_review_score"),
+        })
 
     # youtube_status を一括取得して付与
     yt_map = _fetch_yt_status_bulk([it["name"] for it in items])
