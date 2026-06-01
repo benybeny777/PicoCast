@@ -1,6 +1,5 @@
 import os
 import re
-import time
 from google import genai
 from config import config
 from config import (
@@ -481,82 +480,3 @@ class ImageGenerator:
         finally:
             response = None
             parts = None
-
-    def generate_backgrounds_batch(self, requests_list, target_dir=None, fnames=None):
-        """Google Batch API で複数背景を一括生成する。
-        requests_list: [{"description": str, "raw": bool}, ...]
-        戻り値: 同順のファイル名リスト（失敗は None）
-        注意: スタイル参照（1枚目を基準にする機能）はバッチモードでは無効。
-        """
-        if not self.client:
-            from core.error_codes import format_error
-            raise Exception(format_error("E-SECRET-MISSING", "Google API キー"))
-
-        save_dir = target_dir or "output/backgrounds"
-        os.makedirs(save_dir, exist_ok=True)
-
-        model_name = NANOBANANA_PRO_MODEL if "pro" in self.image_style else NANOBANANA_FLASH_MODEL
-
-        # inline リクエストを組み立て
-        inline_requests = []
-        batch_prompts = []
-        batch_job = None
-        aspect_ratio = "9:16" if self.height > self.width else "16:9"
-        image_size = self.nanobanana_image_size()
-        for req in requests_list:
-            prompt = self._build_full_prompt(req["description"], req.get("raw", False))
-            inline_requests.append({
-                "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-                "config": {
-                    "response_modalities": ["IMAGE"],
-                    "image_config": {"aspect_ratio": aspect_ratio, "image_size": image_size},
-                },
-            })
-            batch_prompts.append(prompt)
-
-        if self.debug:
-            print(f"  [Batch] {len(inline_requests)}件を送信: {model_name} / Nano Banana {self.nanobanana_request_label()}")
-
-        batch_job = self.client.batches.create(model=model_name, src=inline_requests)
-        if self.debug:
-            print(f"  [Batch] ジョブ名: {batch_job.name}  初期状態: {batch_job.state}")
-
-        # 完了までポーリング（30秒間隔）
-        terminal = {"JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED"}
-        while str(batch_job.state) not in terminal:
-            time.sleep(30)
-            batch_job = self.client.batches.get(name=batch_job.name)
-            if self.debug:
-                print(f"  [Batch] 状態: {batch_job.state}")
-
-        if str(batch_job.state) != "JOB_STATE_SUCCEEDED":
-            raise Exception(f"Batch APIジョブ失敗: {batch_job.state}")
-
-        # 結果を保存
-        results = [None] * len(requests_list)
-        for i, result in enumerate(self.client.batches.list_job_results(name=batch_job.name)):
-            if i >= len(results):
-                break
-            try:
-                # response が GenerateContentResponse 相当
-                response = result.response
-                parts = getattr(response, 'parts', None)
-                if parts is None and hasattr(response, 'candidates') and response.candidates:
-                    parts = response.candidates[0].content.parts
-                for part in (parts or []):
-                    if hasattr(part, 'inline_data') and part.inline_data and part.inline_data.data:
-                        target_fname = fnames[i] if fnames and i < len(fnames) else None
-                        fname = self._save_image_part(part, save_dir, fname=target_fname)
-                        results[i] = fname
-                        if self.debug:
-                            print(f"  [Batch] 結果[{i+1}]: {fname}")
-                            self._save_prompt_log(save_dir, fname, batch_prompts[i])
-                        break
-            except Exception as e:
-                if self.debug:
-                    print(f"  [Batch] 結果[{i}]処理エラー: {e}")
-
-        inline_requests = None
-        batch_prompts = None
-        batch_job = None
-        return results

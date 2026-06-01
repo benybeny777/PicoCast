@@ -699,7 +699,7 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
 
 def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
-                 image_style="通常", reuse_backgrounds=False, use_batch_api=False,
+                 image_style="通常", reuse_backgrounds=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
                  long_budget_mode=None, sd_size_mode=False,
                  background_engine=None, bgm_mode="profile_default",
@@ -1498,7 +1498,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     bg_num = 0
     total_voices = len(dialogue_items)
     total_bgs = len(bg_items)
-    batch_bg_results = {}  # {bg_num(1-indexed): filename}
 
     # ── 前処理: 各 dialogue に対応する bg_num を先読み割り当て ──────────────────
     # 音声ファイル名に bg_num を埋め込む必要があるため、
@@ -1676,49 +1675,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status("  📌 サムネイルをショート先頭に挿入予定(native)")
     # ロングの場合は theme_dir に保存済み
 
-    # Batch API: 背景生成フェーズの直前に全背景を一括生成
-    if use_batch_api and not _has_saved_bgs:
-        _temp_num = 0
-        _batch_items = []  # (bg_num, bg_name)
-        for item in items:
-            if item["type"] == "background":
-                bg_name = _background_text(item)
-                if _is_background_reuse_marker(bg_name):
-                    continue
-                _temp_num += 1
-                if _temp_num <= max_backgrounds:
-                    _batch_items.append((_temp_num, bg_name or "default_background"))
-
-        if _batch_items:
-            if is_cancelled():
-                return cancel_result()
-            update_status(f"🖼  Batch API: {len(_batch_items)}枚を一括送信中 (完了まで数分かかります)...")
-            batch_requests = [
-                {
-                    "description": (
-                        f"以下の台本を参考に、「{name}」のシーンの背景画像を生成してください。\n\n"
-                        f"【台本】\n{script_content}"
-                    ),
-                    "raw": False,
-                }
-                for _, name in _batch_items
-            ]
-            batch_fnames = [f"bg_{n:03d}_001.png" for n, _ in _batch_items]
-            try:
-                batch_results = img_gen.generate_backgrounds_batch(batch_requests, target_dir=theme_bg_dir, fnames=batch_fnames)
-                if is_cancelled():
-                    return cancel_result()
-                for (bg_n, _), filename in zip(_batch_items, batch_results):
-                    if filename:
-                        batch_bg_results[bg_n] = filename
-                        report.backgrounds_generated += 1
-                    else:
-                        report.backgrounds_failed += 1
-                ok_count = sum(1 for r in batch_results if r)
-                update_status(f"  ✅ Batch API 完了: {ok_count}/{len(batch_results)}枚生成")
-            except Exception as e:
-                raise Exception(f"Batch API エラー: {e}")
-
     # ══════════════════════════════════════════════════════════════════════════
     # パス2: 全背景生成（Gemini / SD WebUI）
     # ══════════════════════════════════════════════════════════════════════════
@@ -1756,13 +1712,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             else:
                 update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 既存ファイル不足 — スキップ")
                 report.backgrounds_failed += 1
-            continue
-
-        if use_batch_api:
-            if bg_num in batch_bg_results:
-                update_status(f"🖼  背景 [{bg_num}/{total_bgs}] バッチ結果使用: {batch_bg_results[bg_num]}")
-            else:
-                update_status(f"  ⚠ 背景 [{bg_num}/{total_bgs}] バッチ結果なし — スキップ")
             continue
 
         # 実生成が必要 — プロンプトを保存してタスクリストに追加
