@@ -61,16 +61,20 @@ def api_render(history_name: str, req: RenderRequest):
 def api_open_folder(history_name: str):
     """出力フォルダをOSのファイルマネージャーで開く（127.0.0.1専用ローカル操作）。"""
     path = find_history_dir(history_name)
-    if path is None:
+    if path is None or not os.path.isdir(path):
         raise HTTPException(status_code=404, detail="フォルダが見つかりません")
-    if not os.path.isdir(path):
-        raise HTTPException(status_code=404, detail="フォルダが見つかりません")
-    if sys.platform == "win32":
-        os.startfile(path)
-    elif sys.platform == "darwin":
-        subprocess.Popen(["open", path])
-    else:
-        subprocess.Popen(["xdg-open", path])
+    # output_root に "/" 混在があっても確実に開けるよう正規化する
+    path = os.path.normpath(path)
+    try:
+        if sys.platform == "win32":
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception as e:
+        # サイレントに失敗させず、原因をフロントへ返す
+        raise HTTPException(status_code=500, detail=f"フォルダを開けませんでした: {e}") from e
     return {"opened": path}
 
 

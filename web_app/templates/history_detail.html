@@ -232,7 +232,15 @@ async function regenerateFailedBackgrounds() {
 }
 
 async function openFolder() {
-  await fetch(`/api/history/${encodeURIComponent(historyName)}/open-folder`, {method: 'POST'});
+  try {
+    const res = await fetch(`/api/history/${encodeURIComponent(historyName)}/open-folder`, {method: 'POST'});
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      alert('フォルダを開けませんでした: ' + (data.detail || ('HTTP ' + res.status)));
+    }
+  } catch (e) {
+    alert('通信エラー: ' + e);
+  }
 }
 
 async function deleteHistory() {
