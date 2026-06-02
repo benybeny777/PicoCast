@@ -413,6 +413,15 @@ def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, 
     assert "history_names: ['" not in res.text
 
 
+def test_history_row_actions_do_not_embed_json_in_onclick(client):
+    res = client.get("/history")
+    assert res.status_code == 200
+    assert "history-delete-one" in res.text
+    assert "history-open-folder" in res.text
+    assert "onclick=\"deleteOneHistory(" not in res.text
+    assert "onclick=\"openFolder(" not in res.text
+
+
 # ── 設定診断APIが秘密値を返さない ─────────────────────────────────────────
 def test_settings_api_no_secrets(client):
     res = client.get("/api/settings/status")

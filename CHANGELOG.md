@@ -12,6 +12,10 @@
 - `/settings` のHTML生成時にフルサービス診断を待たず、APIキー登録状態はDBの bool だけで表示するようにした。
 - プリロード未完了でも `/api/settings/ollama-models` / `/api/settings/bgm-files` は暫定値を即返し、設定項目本体が外部サービス待ちで出ない状態を避けるようにした。
 
+### 履歴一覧の行ボタンを修正
+
+- 履歴一覧の行ごとの「削除」「フォルダを開く」ボタンが、HTML属性内の引用符衝突で動かない場合があったため、行の `data-name` を読むイベントリスナー方式に変更した。
+
 ### Web薄化とjob-runnerを導入
 
 - 生成・レンダージョブを Web プロセス内 subprocess IPC から、`metadata.db:jobs` を共有状態にした常駐 `workers.runner` 実行へ移行した。

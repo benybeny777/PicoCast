@@ -54,8 +54,8 @@
         <td>{{ h.upload_status or "—" }}</td>
         <td>
           <a href="/history/{{ h.name }}" class="btn btn-xs">詳細</a>
-          <button class="btn btn-xs btn-secondary" onclick="openFolder({{ h.name | tojson }})">📂</button>
-          <button type="button" class="btn btn-xs btn-danger" onclick="deleteOneHistory({{ h.name | tojson }}, this)">削除</button>
+          <button type="button" class="btn btn-xs btn-secondary history-open-folder">📂</button>
+          <button type="button" class="btn btn-xs btn-danger history-delete-one">削除</button>
         </td>
       </tr>
       {% endfor %}
@@ -71,6 +71,11 @@
 <script>
 async function openFolder(name) {
   await fetch(`/api/history/${encodeURIComponent(name)}/open-folder`, {method: 'POST'});
+}
+
+function rowHistoryName(btn) {
+  const row = btn.closest('.history-row');
+  return row ? row.dataset.name : '';
 }
 
 async function _deleteHistoryRequest(name) {
@@ -124,6 +129,20 @@ function filterHistory() {
   });
 }
 filterHistory();
+
+document.querySelectorAll('.history-open-folder').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const name = rowHistoryName(btn);
+    if (name) openFolder(name);
+  });
+});
+
+document.querySelectorAll('.history-delete-one').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const name = rowHistoryName(btn);
+    if (name) deleteOneHistory(name, btn);
+  });
+});
 
 function selectVisibleHistories(checked) {
   document.querySelectorAll('.history-row').forEach(row => {
