@@ -120,14 +120,18 @@ def _run_render(job: dict, cancel_event: threading.Event, log: _BufferedJobLog) 
     log.add(f"対象フォルダ: {theme_dir}")
     if cancel_event.is_set():
         return {"cancelled": True}
-    from core.native_renderer import render_native_test
-    render_result = render_native_test(
-        output_dir=theme_dir,
-        progress_callback=lambda message, tag="info": log.add(message, tag),
-        bgm_mode=params.get("bgm_mode", "profile_default"),
-        bgm_id=params.get("bgm_id"),
-        bgm_volume_db=params.get("bgm_volume_db"),
-    )
+    from core.native_renderer import render_native_test, RenderCancelled
+    try:
+        render_result = render_native_test(
+            output_dir=theme_dir,
+            progress_callback=lambda message, tag="info": log.add(message, tag),
+            bgm_mode=params.get("bgm_mode", "profile_default"),
+            bgm_id=params.get("bgm_id"),
+            bgm_volume_db=params.get("bgm_volume_db"),
+            cancel_event=cancel_event,
+        )
+    except RenderCancelled:
+        return {"cancelled": True}
     output_path = render_result.output_path if hasattr(render_result, "output_path") else str(render_result)
     log.add(f"MP4 生成完了: {os.path.basename(output_path)}", "success")
     return {"output_path": output_path, "history_name": history_name}

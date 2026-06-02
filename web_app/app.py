@@ -80,7 +80,11 @@ def _start_job_runner() -> None:
     logger = logging.getLogger(__name__)
     _runner_stop_event = threading.Event()
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
-    popen_extra = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+    # POSIX は専用プロセスグループにして終了時に子（ffmpeg等）ごと killpg できるようにする
+    if sys.platform == "win32":
+        popen_extra = {"creationflags": subprocess.CREATE_NO_WINDOW}
+    else:
+        popen_extra = {"start_new_session": True}
 
     def _spawn():
         return subprocess.Popen(
@@ -119,9 +123,28 @@ def _stop_job_runner() -> None:
     _runner_proc = None
     if proc is None or proc.poll() is not None:
         return
+    _kill_process_tree(proc)
+
+
+def _kill_process_tree(proc) -> None:
+    """runner とその子（ffmpeg 等）をツリーごと終了し、孤児プロセスを残さない。"""
+    import subprocess
+    pid = proc.pid
     try:
-        proc.terminate()
-        proc.wait(timeout=10)
+        if sys.platform == "win32":
+            # taskkill /T で子プロセスツリーごと強制終了する
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15,
+            )
+        else:
+            import os as _os
+            import signal
+            try:
+                _os.killpg(_os.getpgid(pid), signal.SIGTERM)
+                proc.wait(timeout=10)
+            except Exception:
+                _os.killpg(_os.getpgid(pid), signal.SIGKILL)
     except Exception:
         try:
             proc.kill()

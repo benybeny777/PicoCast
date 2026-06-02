@@ -1040,6 +1040,10 @@ def _video_size(output_dir: str, script_text: str) -> tuple[int, int]:
     return 1920, 1080
 
 
+class RenderCancelled(Exception):
+    """レンダーがキャンセル要求により中断されたことを表す。"""
+
+
 def render_native_test(
     output_dir: str,
     progress_callback=None,
@@ -1049,6 +1053,7 @@ def render_native_test(
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
     bgm_volume_db: float | None = None,
+    cancel_event=None,
 ) -> NativeRenderResult:
     """生成済み音声・背景アセットからネイティブMP4を生成する。"""
     output_dir = os.path.abspath(output_dir)
@@ -1126,6 +1131,9 @@ def render_native_test(
     warned_expression_fallbacks: set[tuple[str | None, str | None, str]] = set()
     motion_fallback_count = 0
     for idx, (audio_path, duration, caption, effect) in enumerate(zip(audio_files, durations, captions, effects), start=1):
+        # セグメント境界でキャンセル要求を確認する（実行中ffmpegは現セグメント完了後に停止）
+        if cancel_event is not None and cancel_event.is_set():
+            raise RenderCancelled("レンダーをキャンセルしました")
         bg_path = _background_for_audio(audio_path, bg_files)
         ass_path = os.path.join(work_dir, f"subtitle_{idx:04d}.ass")
         segment_path = os.path.join(work_dir, f"segment_{idx:04d}.mp4")

@@ -6,6 +6,12 @@
 
 ## 2026-06-02
 
+### runner のffmpeg孤児・キャンセル不能を修正／ジョブログ肥大を抑制
+
+- job-runner 終了・再起動時に、子の ffmpeg がツリーから外れて**孤児プロセスとして残る**問題を修正。Web から runner を停止する際に、Windows は `taskkill /T`、POSIX は専用プロセスグループへの `killpg` でツリーごと終了する（runner は `start_new_session` で起動）。
+- レンダー（`render_native_test`）が `cancel_event` を受け取り、**セグメント境界でキャンセルを検出**して `RenderCancelled` で中断するようにした。実行中の長い ffmpeg エンコード後（秒単位）で確実に停止する。runner はこれを cancelled として記録する。
+- `append_job_logs` がフラッシュ毎に `logs_json` 全体を再シリアライズして肥大化（O(n²)）していたため、1ジョブのログ行を `JOB_LOG_MAX_ENTRIES`（既定3000）で上限化し、古い行から破棄するようにした。
+
 ### profile_context のスレッドローカル残留（要再起動バグ）を恒久修正
 
 - `profile_context.__enter__` が active profile の上書きをスレッドローカルへ設定した直後に `get_profile()` で例外が出ると、`with` 本体に入らず `__exit__` も呼ばれないため上書きが**残留**していた。スレッドプール上のスレッドが誤プロファイルを参照し続け、履歴フォルダ未検出（「フォルダが見つかりません」）・音声件数0件などが**アプリ再起動まで直らない**原因になり得た。`__enter__` 失敗時に必ず復元するよう修正し、リーク不可をテストで保証。

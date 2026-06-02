@@ -463,3 +463,4 @@ JOB_RUNNER_POLL_INTERVAL_SEC = float(os.environ.get("JOB_RUNNER_POLL_INTERVAL_SE
 JOB_RUNNER_HEARTBEAT_INTERVAL_SEC = float(os.environ.get("JOB_RUNNER_HEARTBEAT_INTERVAL_SEC", "2.0"))  # job-runner が実行中ジョブの生存時刻を更新する間隔(秒)
 JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC = float(os.environ.get("JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC", "30.0"))  # heartbeat が途絶えた running ジョブを failed 化するまでの秒数
 JOB_LOG_FLUSH_INTERVAL_SEC = float(os.environ.get("JOB_LOG_FLUSH_INTERVAL_SEC", "0.5"))  # runner がジョブログを DB へまとめ書きする間隔(秒)
+JOB_LOG_MAX_ENTRIES = int(os.environ.get("JOB_LOG_MAX_ENTRIES", "3000"))  # 1ジョブが保持するログ行の上限。超過分は古い行から破棄し logs_json 肥大と再書込コストを抑える

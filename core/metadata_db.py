@@ -1438,6 +1438,10 @@ def append_job_logs(job_id: str, entries: list[dict]) -> None:
         except Exception:
             logs = []
         logs.extend(entries)
+        # logs_json 肥大と flush 毎の再シリアライズコストを抑えるため上限で切り詰める
+        from config import JOB_LOG_MAX_ENTRIES
+        if JOB_LOG_MAX_ENTRIES > 0 and len(logs) > JOB_LOG_MAX_ENTRIES:
+            logs = logs[-JOB_LOG_MAX_ENTRIES:]
         progress_text = entries[-1].get("message", "") if entries else ""
         conn.execute(
             "UPDATE jobs SET logs_json=?, progress_text=? WHERE job_id=?",
