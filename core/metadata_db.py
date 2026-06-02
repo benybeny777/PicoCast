@@ -1335,6 +1335,7 @@ def upsert_job(job_dict: dict) -> None:
 def load_jobs_from_db(max_n: int = 500) -> list[dict]:
     """jobs テーブルから最新 N 件を返す。"""
     import json as _json
+    initialize_db()
     with ManagedConnection() as conn:
         rows = conn.execute("""
             SELECT job_id, job_type, profile_id, status, progress_text,
@@ -1369,6 +1370,7 @@ def load_jobs_from_db(max_n: int = 500) -> list[dict]:
 
 def claim_queued_job(runner_pid: int, job_types: list[str] | tuple[str, ...] | None = None) -> dict | None:
     """最古の queued ジョブを running に原子的に更新して返す。"""
+    initialize_db()
     with ManagedConnection() as conn:
         conn.execute("BEGIN IMMEDIATE")
         if job_types:
@@ -1424,6 +1426,7 @@ def append_job_logs(job_id: str, entries: list[dict]) -> None:
     """ジョブログを jobs.logs_json へ追記する。"""
     if not entries:
         return
+    initialize_db()
     with ManagedConnection() as conn:
         conn.execute("BEGIN IMMEDIATE")
         row = conn.execute("SELECT logs_json FROM jobs WHERE job_id=?", (job_id,)).fetchone()
@@ -1445,6 +1448,7 @@ def append_job_logs(job_id: str, entries: list[dict]) -> None:
 
 def update_job_progress(job_id: str, progress_text: str | None = None, heartbeat_at: str | None = None) -> None:
     """進捗テキストと heartbeat を更新する。"""
+    initialize_db()
     with ManagedConnection() as conn:
         conn.execute(
             """
@@ -1460,6 +1464,7 @@ def update_job_progress(job_id: str, progress_text: str | None = None, heartbeat
 
 def set_job_result(job_id: str, status: str, result: dict | None = None, error: str | None = None, finished_at: str | None = None) -> None:
     """ジョブの最終結果を保存する。"""
+    initialize_db()
     with ManagedConnection() as conn:
         conn.execute(
             """
@@ -1481,6 +1486,7 @@ def set_job_result(job_id: str, status: str, result: dict | None = None, error: 
 
 def request_cancel(job_id: str) -> bool:
     """ジョブへキャンセル要求を記録する。queued は即 cancelled にする。"""
+    initialize_db()
     with ManagedConnection() as conn:
         row = conn.execute("SELECT status FROM jobs WHERE job_id=?", (job_id,)).fetchone()
         if row is None:
@@ -1500,6 +1506,7 @@ def request_cancel(job_id: str) -> bool:
 
 
 def is_cancel_requested(job_id: str) -> bool:
+    initialize_db()
     with ManagedConnection() as conn:
         row = conn.execute("SELECT cancel_requested FROM jobs WHERE job_id=?", (job_id,)).fetchone()
     return bool(row and row["cancel_requested"])
@@ -1509,6 +1516,7 @@ def reap_stale_running_jobs(timeout_sec: float) -> int:
     """heartbeat が途絶えた running ジョブを failed にする。"""
     from datetime import datetime as _dt, timedelta as _td
 
+    initialize_db()
     threshold = (_dt.fromisoformat(_now_jst()) - _td(seconds=float(timeout_sec))).isoformat()
     with ManagedConnection() as conn:
         cur = conn.execute(

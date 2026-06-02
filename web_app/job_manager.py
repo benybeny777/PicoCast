@@ -12,6 +12,7 @@ import logging
 import threading
 import traceback
 import uuid
+from contextlib import nullcontext
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
@@ -26,6 +27,13 @@ _TAG_TO_LEVEL = {
     "success": logging.INFO,
     "info": logging.INFO,
 }
+
+
+def _profile_scope(profile_id: str | None):
+    if not profile_id:
+        return nullcontext()
+    from core.channel_profile import profile_context
+    return profile_context(profile_id)
 
 
 class JobStatus:
@@ -115,11 +123,20 @@ class JobManager:
 
     def get_job(self, job_id: str) -> Job | None:
         from core.metadata_db import load_jobs_from_db
-        for d in load_jobs_from_db(max_n=1000):
-            if d.get("job_id") == job_id:
-                return Job.from_dict(d)
         with self._lock:
-            return self._running.get(job_id)
+            running = self._running.get(job_id)
+            if running:
+                return running
+        for profile_id in self._lookup_profile_ids():
+            with _profile_scope(profile_id):
+                for d in load_jobs_from_db(max_n=1000):
+                    if d.get("job_id") == job_id:
+                        return Job.from_dict(d)
+        if not self._lookup_profile_ids():
+            for d in load_jobs_from_db(max_n=1000):
+                if d.get("job_id") == job_id:
+                    return Job.from_dict(d)
+        return None
 
     def list_jobs(self) -> list[dict]:
         from config import JOB_LOG_MAX_JOBS
@@ -130,16 +147,41 @@ class JobManager:
 
     def cancel_job(self, job_id: str) -> bool:
         from core.metadata_db import request_cancel
-        ok = request_cancel(job_id)
         with self._lock:
             job = self._running.get(job_id)
             if job:
-                job.cancel_event.set()
-                job.cancel_requested = True
-                if job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
-                    job.status = JobStatus.CANCELLED
-                    job.progress_text = "キャンセル要求済み"
-        return ok
+                with _profile_scope(job.profile_id):
+                    ok = request_cancel(job_id)
+                self._mark_cancelled_in_memory(job)
+                return ok
+        for profile_id in self._lookup_profile_ids():
+            with _profile_scope(profile_id):
+                if request_cancel(job_id):
+                    return True
+        if not self._lookup_profile_ids():
+            return request_cancel(job_id)
+        return False
+
+    def _lookup_profile_ids(self) -> list[str]:
+        ids: list[str] = []
+        active_id = self._active_profile_id()
+        if active_id:
+            ids.append(active_id)
+        try:
+            from core.channel_profile import list_profiles
+            for profile in list_profiles():
+                if profile.profile_id not in ids:
+                    ids.append(profile.profile_id)
+        except Exception as exc:
+            raise RuntimeError(f"ジョブ検索用のチャンネル一覧取得に失敗しました: {exc}") from exc
+        return ids
+
+    def _mark_cancelled_in_memory(self, job: Job) -> None:
+        job.cancel_event.set()
+        job.cancel_requested = True
+        if job.status in (JobStatus.QUEUED, JobStatus.RUNNING):
+            job.status = JobStatus.CANCELLED
+            job.progress_text = "キャンセル要求済み"
 
     def submit(self, job: Job, fn: Callable, *args, **kwargs) -> None:
         """従来互換: 軽量ジョブを Web プロセス内スレッドで実行する。"""
@@ -151,8 +193,9 @@ class JobManager:
         def _run():
             job.status = JobStatus.RUNNING
             job.started_at = datetime.now(_JST)
-            upsert_job(job.to_dict())
-            update_job_progress(job.job_id, "実行中", _now_iso())
+            with _profile_scope(job.profile_id):
+                upsert_job(job.to_dict())
+                update_job_progress(job.job_id, "実行中", _now_iso())
             _job_logger.info("[%s job=%s] ▶ 開始", job.type, job.job_id[:8])
             try:
                 result = fn(job, *args, **kwargs)
@@ -172,8 +215,9 @@ class JobManager:
                     _log(job, tb, "error")
             finally:
                 job.finished_at = datetime.now(_JST)
-                set_job_result(job.job_id, job.status, job.result, job.error, job.finished_at.isoformat())
-                upsert_job(job.to_dict())
+                with _profile_scope(job.profile_id):
+                    set_job_result(job.job_id, job.status, job.result, job.error, job.finished_at.isoformat())
+                    upsert_job(job.to_dict())
                 with self._lock:
                     self._running.pop(job.job_id, None)
                 _job_logger.info("[%s job=%s] ■ 終了 status=%s", job.type, job.job_id[:8], job.status)
@@ -188,7 +232,8 @@ def _log(job: Job, message: str, tag: str = "info") -> None:
     entry = {"time": _now_iso(), "tag": tag, "message": message}
     job.logs.append(entry)
     job.progress_text = message
-    append_job_logs(job.job_id, [entry])
+    with _profile_scope(job.profile_id):
+        append_job_logs(job.job_id, [entry])
     try:
         _job_logger.log(_TAG_TO_LEVEL.get(tag, logging.INFO), "[%s job=%s] %s", job.type, job.job_id[:8], message)
     except Exception:

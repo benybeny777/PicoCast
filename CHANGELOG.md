@@ -11,6 +11,8 @@
 - 生成・レンダージョブを Web プロセス内 subprocess IPC から、`metadata.db:jobs` を共有状態にした常駐 `workers.runner` 実行へ移行した。
 - jobs に `profile_id` / `params_json` / `cancel_requested` / `heartbeat_at` / `runner_pid` を追加し、runner が `queued` を原子的に claim して実行するようにした。
 - runner はジョブの `profile_id` をスレッドローカルで固定して実行し、Web UI でチャンネルを切り替えても生成先 profile が混線しないようにした。
+- ジョブ詳細取得・キャンセル・ログ追記も `job.profile_id` 基準にし、ジョブ投入後にWeb UIのactive profileを切り替えても対象ジョブを取りこぼさないようにした。
+- 既存DBの jobs テーブルに新列が無い状態でも、ジョブ参照・キャンセル・runner claim 前に migration を保証するようにした。
 - 旧 `web_app/worker_runner.py` / `workers/worker_pipeline.py` / `workers/worker_render.py` と `input.json` / `result.json` ベースのファイルIPCを廃止した。
 - デバッグログを `app_debug_web.log` / `app_debug_runner.log` に分離し、QueueListener 経由の書き込みで Windows のローテーション衝突を避けるようにした。
 
