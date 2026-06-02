@@ -126,6 +126,38 @@ def _build_metadata_txt(db_info: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip()
 
 
+def _expected_counts(script_txt: str) -> dict[str, int | None]:
+    """保存済み台本から、生成されるべき音声WAV数と背景画像数（＝件数表示の分母）を算出する。
+
+    workers.main の生成ループと同一ロジックを遅延importで再利用し、二重定義を避ける。
+    台本未保存（空）の履歴は分母を算出できないため None を返す（呼び出し側で分母なし表示にフォールバック）。
+
+    注意: long_budget_mode（Long節約）はDBに保存されないため、Long は通常モードの上限で
+    算出する。Shorts 主体の運用では実害は小さい。
+    """
+    if not script_txt or not script_txt.strip():
+        return {"audio": None, "backgrounds": None}
+    from core.parser import ScriptParser
+    from workers.main import (
+        _detect_is_shorts,
+        _effective_background_count,
+        _split_at_punctuation,
+    )
+    from config import MAX_BACKGROUNDS_LONG, MAX_BACKGROUNDS_SHORTS
+
+    items = ScriptParser.parse_string(script_txt)
+    # 音声: 各 dialogue の text を句読点分割した chunk 数の合計（main.py の音声生成ループと一致）
+    audio_expected = 0
+    for item in items:
+        if item.get("type") == "dialogue":
+            audio_expected += len(_split_at_punctuation(item.get("text", "")))
+    # 背景: format 依存の上限で頭打ち（再利用マーカーは除外）
+    is_shorts = _detect_is_shorts(script_txt)
+    max_backgrounds = MAX_BACKGROUNDS_SHORTS if is_shorts else MAX_BACKGROUNDS_LONG
+    bg_expected = _effective_background_count(items, max_backgrounds)
+    return {"audio": audio_expected, "backgrounds": bg_expected}
+
+
 def _history_db_info(local_id: str) -> dict[str, Any]:
     with ManagedConnection() as conn:
         row = conn.execute(
@@ -418,6 +450,9 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
     has_poll_copy = False
     has_fixed_comment = bool(db_info.get("fixed_comment"))
 
+    # 件数表示の分母（期待数）。台本未保存なら None（分母なし表示）。
+    expected = _expected_counts(script_txt)
+
     return {
         "name": history_name,
         "theme_dir": theme_dir,
@@ -435,6 +470,8 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         "long_thumbnails": long_thumbnails,
         "audio_files": audio_files,
         "backgrounds": backgrounds,
+        "expected_audio_count": expected["audio"],
+        "expected_background_count": expected["backgrounds"],
         "image_failures": image_failures,
         "has_poll_copy": has_poll_copy,
         "has_fixed_comment": has_fixed_comment,

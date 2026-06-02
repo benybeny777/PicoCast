@@ -11,8 +11,8 @@
     <table class="status-table">
       <tr><td>MP4</td><td>{% if detail.has_mp4 %}<span class="badge badge-ok">{{ detail.mp4_name }}</span>{% else %}<span class="badge badge-ng">なし</span>{% endif %}</td></tr>
       <tr><td>サムネイル</td><td>{% if detail.has_thumbnail %}<span class="badge badge-ok">あり</span>{% else %}<span class="badge badge-ng">なし</span>{% endif %}</td></tr>
-      <tr><td>音声データ</td><td>{{ detail.audio_files | length }} 件</td></tr>
-      <tr><td>背景画像数</td><td>{{ detail.backgrounds | length }} 枚</td></tr>
+      <tr><td>音声データ</td><td>{% if detail.expected_audio_count is not none %}{{ detail.audio_files | length }} 件 / {{ detail.expected_audio_count }} 件{% else %}{{ detail.audio_files | length }} 件{% endif %}</td></tr>
+      <tr><td>背景画像数</td><td>{% if detail.expected_background_count is not none %}{{ detail.backgrounds | length }} 枚 / {{ detail.expected_background_count }} 枚{% else %}{{ detail.backgrounds | length }} 枚{% endif %}</td></tr>
     </table>
     {% if detail.has_mp4 %}
     <a href="/api/images/{{ detail.name | urlencode }}/file/{{ detail.mp4_name | urlencode }}" class="btn btn-secondary mt-sm" target="_blank">MP4を確認</a>
