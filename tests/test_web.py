@@ -283,6 +283,8 @@ def test_history_excludes_management_dirs(tmp_path, monkeypatch):
     (videos_dir / "random_folder").mkdir(parents=True)
     (videos_dir / "Shorts_テスト動画").mkdir(parents=True)
     (videos_dir / "Long_テスト動画").mkdir(parents=True)
+    (videos_dir / "Shorts_テスト動画" / "thumbnail.png").write_bytes(b"png")
+    (videos_dir / "Long_テスト動画" / "video_native.mp4").write_bytes(b"mp4")
 
     _patch_service_output_dirs(monkeypatch, hs, fake_output)
     monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
@@ -302,8 +304,12 @@ def test_history_accepts_legacy_short_prefix(tmp_path, monkeypatch):
     fake_output = tmp_path / "output"
     videos_dir = fake_output / "videos"
     (videos_dir / "short_テスト動画").mkdir(parents=True)
+    (videos_dir / "short_テスト動画" / "thumbnail.png").write_bytes(b"png")
 
     _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(hs, "_history_db_info_bulk", lambda _local_ids: {
+        "Shorts_台本だけ": {"video_format": "Shorts"},
+    })
     monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
 
     result = hs.list_histories(include_management=False)
@@ -319,6 +325,7 @@ def test_history_includes_management_when_requested(tmp_path, monkeypatch):
     videos_dir = fake_output / "videos"
     (videos_dir / "000_analytics").mkdir(parents=True)
     (videos_dir / "Shorts_テスト動画").mkdir(parents=True)
+    (videos_dir / "Shorts_テスト動画" / "thumbnail.png").write_bytes(b"png")
 
     _patch_service_output_dirs(monkeypatch, hs, fake_output)
     monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
@@ -337,6 +344,7 @@ def test_history_excludes_uploaded_orphans(tmp_path, monkeypatch):
     (uploaded_dir / "Shorts_DBあり").mkdir(parents=True)
     (uploaded_dir / "Shorts_DBなし").mkdir(parents=True)
     (uploaded_dir / "Shorts_IDなし").mkdir(parents=True)
+    (uploaded_dir / "Shorts_DBあり" / "video_native.mp4").write_bytes(b"mp4")
 
     _patch_service_output_dirs(monkeypatch, hs, fake_output)
     monkeypatch.setattr(hs, "_fetch_known_video_ids", lambda: {"Shorts_DBあり", "Shorts_IDなし"})
@@ -352,6 +360,25 @@ def test_history_excludes_uploaded_orphans(tmp_path, monkeypatch):
     assert "Shorts_IDなし" not in names
 
 
+def test_history_excludes_script_only_drafts(tmp_path, monkeypatch):
+    import web_app.services.history_service as hs
+
+    fake_output = tmp_path / "output"
+    videos_dir = fake_output / "videos"
+    (videos_dir / "Shorts_台本だけ").mkdir(parents=True)
+    (videos_dir / "Shorts_生成物あり" / "thumbnails").mkdir(parents=True)
+    (videos_dir / "Shorts_生成物あり" / "thumbnails" / "thumbnail.png").write_bytes(b"png")
+
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
+
+    result = hs.list_histories(include_management=False)
+    names = [r["name"] for r in result]
+
+    assert "Shorts_台本だけ" not in names
+    assert "Shorts_生成物あり" in names
+
+
 def test_history_initializes_empty_metadata_db(tmp_path, monkeypatch):
     import core.metadata_db as m
     import web_app.services.history_service as hs
@@ -359,6 +386,7 @@ def test_history_initializes_empty_metadata_db(tmp_path, monkeypatch):
     fake_output = tmp_path / "output"
     videos_dir = fake_output / "videos"
     (videos_dir / "Shorts_初期化テスト").mkdir(parents=True)
+    (videos_dir / "Shorts_初期化テスト" / "thumbnail.png").write_bytes(b"png")
     db_path = tmp_path / "metadata.db"
     db_path.write_bytes(b"")
 

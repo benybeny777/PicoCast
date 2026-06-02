@@ -22,6 +22,10 @@
 - job-runner 実行中の queued ジョブで、Webプロセス側の古いメモリ状態ではなく DB の最新ログを返すようにした。
 - デバッグログタブも `WEB_LOG_POLL_INTERVAL_MS` と同じ間隔で自動更新するようにし、手動更新ボタンを削除した。
 
+### 履歴一覧の途中データ除外
+
+- 台本だけDB保存された途中停止データが履歴一覧へ出ないよう、render_info / MP4 / サムネ / 実生成ファイルがある履歴だけ表示するようにした。
+
 ### Web薄化とjob-runnerを導入
 
 - 生成・レンダージョブを Web プロセス内 subprocess IPC から、`metadata.db:jobs` を共有状態にした常駐 `workers.runner` 実行へ移行した。

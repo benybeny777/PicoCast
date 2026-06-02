@@ -34,6 +34,22 @@ def _find_thumbnail(theme_dir: str) -> str | None:
     return None
 
 
+def _has_generated_artifact(theme_dir: str, db_info: dict[str, Any]) -> bool:
+    """台本だけ保存された途中データを履歴一覧から除外するための生成物判定。"""
+    if db_info.get("render_engine"):
+        return True
+    if _find_mp4(theme_dir) or _find_thumbnail(theme_dir):
+        return True
+    for rel_dir in ("backgrounds", "audio"):
+        target_dir = os.path.join(theme_dir, rel_dir)
+        try:
+            if any(entry.is_file() for entry in os.scandir(target_dir)):
+                return True
+        except OSError:
+            continue
+    return False
+
+
 def _video_format(name: str, value: str | None) -> str:
     value = str(value or "").strip()
     if value:
@@ -252,6 +268,8 @@ def list_histories(include_management: bool = False, include_uploaded: bool = Fa
     db_info_map = _history_db_info_bulk([name for name, _, _ in _valid])
     for name, theme_dir, is_mgmt in _valid:
         db_info = db_info_map.get(name, {})
+        if not is_mgmt and not _has_generated_artifact(theme_dir, db_info):
+            continue
         mp4_name = _find_mp4(theme_dir)
         thumb_rel = _find_thumbnail(theme_dir)
         video_format = _video_format(name, db_info.get("video_format"))
