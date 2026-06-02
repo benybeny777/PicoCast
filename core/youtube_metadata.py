@@ -93,7 +93,11 @@ def _has_any(text: str, words: tuple[str, ...]) -> bool:
     return any(word in text for word in words)
 
 
-def normalize_tags(tags: list[str]) -> list[str]:
+def normalize_tags(tags: list[str], excluded: list[str] | None = None) -> list[str]:
+    # excluded 未指定時は食べ物チャンネル向けの既定除外リスト。
+    # 他ジャンル（都市伝説等）は EXCLUDED_TAGS に「都市伝説」「怖い話」が含まれ消えてしまうため、
+    # ジャンル設定チャンネルからは空リストを渡して除外を効かせない。
+    excluded_set = set(EXCLUDED_TAGS if excluded is None else excluded)
     normalized = []
     seen = set()
 
@@ -105,7 +109,7 @@ def normalize_tags(tags: list[str]) -> list[str]:
         tag = tag.lstrip("#").strip()
         tag = " ".join(tag.split())
 
-        if not tag or tag in EXCLUDED_TAGS:
+        if not tag or tag in excluded_set:
             continue
 
         key = tag.lower()
@@ -186,11 +190,39 @@ def build_topic_tags(title: str, script_text: str = "") -> list[str]:
     return tags
 
 
+def _active_genre_config() -> dict:
+    """active profile の genre profile.yaml 設定を返す（取得失敗時は空 dict）。
+
+    profile.yaml に seo_sentence_* / default_tags を定義したチャンネル（例: 都市伝説）は
+    それを使う。未定義のチャンネル（例: 食べ物）は従来の食べ物向け定数にフォールバックし、
+    既存挙動を一切変えない。
+    """
+    try:
+        from core.channel_profile import require_active_profile
+        from core.prompt_profile_loader import load_genre_profile_config
+        prof = require_active_profile()
+        cfg = dict(load_genre_profile_config(prof.genre_profile) or {})
+        cfg["__channel_default_hashtags__"] = prof.default_hashtags or ""
+        return cfg
+    except Exception:
+        return {}  # フォールバック: profile未取得時は従来の食べ物挙動
+
+
 def build_youtube_tags(
     title: str,
     script_text: str = "",
     extra_tags: list[str] | None = None,
 ) -> list[str]:
+    cfg = _active_genre_config()
+    genre_tags = split_tags(cfg.get("default_tags", ""))
+    if genre_tags:
+        # ジャンル設定チャンネル: ジャンル既定タグ＋台本由来タグのみ（食べ物タグ・食べ物除外を使わない）
+        tags = list(genre_tags)
+        if extra_tags:
+            tags.extend(extra_tags)
+        tags = normalize_tags(tags, excluded=[])
+        return trim_tags_to_500_chars(tags)
+    # 未設定（食べ物チャンネル）は従来挙動
     tags: list[str] = []
     tags.extend(VIDEO_DEFAULT_TAGS)
     tags.extend(build_topic_tags(title, script_text))
@@ -214,6 +246,14 @@ def ensure_seo_description_sentence(description: str, is_shorts: bool | None = N
     desc = str(description or "").strip()
     if not desc:
         return desc
+    cfg = _active_genre_config()
+    genre_sentence = str(
+        cfg.get("seo_sentence_shorts" if is_shorts is not False else "seo_sentence_long", "")
+    ).strip()
+    if genre_sentence:
+        # ジャンル設定チャンネル: ジャンル固有のSEO文を使う（食べ物文を入れない）
+        return desc if genre_sentence in desc else f"{genre_sentence}\n\n{desc}"
+    # 未設定（食べ物チャンネル）は従来挙動
     body_without_hashtags = strip_hashtags(desc)
     if _has_any(body_without_hashtags, ("雑学ショート", "食べ物雑学", "ゆっくり解説 食べ物", "食べ物の歴史")):
         return desc
@@ -223,6 +263,16 @@ def ensure_seo_description_sentence(description: str, is_shorts: bool | None = N
 
 def ensure_fixed_hashtags(description: str) -> str:
     desc = str(description or "").rstrip()
+    cfg = _active_genre_config()
+    if cfg.get("default_tags"):
+        # ジャンル設定チャンネル: そのチャンネルの default_hashtags を担保（食べ物タグを足さない）。
+        # default_hashtags は「#a #b」のスペース区切りなので # を二重付与しないよう注意する。
+        fixed = [t if t.startswith("#") else f"#{t}" for t in cfg.get("__channel_default_hashtags__", "").split()]
+        existing = set(re.findall(r"#\S+", desc))
+        missing = [tag for tag in fixed if tag not in existing]
+        if not missing:
+            return desc
+        return (desc + "\n\n" + " ".join(missing)).strip()
     existing = set(re.findall(r"#\S+", desc))
     missing = [tag for tag in DEFAULT_HASHTAGS if tag not in existing]
     if not missing:

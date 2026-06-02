@@ -6,6 +6,13 @@
 
 ## 2026-06-02
 
+### 都市伝説チャンネルの説明文・タグをチャンネル別（ジャンル駆動）に
+
+- `zundamon_kowai` の `channel_theme` / `default_hashtags` を都市伝説向けに設定（DB）。
+- YouTube 説明文の SEO 文・タグ・ハッシュタグが**全チャンネルで食べ物固定**だった問題を修正。`core/youtube_metadata.py` を active profile の genre 設定（`config/prompt_profiles/genres/{genre}/profile.yaml` の `seo_sentence_*` / `default_tags`）駆動にした。設定があるチャンネル（都市伝説）はそれを使い、未設定のチャンネル（食べ物）は従来の挙動のまま（**食べ物チャンネルは無変更**）。
+- これにより都市伝説チャンネルの説明文に食べ物 SEO 文・`#食べ物雑学`・食べ物タグが混入しなくなった。`normalize_tags` の食べ物向け除外リスト（`都市伝説`/`怖い話` を含む）はジャンル設定チャンネルには適用しない。
+- 再生リストは従来どおり genre 駆動（`playlist_categories.md`）で、`zundamon_kowai` は都市伝説カテゴリ。
+
 ### 背景プロンプトの欠落・デバッグログ氾濫を修正
 
 - 背景プロンプト `prompt_bg_XXXX.txt` を「生成/再利用」に関わらず**常に保存**するようにした。従来は実生成パスでしか書いておらず、背景再利用時に prompt ファイルが欠落 → 画像ページのプロンプトが空表示・個別再生成が失敗していた。
