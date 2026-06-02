@@ -8,7 +8,6 @@ from config import (
     WEB_DEFAULT_LONG_BUDGET_MODE,
     WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
     WEB_DEFAULT_REUSE_BACKGROUNDS,
-    WEB_DEFAULT_SD_SIZE_MODE,
 )
 
 
@@ -21,7 +20,6 @@ class GenerateRequest(BaseModel):
     reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
-    sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
     with_render: bool = True
     bgm_mode: str = "profile_default"  # profile_default / selected / none
     bgm_id: str | None = None
@@ -43,7 +41,6 @@ class BatchGenerateRequest(BaseModel):
     reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
-    sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
     with_render: bool = True
     bgm_mode: str = "profile_default"  # profile_default / selected / none
     bgm_id: str | None = None
@@ -58,7 +55,6 @@ class HistoryRegenerateRequest(BaseModel):
     reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
     long_budget_mode: bool = WEB_DEFAULT_LONG_BUDGET_MODE
-    sd_size_mode: bool = WEB_DEFAULT_SD_SIZE_MODE
     with_render: bool = False
     bgm_mode: str = "profile_default"  # profile_default / selected / none
     bgm_id: str | None = None
@@ -91,7 +87,6 @@ class ImageRegenerateRequest(BaseModel):
     image_keys: list[str]          # "backgrounds/bg_NNN_001.png" / "thumbnails/..." 等
     prompts: dict[str, str] = {}   # key → テキスト（未保存のプロンプト上書き用）
     background_engine: str = ""    # "" = configデフォルト / "nanobanana" / "sd_webui"
-    sd_size_mode: bool = False     # True: 縮小サイズで生成して最終サイズにリサイズ（高速化）
 
 
 # ── アップロード ──────────────────────────────────────

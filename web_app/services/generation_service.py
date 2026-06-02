@@ -35,7 +35,6 @@ def submit_generate_job(
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
-    sd_size_mode: bool = False,
     with_render: bool = False,
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
@@ -52,7 +51,6 @@ def submit_generate_job(
         reuse_backgrounds,
         long_thumbnail_ab_test,
         long_budget_mode,
-        sd_size_mode,
         with_render,
         bgm_mode,
         bgm_id,
@@ -68,7 +66,6 @@ def _submit_generate_job_prepared(
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
-    sd_size_mode: bool = False,
     with_render: bool = False,
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
@@ -85,7 +82,6 @@ def _submit_generate_job_prepared(
         "reuse_audio": reuse_audio,
         "long_thumbnail_ab_test": long_thumbnail_ab_test,
         "long_budget_mode": long_budget_mode,
-        "sd_size_mode": sd_size_mode,
         "with_render": with_render,
         "bgm_mode": bgm_mode,
         "bgm_id": bgm_id,
@@ -105,7 +101,6 @@ def submit_batch_generate_jobs(
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
-    sd_size_mode: bool = False,
     with_render: bool = False,
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
@@ -115,7 +110,7 @@ def submit_batch_generate_jobs(
     """複数台本の生成ジョブを登録してjob_id一覧を返す。"""
     job_ids = []
     for script in apply_topic_request_cta_policy_to_scripts(scripts):
-        job_ids.append(_submit_generate_job_prepared(script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db, reuse_audio))
+        job_ids.append(_submit_generate_job_prepared(script, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, with_render, bgm_mode, bgm_id, bgm_volume_db, reuse_audio))
     return job_ids
 
 
@@ -126,7 +121,6 @@ def submit_history_regenerate_jobs(
     reuse_backgrounds: bool = False,
     long_thumbnail_ab_test: bool = False,
     long_budget_mode: bool = False,
-    sd_size_mode: bool = False,
     with_render: bool = False,
     bgm_mode: str = "profile_default",
     bgm_id: str | None = None,
@@ -145,7 +139,7 @@ def submit_history_regenerate_jobs(
         text = get_script_content(name)
         if text and text.strip():
             scripts.append(text.strip())
-    return submit_batch_generate_jobs(scripts, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, sd_size_mode, with_render, bgm_mode, bgm_id, bgm_volume_db, reuse_audio)
+    return submit_batch_generate_jobs(scripts, image_style, background_engine, reuse_backgrounds, long_thumbnail_ab_test, long_budget_mode, with_render, bgm_mode, bgm_id, bgm_volume_db, reuse_audio)
 
 
 def split_scripts(raw: str) -> list[str]:

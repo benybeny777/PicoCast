@@ -667,7 +667,7 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 
 `/check` の LLM/尺チェックは、台本本文を保存・生成せずに確認だけ行う。基本表示は推定尺のみで、`OPENING_REVIEW_USE_LLM=1` の場合だけ Ollama 点数、`OPENAI_FINAL_REVIEW_ENABLED=1` の場合だけ ChatGPT 点数を追加表示する。ローカル冒頭レビューの詳細、警告一覧、修正依頼文、台本本文は結果表示に出さない。
 
-`/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI）と **高画質（FHD）生成**（`sd_size_mode` の反転、チェックなし=縮小生成ON）の選択が含まれる。`/images` 再生成にも同様のエンジン選択と高画質（FHD）生成チェックボックスがある。
+`/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI）の選択が含まれる。`/images` 再生成にも同様のエンジン選択がある。
 
 `/settings` のAPIキー設定タブ（「APIキー設定」）は画面最下部に置く。通常の設定変更欄には秘密値を含めない。APIキー設定欄には `GOOGLE_API_KEY`・`OPENAI_API_KEY`・`HF_TOKEN`（Hugging Face アクセストークン）が含まれ、いずれも active profile ごとの有無（bool）のみ画面に表示する。保存した値は active profile の `encrypted_secrets` に紐づき、チャンネル切替後は切替先 profile の登録状態を表示・使用する。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
 
@@ -926,9 +926,6 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_DEFAULT_REUSE_BACKGROUNDS` | `false` | Web UI生成画面の背景再利用既定値 |
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `false` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `false` | Web UI生成画面のLong節約既定値 |
-| `WEB_DEFAULT_SD_SIZE_MODE` | `"1"` | Web UI生成画面の縮小生成既定値。`"1"` = 縮小生成ON（チェックボックス表記は「高画質（FHD）生成」でチェックなし） |
-| `NANOBANANA_SD_IMAGE_SIZE` | `"1K"` | Nano Banana縮小生成時の画像サイズ |
-| `NANOBANANA_FHD_IMAGE_SIZE` | `"2K"` | Nano Banana高画質生成時の画像サイズ |
 | `AUTO_FIXED_COMMENT_PROFILE_SCOPE` | `"all"` | 固定コメント自動投稿の対象。`all`=全チャンネル、`active`=アクティブのみ |
 | `WEB_JOB_POLL_INTERVAL_MS` | 2000 | Web UIジョブ状態更新間隔(ms) |
 | `WEB_LOG_POLL_INTERVAL_MS` | 8000 | ログ画面(/logs)のポーリング間隔(ms)。長いほどログをコピペしやすい。テキスト選択中はその回の再描画を自動スキップする |
@@ -1049,16 +1046,11 @@ YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案�
 
 Long ではタイトル候補（A/B/C案）を生成し、アップロード時は A 案を既定タイトルとして使う（B/C 案は YouTube Studio で手動テスト）。旧仕様の `_meta/title_ab_test.json` によるローカルマニフェスト管理は廃止済み。
 
-### 縮小生成モード
+### 画像生成解像度
 
-Web UI の **「高画質（FHD）生成」チェックボックス**（デフォルト OFF = 縮小生成）または `WEB_DEFAULT_SD_SIZE_MODE` で制御する。Shorts / Long 両方に適用される。
+背景・サムネイルは常に最終解像度（Shorts 1080x1920 / Long 1920x1080）で扱う。Nano Banana へは `image_size` を送らず（API 既定サイズで生成）、保存時に `_save_image_part` が最終解像度へリサイズする。Stable Diffusion WebUI も最終解像度で生成する。解像度ログ・Nano Banana 送信設定ログは `1080x1920` のように最終解像度を単体表示する。
 
-- **チェックなし（デフォルト）**: 縮小生成 ON。Nano Banana は `NANOBANANA_SD_IMAGE_SIZE`（デフォルト `1K`）で生成し、アプリ側で最終解像度へ拡大する。Stable Diffusion WebUI は `SD_SIZE_IMAGE_SCALE`（デフォルト 0.5）倍で生成し、アプリ側で最終解像度へ拡大する。生成時間・APIトークン消費・コストを削減できる反面、解像度が粗くなる。
-- **チェックあり**: 高画質生成 ON。Nano Banana は `NANOBANANA_FHD_IMAGE_SIZE`（デフォルト `2K`）で生成し、アプリ側で最終解像度へ調整する。Stable Diffusion WebUI は最終解像度で生成する。品質は高いがコスト・時間がかかる。
-
-解像度ログは「縮小生成解像度(SD) → 最終保存解像度(FHD)」を矢印で示す。SD（縮小生成）では `540x960 (SD) → 1080x1920 (FHD)` のように縮小して生成し最終解像度へ拡大することが分かる形にし、FHD（高画質生成）では `1920x1080 (FHD)` のように単体表示する（縮小生成解像度は `SD_SIZE_IMAGE_SCALE` 倍）。Nano Banana の送信設定ログも同様に `Google送信設定: Nano Banana 540x960 (SD) → 保存 1080x1920 (FHD)` / `Google送信設定: Nano Banana 1920x1080 (FHD)` と表示する。
-
-`WEB_DEFAULT_SD_SIZE_MODE` のデフォルトは `"1"`（縮小生成 ON）。通常生成・画像確認再生成・サムネイル再生成の全パスに適用される。
+> 旧「縮小生成モード（SDサイズモード / `sd_size_mode`）」は廃止した。`NANOBANANA_SD_IMAGE_SIZE` / `NANOBANANA_FHD_IMAGE_SIZE` / `SD_SIZE_IMAGE_SCALE` / `WEB_DEFAULT_SD_SIZE_MODE` および UI の「高画質（FHD）生成」チェックボックスは削除済み。
 
 ### 画像生成APIエラーの扱い（503混雑など）
 
@@ -1599,8 +1591,6 @@ YouTube OAuth:
 | `GEMINI_MODEL` | `.env` / `config.py` | 台本生成で使うGeminiモデル |
 | `NANOBANANA_PRO_MODEL` | `.env` / `config.py` | 高品質画像生成モデル |
 | `NANOBANANA_FLASH_MODEL` | `.env` / `config.py` | 速い画像生成モデル |
-| `NANOBANANA_SD_IMAGE_SIZE` | `.env` / `config.py` | Nano Banana縮小生成時の画像サイズ |
-| `NANOBANANA_FHD_IMAGE_SIZE` | `.env` / `config.py` | Nano Banana高画質生成時の画像サイズ |
 | `IMAGE_BACKEND` | `.env` / `config.py` | 画像生成バックエンド主スイッチ。`gemini`（デフォルト）または `sd_webui` |
 | `SD_WEBUI_BASE_URL` | `.env` / `config.py` | Stable Diffusion WebUI API URL |
 | `SD_WEBUI_TIMEOUT_SEC` | `.env` / `config.py` | Stable Diffusion WebUI API タイムアウト(秒) |
@@ -1634,7 +1624,6 @@ YouTube OAuth:
 | `WEB_DEFAULT_REUSE_BACKGROUNDS` | `.env` / `config.py` | Web UI生成画面の背景再利用既定値 |
 | `WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST` | `.env` / `config.py` | Web UI生成画面のLongサムネAB既定値 |
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `.env` / `config.py` | Web UI生成画面のLong節約既定値 |
-| `WEB_DEFAULT_SD_SIZE_MODE` | `.env` / `config.py` | Web UI生成画面の縮小生成既定値。`"1"` = 縮小生成ON（デフォルト） |
 | `AUTO_FIXED_COMMENT_PROFILE_SCOPE` | `.env` / `config.py` | 固定コメント自動投稿の対象。`all`=全チャンネル、`active`=アクティブのみ |
 | `WEB_JOB_POLL_INTERVAL_MS` | `.env` / `config.py` | Web UIのジョブ状態更新間隔(ms) |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | `.env` / `config.py` | Web UIのジョブ成功後再読み込み待ち時間(ms) |

@@ -109,22 +109,19 @@ def test_sd_webui_error_carries_code():
     assert ImageGenerationError("x", category="generic", backend="sd_webui").code == "E-IMG-FAIL"
 
 
-def test_resolution_label_shows_final_size_and_quality():
-    # SD（縮小生成）は「縮小生成解像度(SD) → 最終解像度(FHD)」の矢印表示。
-    # 既定 SD_SIZE_IMAGE_SCALE=0.5 → 1080x1920 の生成は 540x960。
-    assert main._resolution_label(1080, 1920, True) == "540x960 (SD) → 1080x1920 (FHD)"
-    # FHD（高画質生成）は生成＝保存なので単体表示。
-    assert main._resolution_label(1920, 1080, False) == "1920x1080 (FHD)"
+def test_resolution_label_shows_final_size():
+    assert main._resolution_label(1080, 1920) == "1080x1920"
+    assert main._resolution_label(1920, 1080) == "1920x1080"
 
 
-def test_nanobanana_summary_shows_sd_to_fhd_arrow():
+def test_nanobanana_summary_shows_final_size():
     from core.image_generator import ImageGenerator
 
-    assert ImageGenerator(width=1080, height=1920, sd_size_mode=True).nanobanana_request_summary() == (
-        "Google送信設定: Nano Banana 540x960 (SD) → 保存 1080x1920 (FHD)"
+    assert ImageGenerator(width=1080, height=1920).nanobanana_request_summary() == (
+        "Google送信設定: Nano Banana 1080x1920"
     )
-    assert ImageGenerator(width=1920, height=1080, sd_size_mode=False).nanobanana_request_summary() == (
-        "Google送信設定: Nano Banana 1920x1080 (FHD)"
+    assert ImageGenerator(width=1920, height=1080).nanobanana_request_summary() == (
+        "Google送信設定: Nano Banana 1920x1080"
     )
 
 

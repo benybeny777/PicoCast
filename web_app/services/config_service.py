@@ -77,7 +77,6 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "WEB_DEFAULT_REUSE_BACKGROUNDS",      "type": "bool",  "label": "Web既定: 背景再利用",        "default": "1" if cfg.WEB_DEFAULT_REUSE_BACKGROUNDS          else "0",         "group": "Web UI"},
     {"key": "WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST", "type": "bool",  "label": "Web既定: LongサムネAB",     "default": "1" if cfg.WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST     else "0",         "group": "Web UI"},
     {"key": "WEB_DEFAULT_LONG_BUDGET_MODE",       "type": "bool",  "label": "Web既定: Long節約",          "default": "1" if cfg.WEB_DEFAULT_LONG_BUDGET_MODE           else "0",         "group": "Web UI"},
-    {"key": "WEB_DEFAULT_SD_SIZE_MODE",           "type": "bool",  "label": "Web既定: 縮小生成（ONで縮小・OFFでFHD）", "default": "1" if cfg.WEB_DEFAULT_SD_SIZE_MODE else "0", "group": "Web UI"},
     {"key": "WEB_JOB_POLL_INTERVAL_MS",           "type": "int",   "label": "Webジョブ更新間隔(ms)",      "default": str(cfg.WEB_JOB_POLL_INTERVAL_MS),    "min": 500,  "max": 30000,    "group": "Web UI"},
     {"key": "WEB_LOG_POLL_INTERVAL_MS",           "type": "int",   "label": "ログ画面 更新間隔(ms)（長いほどコピペしやすい）", "default": str(cfg.WEB_LOG_POLL_INTERVAL_MS), "min": 1000, "max": 60000, "group": "Web UI"},
     {"key": "WEB_SUCCESS_RELOAD_DELAY_MS",        "type": "int",   "label": "Web成功後再読み込み待ち(ms)", "default": str(cfg.WEB_SUCCESS_RELOAD_DELAY_MS), "min": 0,    "max": 10000,    "group": "Web UI", "admin": True},

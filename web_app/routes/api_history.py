@@ -114,7 +114,6 @@ def api_regenerate_histories(req: HistoryRegenerateRequest):
         req.reuse_backgrounds,
         req.long_thumbnail_ab_test,
         req.long_budget_mode,
-        req.sd_size_mode,
         req.with_render,
         req.bgm_mode,
         req.bgm_id,

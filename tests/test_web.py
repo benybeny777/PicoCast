@@ -96,7 +96,7 @@ def test_generate_page(client):
     assert res.status_code == 200
     assert "LongサムネAB" in res.text
     assert "Long節約" in res.text
-    assert "高画質（FHD）生成" in res.text
+    assert "高画質（FHD）生成" not in res.text
     assert "const imageStyle" in res.text
     assert "’通常’" not in res.text
 

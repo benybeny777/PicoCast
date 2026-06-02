@@ -100,9 +100,6 @@
     <div class="form-group check-group">
       <label><input type="checkbox" id="long-budget-mode" {% if default_long_budget_mode %}checked{% endif %}> Long節約</label>
     </div>
-    <div class="form-group check-group">
-      <label><input type="checkbox" id="sd-size-mode" {% if not default_sd_size_mode %}checked{% endif %}> 高画質（FHD）生成</label>
-    </div>
   </div>
   {# BGM はチャンネル設定で管理するため履歴では表示・編集しない。再作成時はチャンネル既定を使用する。 #}
 
@@ -393,12 +390,11 @@ function _readPipelineParams() {
     reuseAudio:       document.getElementById('reuse-audio').checked,
     longThumbnailAb:  document.getElementById('long-thumbnail-ab').checked,
     longBudgetMode:   document.getElementById('long-budget-mode').checked,
-    fhdMode:          document.getElementById('sd-size-mode').checked,
     bgm:              readBgmParams(),
   };
 }
 
-async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, reuseAudio, longThumbnailAb, longBudgetMode, fhdMode, bgm }) {
+async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, reuseAudio, longThumbnailAb, longBudgetMode, bgm }) {
   return fetch('/api/history/regenerate', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
@@ -410,7 +406,6 @@ async function _submitPipelineJob({ imageStyle, backgroundEngine, reuseBg, reuse
       reuse_audio: reuseAudio,
       long_thumbnail_ab_test: longThumbnailAb,
       long_budget_mode: longBudgetMode,
-      sd_size_mode: !fhdMode,
       ...bgm,
       confirmed: true
     }),

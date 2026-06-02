@@ -15,7 +15,6 @@ from config import (
     WEB_DEFAULT_LONG_BUDGET_MODE,
     WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
     WEB_DEFAULT_REUSE_BACKGROUNDS,
-    WEB_DEFAULT_SD_SIZE_MODE,
     WEB_IMAGE_STYLE_CHOICES,
     WEB_JOB_POLL_INTERVAL_MS,
     WEB_LOG_POLL_INTERVAL_MS,
@@ -92,7 +91,6 @@ def page_generate(request: Request):
         "default_reuse_backgrounds": WEB_DEFAULT_REUSE_BACKGROUNDS,
         "default_long_thumbnail_ab_test": WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
         "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
-        "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
         "image_backend": _cfg.IMAGE_BACKEND,
         "bgm_assets": list_bgm_assets(),
     })
@@ -127,7 +125,6 @@ def page_history_detail(request: Request, history_name: str):
         "default_reuse_backgrounds": WEB_DEFAULT_REUSE_BACKGROUNDS,
         "default_long_thumbnail_ab_test": WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST,
         "default_long_budget_mode": WEB_DEFAULT_LONG_BUDGET_MODE,
-        "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
         "image_backend": _cfg.IMAGE_BACKEND,
         "bgm_assets": list_bgm_assets(),
     })
@@ -144,7 +141,6 @@ def page_images(request: Request, history: str = ""):
         "selected_history": history,
         "image_data": selected,
         "image_backend": _cfg.IMAGE_BACKEND,
-        "default_sd_size_mode": WEB_DEFAULT_SD_SIZE_MODE,
     })
 
 

@@ -56,7 +56,6 @@ from config import (
     NATIVE_SHORTS_TARGET_CHARS_MIN,
     OLLAMA_REWRITE_FALLBACK_MODEL,
     OLLAMA_REWRITE_MODEL,
-    SD_SIZE_IMAGE_SCALE,
     OPENING_SCORE_HARD_ABORT_THRESHOLD,
     OPENING_SCORE_ABORT_THRESHOLD,
     OPENING_REWRITE_MAX_FALLBACKS,
@@ -223,19 +222,8 @@ def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
     return "\n".join(cleaned).strip(), len(cleaned) != len(lines)
 
 
-def _scaled_gen_size(width: int, height: int) -> tuple[int, int]:
-    """SD（縮小生成）モードで実際に生成する縮小解像度を返す（ImageGenerator と同じ計算）。"""
-    scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
-    return max(64, round(width * scale)), max(64, round(height * scale))
-
-
-def _resolution_label(width: int, height: int, sd_size_mode: bool) -> str:
-    # SD（縮小生成）のときは「縮小して生成 → 最終解像度へ拡大保存」を矢印で表示する。
-    # FHD（高画質生成）のときは生成＝保存なので単体表示。
-    if sd_size_mode:
-        gw, gh = _scaled_gen_size(width, height)
-        return f"{gw}x{gh} (SD) → {width}x{height} (FHD)"
-    return f"{width}x{height} (FHD)"
+def _resolution_label(width: int, height: int) -> str:
+    return f"{width}x{height}"
 
 
 def _format_review_list(items) -> str:
@@ -496,7 +484,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     thumb_engine = img_gen.background_engine
     thumb_img_gen = ImageGenerator(
         width=img_gen.width, height=img_gen.height,
-        debug=img_gen.debug, image_style=img_gen.image_style, sd_size_mode=img_gen.sd_size_mode,
+        debug=img_gen.debug, image_style=img_gen.image_style,
         background_engine=thumb_engine,
     )
 
@@ -687,7 +675,7 @@ def _strip_video_folder_prefix(name: str) -> str:
     return name
 
 
-def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None, sd_size_mode=False, long_thumbnail_ab_test=None, background_engine=None):
+def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, progress_callback=None, long_thumbnail_ab_test=None, background_engine=None):
     """既存の出力フォルダのサムネイルのみ再生成する。"""
     def update_status(msg, tag="info"):
         if progress_callback:
@@ -711,7 +699,7 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     os.makedirs(theme_bg_dir, exist_ok=True)
 
     # background_engine=None → IMAGE_BACKEND の設定に従う
-    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, sd_size_mode=sd_size_mode, background_engine=background_engine)
+    img_gen = ImageGenerator(width=width, height=height, debug=debug, image_style=image_style, background_engine=background_engine)
     try:
         thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
                                         update_status, script_content=script_content, debug_mode=debug,
@@ -727,7 +715,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  progress_callback=None, pregenerated_script=None,
                  image_style="通常", reuse_backgrounds=False,
                  cancel_event=None, existing_titles=None, long_thumbnail_ab_test=None,
-                 long_budget_mode=None, sd_size_mode=False,
+                 long_budget_mode=None,
                  background_engine=None, bgm_mode="profile_default",
                  bgm_id=None, bgm_volume_db=None, reuse_audio=False):
     report = GenerationReport()
@@ -868,7 +856,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             width, height = 1920, 1080
         else:
             width, height = 1080, 1920  # Shorts / デフォルト（縦）
-    update_status(f"   📐 解像度: {_resolution_label(width, height, sd_size_mode)}")
+    update_status(f"   📐 解像度: {_resolution_label(width, height)}")
 
     # Step 4: 既存フォルダは削除せず、先にバックアップへ退避する。
     # 開きっぱなしで退避できない場合は、Web UI側で警告して同じ生成を再試行する。
@@ -1509,7 +1497,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         height=height,
         debug=debug_mode,
         image_style=image_style,
-        sd_size_mode=sd_size_mode,
         background_engine=background_engine,
     )
 
@@ -1518,16 +1505,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     if img_gen.background_engine == "nanobanana":
         update_status(f"🖼  {img_gen.nanobanana_request_summary()}")
-    elif img_gen.background_engine == "sd_webui" and not sd_size_mode:
-        update_status(f"🖼  SD WebUI 高画質生成: 解像度: {_resolution_label(width, height, sd_size_mode)}")
-    elif sd_size_mode:
-        from config import SD_SIZE_IMAGE_SCALE
-        scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
-        gen_width = max(64, int(round(width * scale)))
-        gen_height = max(64, int(round(height * scale)))
-        update_status(
-            f"🖼  SD WebUI 縮小生成: 解像度: {_resolution_label(width, height, sd_size_mode)} / 生成: {gen_width}x{gen_height}"
-        )
+    elif img_gen.background_engine == "sd_webui":
+        update_status(f"🖼  SD WebUI 生成: 解像度: {_resolution_label(width, height)}")
     update_status(f"🎬 アセット生成を開始します...")
 
     voice_num = 0

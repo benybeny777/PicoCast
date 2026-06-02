@@ -10,9 +10,11 @@
 
 - runner は起動時に、前回セッションで `queued` のまま残っていた `generate` / `render` を `cancelled`（`起動時に破棄（前回の未実行ジョブ）`）へ破棄するようにした（`discard_pending_jobs`）。再起動だけで前回のキュー残りが勝手に走らなくなる。起動後に新規登録したジョブは通常どおり実行する。
 
-### Nano Banana 503切り分けのため image_size 指定を一時的に外す
+### SDサイズモード（縮小生成）を廃止し、生成コールを image_size なしに固定
 
-- `core/image_generator.py` の生成コールから `ImageConfig.image_size`（SD=1K / FHD=2K）指定を外し、cb0622e 以前と同じ `aspect_ratio` のみの送信に戻した。保存解像度は従来どおり最終サイズへリサイズするため出力は変わらない。SD指定後に503が頻発する事象の切り分け用。
+- nanobanana 縮小生成（SDサイズモード）を完全廃止した。`sd_size_mode` 引数・パラメータ、`NANOBANANA_SD_IMAGE_SIZE` / `NANOBANANA_FHD_IMAGE_SIZE` / `SD_SIZE_IMAGE_SCALE` / `WEB_DEFAULT_SD_SIZE_MODE` 各設定、UI の「高画質（FHD）生成」チェックボックスを削除した。
+- 生成コール（`ImageConfig`）は `image_size` を送らず `aspect_ratio` のみに固定。保存時に最終解像度へリサイズするため出力解像度は変わらない。SD指定後に nanobanana の 503 が頻発していた事象への対応。
+- Stable Diffusion WebUI 経路も常に最終解像度で生成するようにした（縮小→拡大を廃止）。
 
 ### 台本保存済みの途中停止履歴をリトライ可能に変更
 

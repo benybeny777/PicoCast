@@ -4,10 +4,7 @@ from google import genai
 from config import config
 from config import (
     NANOBANANA_FLASH_MODEL,
-    NANOBANANA_FHD_IMAGE_SIZE,
     NANOBANANA_PRO_MODEL,
-    NANOBANANA_SD_IMAGE_SIZE,
-    SD_SIZE_IMAGE_SCALE,
 )
 # IMAGE_BACKEND は実行時に config から直接参照する（monkeypatch対応）
 
@@ -106,14 +103,12 @@ class ImageGenerator:
         height=1080,
         debug=False,
         image_style="通常",
-        sd_size_mode=False,
         background_engine=None,
     ):
         self.width = width
         self.height = height
         self.debug = debug
         self.image_style = image_style
-        self.sd_size_mode = sd_size_mode
 
         # バックエンド解決順:
         #   1. 明示的に渡された background_engine 引数を最優先
@@ -133,10 +128,6 @@ class ImageGenerator:
                 f"有効な値: 'gemini', 'sd_webui'"
             )
         self.background_engine = effective_engine
-
-        scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
-        self.request_width = max(64, int(round(self.width * scale))) if sd_size_mode else self.width
-        self.request_height = max(64, int(round(self.height * scale))) if sd_size_mode else self.height
 
         self.client = None
         if self.background_engine == "nanobanana":
@@ -192,28 +183,14 @@ class ImageGenerator:
     def _image_generation_config(self):
         from google.genai import types
         aspect_ratio = "9:16" if self.height > self.width else "16:9"
-        # 503頻発の切り分け実験: image_size 指定を外し、cb0622e 以前と同じ aspect_ratio のみで送る。
-        # 戻すときは image_size=self.nanobanana_image_size() を ImageConfig に再追加する。
+        # image_size は送らない（API 既定サイズで生成し、保存時に最終解像度へリサイズする）。
         return types.GenerateContentConfig(
             response_modalities=["IMAGE"],
             image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
         )
 
-    def nanobanana_image_size(self):
-        return NANOBANANA_SD_IMAGE_SIZE if self.sd_size_mode else NANOBANANA_FHD_IMAGE_SIZE
-
-    def nanobanana_request_label(self):
-        return "SD" if self.sd_size_mode else "FHD"
-
     def nanobanana_request_summary(self):
-        # SD（縮小生成）は「縮小して生成 → 最終解像度へ拡大保存」を矢印表示。
-        # FHD（高画質生成）は生成＝保存なので単体表示。
-        if self.sd_size_mode:
-            return (
-                f"Google送信設定: Nano Banana {self.request_width}x{self.request_height} (SD)"
-                f" → 保存 {self.width}x{self.height} (FHD)"
-            )
-        return f"Google送信設定: Nano Banana {self.width}x{self.height} (FHD)"
+        return f"Google送信設定: Nano Banana {self.width}x{self.height}"
 
     def _save_prompt_log(self, save_dir, fname, prompt):
         log_path = os.path.join(save_dir, "image_prompts.txt")
@@ -250,17 +227,6 @@ class ImageGenerator:
 
     def _write_image_generation_meta(self, save_dir, entry):
         return None
-
-    def _resize_image_file(self, path, size):
-        from PIL import Image
-        with Image.open(path) as img:
-            if img.size == size:
-                return
-            resized = img.resize(size, Image.LANCZOS)
-            try:
-                resized.save(path)
-            finally:
-                resized.close()
 
     def _prepare_sd_webui_model(self) -> None:
         """SD_WEBUI_MODEL が設定されている場合、インストール確認・ダウンロード・モデル切り替えを行う。
@@ -363,13 +329,8 @@ class ImageGenerator:
             final_width = self.width
             final_height = self.height
 
-        if self.sd_size_mode:
-            scale = max(0.1, min(1.0, float(SD_SIZE_IMAGE_SCALE or 0.5)))
-            gen_width = max(64, int(round(final_width * scale)))
-            gen_height = max(64, int(round(final_height * scale)))
-        else:
-            gen_width = final_width
-            gen_height = final_height
+        gen_width = final_width
+        gen_height = final_height
 
         prompt_suffix = _THUMB_PROMPT_SUFFIX if is_thumbnail else _BG_PROMPT_SUFFIX
 
@@ -385,8 +346,6 @@ class ImageGenerator:
         with StableDiffusionWebUIGenerator(width=gen_width, height=gen_height) as gen:
             try:
                 gen.generate_image(en_prompt, output_path, prompt_suffix=prompt_suffix)
-                if self.sd_size_mode:
-                    self._resize_image_file(output_path, (final_width, final_height))
             except ImageGenerationError:
                 raise  # 既に分類済み
             except Exception as e:
@@ -424,8 +383,7 @@ class ImageGenerator:
         model_name = NANOBANANA_PRO_MODEL if (force_nanobanana_pro or "pro" in self.image_style) else NANOBANANA_FLASH_MODEL
 
         if self.debug:
-            size_note = f" {self.nanobanana_request_label()}生成→{self.width}x{self.height}"
-            print(f"  [AI] Google {model_name} (Nano Banana){size_note} で描画を開始します: {description[:40]}...")
+            print(f"  [AI] Google {model_name} (Nano Banana) {self.width}x{self.height} で描画を開始します: {description[:40]}...")
 
         try:
             full_prompt = self._build_full_prompt(description, raw)

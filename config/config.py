@@ -198,9 +198,6 @@ VOICE_READING_MODE = os.environ.get("VOICE_READING_MODE", "safe_auto")  # 読み
 GEMINI_MODEL          = os.environ.get("GEMINI_MODEL",          "gemini-3.1-pro-preview")       # 台本生成モデル
 NANOBANANA_PRO_MODEL  = os.environ.get("NANOBANANA_PRO_MODEL",  "gemini-3-pro-image-preview")   # 背景・サムネ生成（高品質）
 NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-flash-image-preview")  # 背景・サムネ生成（高速）
-NANOBANANA_SD_IMAGE_SIZE = os.environ.get("NANOBANANA_SD_IMAGE_SIZE", "1K")                      # Nano Banana 縮小生成時の画像サイズ
-NANOBANANA_FHD_IMAGE_SIZE = os.environ.get("NANOBANANA_FHD_IMAGE_SIZE", "2K")                    # Nano Banana 高画質生成時の画像サイズ
-SD_SIZE_IMAGE_SCALE   = float(os.environ.get("SD_SIZE_IMAGE_SCALE", "0.5"))                     # SD 生成モード: 縮小倍率（生成後に拡大）
 
 
 # ───────────────────────────────────────────────
@@ -412,7 +409,6 @@ WEB_IMAGE_STYLE_CHOICES = _split_env_choices(os.environ.get("WEB_IMAGE_STYLE_CHO
 WEB_DEFAULT_REUSE_BACKGROUNDS = os.environ.get("WEB_DEFAULT_REUSE_BACKGROUNDS", "1").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時の背景再利用既定値
 WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST = os.environ.get("WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のLongサムネAB既定値
 WEB_DEFAULT_LONG_BUDGET_MODE = os.environ.get("WEB_DEFAULT_LONG_BUDGET_MODE", "0").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時のLong節約既定値
-WEB_DEFAULT_SD_SIZE_MODE = os.environ.get("WEB_DEFAULT_SD_SIZE_MODE", "1").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時の縮小生成既定値（デフォルトON）
 WEB_JOB_POLL_INTERVAL_MS = int(os.environ.get("WEB_JOB_POLL_INTERVAL_MS", "2000"))  # Web UI のジョブポーリング間隔(ms)
 WEB_LOG_POLL_INTERVAL_MS = int(os.environ.get("WEB_LOG_POLL_INTERVAL_MS", "8000"))  # ログ画面(/logs)のポーリング間隔(ms)。頻繁な再描画でログのコピペが途切れるのを避けるため長め。テキスト選択中はさらにポーリングを一時停止する
 WEB_SUCCESS_RELOAD_DELAY_MS = int(os.environ.get("WEB_SUCCESS_RELOAD_DELAY_MS", "1500"))  # Web UI ジョブ成功後の再読み込み待ち時間(ms)
