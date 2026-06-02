@@ -34,6 +34,17 @@ def _find_thumbnail(theme_dir: str) -> str | None:
     return None
 
 
+def _list_audio_files(theme_dir: str) -> list[str]:
+    audio_dir = os.path.join(theme_dir, "audio")
+    if not os.path.isdir(audio_dir):
+        return []
+    result: list[str] = []
+    for fname in sorted(os.listdir(audio_dir)):
+        if os.path.splitext(fname)[1].lower() in (".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg"):
+            result.append(f"audio/{fname}")
+    return result
+
+
 def _has_generated_artifact(theme_dir: str, db_info: dict[str, Any]) -> bool:
     """台本だけ保存された途中データを履歴一覧から除外するための生成物判定。"""
     if db_info.get("render_engine"):
@@ -376,6 +387,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
 
     mp4_name = _find_mp4(theme_dir)
     thumb_rel = _find_thumbnail(theme_dir)
+    audio_files = _list_audio_files(theme_dir)
 
     # Long サムネA/B/C
     long_thumbnails = []
@@ -411,6 +423,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
         "has_thumbnail": thumb_rel is not None,
         "thumbnail_rel": thumb_rel,
         "long_thumbnails": long_thumbnails,
+        "audio_files": audio_files,
         "backgrounds": backgrounds,
         "image_failures": image_failures,
         "has_poll_copy": has_poll_copy,

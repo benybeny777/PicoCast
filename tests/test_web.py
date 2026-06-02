@@ -441,6 +441,10 @@ def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, 
         "動画形式: Shorts\n生成区分: 新規\n動画タイトル: Bob's 100%\n",
         encoding="utf-8",
     )
+    audio_dir = theme_dir / "audio"
+    audio_dir.mkdir()
+    (audio_dir / "001.wav").write_bytes(b"wav")
+    (audio_dir / "memo.txt").write_text("ignore", encoding="utf-8")
 
     _patch_service_output_dirs(monkeypatch, hs, fake_output)
 
@@ -451,6 +455,27 @@ def test_history_detail_escapes_history_name_in_regenerate_js(client, tmp_path, 
     assert "encodeURIComponent(historyName)" in res.text
     assert "history_names: [historyName]" in res.text
     assert "history_names: ['" not in res.text
+    assert "音声データ" in res.text
+    assert "1 件" in res.text
+
+
+def test_history_open_folder_resolves_videos_dir(client, tmp_path, monkeypatch):
+    import sys
+    import web_app.routes.api_history as api_history
+
+    fake_output = tmp_path / "output"
+    theme_dir = fake_output / "videos" / "Shorts_フォルダ確認"
+    theme_dir.mkdir(parents=True)
+
+    monkeypatch.setattr(api_history, "find_history_dir", lambda name: str(theme_dir) if name == "Shorts_フォルダ確認" else None)
+    opened = []
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(api_history.os, "startfile", lambda path: opened.append(path), raising=False)
+
+    res = client.post("/api/history/Shorts_フォルダ確認/open-folder")
+
+    assert res.status_code == 200
+    assert opened == [str(theme_dir)]
 
 
 def test_history_row_actions_do_not_embed_json_in_onclick(client):
