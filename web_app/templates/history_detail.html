@@ -295,75 +295,8 @@ function appendLog(msg, tag) {
   el.style.color = tag === 'error' ? 'var(--err)' : tag === 'warning' ? 'var(--warning)' : tag === 'success' ? 'var(--ok)' : '';
 }
 
-function _buildJobCardHtml(job) {
-  const statusCls = job.status === 'success' ? 'badge-ok' :
-                    job.status === 'failed'  ? 'badge-ng' :
-                    job.status === 'running' ? 'badge-running' : 'badge-warn';
-  const t = (job.started_at || '').slice(0, 16).replace('T', ' ');
-  return `<div class="card mt job-card status-${escapeHtml(job.status)}"
-               data-status="${escapeHtml(job.status)}"
-               data-type="${escapeHtml(job.type || '')}"
-               data-job-id="${escapeHtml(job.job_id)}">
-    <div class="job-header">
-      <span class="job-type-badge">${escapeHtml(job.type || '')}</span>
-      <span class="badge ${statusCls}">${escapeHtml(job.status)}</span>
-      <span class="job-time">${escapeHtml(t)}</span>
-    </div>
-    <div class="job-progress">${escapeHtml(job.progress_text || '')}</div>
-  </div>`;
-}
-
 function _updateJobCard(container, job) {
-  let card = container.querySelector(`.job-card[data-job-id="${CSS.escape(job.job_id)}"]`);
-  if (!card) {
-    container.insertAdjacentHTML('beforeend', _buildJobCardHtml(job));
-    card = container.querySelector(`.job-card[data-job-id="${CSS.escape(job.job_id)}"]`);
-  }
-
-  card.className = card.className.replace(/\bstatus-\S+/, `status-${job.status}`);
-  card.dataset.status = job.status;
-
-  const badge = card.querySelector('.badge');
-  if (badge) {
-    badge.textContent = job.status;
-    badge.className = 'badge ' + (
-      job.status === 'success' ? 'badge-ok' :
-      job.status === 'failed'  ? 'badge-ng' :
-      job.status === 'running' ? 'badge-running' : 'badge-warn'
-    );
-  }
-
-  const prog = card.querySelector('.job-progress');
-  if (prog) prog.textContent = job.progress_text || '';
-
-  let errEl = card.querySelector('.error-text');
-  if (job.error) {
-    if (!errEl) { errEl = document.createElement('div'); errEl.className = 'error-text'; prog && prog.after(errEl); }
-    errEl.textContent = 'エラー: ' + job.error;
-  } else if (errEl) errEl.remove();
-
-  const logs = job.logs || [];
-  if (logs.length > 0) {
-    let details = card.querySelector('details');
-    if (!details) {
-      details = document.createElement('details');
-      details.open = true;
-      card.appendChild(details);
-    }
-    let summary = details.querySelector('summary');
-    if (!summary) { summary = document.createElement('summary'); details.prepend(summary); }
-    summary.textContent = `ログ詳細 (${logs.length}件)`;
-
-    let logBox = details.querySelector('.log-box');
-    if (!logBox) { logBox = document.createElement('div'); logBox.className = 'log-box'; details.appendChild(logBox); }
-
-    const atBottom = details.open && (logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80);
-    logBox.innerHTML = logs.map(e => {
-      const t = (e.time || '').slice(11, 19);
-      return `<div class="log-line log-${escapeHtml(e.tag)}">${escapeHtml(t)} [${escapeHtml(e.tag)}] ${escapeHtml(e.message)}</div>`;
-    }).join('');
-    if (atBottom) logBox.scrollTop = logBox.scrollHeight;
-  }
+  updateJobCard(container, job);
 }
 
 function disableButtons() {

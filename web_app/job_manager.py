@@ -117,15 +117,16 @@ class JobManager:
         job = Job(str(uuid.uuid4()), job_type, self._active_profile_id(), params or {})
         job.status = JobStatus.QUEUED if queued else JobStatus.RUNNING
         upsert_job(job.to_dict())
-        with self._lock:
-            self._running[job.job_id] = job
+        if not queued:
+            with self._lock:
+                self._running[job.job_id] = job
         return job
 
     def get_job(self, job_id: str) -> Job | None:
         from core.metadata_db import load_jobs_from_db
         with self._lock:
             running = self._running.get(job_id)
-            if running:
+            if running and running.status != JobStatus.QUEUED:
                 return running
         for profile_id in self._lookup_profile_ids():
             with _profile_scope(profile_id):

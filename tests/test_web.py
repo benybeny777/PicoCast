@@ -189,10 +189,22 @@ def test_logs_page(client):
     assert res.status_code == 200
 
 
+def test_logs_page_uses_common_job_card_and_debug_polling(client):
+    res = client.get("/logs")
+    assert res.status_code == 200
+    assert "updateJobCard(" in res.text
+    assert "buildJobCardHtml(job)" in res.text
+    assert "_startDebugPolling" in res.text
+    assert "setInterval(() =>" in res.text
+    assert "_LOG_POLL_INTERVAL_MS" in res.text
+    assert '<button class="btn btn-secondary" onclick="location.reload()">更新</button>' not in res.text
+    assert "読み込み / 更新" not in res.text
+
+
 def test_logs_running_job_cancel_button_is_action_label(client):
     from web_app.job_manager import get_job_manager, JobStatus
 
-    job = get_job_manager().create_job("generate")
+    job = get_job_manager().create_job("generate", queued=False)
     job.status = JobStatus.RUNNING
 
     res = client.get("/logs")
@@ -208,8 +220,8 @@ def test_job_manager_state_transitions():
     from web_app.job_manager import get_job_manager, JobStatus
 
     mgr = get_job_manager()
-    job = mgr.create_job("test")
-    assert job.status == JobStatus.QUEUED
+    job = mgr.create_job("test", queued=False)
+    assert job.status == JobStatus.RUNNING
 
     # cancel_job
     ok = mgr.cancel_job(job.job_id)
@@ -844,6 +856,25 @@ def test_claim_queued_job_is_atomic(tmp_path, monkeypatch):
     assert claimed1["status"] == "running"
     assert claimed1["runner_pid"] == 111
     assert claimed2 is None
+
+
+def test_get_job_prefers_db_for_queued_runner_job(tmp_path, monkeypatch):
+    import core.metadata_db as m
+    from web_app.job_manager import JobManager
+
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    monkeypatch.setattr("web_app.job_manager.JobManager._active_profile_id", lambda _self: "test_profile")
+
+    mgr = JobManager()
+    job = mgr.create_job("generate", {"script": "動画形式: Shorts"}, queued=True)
+    m.append_job_logs(job.job_id, [{"time": "2026-06-02T12:00:00+09:00", "tag": "info", "message": "runner側ログ"}])
+    m.update_job_progress(job.job_id, "runner側進捗", "2026-06-02T12:00:00+09:00")
+
+    found = mgr.get_job(job.job_id)
+
+    assert found is not None
+    assert found.progress_text == "runner側進捗"
+    assert found.logs[-1]["message"] == "runner側ログ"
 
 
 # ── reuse_audio の配管（サービス層） ──────────────────────────────────────────
