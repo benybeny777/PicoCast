@@ -18,6 +18,78 @@ from core.channel_profile import get_profile, require_active_profile
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _ALLOWED_EXTS = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
+# BGM 実ファイルの既定保存先（プロファイルルート相対）
+_BGM_REL_DIR = os.path.join("000_assets", "bgm")
+_MIGRATED_REL = False
+
+
+def _to_rel(profile, path: str) -> str:
+    """profile ルート相対パスへ正規化して保存用に返す。
+
+    output ディレクトリごと移動しても壊れないよう、DB には絶対パスを保存しない。
+    profile ルート外の絶対パス（旧プロファイルの残骸等）は basename を
+    000_assets/bgm 配下とみなす。
+    """
+    p = str(path or "")
+    if not p:
+        return p
+    if not os.path.isabs(p):
+        return p.replace("\\", "/")
+    rel = None
+    try:
+        rel = os.path.relpath(p, profile.output_root_abs)
+    except ValueError:
+        rel = None  # 別ドライブ等
+    if rel is None or rel.startswith(".."):
+        rel = os.path.join(_BGM_REL_DIR, os.path.basename(p))
+    return rel.replace("\\", "/")
+
+
+def _to_abs(profile_id: str, stored: str) -> str:
+    """DB 保存値（相対）を現プロファイルの絶対パスへ解決する。"""
+    p = str(stored or "")
+    if not p:
+        return p
+    if os.path.isabs(p):
+        return p  # 移行前の旧絶対パス（マイグレーションで相対化される）
+    prof = get_profile(profile_id)
+    if prof is None:
+        return p
+    return os.path.normpath(os.path.join(prof.output_root_abs, p))
+
+
+def _resolve_row(row) -> dict[str, Any]:
+    """DB 行を dict 化し file_path を絶対パスへ解決して返す（消費側は絶対前提のまま）。"""
+    data = dict(row)
+    data["file_path"] = _to_abs(data.get("profile_id"), data.get("file_path"))
+    return data
+
+
+def _migrate_paths_to_relative() -> None:
+    """既存の絶対 file_path を一度だけプロファイル相対へ書き換える。"""
+    global _MIGRATED_REL
+    if _MIGRATED_REL:
+        return
+    _MIGRATED_REL = True
+    try:
+        with _open() as conn:
+            rows = conn.execute("SELECT bgm_id, profile_id, file_path FROM bgm_assets").fetchall()
+        updates = []
+        for r in rows:
+            fp = r["file_path"]
+            if not fp or not os.path.isabs(fp):
+                continue
+            prof = get_profile(r["profile_id"])
+            if prof is None:
+                continue  # 存在しないプロファイルの孤立行は触らない（別途掃除）
+            updates.append((_to_rel(prof, fp), r["bgm_id"]))
+        if updates:
+            with _open() as conn:
+                conn.executemany("UPDATE bgm_assets SET file_path=? WHERE bgm_id=?", updates)
+                conn.commit()
+    except Exception:
+        _MIGRATED_REL = False  # 次回再試行（フォールバックではなく一時失敗の再試行）
+        raise
 
 
 def _open() -> sqlite3.Connection:
@@ -47,6 +119,7 @@ def _open() -> sqlite3.Connection:
 
 def list_bgm_assets(profile_id: str | None = None, include_disabled: bool = False) -> list[dict[str, Any]]:
     profile_id = profile_id or require_active_profile().profile_id
+    _migrate_paths_to_relative()
     ensure_legacy_default(profile_id)
     sql = "SELECT * FROM bgm_assets WHERE profile_id=?"
     params: list[Any] = [profile_id]
@@ -55,11 +128,12 @@ def list_bgm_assets(profile_id: str | None = None, include_disabled: bool = Fals
     sql += " ORDER BY is_default DESC, display_name ASC"
     with _open() as conn:
         rows = conn.execute(sql, params).fetchall()
-    return [dict(row) for row in rows]
+    return [_resolve_row(row) for row in rows]
 
 
 def get_bgm_asset(bgm_id: str, profile_id: str | None = None, *, require_enabled: bool = True) -> dict[str, Any]:
     profile_id = profile_id or require_active_profile().profile_id
+    _migrate_paths_to_relative()
     with _open() as conn:
         row = conn.execute(
             "SELECT * FROM bgm_assets WHERE bgm_id=? AND profile_id=?",
@@ -67,7 +141,7 @@ def get_bgm_asset(bgm_id: str, profile_id: str | None = None, *, require_enabled
         ).fetchone()
     if not row:
         raise ValueError("BGMが見つかりません")
-    data = dict(row)
+    data = _resolve_row(row)
     if require_enabled and not data.get("is_enabled"):
         raise ValueError("無効化済みBGMは使用できません")
     return data
@@ -75,13 +149,14 @@ def get_bgm_asset(bgm_id: str, profile_id: str | None = None, *, require_enabled
 
 def get_default_bgm(profile_id: str | None = None) -> dict[str, Any] | None:
     profile_id = profile_id or require_active_profile().profile_id
+    _migrate_paths_to_relative()
     ensure_legacy_default(profile_id)
     with _open() as conn:
         row = conn.execute(
             "SELECT * FROM bgm_assets WHERE profile_id=? AND is_enabled=1 AND is_default=1 LIMIT 1",
             (profile_id,),
         ).fetchone()
-    return dict(row) if row else None
+    return _resolve_row(row) if row else None
 
 
 def create_bgm_asset(
@@ -126,7 +201,7 @@ def create_bgm_asset(
             ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
-                bgm_id, profile_id, display_name, dest_path, float(default_volume_db),
+                bgm_id, profile_id, display_name, _to_rel(profile, dest_path), float(default_volume_db),
                 int(bool(loop_enabled)), 1, int(bool(is_default)), note.strip(),
                 duration, now, now,
             ),
@@ -205,6 +280,13 @@ def resolve_bgm_selection(
         raise ValueError(f"未対応のBGMモードです: {mode}")
 
     file_path = str(asset["file_path"])
+    if not os.path.isfile(file_path):
+        # 旧絶対パス等で実体が無い場合、現プロファイルの資産配下をファイル名で探索する
+        prof = get_profile(profile_id)
+        if prof:
+            candidate = os.path.join(prof.output_root_abs, _BGM_REL_DIR, os.path.basename(file_path))
+            if os.path.isfile(candidate):
+                file_path = candidate
     if not os.path.isfile(file_path):
         raise FileNotFoundError(f"BGMファイルが見つかりません: {file_path}")
     volume = float(bgm_volume_db) if bgm_volume_db is not None else float(asset["default_volume_db"])
