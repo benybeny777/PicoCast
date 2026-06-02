@@ -81,6 +81,32 @@ def dual_profile_env(tmp_path, monkeypatch):
     yield cp, ppl, tmp_path, food, urban
 
 
+# ── profile_context は __enter__ 失敗時もスレッドローカルを残留させない ──────────
+
+def test_profile_context_does_not_leak_on_enter_failure(monkeypatch):
+    """__enter__ 内 get_profile が例外でも、active profile 上書きが残留しないこと。
+
+    残留すると、スレッドプール上のスレッドが誤プロファイルを参照し続け、
+    アプリ再起動まで直らない（履歴フォルダ未検出・件数0件などの原因になる）。
+    """
+    import sqlite3
+
+    import core.channel_profile as cp
+
+    assert getattr(cp._profile_context, "profile_id", None) is None
+
+    def _boom(_pid):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(cp, "get_profile", _boom)
+    with pytest.raises(sqlite3.OperationalError):
+        with cp.profile_context("zunkami"):
+            pass
+
+    # 上書きが復元され、以降のリクエストへ漏れないこと
+    assert getattr(cp._profile_context, "profile_id", None) is None
+
+
 # ── default_hashtags が profile 別に切り替わる ────────────────────────────────
 
 def test_default_hashtags_food_trivia(dual_profile_env):

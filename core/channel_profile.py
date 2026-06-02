@@ -311,7 +311,14 @@ class profile_context:
     def __enter__(self):
         self._previous = getattr(_profile_context, "profile_id", None)
         _profile_context.profile_id = self.profile_id
-        return get_profile(self.profile_id)
+        try:
+            return get_profile(self.profile_id)
+        except Exception:
+            # __enter__ が例外を投げると with 本体に入らず __exit__ も呼ばれないため、
+            # ここで必ず復元する。これを怠ると、スレッドプール上のスレッドへ profile 上書きが
+            # 残留し、以降のリクエストが誤プロファイルを参照する（アプリ再起動まで直らない）。
+            self.__exit__(None, None, None)
+            raise
 
     def __exit__(self, exc_type, exc, tb):
         if self._previous is None:
