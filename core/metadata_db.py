@@ -1553,6 +1553,33 @@ def reap_stale_running_jobs(timeout_sec: float) -> int:
         return int(cur.rowcount or 0)
 
 
+def discard_pending_jobs(job_types: list[str] | tuple[str, ...]) -> int:
+    """起動時に残っていた未実行(queued)ジョブを cancelled へ破棄する。
+
+    前回セッションでキューに積まれたまま終わったジョブを、runner 起動時に
+    自動実行しないための処理。起動後に新規登録されたジョブには影響しない。
+    """
+    initialize_db()
+    if not job_types:
+        return 0
+    placeholders = ",".join("?" for _ in job_types)
+    with ManagedConnection() as conn:
+        cur = conn.execute(
+            f"""
+            UPDATE jobs
+            SET status='cancelled',
+                cancel_requested=1,
+                progress_text='起動時に破棄（前回の未実行ジョブ）',
+                error='起動時に破棄（前回の未実行ジョブ）',
+                finished_at=?
+            WHERE status='queued' AND job_type IN ({placeholders})
+            """,
+            (_now_jst(), *job_types),
+        )
+        conn.commit()
+        return int(cur.rowcount or 0)
+
+
 def delete_old_jobs(keep_n: int) -> None:
     """古いジョブを削除して keep_n 件だけ残す。"""
     with ManagedConnection() as conn:

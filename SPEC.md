@@ -511,6 +511,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 
 - 同時実行数は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列）。設定画面の「管理者設定」タブから変更でき、runner は設定DBを定期的に読み直して次のジョブ取得から反映する。2以上にすると runner 内で生成・レンダーを並列実行する。
 - Web は queued 登録と DB 参照だけを行うため、重い生成中でもジョブ一覧・履歴・設定画面の応答を維持する。
+- runner は起動時に、前回セッションで残っていた `queued` の `generate` / `render` を `cancelled`（`起動時に破棄（前回の未実行ジョブ）`）へ破棄する（`discard_pending_jobs`）。前回の未実行ジョブを再起動だけで自動実行しない。起動後に新規登録されたジョブは通常どおり実行する。
 
 設定画面 (`/settings`) で使う補助データ（Ollamaモデル一覧、`assets/bgm/` の音源ファイル一覧）は、Web UI 起動時に `settings_preload_service` がバックグラウンドでプリロードする。プリロードが未完了の状態で設定画面を開いた場合でも、`GET /api/settings/ollama-models` と `GET /api/settings/bgm-files` は待機せず暫定値を返し、設定項目本体を先に表示する。APIキー登録状態は `encrypted_secrets` の bool だけを使い、`/settings` のHTML生成時に VOICEVOX / ffmpeg / Ollama / Stable Diffusion のフル診断を実行しない。ジョブ実行・ログ保持・各種タイムアウト・Web UI 表示名など運用負荷やアプリ全体に影響する項目は「管理者設定」タブに分離する。
 - `JOB_RUNNER_POLL_INTERVAL_SEC` ごとに queued/cancel を確認し、`JOB_LOG_FLUSH_INTERVAL_SEC` ごとにログをまとめ書きする。

@@ -192,9 +192,11 @@ class ImageGenerator:
     def _image_generation_config(self):
         from google.genai import types
         aspect_ratio = "9:16" if self.height > self.width else "16:9"
+        # 503頻発の切り分け実験: image_size 指定を外し、cb0622e 以前と同じ aspect_ratio のみで送る。
+        # 戻すときは image_size=self.nanobanana_image_size() を ImageConfig に再追加する。
         return types.GenerateContentConfig(
             response_modalities=["IMAGE"],
-            image_config=types.ImageConfig(aspect_ratio=aspect_ratio, image_size=self.nanobanana_image_size()),
+            image_config=types.ImageConfig(aspect_ratio=aspect_ratio),
         )
 
     def nanobanana_image_size(self):

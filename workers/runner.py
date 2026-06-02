@@ -255,6 +255,20 @@ def _run_job(job: dict) -> None:
         _logger.info("job完了: job=%s type=%s status=%s profile=%s", job_id[:8], job_type, status, profile_id)
 
 
+def _discard_pending_on_startup() -> None:
+    """起動時に残っていた前回の未実行(queued)ジョブを破棄し、自動実行しないようにする。"""
+    from core.metadata_db import discard_pending_jobs, initialize_db, is_initialized
+
+    total = 0
+    for profile in list_profiles():
+        with profile_context(profile.profile_id):
+            if not is_initialized():
+                initialize_db()
+            total += discard_pending_jobs(_RUNNABLE_TYPES)
+    if total:
+        _logger.info("起動時に前回の未実行ジョブを破棄しました: count=%s", total)
+
+
 def _claim_one(pid: int) -> dict | None:
     from core.metadata_db import claim_queued_job, initialize_db, is_initialized, reap_stale_running_jobs
 
@@ -277,6 +291,7 @@ def main() -> None:
     pid = os.getpid()
     executor_capacity = max(1, JOB_RUNNER_EXECUTOR_CAPACITY, JOB_MAX_CONCURRENT_WORKERS)
     _logger.info("runner起動 pid=%s capacity=%s max_workers=%s", pid, executor_capacity, JOB_MAX_CONCURRENT_WORKERS)
+    _discard_pending_on_startup()
     futures = set()
     with ThreadPoolExecutor(max_workers=executor_capacity) as executor:
         try:

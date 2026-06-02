@@ -616,6 +616,26 @@ def test_runner_treats_empty_or_error_message_as_failure():
     assert _result_error_message({"message": "✅ 完成! 出力フォルダ: output/x"}) == ""
 
 
+def test_discard_pending_jobs_cancels_only_queued_runnable(tmp_path, monkeypatch):
+    """起動時破棄は queued の generate/render だけを cancelled にし、他状態は触らない。"""
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+
+    base = {"profile_id": "p", "progress_text": "", "logs": [], "params": {}}
+    m.upsert_job({**base, "job_id": "queued-gen", "type": "generate", "status": "queued"})
+    m.upsert_job({**base, "job_id": "queued-render", "type": "render", "status": "queued"})
+    m.upsert_job({**base, "job_id": "running-gen", "type": "generate", "status": "running"})
+    m.upsert_job({**base, "job_id": "queued-other", "type": "image_regenerate", "status": "queued"})
+
+    discarded = m.discard_pending_jobs(("generate", "render"))
+
+    assert discarded == 2
+    statuses = {r["job_id"]: r["status"] for r in m.load_jobs_from_db(max_n=10)}
+    assert statuses["queued-gen"] == "cancelled"
+    assert statuses["queued-render"] == "cancelled"
+    assert statuses["running-gen"] == "running"
+    assert statuses["queued-other"] == "queued"
+
+
 def test_config_image_style_choices_save_normalizes_quotes(tmp_path, monkeypatch):
     import web_app.services.config_service as cs
     import core.settings_store as settings_store
