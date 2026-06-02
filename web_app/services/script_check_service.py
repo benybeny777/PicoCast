@@ -50,55 +50,59 @@ def _run_check(job: Job, script: str) -> list[dict[str, Any]]:
         # 尺レビュー
         estimated_sec = None
         dur_result: dict[str, Any] = {}
-        try:
-            estimated_sec, _line_count, _avg_chars = _estimate_script_duration(items, is_shorts)
-            dur_result = duration_review(float(estimated_sec or 0.0), is_shorts=is_shorts)
-        except Exception as e:
-            dur_result = {"error": str(e)}
+        _log(job, f"台本 {i}: 尺レビューを実行中...", "info")
+        estimated_sec, _line_count, _avg_chars = _estimate_script_duration(items, is_shorts)
+        dur_result = duration_review(float(estimated_sec or 0.0), is_shorts=is_shorts)
+        _log(job, f"台本 {i}: 尺レビュー完了 ({dur_result.get('seconds', '—')}秒)", "info")
 
         # Ollamaレビューの前提になるローカル冒頭チェック
         local_result: dict[str, Any] = {}
-        try:
-            local_result = local_opening_review(items, title, thumbnail_text, is_shorts)
-        except Exception as e:
-            local_result = {"error": str(e)}
+        _log(job, f"台本 {i}: ローカル冒頭チェックを実行中...", "info")
+        local_result = local_opening_review(items, title, thumbnail_text, is_shorts)
+        _log(job, f"台本 {i}: ローカル冒頭チェック完了", "info")
 
         # LLMチェック（Ollama）
         llm_result: dict[str, Any] | None = {}
         if config.OPENING_REVIEW_USE_LLM:
-            try:
-                llm_result = llm_opening_review(
-                    local_result,
-                    title,
-                    thumbnail_text,
-                    "Shorts" if is_shorts else "Long",
-                    "38-50秒" if is_shorts else "5-8分",
-                ) or {"skipped": True, "reason": "Ollamaレビュー結果なし"}
-            except Exception as e:
-                llm_result = {"error": str(e), "skipped": True}
+            _log(job, f"台本 {i}: Ollamaレビューを実行中...", "info")
+            llm_result = llm_opening_review(
+                local_result,
+                title,
+                thumbnail_text,
+                "Shorts" if is_shorts else "Long",
+                "38-50秒" if is_shorts else "5-8分",
+            ) or {"skipped": True, "reason": "Ollamaレビュー結果なし"}
+            if (llm_result or {}).get("skipped"):
+                _log(job, f"台本 {i}: Ollamaレビューをスキップ ({(llm_result or {}).get('reason', '理由なし')})", "warning")
+            else:
+                _log(job, f"台本 {i}: Ollamaレビュー完了", "info")
         else:
             llm_result = {"skipped": True, "reason": "OPENING_REVIEW_USE_LLM is false"}
+            _log(job, f"台本 {i}: Ollamaレビューをスキップ (設定OFF)", "info")
 
         # ChatGPT最終レビュー
         final_result: dict[str, Any] | None = {}
         if config.OPENAI_FINAL_REVIEW_ENABLED:
-            try:
-                final_result = final_chatgpt_review(
-                    title=title,
-                    thumbnail_text=thumbnail_text,
-                    fixed_comment=fixed_comment,
-                    script_content=sc,
-                    items=items,
-                    is_shorts=is_shorts,
-                    estimated_duration=float(estimated_sec or 0.0),
-                    local_review=local_result,
-                    ollama_review=llm_result,
-                    duration_result=dur_result,
-                ) or {"skipped": True, "reason": "ChatGPTレビュー結果なし"}
-            except Exception as e:
-                final_result = {"error": str(e), "skipped": True}
+            _log(job, f"台本 {i}: ChatGPT最終レビューを実行中...", "info")
+            final_result = final_chatgpt_review(
+                title=title,
+                thumbnail_text=thumbnail_text,
+                fixed_comment=fixed_comment,
+                script_content=sc,
+                items=items,
+                is_shorts=is_shorts,
+                estimated_duration=float(estimated_sec or 0.0),
+                local_review=local_result,
+                ollama_review=llm_result,
+                duration_result=dur_result,
+            ) or {"skipped": True, "reason": "ChatGPTレビュー結果なし"}
+            if (final_result or {}).get("skipped"):
+                _log(job, f"台本 {i}: ChatGPT最終レビューをスキップ ({(final_result or {}).get('reason', '理由なし')})", "warning")
+            else:
+                _log(job, f"台本 {i}: ChatGPT最終レビュー完了", "info")
         else:
             final_result = {"skipped": True, "reason": "OPENAI_FINAL_REVIEW_ENABLED is false"}
+            _log(job, f"台本 {i}: ChatGPT最終レビューをスキップ (設定OFF)", "info")
 
         ollama_score = (llm_result or {}).get("score")
         chatgpt_score = (final_result or {}).get("final_score")

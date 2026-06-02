@@ -131,7 +131,7 @@ output/{profile_id}/          ← active profile の output_root
 
 生成・レンダーは Web プロセスで直接実行しない。Web は `jobs` へ queued 登録し、`workers.runner` が `profile_id` を固定して実行する。ジョブ登録時は必ず `profile_id` を保存し、runner 内では `core.channel_profile.profile_context(profile_id)` を使って profile 混線を防ぐ。
 
-**例外: よみがな辞書は全チャンネル共通（プロファイル非依存）。** `data/reading_dictionary_base.json` / `data/reading_dictionary_user.json` / `data/reading_candidates.json` はプロジェクト直下の単一 `data/` に置き、`output/{profile_id}/` 配下に分けない。チャンネル別にしないこと（登録した読みは全チャンネルで共有する仕様）。
+**例外: よみがな辞書は全チャンネル共通（プロファイル非依存）。** `data/settings.db` の `reading_dictionary_entries` / `reading_candidates` テーブルで管理し、`output/{profile_id}/` 配下に分けない。チャンネル別にしないこと（登録した読みは全チャンネルで共有する仕様）。よみがな辞書・自動学習辞書・候補を JSON ファイルへ戻さない。
 
 ## 重要な規約・注意点
 

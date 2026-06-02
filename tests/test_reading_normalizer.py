@@ -1,19 +1,9 @@
-import json
-
-import pytest
-
-
 def _set_paths(monkeypatch, tmp_path):
-    from config import config
+    import core.settings_store as settings_store
+    from core import reading_dictionary_store
 
-    base_path = tmp_path / "base.json"
-    user_path = tmp_path / "user.json"
-    cand_path = tmp_path / "candidates.json"
-    base_path.write_text(json.dumps({"東京": "とうきょう"}, ensure_ascii=False), encoding="utf-8")
-    monkeypatch.setattr(config, "VOICE_READING_BASE_DICT_PATH", str(base_path))
-    monkeypatch.setattr(config, "VOICE_READING_USER_DICT_PATH", str(user_path))
-    monkeypatch.setattr(config, "VOICE_READING_CANDIDATES_PATH", str(cand_path))
-    return base_path, user_path, cand_path
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+    reading_dictionary_store.seed_initial_entries({"base": {"東京": "とうきょう"}, "user": {}})
 
 
 def test_dictionary_mode_uses_configured_dictionary(monkeypatch, tmp_path):
@@ -27,16 +17,33 @@ def test_dictionary_mode_uses_configured_dictionary(monkeypatch, tmp_path):
     assert normalizer.normalize_batch(["東京の話"])["東京の話"] == "とうきょうの話"
 
 
-def test_invalid_dictionary_json_aborts(monkeypatch, tmp_path):
-    from config import config
-    from core.reading_normalizer import ReadingNormalizer
+def test_auto_dictionary_duplicate_is_distinct(monkeypatch, tmp_path):
+    import core.settings_store as settings_store
+    from core import reading_dictionary_store
 
-    base_path, user_path, cand_path = _set_paths(monkeypatch, tmp_path)
-    base_path.write_text("[]", encoding="utf-8")
-    monkeypatch.setattr(config, "VOICE_READING_MODE", "dictionary")
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+    reading_dictionary_store.seed_initial_entries({
+        "base": {"薄衣": "うすごろも"},
+        "user": {"薄衣": "うすぎぬ", "東京": "とうきょう"},
+    })
 
-    with pytest.raises(RuntimeError, match="同梱辞書が不正"):
-        ReadingNormalizer()
+    data = reading_dictionary_store.load_all()
+
+    assert data["base"]["薄衣"] == "うすごろも"
+    assert "薄衣" not in data["user"]
+    assert data["user"]["東京"] == "とうきょう"
+
+
+def test_reading_dictionary_seeds_initial_data_for_empty_db(monkeypatch, tmp_path):
+    import core.settings_store as settings_store
+    from core import reading_dictionary_store
+
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+
+    data = reading_dictionary_store.load_all()
+
+    assert data["base"]["黒板"] == "こくばん"
+    assert data["user"]["東京"] == "とうきょう"
 
 
 def test_safe_auto_initializes_with_sudachipy(monkeypatch, tmp_path):

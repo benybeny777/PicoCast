@@ -14,8 +14,8 @@
   <button class="tab-btn" onclick="switchTab('bgm', this)">BGM</button>
   <button class="tab-btn" onclick="switchTab('apikey', this)">APIキー</button>
   <button class="tab-btn" onclick="switchTab('dict-base', this)">よみがな辞書</button>
-  <button class="tab-btn" onclick="switchTab('dict-user', this)">自動学習辞書</button>
   <button class="tab-btn" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
+  <button class="tab-btn" onclick="switchTab('admin', this)">管理者設定</button>
   <button class="tab-btn" id="tab-btn-channels" onclick="switchTab('channels', this)">チャンネル</button>
   <button class="tab-btn" id="tab-btn-templates" onclick="switchTab('templates', this)">テンプレート</button>
 </div>
@@ -24,12 +24,29 @@
 <div id="tab-config" class="tab-panel active">
   <div class="card">
     <h2>設定変更</h2>
-    <p class="hint">変更は <code>.env</code> に書き込まれ、現在のプロセスにも即時反映されます。</p>
+    <p class="hint">変更は設定DBに保存され、現在のプロセスにも即時反映されます。</p>
     <div class="action-row mt">
       <button class="btn btn-primary" onclick="saveConfig()">保存</button>
       <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
     </div>
     <div id="config-form"><p>読み込み中...</p></div>
+    <div class="action-row mt">
+      <button class="btn btn-primary" onclick="saveConfig()">保存</button>
+      <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── タブ: 管理者設定 ── -->
+<div id="tab-admin" class="tab-panel">
+  <div class="card">
+    <h2>管理者設定</h2>
+    <p class="hint">ジョブ実行やログ保持など、運用負荷に影響する設定をまとめています。</p>
+    <div class="action-row mt">
+      <button class="btn btn-primary" onclick="saveConfig()">保存</button>
+      <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
+    </div>
+    <div id="admin-config-form"><p>読み込み中...</p></div>
     <div class="action-row mt">
       <button class="btn btn-primary" onclick="saveConfig()">保存</button>
       <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
@@ -147,31 +164,25 @@
   </style>
 </div>
 
-<!-- ── タブ: よみがな辞書（手動） ── -->
+<!-- ── タブ: よみがな辞書 ── -->
 <div id="tab-dict-base" class="tab-panel">
   <div class="card">
     <h2>よみがな辞書</h2>
-    <p class="hint">VOICEVOXが読み間違える語を手動登録します。登録語は優先的に適用されます。</p>
+    <p class="hint">VOICEVOXが読み間違える語を登録・確認します。手動登録と safe_auto の自動学習を種別で絞り込めます。</p>
     <div style="display:flex; gap:8px; align-items:center; margin:12px 0">
       <input id="dict-word" type="text" placeholder="表記（例: 黒板）" class="form-input" style="width:140px">
       <input id="dict-reading" type="text" placeholder="よみ（例: こくばん）" class="form-input" style="width:160px">
       <button class="btn btn-primary" onclick="addDictEntry()">追加</button>
+      <label for="dict-filter" style="margin-left:12px;color:var(--text-muted);font-size:13px">表示</label>
+      <select id="dict-filter" class="form-input" style="width:auto" onchange="renderReadingDict()">
+        <option value="all">すべて</option>
+        <option value="base">手動</option>
+        <option value="user">自動学習</option>
+      </select>
     </div>
     <div id="dict-status" style="display:none; margin-bottom:8px" class="log-box"></div>
-    <table class="status-table" id="dict-base-table">
-      <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
-    </table>
-  </div>
-</div>
-
-<!-- ── タブ: 自動学習辞書 ── -->
-<div id="tab-dict-user" class="tab-panel">
-  <div class="card">
-    <h2>自動学習辞書</h2>
-    <p class="hint">safe_auto モードが自動的に蓄積した読み仮名です。間違っているエントリを削除すると次回から再判定されます。</p>
-    <div id="dict-user-status" style="display:none; margin-bottom:8px" class="log-box"></div>
-    <table class="status-table" id="dict-user-table">
-      <tr><td colspan="3" style="color:var(--text-muted)">読み込み中...</td></tr>
+    <table class="status-table" id="reading-dict-table">
+      <tr><td colspan="4" style="color:var(--text-muted)">読み込み中...</td></tr>
     </table>
   </div>
 </div>
@@ -397,6 +408,7 @@
 <script>
 let _configItems = [];
 let _dictLoaded = false;
+let _readingDictEntries = [];
 let _bgmLoaded = false;
 let _toastTimer = null;
 
@@ -420,7 +432,7 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('tab-' + name).classList.add('active');
   btn.classList.add('active');
-  if ((name === 'dict-base' || name === 'dict-user') && !_dictLoaded) loadDict();
+  if (name === 'dict-base' && !_dictLoaded) loadDict();
   if (name === 'sd-models' && !_sdLoaded) sdInitTab();
   if (name === 'channels' && !_chLoaded) chLoadChannels();
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
@@ -433,29 +445,18 @@ function authBadge(label, ok) {
 
 async function loadConfig() {
   const form = document.getElementById('config-form');
+  const adminForm = document.getElementById('admin-config-form');
   try {
-    const [configRes, ollamaRes, bgmRes] = await Promise.all([
-      fetch('/api/settings/config'),
-      fetch('/api/settings/ollama-models'),
-      fetch('/api/settings/bgm-files'),
-    ]);
+    const configRes = await fetch('/api/settings/config');
+    if (!configRes.ok) throw new Error(await configRes.text());
     _configItems = await configRes.json();
-    const ollamaData = await ollamaRes.json();
+    const [ollamaData, bgmData] = await Promise.all([
+      fetch('/api/settings/ollama-models').then(r => r.ok ? r.json() : {available: false, models: []}).catch(() => ({available: false, models: []})),
+      fetch('/api/settings/bgm-files').then(r => r.ok ? r.json() : {files: []}).catch(() => ({files: []})),
+    ]);
     const ollamaModels = ollamaData.models || [];
     const ollamaAvailable = ollamaData.available;
-    const bgmData = await bgmRes.json();
     const bgmFiles = bgmData.files || [];
-
-    form.innerHTML = '';
-
-    // グループ化
-    const groupMap = {};
-    const groupOrder = [];
-    for (const item of _configItems) {
-      const g = item.group || 'その他';
-      if (!groupMap[g]) { groupMap[g] = []; groupOrder.push(g); }
-      groupMap[g].push(item);
-    }
 
     function buildInputCell(item) {
       const td = document.createElement('td');
@@ -500,25 +501,43 @@ async function loadConfig() {
       return td;
     }
 
-    for (const groupName of groupOrder) {
-      const header = document.createElement('h3');
-      header.textContent = groupName;
-      header.style.cssText = 'margin:1.4rem 0 0.4rem;padding-bottom:4px;border-bottom:1px solid var(--border);font-size:0.95em;color:var(--text-muted)';
-      form.appendChild(header);
-
-      const table = document.createElement('table');
-      table.className = 'status-table';
-      for (const item of groupMap[groupName]) {
-        const tr = document.createElement('tr');
-        const tdLabel = document.createElement('td');
-        tdLabel.style.width = '55%';
-        tdLabel.innerHTML = `<label for="cfg-${item.key}"><strong>${item.label}</strong><br><small style="color:var(--text-muted)">${item.key}</small></label>`;
-        tr.appendChild(tdLabel);
-        tr.appendChild(buildInputCell(item));
-        table.appendChild(tr);
+    function renderConfigItems(target, items, emptyText) {
+      target.innerHTML = '';
+      if (!items.length) {
+        target.innerHTML = `<p class="hint">${esc(emptyText)}</p>`;
+        return;
       }
-      form.appendChild(table);
+      const groupMap = {};
+      const groupOrder = [];
+      for (const item of items) {
+        const g = item.group || 'その他';
+        if (!groupMap[g]) { groupMap[g] = []; groupOrder.push(g); }
+        groupMap[g].push(item);
+      }
+
+      for (const groupName of groupOrder) {
+        const header = document.createElement('h3');
+        header.textContent = groupName;
+        header.style.cssText = 'margin:1.4rem 0 0.4rem;padding-bottom:4px;border-bottom:1px solid var(--border);font-size:0.95em;color:var(--text-muted)';
+        target.appendChild(header);
+
+        const table = document.createElement('table');
+        table.className = 'status-table';
+        for (const item of groupMap[groupName]) {
+          const tr = document.createElement('tr');
+          const tdLabel = document.createElement('td');
+          tdLabel.style.width = '55%';
+          tdLabel.innerHTML = `<label for="cfg-${item.key}"><strong>${item.label}</strong><br><small style="color:var(--text-muted)">${item.key}</small></label>`;
+          tr.appendChild(tdLabel);
+          tr.appendChild(buildInputCell(item));
+          table.appendChild(tr);
+        }
+        target.appendChild(table);
+      }
     }
+
+    renderConfigItems(form, _configItems.filter(item => !item.admin), '通常設定はありません。');
+    renderConfigItems(adminForm, _configItems.filter(item => item.admin), '管理者設定はありません。');
 
     if (ollamaAvailable && ollamaModels.length > 0) {
       const note = document.createElement('p');
@@ -528,6 +547,7 @@ async function loadConfig() {
     }
   } catch(e) {
     form.innerHTML = `<p class="error-text">読み込みエラー: ${e}</p>`;
+    adminForm.innerHTML = `<p class="error-text">読み込みエラー: ${e}</p>`;
   }
 }
 
@@ -655,29 +675,40 @@ async function saveSecrets() {
   }
 }
 
-function renderDictTable(tableId, entries, dictType) {
-  const table = document.getElementById(tableId);
-  if (Object.keys(entries).length === 0) {
-    table.innerHTML = `<tr><td colspan="3" style="color:var(--text-muted)">登録なし</td></tr>`;
+function dictTypeLabel(dictType) {
+  return dictType === 'user' ? '自動学習' : '手動';
+}
+
+function renderReadingDict() {
+  const table = document.getElementById('reading-dict-table');
+  const filter = document.getElementById('dict-filter').value;
+  const entries = _readingDictEntries
+    .filter(item => filter === 'all' || item.dict_type === filter)
+    .sort((a, b) => (a.dict_type + a.word).localeCompare(b.dict_type + b.word));
+  if (entries.length === 0) {
+    table.innerHTML = `<tr><td colspan="4" style="color:var(--text-muted)">登録なし</td></tr>`;
     return;
   }
-  table.innerHTML = Object.entries(entries).sort(([a],[b]) => a.localeCompare(b)).map(([word, reading]) => `
+  table.innerHTML = `
+    <tr><th>種別</th><th>表記</th><th>よみ</th><th></th></tr>
+    ${entries.map(item => `
     <tr>
-      <td style="width:40%">${esc(word)}</td>
-      <td>${esc(reading)}</td>
-      <td style="text-align:right"><button class="btn btn-secondary" style="padding:2px 10px;font-size:12px" onclick="deleteDictEntry(${esc(JSON.stringify(dictType))}, ${esc(JSON.stringify(word))})">削除</button></td>
-    </tr>`).join('');
+      <td style="width:7em">${esc(dictTypeLabel(item.dict_type))}</td>
+      <td style="width:35%">${esc(item.word)}</td>
+      <td>${esc(item.reading)}</td>
+      <td style="text-align:right"><button class="btn btn-secondary" style="padding:2px 10px;font-size:12px" onclick="deleteDictEntry(${esc(JSON.stringify(item.dict_type))}, ${esc(JSON.stringify(item.word))})">削除</button></td>
+    </tr>`).join('')}`;
 }
 
 async function loadDict() {
   try {
     const res = await fetch('/api/settings/reading-dict');
     const data = await res.json();
-    renderDictTable('dict-base-table', data.base || {}, 'base');
-    renderDictTable('dict-user-table', data.user || {}, 'user');
+    _readingDictEntries = data.entries || [];
+    renderReadingDict();
     _dictLoaded = true;
   } catch(e) {
-    document.getElementById('dict-base-table').innerHTML = `<tr><td class="error-text">読み込みエラー: ${e}</td></tr>`;
+    document.getElementById('reading-dict-table').innerHTML = `<tr><td class="error-text">読み込みエラー: ${e}</td></tr>`;
   }
 }
 
@@ -710,7 +741,7 @@ async function addDictEntry() {
 }
 
 async function deleteDictEntry(dictType, word) {
-  const statusBox = document.getElementById(dictType === 'user' ? 'dict-user-status' : 'dict-status');
+  const statusBox = document.getElementById('dict-status');
   statusBox.style.display = 'block';
   statusBox.style.color = '';
   try {

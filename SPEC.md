@@ -503,16 +503,16 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 
 ジョブ情報は active profile の `metadata.db` の `jobs` テーブルへ永続化され（`upsert_job` / `load_jobs_from_db`）、アプリ再起動後も指定件数分を参照できる。生成・レンダーのジョブは Web プロセスでは実行せず、`workers.runner` が `queued` を取得して `running` へ原子的に更新してから実行する。ジョブには `profile_id` と `params_json` を保存し、runner はジョブ実行中にその profile をスレッドローカルで固定するため、Web UI のチャンネル切替と生成先が混線しない。
 
-runner は `heartbeat_at` を定期更新し、heartbeat が `JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC` を超えて途絶えた `running` ジョブを `failed`（`runner停止により中断`）へ戻す。キャンセルは `cancel_requested=1` を DB に書き、runner がポーリングして `cancel_event` へ反映する。ジョブログは `append_job_logs` でバッファ追記し、頻繁な DB writer 競合を避ける。
+runner は `generate` / `render` ジョブの `heartbeat_at` を定期更新し、`runner_pid` を持つ runner 管轄ジョブだけを stale 回収対象にする。heartbeat が `JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC` を超えて途絶えた runner 管轄の `running` ジョブは `failed`（`runner停止により中断`）へ戻す。`check` など Web プロセス内で動く軽量ジョブは Web 側が heartbeat を更新し、runner の stale 回収対象にはしない。キャンセルは `cancel_requested=1` を DB に書き、runner または Web 側ジョブがポーリングして `cancel_event` へ反映する。ジョブログは `append_job_logs` で追記し、runner はバッファ書き込みで頻繁な DB writer 競合を避ける。
 
 ### ジョブの同時実行制御（キュー）
 
 Web UI は生成・レンダーを直接実行しない。`app.py` が起動時に `python -m workers.runner` を常駐プロセスとして起動・監視し、runner が DB queue から `generate` / `render` を取得して処理する。
 
-- 同時実行数は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列）。2以上にすると runner 内で生成・レンダーを並列実行する。
+- 同時実行数は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列）。設定画面の「管理者設定」タブから変更でき、runner は設定DBを定期的に読み直して次のジョブ取得から反映する。2以上にすると runner 内で生成・レンダーを並列実行する。
 - Web は queued 登録と DB 参照だけを行うため、重い生成中でもジョブ一覧・履歴・設定画面の応答を維持する。
 
-設定画面 (`/settings`) で使う補助データ（Ollamaモデル一覧、`assets/bgm/` の音源ファイル一覧）は、Web UI 起動時に `settings_preload_service` がバックグラウンドでプリロードする。プリロードが未完了の状態で設定画面を開いた場合でも、`GET /api/settings/ollama-models` と `GET /api/settings/bgm-files` は待機せず暫定値を返し、設定項目本体を先に表示する。APIキー登録状態は `encrypted_secrets` の bool だけを使い、`/settings` のHTML生成時に VOICEVOX / ffmpeg / Ollama / Stable Diffusion のフル診断を実行しない。
+設定画面 (`/settings`) で使う補助データ（Ollamaモデル一覧、`assets/bgm/` の音源ファイル一覧）は、Web UI 起動時に `settings_preload_service` がバックグラウンドでプリロードする。プリロードが未完了の状態で設定画面を開いた場合でも、`GET /api/settings/ollama-models` と `GET /api/settings/bgm-files` は待機せず暫定値を返し、設定項目本体を先に表示する。APIキー登録状態は `encrypted_secrets` の bool だけを使い、`/settings` のHTML生成時に VOICEVOX / ffmpeg / Ollama / Stable Diffusion のフル診断を実行しない。ジョブ実行・ログ保持・各種タイムアウト・Web UI 表示名など運用負荷やアプリ全体に影響する項目は「管理者設定」タブに分離する。
 - `JOB_RUNNER_POLL_INTERVAL_SEC` ごとに queued/cancel を確認し、`JOB_LOG_FLUSH_INTERVAL_SEC` ごとにログをまとめ書きする。
 - 追加インフラ不要・純 Python + SQLite のため配布物にそのまま同梱できる（Kafka/Redis/Docker 等には依存しない）。
 
@@ -764,19 +764,16 @@ register_shutdown_hook("my_module", my_close_function)
 VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防ぐため、音声合成前に SudachiPy と自前辞書で読み補正する。
 
 - `VOICE_READING_MODE` は `off` / `dictionary` / `safe_auto` から選択する
-- `dictionary`: `data/reading_dictionary_base.json` と `data/reading_dictionary_user.json` の単純置換だけを使う
+- `dictionary`: `data/settings.db` の `reading_dictionary_entries`（`dict_type=base/user`）の単純置換だけを使う
 - `safe_auto`: SudachiPy / `sudachidict_core` で形態素解析し、安全な名詞類だけを自動でひらがな化する
 - 補正後テキスト → VOICEVOX へ渡す（読み上げ用）
 - 元テキスト → ファイル名・字幕に使う（字幕マッチング維持）
-- 必要ライブラリ不足、辞書JSON不正、候補保存失敗などは `RuntimeError` または元例外で生成を中止する（サイレントスキップ禁止）
+- 必要ライブラリ不足、辞書DB読み書き失敗、候補保存失敗などは `RuntimeError` または元例外で生成を中止する（サイレントスキップ禁止）
 
-**よみがな辞書は全チャンネル共通（プロファイル非依存）。** 辞書ファイルはプロジェクト直下の単一 `data/` ディレクトリに置き、`output/{profile_id}/` 配下には保存しない。アクティブチャンネルを切り替えても同じ辞書（base / user / candidates）を使う。`metadata.db` や認証情報がチャンネル別なのとは異なる扱い。設定画面から登録した読みは全チャンネルへ即時反映される。
+**よみがな辞書は全チャンネル共通（プロファイル非依存）。** `data/settings.db` の `reading_dictionary_entries` / `reading_candidates` テーブルを正本とし、`output/{profile_id}/` 配下には保存しない。アクティブチャンネルを切り替えても同じ辞書（手動 / 自動学習 / candidates）を使う。`metadata.db` や認証情報がチャンネル別なのとは異なる扱い。設定画面から登録した読みは全チャンネルへ即時反映される。よみがな辞書・自動学習辞書・候補の JSON ファイルは廃止済み。
 
 ```
 VOICE_READING_MODE = "safe_auto"
-VOICE_READING_BASE_DICT_PATH = "data/reading_dictionary_base.json"
-VOICE_READING_USER_DICT_PATH = "data/reading_dictionary_user.json"
-VOICE_READING_CANDIDATES_PATH = "data/reading_candidates.json"
 ```
 
 ---
@@ -946,6 +943,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
 | `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`metadata.db` の `jobs` テーブルに保存し、超過分は `delete_old_jobs` で古い順に削除する |
 | `JOB_MAX_CONCURRENT_WORKERS` | 1 | job-runner の同時実行数。2以上で生成・レンダーを並列処理する |
+| `JOB_RUNNER_EXECUTOR_CAPACITY` | 8 | job-runner が内部で確保する最大スレッド数。`JOB_MAX_CONCURRENT_WORKERS` の上限 |
 | `JOB_RUNNER_POLL_INTERVAL_SEC` | 0.5 | job-runner が queued/cancel を確認する間隔 |
 | `JOB_RUNNER_HEARTBEAT_INTERVAL_SEC` | 2.0 | job-runner が実行中ジョブの heartbeat を更新する間隔 |
 | `JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC` | 30.0 | heartbeat が途絶えた running ジョブを failed 化するまでの秒数 |
@@ -2102,7 +2100,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 
 ### `data/settings.db` テーブル定義
 
-テーブル: `channel_profiles` / `encrypted_secrets` / `settings` / `prompt_templates`
+テーブル: `channel_profiles` / `encrypted_secrets` / `settings` / `prompt_templates` / `reading_dictionary_entries` / `reading_candidates`
 
 #### `settings` — アプリ設定
 
@@ -2113,6 +2111,31 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 
 `.env` の非認証設定を起動時に自動移行（`settings_store.bootstrap_from_env()`）。
 以降は設定画面（`/settings`）から保存する。認証情報（`GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` / YouTube OAuth）は `encrypted_secrets` テーブルが正本。`.env` は正本ではなく、起動時固定値や未移行の手元設定が残る場合も新規利用しない。
+
+#### `reading_dictionary_entries` — よみがな辞書
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `dict_type` | TEXT | `base`（手動） / `user`（自動学習） |
+| `word` | TEXT | 表記 |
+| `reading` | TEXT | 読み |
+| `updated_at` | TEXT | 更新日時 |
+
+PRIMARY KEY は `(dict_type, word)`。同じ表記が `base` と `user` に重複した場合は `base` を優先し、`user` 側は表示・保存対象から除外する。
+
+#### `reading_candidates` — 読み補正候補
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `word` | TEXT PK | 表記 |
+| `reading` | TEXT | 候補読み |
+| `reason` | TEXT | 候補化理由 |
+| `source` | TEXT | 由来 |
+| `auto_applied` | INTEGER | 自動適用済みフラグ |
+| `review_required` | INTEGER | 確認要否 |
+| `updated_at` | TEXT | 更新日時 |
+
+`reading_dictionary_seed_state` は初期 seed 投入済みかを記録する内部テーブル。新規DBでは `core/reading_dictionary_seed.py` の初期データを投入し、既存DBでは既存データを尊重する。
 
 ---
 

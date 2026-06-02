@@ -233,7 +233,7 @@ pip install --upgrade -r config/requirements.txt
 | 動画メタ・YouTube状態・Analytics・ジョブ履歴 | `output/{channel}/000_data/metadata.db` |
 | 生成物（MP4 / 背景 / サムネ / 音声） | `output/{channel}/videos/{テーマ名}/` |
 | アップロード済みアーカイブ | `output/{channel}/000_uploaded/{テーマ名}/` |
-| よみがな辞書（**全チャンネル共通**） | `data/reading_dictionary_*.json` / `data/reading_candidates.json` |
+| よみがな辞書・自動学習候補（**全チャンネル共通**） | `data/settings.db` (`reading_dictionary_entries` / `reading_candidates`) |
 | デバッグログ | `output/000_data/debug_logs/app_debug_web.log` / `app_debug_runner.log` |
 
 > [!IMPORTANT]
@@ -247,7 +247,7 @@ pip install --upgrade -r config/requirements.txt
 - **画像が生成されない:** 設定画面で Google API Key が「登録済み」になっているか確認してください。
 - **背景生成で「API混雑(503)」と出る:** Gemini / Nano Banana 側の一時的な混雑です。**台本やプロンプトの問題ではありません。** 生成済みの背景は保持されるので、時間を置いて履歴の再生成（背景再利用）で未生成分だけ作り直せます。エラーコード `E-IMG-BUSY` で表示されます。
 - **GPU エンコードが使われない:** `h264_nvenc` が利用不可の場合は自動的に CPUエンコード (`libx264`) に切り替わります（ログに警告が出ます）。
-- **複数同時生成で UI が重い・固まる:** 生成・レンダーは Web とは別の job-runner で実行します。`JOB_MAX_CONCURRENT_WORKERS`（既定 1）を2以上にすると並列実行できます。
+- **複数同時生成したい:** 生成・レンダーは Web とは別の job-runner で実行します。設定画面の「管理者設定」タブで「生成・レンダー同時実行数」を2以上にすると並列実行できます。まずは2から試してください。
 - **ログ画面が更新で見づらい / コピペできない:** ログ画面の更新間隔は `WEB_LOG_POLL_INTERVAL_MS`（既定 8 秒）で調整でき、テキスト選択中は自動更新を止めます。
 - **詳細なログを追いたい:** Web側は `output/000_data/debug_logs/app_debug_web.log`、生成・レンダーrunner側は `app_debug_runner.log` に残ります（エラーコード付き）。
 - **チャンネルを切り替えたい:** 画面ヘッダーのチャンネル選択から切替。履歴・設定・認証はチャンネル別に切り替わります。

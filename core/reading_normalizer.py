@@ -4,10 +4,9 @@ LLMによる全文変換を廃止し、形態素解析（SudachiPy）と自前�
 「安全な自動読み補正」と「辞書育成」を行います。
 字幕には元テキストをそのまま使用し、音声合成用テキストのみを補正します。
 """
-import os
-import json
 import re
 from config import config as _cfg
+from core import reading_dictionary_store
 
 def _kata_to_hira(text: str) -> str:
     """カタカナをひらがなに変換する"""
@@ -30,10 +29,6 @@ class ReadingNormalizer:
         self.user_dict = {}
         self.candidates = {}
         
-        self.base_path = _cfg.VOICE_READING_BASE_DICT_PATH
-        self.user_path = _cfg.VOICE_READING_USER_DICT_PATH
-        self.cand_path = _cfg.VOICE_READING_CANDIDATES_PATH
-        
         # 統計・ロギング用
         self.applied_base = set()
         self.applied_user = set()
@@ -55,30 +50,14 @@ class ReadingNormalizer:
                     ) from e
 
     def _load_dicts(self):
-        os.makedirs("data", exist_ok=True)
-        if os.path.exists(self.base_path):
-            with open(self.base_path, encoding="utf-8") as f:
-                self.base_dict = json.load(f)
-            if not isinstance(self.base_dict, dict):
-                raise RuntimeError(f"読み補正の同梱辞書が不正です: {self.base_path}")
-        if os.path.exists(self.user_path):
-            with open(self.user_path, encoding="utf-8") as f:
-                self.user_dict = json.load(f)
-            if not isinstance(self.user_dict, dict):
-                raise RuntimeError(f"読み補正のユーザー辞書が不正です: {self.user_path}")
-        if os.path.exists(self.cand_path):
-            with open(self.cand_path, encoding="utf-8") as f:
-                self.candidates = json.load(f)
-            if not isinstance(self.candidates, dict):
-                raise RuntimeError(f"読み補正候補ファイルが不正です: {self.cand_path}")
+        dictionaries = reading_dictionary_store.load_all()
+        self.base_dict = dictionaries["base"]
+        self.user_dict = dictionaries["user"]
+        self.candidates = reading_dictionary_store.load_candidates()
 
     def _save_dicts(self):
-        os.makedirs(os.path.dirname(self.user_path) or ".", exist_ok=True)
-        os.makedirs(os.path.dirname(self.cand_path) or ".", exist_ok=True)
-        with open(self.user_path, "w", encoding="utf-8") as f:
-            json.dump(self.user_dict, f, ensure_ascii=False, indent=2)
-        with open(self.cand_path, "w", encoding="utf-8") as f:
-            json.dump(self.candidates, f, ensure_ascii=False, indent=2)
+        reading_dictionary_store.save_dict("user", self.user_dict)
+        reading_dictionary_store.save_candidates(self.candidates)
 
     def normalize_batch(self, texts: list[str]) -> dict[str, str]:
         """複数テキストを一括でよみがな補正する。"""

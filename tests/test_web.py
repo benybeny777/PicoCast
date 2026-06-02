@@ -124,6 +124,8 @@ def test_settings_page(client):
     assert res.status_code == 200
     assert "chf-google_api_key" in res.text
     assert "chf-youtube_client_secrets" in res.text
+    assert "管理者設定" in res.text
+    assert "admin-config-form" in res.text
 
 
 def test_settings_page_does_not_wait_full_status(client, monkeypatch):
@@ -520,6 +522,64 @@ def test_config_image_style_choices_current_is_csv(monkeypatch):
     item = next(row for row in get_editable_config() if row["key"] == "WEB_IMAGE_STYLE_CHOICES")
     assert item["current"] == "通常,アニメ,水彩"
     assert "('" not in item["current"]
+
+
+def test_config_has_admin_job_worker_setting():
+    from web_app.services.config_service import get_editable_config
+
+    item = next(row for row in get_editable_config() if row["key"] == "JOB_MAX_CONCURRENT_WORKERS")
+
+    assert item["admin"] is True
+    assert item["group"] == "ジョブ実行"
+    assert item["min"] == 1
+    assert item["max"] >= 1
+
+
+def test_config_timeout_settings_are_admin():
+    from web_app.services.config_service import get_editable_config
+
+    items = {row["key"]: row for row in get_editable_config()}
+    timeout_keys = [
+        "VOICEVOX_CONNECTION_TIMEOUT_SEC",
+        "VOICEVOX_QUERY_TIMEOUT_SEC",
+        "VOICEVOX_SYNTHESIS_TIMEOUT_SEC",
+        "SD_WEBUI_TIMEOUT_SEC",
+        "WEB_VOICEVOX_CHECK_TIMEOUT_SEC",
+        "WEB_FFMPEG_CHECK_TIMEOUT_SEC",
+        "JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC",
+        "NATIVE_FFMPEG_TIMEOUT_SEC",
+        "NATIVE_FFPROBE_TIMEOUT_SEC",
+    ]
+
+    for key in timeout_keys:
+        assert items[key]["admin"] is True
+        assert items[key]["group"] == "タイムアウト"
+
+
+def test_config_web_app_name_is_admin():
+    from web_app.services.config_service import get_editable_config
+
+    items = {row["key"]: row for row in get_editable_config()}
+    admin_web_ui_keys = [
+        "WEB_APP_NAME",
+        "WEB_SUCCESS_RELOAD_DELAY_MS",
+        "WEB_TOAST_VISIBLE_MS",
+        "WEB_TOAST_HIDE_DELAY_MS",
+    ]
+
+    for key in admin_web_ui_keys:
+        assert items[key]["admin"] is True
+        assert items[key]["group"] == "Web UI"
+
+
+def test_runner_worker_limit_reads_settings_db(monkeypatch):
+    import workers.runner as runner
+    import core.settings_store as settings_store
+
+    monkeypatch.setattr(settings_store, "get_all", lambda: {"JOB_MAX_CONCURRENT_WORKERS": "2"})
+    monkeypatch.setattr(runner, "_worker_limit_cache", (0.0, 1))
+
+    assert runner._current_worker_limit(8) == 2
 
 
 def test_config_image_style_choices_save_normalizes_quotes(tmp_path, monkeypatch):

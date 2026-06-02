@@ -191,9 +191,6 @@ AUTO_FULL_REWRITE_ENABLED    = os.environ.get("AUTO_FULL_REWRITE_ENABLED",   "0"
 
 # 新しい読み補正モード: "off", "dictionary", "safe_auto"
 VOICE_READING_MODE = os.environ.get("VOICE_READING_MODE", "safe_auto")  # 読み補正モード
-VOICE_READING_BASE_DICT_PATH = os.environ.get("VOICE_READING_BASE_DICT_PATH", "data/reading_dictionary_base.json")  # 同梱読み辞書パス
-VOICE_READING_USER_DICT_PATH = os.environ.get("VOICE_READING_USER_DICT_PATH", "data/reading_dictionary_user.json")  # ユーザー読み辞書パス
-VOICE_READING_CANDIDATES_PATH = os.environ.get("VOICE_READING_CANDIDATES_PATH", "data/reading_candidates.json")  # 読み補正候補保存パス
 
 # ───────────────────────────────────────────────
 # Google AI モデル（Nano Banana Suite）
@@ -458,7 +455,8 @@ AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_C
 # ジョブログ永続化
 # ───────────────────────────────────────────────
 JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))  # 保持する最大ジョブ件数
-JOB_MAX_CONCURRENT_WORKERS = int(os.environ.get("JOB_MAX_CONCURRENT_WORKERS", "1"))  # job-runner の同時実行数。既定1=直列実行。2以上で生成・レンダーを並列処理する。変更は再起動後に反映
+JOB_MAX_CONCURRENT_WORKERS = int(os.environ.get("JOB_MAX_CONCURRENT_WORKERS", "1"))  # job-runner の同時実行数。既定1=直列実行。2以上で生成・レンダーを並列処理する
+JOB_RUNNER_EXECUTOR_CAPACITY = int(os.environ.get("JOB_RUNNER_EXECUTOR_CAPACITY", "8"))  # job-runner が内部で確保する最大スレッド数。JOB_MAX_CONCURRENT_WORKERS の上限
 JOB_RUNNER_POLL_INTERVAL_SEC = float(os.environ.get("JOB_RUNNER_POLL_INTERVAL_SEC", "0.5"))  # job-runner が queued/cancel を確認する間隔(秒)
 JOB_RUNNER_HEARTBEAT_INTERVAL_SEC = float(os.environ.get("JOB_RUNNER_HEARTBEAT_INTERVAL_SEC", "2.0"))  # job-runner が実行中ジョブの生存時刻を更新する間隔(秒)
 JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC = float(os.environ.get("JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC", "30.0"))  # heartbeat が途絶えた running ジョブを failed 化するまでの秒数

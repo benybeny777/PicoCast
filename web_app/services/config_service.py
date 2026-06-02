@@ -12,9 +12,9 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     # ── VOICEVOX ──
     {"key": "VOICEVOX_PATH",                   "type": "str",   "label": "VOICEVOX 実行ファイルパス (空=手動起動)", "default": str(cfg.VOICEVOX_PATH), "allow_empty": True,           "group": "VOICEVOX"},
     {"key": "VOICEVOX_URL",                    "type": "str",   "label": "VOICEVOX API URL",                       "default": str(cfg.VOICEVOX_URL),                                  "group": "VOICEVOX"},
-    {"key": "VOICEVOX_CONNECTION_TIMEOUT_SEC", "type": "float", "label": "VOICEVOX 接続タイムアウト(秒)",          "default": str(cfg.VOICEVOX_CONNECTION_TIMEOUT_SEC), "min": 0.5, "max": 30.0,  "group": "VOICEVOX"},
-    {"key": "VOICEVOX_QUERY_TIMEOUT_SEC",      "type": "float", "label": "VOICEVOX クエリタイムアウト(秒)",        "default": str(cfg.VOICEVOX_QUERY_TIMEOUT_SEC),      "min": 1.0, "max": 60.0,  "group": "VOICEVOX"},
-    {"key": "VOICEVOX_SYNTHESIS_TIMEOUT_SEC",  "type": "float", "label": "VOICEVOX 合成タイムアウト(秒)",          "default": str(cfg.VOICEVOX_SYNTHESIS_TIMEOUT_SEC),  "min": 5.0, "max": 300.0, "group": "VOICEVOX"},
+    {"key": "VOICEVOX_CONNECTION_TIMEOUT_SEC", "type": "float", "label": "VOICEVOX 接続タイムアウト(秒)",          "default": str(cfg.VOICEVOX_CONNECTION_TIMEOUT_SEC), "min": 0.5, "max": 30.0,  "group": "タイムアウト", "admin": True},
+    {"key": "VOICEVOX_QUERY_TIMEOUT_SEC",      "type": "float", "label": "VOICEVOX クエリタイムアウト(秒)",        "default": str(cfg.VOICEVOX_QUERY_TIMEOUT_SEC),      "min": 1.0, "max": 60.0,  "group": "タイムアウト", "admin": True},
+    {"key": "VOICEVOX_SYNTHESIS_TIMEOUT_SEC",  "type": "float", "label": "VOICEVOX 合成タイムアウト(秒)",          "default": str(cfg.VOICEVOX_SYNTHESIS_TIMEOUT_SEC),  "min": 5.0, "max": 300.0, "group": "タイムアウト", "admin": True},
     {"key": "VOICEVOX_QUERY_WORKERS",         "type": "int",   "label": "VOICEVOX クエリ並列数",                   "default": str(cfg.VOICEVOX_QUERY_WORKERS),          "min": 1,   "max": 16,             "group": "VOICEVOX"},
     {"key": "VOICEVOX_SYNTH_WORKERS",         "type": "int",   "label": "VOICEVOX 合成並列数",                     "default": str(cfg.VOICEVOX_SYNTH_WORKERS),          "min": 1,   "max": 16,             "group": "VOICEVOX"},
     # ── 画像生成 ──
@@ -57,7 +57,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "OPENAI_FINAL_REVIEW_MODEL",       "type": "str",          "label": "ChatGPT 最終レビューモデル",      "default": str(cfg.OPENAI_FINAL_REVIEW_MODEL),                                                                                                        "group": "AI / 画像生成"},
     # ── Stable Diffusion WebUI ──
     {"key": "SD_WEBUI_BASE_URL",          "type": "str",   "label": "Stable Diffusion WebUI API URL",                        "default": str(cfg.SD_WEBUI_BASE_URL),                                      "group": "Stable Diffusion WebUI"},
-    {"key": "SD_WEBUI_TIMEOUT_SEC",       "type": "int",   "label": "Stable Diffusion WebUI タイムアウト(秒)",               "default": str(cfg.SD_WEBUI_TIMEOUT_SEC),   "min": 10,  "max": 3600,        "group": "Stable Diffusion WebUI"},
+    {"key": "SD_WEBUI_TIMEOUT_SEC",       "type": "int",   "label": "Stable Diffusion WebUI タイムアウト(秒)",               "default": str(cfg.SD_WEBUI_TIMEOUT_SEC),   "min": 10,  "max": 3600,        "group": "タイムアウト", "admin": True},
     {"key": "SD_WEBUI_MODEL",             "type": "str",   "label": "Stable Diffusion WebUI モデル名 (空=現在のモデル)",      "default": str(cfg.SD_WEBUI_MODEL),         "allow_empty": True,             "group": "Stable Diffusion WebUI"},
     {"key": "SD_WEBUI_SAMPLER",           "type": "str",   "label": "Stable Diffusion WebUI サンプラー",                     "default": str(cfg.SD_WEBUI_SAMPLER),                                       "group": "Stable Diffusion WebUI"},
     {"key": "SD_WEBUI_STEPS",             "type": "int",   "label": "Stable Diffusion WebUI ステップ数",                     "default": str(cfg.SD_WEBUI_STEPS),         "min": 1,   "max": 150,         "group": "Stable Diffusion WebUI"},
@@ -71,7 +71,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     # ── よみがな ──
     {"key": "VOICE_READING_MODE",         "type": "select", "label": "よみがな補正モード", "default": str(cfg.VOICE_READING_MODE), "choices": [("off", "無効 (off)"), ("dictionary", "自前辞書のみ (dictionary)"), ("safe_auto", "安全自動補正 (safe_auto)")], "group": "よみがな"},
     # ── Web UI ──
-    {"key": "WEB_APP_NAME",                       "type": "str",   "label": "Web UI 表示名",             "default": str(cfg.WEB_APP_NAME),                                              "group": "Web UI"},
+    {"key": "WEB_APP_NAME",                       "type": "str",   "label": "Web UI 表示名",             "default": str(cfg.WEB_APP_NAME),                                              "group": "Web UI", "admin": True},
     {"key": "WEB_DEFAULT_IMAGE_STYLE",            "type": "str",   "label": "Web既定画像スタイル",        "default": str(cfg.WEB_DEFAULT_IMAGE_STYLE),                                   "group": "Web UI"},
     {"key": "WEB_IMAGE_STYLE_CHOICES",            "type": "str",   "label": "Web画像スタイル選択肢",      "default": ",".join(cfg.WEB_IMAGE_STYLE_CHOICES),                              "group": "Web UI"},
     {"key": "WEB_DEFAULT_REUSE_BACKGROUNDS",      "type": "bool",  "label": "Web既定: 背景再利用",        "default": "1" if cfg.WEB_DEFAULT_REUSE_BACKGROUNDS          else "0",         "group": "Web UI"},
@@ -80,15 +80,20 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "WEB_DEFAULT_SD_SIZE_MODE",           "type": "bool",  "label": "Web既定: 縮小生成（ONで縮小・OFFでFHD）", "default": "1" if cfg.WEB_DEFAULT_SD_SIZE_MODE else "0", "group": "Web UI"},
     {"key": "WEB_JOB_POLL_INTERVAL_MS",           "type": "int",   "label": "Webジョブ更新間隔(ms)",      "default": str(cfg.WEB_JOB_POLL_INTERVAL_MS),    "min": 500,  "max": 30000,    "group": "Web UI"},
     {"key": "WEB_LOG_POLL_INTERVAL_MS",           "type": "int",   "label": "ログ画面 更新間隔(ms)（長いほどコピペしやすい）", "default": str(cfg.WEB_LOG_POLL_INTERVAL_MS), "min": 1000, "max": 60000, "group": "Web UI"},
-    {"key": "WEB_SUCCESS_RELOAD_DELAY_MS",        "type": "int",   "label": "Web成功後再読み込み待ち(ms)", "default": str(cfg.WEB_SUCCESS_RELOAD_DELAY_MS), "min": 0,    "max": 10000,    "group": "Web UI"},
-    {"key": "WEB_TOAST_VISIBLE_MS",               "type": "int",   "label": "Webトースト表示時間(ms)",    "default": str(cfg.WEB_TOAST_VISIBLE_MS),        "min": 500,  "max": 10000,    "group": "Web UI"},
-    {"key": "WEB_TOAST_HIDE_DELAY_MS",            "type": "int",   "label": "Webトースト非表示待ち(ms)",  "default": str(cfg.WEB_TOAST_HIDE_DELAY_MS),     "min": 0,    "max": 3000,     "group": "Web UI"},
-    {"key": "WEB_VOICEVOX_CHECK_TIMEOUT_SEC",     "type": "float", "label": "VOICEVOX確認タイムアウト(秒)", "default": str(cfg.WEB_VOICEVOX_CHECK_TIMEOUT_SEC), "min": 0.2, "max": 30,    "group": "Web UI"},
-    {"key": "WEB_FFMPEG_CHECK_TIMEOUT_SEC",       "type": "float", "label": "ffmpeg確認タイムアウト(秒)",   "default": str(cfg.WEB_FFMPEG_CHECK_TIMEOUT_SEC),   "min": 0.2, "max": 30,    "group": "Web UI"},
+    {"key": "WEB_SUCCESS_RELOAD_DELAY_MS",        "type": "int",   "label": "Web成功後再読み込み待ち(ms)", "default": str(cfg.WEB_SUCCESS_RELOAD_DELAY_MS), "min": 0,    "max": 10000,    "group": "Web UI", "admin": True},
+    {"key": "WEB_TOAST_VISIBLE_MS",               "type": "int",   "label": "Webトースト表示時間(ms)",    "default": str(cfg.WEB_TOAST_VISIBLE_MS),        "min": 500,  "max": 10000,    "group": "Web UI", "admin": True},
+    {"key": "WEB_TOAST_HIDE_DELAY_MS",            "type": "int",   "label": "Webトースト非表示待ち(ms)",  "default": str(cfg.WEB_TOAST_HIDE_DELAY_MS),     "min": 0,    "max": 3000,     "group": "Web UI", "admin": True},
+    {"key": "WEB_VOICEVOX_CHECK_TIMEOUT_SEC",     "type": "float", "label": "VOICEVOX確認タイムアウト(秒)", "default": str(cfg.WEB_VOICEVOX_CHECK_TIMEOUT_SEC), "min": 0.2, "max": 30,    "group": "タイムアウト", "admin": True},
+    {"key": "WEB_FFMPEG_CHECK_TIMEOUT_SEC",       "type": "float", "label": "ffmpeg確認タイムアウト(秒)",   "default": str(cfg.WEB_FFMPEG_CHECK_TIMEOUT_SEC),   "min": 0.2, "max": 30,    "group": "タイムアウト", "admin": True},
+    # ── 管理者設定 ──
+    {"key": "JOB_MAX_CONCURRENT_WORKERS",          "type": "int",   "label": "生成・レンダー同時実行数",       "default": str(cfg.JOB_MAX_CONCURRENT_WORKERS),          "min": 1,    "max": int(cfg.JOB_RUNNER_EXECUTOR_CAPACITY), "group": "ジョブ実行", "admin": True},
+    {"key": "JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC",    "type": "float", "label": "runner停止判定タイムアウト(秒)", "default": str(cfg.JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC),    "min": 10.0, "max": 600.0, "group": "タイムアウト", "admin": True},
+    {"key": "JOB_LOG_MAX_JOBS",                    "type": "int",   "label": "ジョブ履歴保持件数",             "default": str(cfg.JOB_LOG_MAX_JOBS),                    "min": 50,   "max": 5000,  "group": "ジョブログ", "admin": True},
+    {"key": "JOB_LOG_MAX_ENTRIES",                 "type": "int",   "label": "1ジョブのログ保持行数",          "default": str(cfg.JOB_LOG_MAX_ENTRIES),                 "min": 100,  "max": 20000, "group": "ジョブログ", "admin": True},
     # ── ffmpeg ──
     {"key": "FFMPEG_BIN",                  "type": "str",   "label": "ffmpeg バイナリパス",           "default": str(cfg.FFMPEG_BIN),                                           "group": "ffmpeg"},
-    {"key": "NATIVE_FFMPEG_TIMEOUT_SEC",   "type": "float", "label": "ffmpegタイムアウト(秒)",        "default": str(cfg.NATIVE_FFMPEG_TIMEOUT_SEC),  "min": 30,  "max": 7200,  "group": "ffmpeg"},
-    {"key": "NATIVE_FFPROBE_TIMEOUT_SEC",  "type": "float", "label": "ffprobeタイムアウト(秒)",       "default": str(cfg.NATIVE_FFPROBE_TIMEOUT_SEC), "min": 5,   "max": 300,   "group": "ffmpeg"},
+    {"key": "NATIVE_FFMPEG_TIMEOUT_SEC",   "type": "float", "label": "ffmpegタイムアウト(秒)",        "default": str(cfg.NATIVE_FFMPEG_TIMEOUT_SEC),  "min": 30,  "max": 7200,  "group": "タイムアウト", "admin": True},
+    {"key": "NATIVE_FFPROBE_TIMEOUT_SEC",  "type": "float", "label": "ffprobeタイムアウト(秒)",       "default": str(cfg.NATIVE_FFPROBE_TIMEOUT_SEC), "min": 5,   "max": 300,   "group": "タイムアウト", "admin": True},
 ]
 
 _ALLOWED_KEYS = {item["key"] for item in EDITABLE_CONFIG}

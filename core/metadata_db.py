@@ -1528,7 +1528,7 @@ def is_cancel_requested(job_id: str) -> bool:
 
 
 def reap_stale_running_jobs(timeout_sec: float) -> int:
-    """heartbeat が途絶えた running ジョブを failed にする。"""
+    """heartbeat が途絶えた runner 管轄ジョブを failed にする。"""
     from datetime import datetime as _dt, timedelta as _td
 
     initialize_db()
@@ -1543,6 +1543,8 @@ def reap_stale_running_jobs(timeout_sec: float) -> int:
                 finished_at=?,
                 runner_pid=NULL
             WHERE status='running'
+              AND job_type IN ('generate', 'render')
+              AND runner_pid IS NOT NULL
               AND (heartbeat_at IS NULL OR heartbeat_at < ?)
             """,
             (_now_jst(), threshold),

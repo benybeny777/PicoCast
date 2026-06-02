@@ -18,6 +18,7 @@ if _ROOT not in sys.path:
 from config import (  # noqa: E402
     JOB_LOG_FLUSH_INTERVAL_SEC,
     JOB_MAX_CONCURRENT_WORKERS,
+    JOB_RUNNER_EXECUTOR_CAPACITY,
     JOB_RUNNER_HEARTBEAT_INTERVAL_SEC,
     JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC,
     JOB_RUNNER_POLL_INTERVAL_SEC,
@@ -28,10 +29,34 @@ from core.debug_logging import setup_debug_logging  # noqa: E402
 _JST = timezone(timedelta(hours=9))
 _logger = logging.getLogger("yj.runner")
 _RUNNABLE_TYPES = ("generate", "render")
+_worker_limit_cache: tuple[float, int] = (0.0, max(1, JOB_MAX_CONCURRENT_WORKERS))
 
 
 def _now_iso() -> str:
     return datetime.now(_JST).isoformat()
+
+
+def _current_worker_limit(capacity: int) -> int:
+    """settings.db の runner 並行数を読み、次の claim 判断へ反映する。"""
+    global _worker_limit_cache
+    now = time.monotonic()
+    cached_at, cached_value = _worker_limit_cache
+    if now - cached_at < 2.0:
+        return min(max(1, cached_value), capacity)
+
+    from core.settings_store import get_all
+
+    raw = get_all().get("JOB_MAX_CONCURRENT_WORKERS", str(JOB_MAX_CONCURRENT_WORKERS))
+    try:
+        value = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"JOB_MAX_CONCURRENT_WORKERS が整数ではありません: {raw}") from exc
+    if value < 1 or value > capacity:
+        raise RuntimeError(f"JOB_MAX_CONCURRENT_WORKERS は 1〜{capacity} の範囲で指定してください: {value}")
+    if value != cached_value:
+        _logger.info("runner同時実行数を更新しました: %s -> %s", cached_value, value)
+    _worker_limit_cache = (now, value)
+    return value
 
 
 class _BufferedJobLog:
@@ -200,7 +225,9 @@ def _claim_one(pid: int) -> dict | None:
         with profile_context(profile.profile_id):
             if not is_initialized():
                 initialize_db()
-            reap_stale_running_jobs(JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC)
+            reaped = reap_stale_running_jobs(JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC)
+            if reaped:
+                _logger.warning("heartbeat切れのrunnerジョブを失敗化しました: profile=%s count=%s", profile.profile_id, reaped)
             job = claim_queued_job(pid, _RUNNABLE_TYPES)
             if job:
                 job["profile_id"] = job.get("profile_id") or profile.profile_id
@@ -211,13 +238,15 @@ def _claim_one(pid: int) -> dict | None:
 def main() -> None:
     setup_debug_logging(role="runner")
     pid = os.getpid()
-    _logger.info("runner起動 pid=%s max_workers=%s", pid, JOB_MAX_CONCURRENT_WORKERS)
+    executor_capacity = max(1, JOB_RUNNER_EXECUTOR_CAPACITY, JOB_MAX_CONCURRENT_WORKERS)
+    _logger.info("runner起動 pid=%s capacity=%s max_workers=%s", pid, executor_capacity, JOB_MAX_CONCURRENT_WORKERS)
     futures = set()
-    with ThreadPoolExecutor(max_workers=max(1, JOB_MAX_CONCURRENT_WORKERS)) as executor:
+    with ThreadPoolExecutor(max_workers=executor_capacity) as executor:
         try:
             while True:
                 futures = {f for f in futures if not f.done()}
-                while len(futures) < max(1, JOB_MAX_CONCURRENT_WORKERS):
+                worker_limit = _current_worker_limit(executor_capacity)
+                while len(futures) < worker_limit:
                     job = _claim_one(pid)
                     if not job:
                         break

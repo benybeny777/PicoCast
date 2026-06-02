@@ -48,6 +48,37 @@ def test_initialize_idempotent(tmp_db):
     tmp_db.initialize_db()  # 2回目
 
 
+def test_reap_stale_running_jobs_only_marks_runner_jobs(tmp_db):
+    """runner 管轄外の軽量ジョブは stale 回収で failed にしない。"""
+    old_heartbeat = "2026-01-01T00:00:00+09:00"
+    with tmp_db.ManagedConnection() as conn:
+        conn.execute(
+            """
+            INSERT INTO jobs(job_id, job_type, status, heartbeat_at, runner_pid, created_at)
+            VALUES(?,?,?,?,?,?)
+            """,
+            ("generate-old", "generate", "running", old_heartbeat, 111, old_heartbeat),
+        )
+        conn.execute(
+            """
+            INSERT INTO jobs(job_id, job_type, status, heartbeat_at, runner_pid, created_at)
+            VALUES(?,?,?,?,?,?)
+            """,
+            ("check-old", "check", "running", old_heartbeat, None, old_heartbeat),
+        )
+        conn.commit()
+
+    count = tmp_db.reap_stale_running_jobs(30.0)
+
+    with tmp_db.ManagedConnection() as conn:
+        generate_status = conn.execute("SELECT status FROM jobs WHERE job_id='generate-old'").fetchone()["status"]
+        check_status = conn.execute("SELECT status FROM jobs WHERE job_id='check-old'").fetchone()["status"]
+
+    assert count == 1
+    assert generate_status == "failed"
+    assert check_status == "running"
+
+
 # ── upsert ───────────────────────────────────────────────────────────────────
 
 def test_sync_folder_to_db(tmp_db, tmp_folder):

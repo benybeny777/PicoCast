@@ -192,11 +192,21 @@ class JobManager:
             self._running[job.job_id] = job
 
         def _run():
+            stop_heartbeat = threading.Event()
+
+            def _heartbeat_loop() -> None:
+                from config import JOB_RUNNER_HEARTBEAT_INTERVAL_SEC
+                while not stop_heartbeat.wait(max(0.5, float(JOB_RUNNER_HEARTBEAT_INTERVAL_SEC))):
+                    with _profile_scope(job.profile_id):
+                        update_job_progress(job.job_id, None, _now_iso())
+
             job.status = JobStatus.RUNNING
             job.started_at = datetime.now(_JST)
             with _profile_scope(job.profile_id):
                 upsert_job(job.to_dict())
                 update_job_progress(job.job_id, "実行中", _now_iso())
+            heartbeat_thread = threading.Thread(target=_heartbeat_loop, daemon=True, name=f"job-heartbeat-{job.job_id[:8]}")
+            heartbeat_thread.start()
             _job_logger.info("[%s job=%s] ▶ 開始", job.type, job.job_id[:8])
             try:
                 result = fn(job, *args, **kwargs)
@@ -215,6 +225,8 @@ class JobManager:
                 if tb and tb.strip() != "NoneType: None":
                     _log(job, tb, "error")
             finally:
+                stop_heartbeat.set()
+                heartbeat_thread.join(timeout=1.0)
                 job.finished_at = datetime.now(_JST)
                 with _profile_scope(job.profile_id):
                     set_job_result(job.job_id, job.status, job.result, job.error, job.finished_at.isoformat())
