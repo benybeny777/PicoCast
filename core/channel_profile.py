@@ -24,6 +24,7 @@ _logger = logging.getLogger(__name__)
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _lock = threading.Lock()
+_profile_context = threading.local()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -286,6 +287,9 @@ def _copy_legacy_default_secrets(conn: sqlite3.Connection) -> None:
 
 def get_active_profile() -> ChannelProfile | None:
     """アクティブプロファイルを返す。未設定なら None。"""
+    override_id = getattr(_profile_context, "profile_id", None)
+    if override_id:
+        return get_profile(override_id)
     with _lock:
         conn = _open_db()
         try:
@@ -295,6 +299,29 @@ def get_active_profile() -> ChannelProfile | None:
         finally:
             conn.close()
     return _row_to_profile(row) if row else None
+
+
+class profile_context:
+    """現在スレッドの active profile 参照を一時的に固定する。"""
+
+    def __init__(self, profile_id: str):
+        self.profile_id = profile_id
+        self._previous = None
+
+    def __enter__(self):
+        self._previous = getattr(_profile_context, "profile_id", None)
+        _profile_context.profile_id = self.profile_id
+        return get_profile(self.profile_id)
+
+    def __exit__(self, exc_type, exc, tb):
+        if self._previous is None:
+            try:
+                delattr(_profile_context, "profile_id")
+            except AttributeError:
+                pass
+        else:
+            _profile_context.profile_id = self._previous
+        return False
 
 
 def require_active_profile() -> ChannelProfile:

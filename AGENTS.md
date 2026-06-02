@@ -96,6 +96,7 @@
 |---|---|
 | `web_app/app.py` | FastAPI Web UI エントリポイント |
 | `workers/main.py` | `run_pipeline()` — Web UI から呼ぶ1本分の動画生成パイプライン |
+| `workers/runner.py` | DB queue から生成・レンダージョブを取得して実行する常駐 runner |
 | `config/config.py` | 定数・設定（音声速度・モデル名・パスなど） |
 | `core/parser.py` | 台本パーサー `ScriptParser` |
 | `core/ai_generator.py` | Gemini台本生成・画像プロンプト強化 |
@@ -127,6 +128,8 @@ output/{profile_id}/          ← active profile の output_root
 ```
 
 動画生成・履歴・画像確認・再レンダー・アップロード候補・Analytics・固定コメント・スケジュールは、必ず active profile の `output_root` 配下だけを参照する。別 profile の `output_root` へのアクセスは `safe_output_path()` が拒否する。
+
+生成・レンダーは Web プロセスで直接実行しない。Web は `jobs` へ queued 登録し、`workers.runner` が `profile_id` を固定して実行する。ジョブ登録時は必ず `profile_id` を保存し、runner 内では `core.channel_profile.profile_context(profile_id)` を使って profile 混線を防ぐ。
 
 **例外: よみがな辞書は全チャンネル共通（プロファイル非依存）。** `data/reading_dictionary_base.json` / `data/reading_dictionary_user.json` / `data/reading_candidates.json` はプロジェクト直下の単一 `data/` に置き、`output/{profile_id}/` 配下に分けない。チャンネル別にしないこと（登録した読みは全チャンネルで共有する仕様）。
 

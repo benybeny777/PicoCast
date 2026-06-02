@@ -69,11 +69,8 @@ def _run_hooks() -> None:
 
 
 def _stop_workers(timeout: float = 10.0) -> None:
-    try:
-        from web_app.worker_runner import cancel_all_workers
-        cancel_all_workers(timeout=timeout)
-    except Exception as e:
-        _logger.error("worker停止エラー: %s", e)
+    """旧worker subprocessは廃止。runnerは app.py の shutdown hook で停止する。"""
+    return None
 
 
 def _stop_server() -> None:

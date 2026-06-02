@@ -16,6 +16,7 @@ if _ROOT not in sys.path:
 @pytest.fixture(scope="module")
 def client():
     from fastapi.testclient import TestClient
+    os.environ["NVF_DISABLE_JOB_RUNNER"] = "1"
     from web_app.app import app
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
@@ -781,74 +782,42 @@ def test_auto_fixed_comment_scope_active_only(monkeypatch):
     assert calls == [("active_video", True, None)]
 
 
-# ── ジョブ同時実行制御（キュー） ──
-_DUMMY_WORKER = (
-    "import sys, json, time\n"
-    "a = sys.argv\n"
-    "res = a[a.index('--result') + 1]\n"
-    "print(json.dumps({'tag': 'info', 'message': 'start'}), flush=True)\n"
-    "time.sleep(0.3)\n"
-    "open(res, 'w', encoding='utf-8').write(json.dumps({'status': 'success', 'message': 'ok'}))\n"
-)
-
-
-def test_worker_runner_serializes_concurrent_workers(tmp_path, monkeypatch):
-    """既定（JOB_MAX_CONCURRENT_WORKERS=1）で、複数ジョブの subprocess が同時に走らず直列化されること。"""
-    import threading
-    import time
-    import uuid
-    import web_app.worker_runner as wr
+# ── ジョブDB queue ──
+def test_claim_queued_job_is_atomic(tmp_path, monkeypatch):
+    import core.metadata_db as m
     from web_app.job_manager import Job
 
-    (tmp_path / "dummy_worker.py").write_text(_DUMMY_WORKER, encoding="utf-8")
-    monkeypatch.setattr(wr, "_WORKER_DIR", str(tmp_path))
-    monkeypatch.setattr(wr, "_worker_slots", threading.BoundedSemaphore(1))
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    job = Job("job-1", "generate", "test_profile", {"script": "動画形式: Shorts"})
+    m.upsert_job(job.to_dict())
 
-    intervals: list[tuple[float, float]] = []
-    lock = threading.Lock()
+    claimed1 = m.claim_queued_job(111, ("generate",))
+    claimed2 = m.claim_queued_job(222, ("generate",))
 
-    def run_one():
-        job = Job(uuid.uuid4().hex, "test")
-        t0 = time.monotonic()
-        wr.run_in_worker("dummy_worker.py", {}, job)
-        t1 = time.monotonic()
-        with lock:
-            intervals.append((t0, t1))
-
-    threads = [threading.Thread(target=run_one) for _ in range(3)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=30)
-
-    assert len(intervals) == 3
-    # 各ダミーワーカーは約0.3秒。直列化されていれば全体で約0.9秒（>=0.6秒）かかる。
-    # 並行実行なら約0.3秒で終わってしまう。
-    total_elapsed = max(e for _s, e in intervals) - min(s for s, _e in intervals)
-    assert total_elapsed >= 0.6, f"workers ran concurrently (total={total_elapsed:.2f}s): {intervals}"
+    assert claimed1["job_id"] == "job-1"
+    assert claimed1["status"] == "running"
+    assert claimed1["runner_pid"] == 111
+    assert claimed2 is None
 
 
 # ── reuse_audio の配管（サービス層） ──────────────────────────────────────────
-def test_run_generate_threads_reuse_audio_to_worker(monkeypatch):
-    """generation_service._run_generate が reuse_audio / reuse_backgrounds を
-    worker_pipeline へ渡す params に正しく載せること（位置引数ズレの回帰防止）。"""
+def test_submit_generate_stores_reuse_audio_in_params(tmp_path, monkeypatch):
+    """生成ジョブ登録時に reuse_audio / reuse_backgrounds を DB params に保存する。"""
     import web_app.services.generation_service as gs
-    from web_app.job_manager import Job
+    import core.metadata_db as m
 
-    captured = {}
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    monkeypatch.setattr("web_app.job_manager.JobManager._active_profile_id", lambda _self: "test_profile")
 
-    def _fake_run_in_worker(worker_name, params, job):
-        captured.update(params)
-        return {"status": "cancelled"}  # 早期returnでDB/パス解決を回避
-
-    monkeypatch.setattr(gs, "run_in_worker", _fake_run_in_worker)
-    job = Job("t1", "generate")
-    gs._run_generate(
-        job, "動画形式: Shorts\n動画タイトル: t\n", "通常", "", False,
-        False, False, False, False, "profile_default", None, None, True,
+    job_id = gs.submit_generate_job(
+        "動画形式: Shorts\n動画タイトル: t\n",
+        reuse_audio=True,
+        reuse_backgrounds=False,
     )
-    assert captured.get("reuse_audio") is True
-    assert captured.get("reuse_backgrounds") is False
+    rows = m.load_jobs_from_db()
+    row = next(r for r in rows if r["job_id"] == job_id)
+    assert row["params"]["reuse_audio"] is True
+    assert row["params"]["reuse_backgrounds"] is False
 
 
 # ── 再生成エンドポイント ──────────────────────────────────────────────────────

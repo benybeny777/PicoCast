@@ -26,7 +26,10 @@ from config import config
 from core.debug_logging import setup_debug_logging
 from core.gui_support import build_app_version
 
-setup_debug_logging()
+setup_debug_logging(role="web")
+
+_runner_proc = None
+_runner_stop_event = None
 
 # ── アプリ生成 ────────────────────────────────────────────────────────────
 from contextlib import asynccontextmanager
@@ -42,6 +45,8 @@ async def _lifespan(app):
 
     from core.metadata_db import initialize_db
     initialize_db()  # 起動時に DB を確実に初期化しログを残す
+    _start_job_runner()
+    register_shutdown_hook("job_runner", _stop_job_runner)
     register_shutdown_hook("metadata_db", close_all_connections)
 
     # channel profile にテンプレートが未投入であればファイルから seed する
@@ -58,6 +63,68 @@ async def _lifespan(app):
     yield
     # ── shutdown フェーズ（Ctrl+C / SIGTERM / /api/shutdown すべてここを通る） ──
     run_lifespan_shutdown()
+
+
+def _start_job_runner() -> None:
+    """Web UI 起動に合わせて job-runner 常駐プロセスを起動・監視する。"""
+    global _runner_proc, _runner_stop_event
+    if os.environ.get("NVF_DISABLE_JOB_RUNNER", "").strip().lower() in ("1", "true", "yes", "on"):
+        return
+    import logging
+    import subprocess
+    import threading
+    import time
+
+    logger = logging.getLogger(__name__)
+    _runner_stop_event = threading.Event()
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUNBUFFERED": "1"}
+    popen_extra = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
+
+    def _spawn():
+        return subprocess.Popen(
+            [sys.executable, "-m", "workers.runner"],
+            cwd=_ROOT,
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            **popen_extra,
+        )
+
+    _runner_proc = _spawn()
+    logger.info("job-runner 起動 pid=%s", _runner_proc.pid)
+
+    def _watch():
+        global _runner_proc
+        while not _runner_stop_event.wait(2.0):
+            proc = _runner_proc
+            if proc is None:
+                continue
+            if proc.poll() is not None:
+                logger.error("job-runner が終了しました exit=%s。再起動します", proc.returncode)
+                time.sleep(1.0)
+                if not _runner_stop_event.is_set():
+                    _runner_proc = _spawn()
+                    logger.info("job-runner 再起動 pid=%s", _runner_proc.pid)
+
+    threading.Thread(target=_watch, daemon=True, name="job-runner-watch").start()
+
+
+def _stop_job_runner() -> None:
+    global _runner_proc, _runner_stop_event
+    if _runner_stop_event is not None:
+        _runner_stop_event.set()
+    proc = _runner_proc
+    _runner_proc = None
+    if proc is None or proc.poll() is not None:
+        return
+    try:
+        proc.terminate()
+        proc.wait(timeout=10)
+    except Exception:
+        try:
+            proc.kill()
+        except Exception:
+            pass
 
 app = FastAPI(
     title=f"{config.WEB_APP_NAME} — Web UI",

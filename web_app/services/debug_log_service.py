@@ -7,19 +7,28 @@ from config import config
 def recent_debug_log(max_lines: int | None = None) -> dict[str, Any]:
     """直近のデバッグログ末尾をWeb UI表示用に返す。"""
     max_lines = max_lines or config.DEBUG_LOG_VIEW_LINES
-    log_path = os.path.join(config.DEBUG_LOG_DIR, "app_debug.log")
-    if not os.path.isfile(log_path):
+    paths = [
+        os.path.join(config.DEBUG_LOG_DIR, "app_debug_web.log"),
+        os.path.join(config.DEBUG_LOG_DIR, "app_debug_runner.log"),
+    ]
+    existing = [p for p in paths if os.path.isfile(p)]
+    if not existing:
         return {
             "enabled": config.DEBUG_LOG_ENABLED,
-            "path": log_path,
+            "path": " / ".join(paths),
             "lines": [],
             "message": "デバッグログはまだ出力されていません。",
         }
-    lines = _tail_lines(log_path, max_lines)
+    lines: list[str] = []
+    per_file = max(1, max_lines // max(1, len(existing)))
+    for path in existing:
+        name = os.path.basename(path)
+        lines.append(f"===== {name} =====")
+        lines.extend(_tail_lines(path, per_file))
     return {
         "enabled": config.DEBUG_LOG_ENABLED,
-        "path": log_path,
-        "lines": lines,
+        "path": " / ".join(existing),
+        "lines": lines[-max_lines:],
         "message": "",
     }
 

@@ -4,6 +4,18 @@
 
 ---
 
+## 2026-06-02
+
+### Web薄化とjob-runnerを導入
+
+- 生成・レンダージョブを Web プロセス内 subprocess IPC から、`metadata.db:jobs` を共有状態にした常駐 `workers.runner` 実行へ移行した。
+- jobs に `profile_id` / `params_json` / `cancel_requested` / `heartbeat_at` / `runner_pid` を追加し、runner が `queued` を原子的に claim して実行するようにした。
+- runner はジョブの `profile_id` をスレッドローカルで固定して実行し、Web UI でチャンネルを切り替えても生成先 profile が混線しないようにした。
+- 旧 `web_app/worker_runner.py` / `workers/worker_pipeline.py` / `workers/worker_render.py` と `input.json` / `result.json` ベースのファイルIPCを廃止した。
+- デバッグログを `app_debug_web.log` / `app_debug_runner.log` に分離し、QueueListener 経由の書き込みで Windows のローテーション衝突を避けるようにした。
+
+---
+
 ## 2026-06-01
 
 ### 依存漏れの追加・固定コメント候補の N+1 解消

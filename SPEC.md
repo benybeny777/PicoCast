@@ -63,8 +63,7 @@
 yukkurijidou/
 ├── web_app/                # ローカル Web UI (FastAPI)
 │   ├── app.py              # FastAPI エントリポイント (通常起動はOS別起動スクリプト推奨)
-│   ├── job_manager.py      # バックグラウンドジョブ管理
-│   ├── worker_runner.py    # subprocess ワーカー起動・進捗転送・キャンセル共通ヘルパー
+│   ├── job_manager.py      # DB queue ジョブ登録・参照
 │   ├── schemas.py          # Pydantic リクエスト/レスポンススキーマ
 │   ├── security.py         # パストラバーサル対策・output/配下制限
 │   ├── services/           # ビジネスロジック層
@@ -102,8 +101,7 @@ yukkurijidou/
 │   └── static/             # CSS/JS (app.css, app.js)
 ├── workers/
 │   ├── main.py             # 動画生成パイプライン
-│   ├── worker_pipeline.py  # パイプライン subprocess ワーカー（1本生成完了でプロセス終了）
-│   └── worker_render.py    # レンダリング subprocess ワーカー（1本完了でプロセス終了）
+│   └── runner.py           # DB queue から生成・レンダージョブを実行する常駐 runner
 ├── core/
 │   ├── ai_generator.py     # Gemini台本生成
 │   ├── voicevox.py         # VOICEVOX音声生成
@@ -503,21 +501,18 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 | logs | [{time, tag, message}] のリスト |
 | result / error | 成功時の結果 / 失敗時のエラーメッセージ |
 
-ジョブ情報は `metadata.db` の `jobs` テーブルへ永続化され（`upsert_job` / `load_jobs_from_db`）、アプリ再起動後も指定件数分を参照できる。
-実行中かつ再起動されたジョブは、起動時に `failed`（アプリ再起動により中断）としてマークされる。
-保存タイミング: 成功・失敗・キャンセル時（`jobs` テーブルへ upsert、超過分は `delete_old_jobs` で古い順に削除）。
-保存失敗はジョブ自身のログに warning として記録する（ジョブ実行は妨げない）。
+ジョブ情報は active profile の `metadata.db` の `jobs` テーブルへ永続化され（`upsert_job` / `load_jobs_from_db`）、アプリ再起動後も指定件数分を参照できる。生成・レンダーのジョブは Web プロセスでは実行せず、`workers.runner` が `queued` を取得して `running` へ原子的に更新してから実行する。ジョブには `profile_id` と `params_json` を保存し、runner はジョブ実行中にその profile をスレッドローカルで固定するため、Web UI のチャンネル切替と生成先が混線しない。
+
+runner は `heartbeat_at` を定期更新し、heartbeat が `JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC` を超えて途絶えた `running` ジョブを `failed`（`runner停止により中断`）へ戻す。キャンセルは `cancel_requested=1` を DB に書き、runner がポーリングして `cancel_event` へ反映する。ジョブログは `append_job_logs` でバッファ追記し、頻繁な DB writer 競合を避ける。
 
 ### ジョブの同時実行制御（キュー）
 
-複数ジョブ（複数生成など）を同時実行すると、`run_in_worker()` が各 worker subprocess の stdout を Web プロセス内スレッドでブロッキング読み取りするため、Web プロセスが応答不能になり UI のログ・ステータス更新が止まる事象が起きる（生成 subprocess 自体は独立プロセスのため進行する）。
+Web UI は生成・レンダーを直接実行しない。`app.py` が起動時に `python -m workers.runner` を常駐プロセスとして起動・監視し、runner が DB queue から `generate` / `render` を取得して処理する。
 
-これを防ぐため、`worker_runner.py` で **`threading.BoundedSemaphore` によりワーカー subprocess を直列実行（同時1本）** する。
-
-- 同時起動数は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列）。設定値は `.env` ではなく `config/config.py` に置く。
-- 上限に達している間、後続ジョブは `with _worker_slots` で順番待ち（キュー）になり、待機開始時に `⏳ …順番待ち` をジョブログへ出す。投入自体はブロックしない（`JobManager` がジョブを受け付け、枠が空き次第 subprocess を起動）。
-- 既定の直列実行が最も安全。`JOB_MAX_CONCURRENT_WORKERS` を上げると並行実行で生成は速くなるが、Web プロセスの並列飽和（無応答）リスクが上がるため、基本は直列のまま運用する。
-- 純 Python・追加インフラ不要のため配布物にそのまま同梱できる（販売・配布を想定し、外部ミドルウェア＝Kafka/Redis 等には依存しない方針）。
+- 同時実行数は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列）。2以上にすると runner 内で生成・レンダーを並列実行する。
+- Web は queued 登録と DB 参照だけを行うため、重い生成中でもジョブ一覧・履歴・設定画面の応答を維持する。
+- `JOB_RUNNER_POLL_INTERVAL_SEC` ごとに queued/cancel を確認し、`JOB_LOG_FLUSH_INTERVAL_SEC` ごとにログをまとめ書きする。
+- 追加インフラ不要・純 Python + SQLite のため配布物にそのまま同梱できる（Kafka/Redis/Docker 等には依存しない）。
 
 ### 主要画面
 
@@ -695,7 +690,7 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 1. 「⏻ 終了」ボタンをクリック → `POST /api/shutdown {confirmed:true}`
 2. worker 実行中 → 拒否・理由返却（UI に確認ダイアログ再表示）
 3. ユーザーが強制終了を選択 → `POST /api/shutdown {confirmed:true, force:true}`
-4. `cancel_all_workers(timeout)` で cancel 要求 → terminate → kill の順に強制終了
+4. shutdown hook で job-runner を terminate → kill の順に停止
 5. 以降は通常終了と同じ
 
 **Ctrl+C / SIGTERM:**
@@ -947,8 +942,12 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
-| `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`metadata.db` の `jobs` テーブルに保存し、超過分は `delete_old_jobs` で古い順に削除する。デバッグログ（`app_debug.log`）は別途 `TimedRotatingFileHandler` で毎日0時にローテートし `DEBUG_LOG_RETENTION_DAYS` 日分を保持する |
-| `JOB_MAX_CONCURRENT_WORKERS` | 1 | ワーカーsubprocess同時起動数。既定1=直列実行（生成・レンダーを1本ずつ）。超過分は順番待ち（キュー）。上げるとWeb無応答リスク増。`.env` ではなく config.py に置く。変更は再起動後に反映 |
+| `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`metadata.db` の `jobs` テーブルに保存し、超過分は `delete_old_jobs` で古い順に削除する |
+| `JOB_MAX_CONCURRENT_WORKERS` | 1 | job-runner の同時実行数。2以上で生成・レンダーを並列処理する |
+| `JOB_RUNNER_POLL_INTERVAL_SEC` | 0.5 | job-runner が queued/cancel を確認する間隔 |
+| `JOB_RUNNER_HEARTBEAT_INTERVAL_SEC` | 2.0 | job-runner が実行中ジョブの heartbeat を更新する間隔 |
+| `JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC` | 30.0 | heartbeat が途絶えた running ジョブを failed 化するまでの秒数 |
+| `JOB_LOG_FLUSH_INTERVAL_SEC` | 0.5 | runner がジョブログを DB へまとめ書きする間隔 |
 
 ---
 
@@ -1085,7 +1084,7 @@ Web UI の **「高画質（FHD）生成」チェックボックス**（デフ�
 
 ### デバッグログの内容
 
-`app_debug.log`（`output/000_data/debug_logs/`、`TimedRotatingFileHandler` で日次ローテート）には、Web プロセスの logging に加えて**全ジョブのログをミラー**する。`job_manager._log()` が `yj.job` ロガーへ `[<type> job=<id>] <message>` 形式で出力し、ワーカー subprocess の stdout/stderr も `run_in_worker` 経由で同関数を通るため、生成・レンダーの進捗とエラー（エラーコード付き）が永続ログにも残る。ジョブの開始・終了・所要時間、ワーカーの起動/終了 exit code、結果ファイル無しのクラッシュも記録する。フォーマットは `%(asctime)s %(levelname)s [pid] %(name)s %(funcName)s:%(lineno)d: %(message)s`。秘密値は `_SecretRedactingFilter` でマスクする。
+デバッグログは `QueueHandler` / `QueueListener` 構成で、アプリ処理スレッドはキュー投入だけを行う。ファイルは role 別に `app_debug_web.log` / `app_debug_runner.log` へ分け、1ファイル1書き手にして Windows のローテーション rename 衝突を防ぐ。`TimedRotatingFileHandler` で日次ローテートし、フォーマットは `%(asctime)s %(levelname)s [pid] %(name)s %(funcName)s:%(lineno)d: %(message)s`。秘密値は `_SecretRedactingFilter` でマスクする。
 
 ### Long画像節約モード
 

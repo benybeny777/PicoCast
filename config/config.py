@@ -458,4 +458,8 @@ AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_C
 # ジョブログ永続化
 # ───────────────────────────────────────────────
 JOB_LOG_MAX_JOBS = int(os.environ.get("JOB_LOG_MAX_JOBS", "300"))  # 保持する最大ジョブ件数
-JOB_MAX_CONCURRENT_WORKERS = int(os.environ.get("JOB_MAX_CONCURRENT_WORKERS", "1"))  # 同時起動ワーカーsubprocess数。既定1=直列実行（生成・レンダーを1本ずつ処理しWeb無応答を防ぐ）。超過分は順番待ち（キュー）。値はこの config に置く（.env には置かない）。変更は再起動後に反映
+JOB_MAX_CONCURRENT_WORKERS = int(os.environ.get("JOB_MAX_CONCURRENT_WORKERS", "1"))  # job-runner の同時実行数。既定1=直列実行。2以上で生成・レンダーを並列処理する。変更は再起動後に反映
+JOB_RUNNER_POLL_INTERVAL_SEC = float(os.environ.get("JOB_RUNNER_POLL_INTERVAL_SEC", "0.5"))  # job-runner が queued/cancel を確認する間隔(秒)
+JOB_RUNNER_HEARTBEAT_INTERVAL_SEC = float(os.environ.get("JOB_RUNNER_HEARTBEAT_INTERVAL_SEC", "2.0"))  # job-runner が実行中ジョブの生存時刻を更新する間隔(秒)
+JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC = float(os.environ.get("JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC", "30.0"))  # heartbeat が途絶えた running ジョブを failed 化するまでの秒数
+JOB_LOG_FLUSH_INTERVAL_SEC = float(os.environ.get("JOB_LOG_FLUSH_INTERVAL_SEC", "0.5"))  # runner がジョブログを DB へまとめ書きする間隔(秒)

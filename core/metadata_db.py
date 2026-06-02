@@ -1,7 +1,7 @@
 """
 ローカルメタデータ SQLite DB。
 
-DB ファイル: output/000_data/metadata.db
+DB ファイル: output/{profile_id}/000_data/metadata.db
 
 テーブル構成:
   videos             — 生成動画の基本情報
@@ -300,6 +300,7 @@ CREATE TABLE IF NOT EXISTS image_replacements (
 CREATE TABLE IF NOT EXISTS jobs (
     job_id        TEXT PRIMARY KEY,
     job_type      TEXT,
+    profile_id    TEXT,
     status        TEXT,
     progress_text TEXT DEFAULT '',
     started_at    TEXT,
@@ -307,6 +308,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     logs_json     TEXT DEFAULT '[]',
     result_json   TEXT,
     error         TEXT,
+    params_json   TEXT,
+    cancel_requested INTEGER DEFAULT 0,
+    heartbeat_at  TEXT,
+    runner_pid    INTEGER,
     created_at    TEXT
 );
 
@@ -356,6 +361,11 @@ def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
     """
     # v2: videos.script_content
     _add_column(conn, "videos", "script_content", "TEXT")
+    _add_column(conn, "jobs", "profile_id", "TEXT")
+    _add_column(conn, "jobs", "params_json", "TEXT")
+    _add_column(conn, "jobs", "cancel_requested", "INTEGER DEFAULT 0")
+    _add_column(conn, "jobs", "heartbeat_at", "TEXT")
+    _add_column(conn, "jobs", "runner_pid", "INTEGER")
 
     # v3: analytics_snapshots 追加列
     for col, typedef in [
@@ -1285,20 +1295,27 @@ def upsert_job(job_dict: dict) -> None:
     import json as _json
     with ManagedConnection() as conn:
         conn.execute("""
-            INSERT INTO jobs(job_id, job_type, status, progress_text,
-                             started_at, finished_at, logs_json, result_json, error, created_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO jobs(job_id, job_type, profile_id, status, progress_text,
+                             started_at, finished_at, logs_json, result_json, error,
+                             params_json, cancel_requested, heartbeat_at, runner_pid, created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(job_id) DO UPDATE SET
+                profile_id=excluded.profile_id,
                 status=excluded.status,
                 progress_text=excluded.progress_text,
                 started_at=excluded.started_at,
                 finished_at=excluded.finished_at,
                 logs_json=excluded.logs_json,
                 result_json=excluded.result_json,
-                error=excluded.error
+                error=excluded.error,
+                params_json=COALESCE(excluded.params_json, jobs.params_json),
+                cancel_requested=excluded.cancel_requested,
+                heartbeat_at=excluded.heartbeat_at,
+                runner_pid=excluded.runner_pid
         """, (
             job_dict["job_id"],
             job_dict.get("type"),
+            job_dict.get("profile_id"),
             job_dict.get("status"),
             job_dict.get("progress_text", ""),
             job_dict.get("started_at"),
@@ -1306,6 +1323,10 @@ def upsert_job(job_dict: dict) -> None:
             _json.dumps(job_dict.get("logs") or [], ensure_ascii=False),
             _json.dumps(job_dict.get("result"), ensure_ascii=False) if job_dict.get("result") is not None else None,
             job_dict.get("error"),
+            _json.dumps(job_dict.get("params") or {}, ensure_ascii=False) if job_dict.get("params") is not None else job_dict.get("params_json"),
+            int(bool(job_dict.get("cancel_requested", False))),
+            job_dict.get("heartbeat_at"),
+            job_dict.get("runner_pid"),
             job_dict.get("started_at") or _now_jst(),
         ))
         conn.commit()
@@ -1316,8 +1337,9 @@ def load_jobs_from_db(max_n: int = 500) -> list[dict]:
     import json as _json
     with ManagedConnection() as conn:
         rows = conn.execute("""
-            SELECT job_id, job_type, status, progress_text,
-                   started_at, finished_at, logs_json, result_json, error
+            SELECT job_id, job_type, profile_id, status, progress_text,
+                   started_at, finished_at, logs_json, result_json, error,
+                   params_json, cancel_requested, heartbeat_at, runner_pid, created_at
             FROM jobs
             ORDER BY COALESCE(started_at, created_at) DESC
             LIMIT ?
@@ -1335,8 +1357,175 @@ def load_jobs_from_db(max_n: int = 500) -> list[dict]:
             d["result"] = _json.loads(result_raw) if result_raw else None
         except Exception:
             d["result"] = None
+        try:
+            params_raw = d.pop("params_json", None)
+            d["params"] = _json.loads(params_raw) if params_raw else {}
+        except Exception:
+            d["params"] = {}
+        d["cancel_requested"] = bool(d.get("cancel_requested"))
         result.append(d)
     return result
+
+
+def claim_queued_job(runner_pid: int, job_types: list[str] | tuple[str, ...] | None = None) -> dict | None:
+    """最古の queued ジョブを running に原子的に更新して返す。"""
+    with ManagedConnection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        if job_types:
+            placeholders = ",".join("?" for _ in job_types)
+            row = conn.execute(
+                f"""
+                SELECT * FROM jobs
+                WHERE status='queued' AND job_type IN ({placeholders})
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                tuple(job_types),
+            ).fetchone()
+        else:
+            row = conn.execute("""
+                SELECT * FROM jobs
+                WHERE status='queued'
+                ORDER BY created_at ASC
+                LIMIT 1
+            """).fetchone()
+        if row is None:
+            conn.commit()
+            return None
+        now = _now_jst()
+        conn.execute("""
+            UPDATE jobs
+            SET status='running',
+                started_at=COALESCE(started_at, ?),
+                progress_text='実行中',
+                heartbeat_at=?,
+                runner_pid=?,
+                cancel_requested=0
+            WHERE job_id=? AND status='queued'
+        """, (now, now, runner_pid, row["job_id"]))
+        conn.commit()
+        row = conn.execute("SELECT * FROM jobs WHERE job_id=?", (row["job_id"],)).fetchone()
+    if row is None:
+        return None
+    d = dict(row)
+    d["type"] = d.pop("job_type", None)
+    try:
+        d["params"] = json.loads(d.pop("params_json") or "{}")
+    except Exception:
+        d["params"] = {}
+    try:
+        d["logs"] = json.loads(d.get("logs_json") or "[]")
+    except Exception:
+        d["logs"] = []
+    return d
+
+
+def append_job_logs(job_id: str, entries: list[dict]) -> None:
+    """ジョブログを jobs.logs_json へ追記する。"""
+    if not entries:
+        return
+    with ManagedConnection() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT logs_json FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+        if row is None:
+            conn.commit()
+            return
+        try:
+            logs = json.loads(row["logs_json"] or "[]")
+        except Exception:
+            logs = []
+        logs.extend(entries)
+        progress_text = entries[-1].get("message", "") if entries else ""
+        conn.execute(
+            "UPDATE jobs SET logs_json=?, progress_text=? WHERE job_id=?",
+            (json.dumps(logs, ensure_ascii=False), progress_text, job_id),
+        )
+        conn.commit()
+
+
+def update_job_progress(job_id: str, progress_text: str | None = None, heartbeat_at: str | None = None) -> None:
+    """進捗テキストと heartbeat を更新する。"""
+    with ManagedConnection() as conn:
+        conn.execute(
+            """
+            UPDATE jobs
+            SET progress_text=COALESCE(?, progress_text),
+                heartbeat_at=COALESCE(?, heartbeat_at)
+            WHERE job_id=?
+            """,
+            (progress_text, heartbeat_at, job_id),
+        )
+        conn.commit()
+
+
+def set_job_result(job_id: str, status: str, result: dict | None = None, error: str | None = None, finished_at: str | None = None) -> None:
+    """ジョブの最終結果を保存する。"""
+    with ManagedConnection() as conn:
+        conn.execute(
+            """
+            UPDATE jobs
+            SET status=?, result_json=?, error=?, finished_at=?, heartbeat_at=?, runner_pid=NULL
+            WHERE job_id=?
+            """,
+            (
+                status,
+                json.dumps(result, ensure_ascii=False) if result is not None else None,
+                error,
+                finished_at or _now_jst(),
+                _now_jst(),
+                job_id,
+            ),
+        )
+        conn.commit()
+
+
+def request_cancel(job_id: str) -> bool:
+    """ジョブへキャンセル要求を記録する。queued は即 cancelled にする。"""
+    with ManagedConnection() as conn:
+        row = conn.execute("SELECT status FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+        if row is None:
+            return False
+        if row["status"] == "queued":
+            conn.execute(
+                "UPDATE jobs SET status='cancelled', cancel_requested=1, progress_text='キャンセル済み', finished_at=? WHERE job_id=?",
+                (_now_jst(), job_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE jobs SET cancel_requested=1, progress_text='キャンセル要求済み' WHERE job_id=?",
+                (job_id,),
+            )
+        conn.commit()
+    return True
+
+
+def is_cancel_requested(job_id: str) -> bool:
+    with ManagedConnection() as conn:
+        row = conn.execute("SELECT cancel_requested FROM jobs WHERE job_id=?", (job_id,)).fetchone()
+    return bool(row and row["cancel_requested"])
+
+
+def reap_stale_running_jobs(timeout_sec: float) -> int:
+    """heartbeat が途絶えた running ジョブを failed にする。"""
+    from datetime import datetime as _dt, timedelta as _td
+
+    threshold = (_dt.fromisoformat(_now_jst()) - _td(seconds=float(timeout_sec))).isoformat()
+    with ManagedConnection() as conn:
+        cur = conn.execute(
+            """
+            UPDATE jobs
+            SET status='failed',
+                error='runner停止により中断',
+                progress_text='runner停止により中断',
+                finished_at=?,
+                runner_pid=NULL
+            WHERE status='running'
+              AND (heartbeat_at IS NULL OR heartbeat_at < ?)
+            """,
+            (_now_jst(), threshold),
+        )
+        conn.commit()
+        return int(cur.rowcount or 0)
 
 
 def delete_old_jobs(keep_n: int) -> None:
