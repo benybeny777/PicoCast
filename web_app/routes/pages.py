@@ -195,9 +195,9 @@ def page_fixed_comment(request: Request):
 
 @router.get("/settings", response_class=HTMLResponse)
 def page_settings(request: Request):
-    status = status_service.get_cached_settings_status()
-    from core.bgm_store import list_bgm_assets
-    return _render(request, "settings.html", {"status": status, "bgm_assets": list_bgm_assets(include_disabled=True)})
+    from web_app.services.secrets_service import get_secret_status
+    status = get_secret_status()
+    return _render(request, "settings.html", {"status": status})
 
 
 @router.get("/logs", response_class=HTMLResponse)

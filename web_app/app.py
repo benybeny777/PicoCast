@@ -39,6 +39,7 @@ async def _lifespan(app):
     import threading
     from web_app.services.auto_fixed_comment_service import start_auto_watcher
     from web_app.services.status_service import refresh_settings_status
+    from web_app.services.settings_preload_service import preload_settings_screen_cache
     from core.external_service_check import log_external_services
     from core.app_shutdown import register_shutdown_hook, run_lifespan_shutdown
     from core.metadata_db import close_all_connections
@@ -59,6 +60,7 @@ async def _lifespan(app):
 
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
+    threading.Thread(target=preload_settings_screen_cache, daemon=True, name="settings-screen-preload").start()
     threading.Thread(target=log_external_services, daemon=True).start()
     yield
     # ── shutdown フェーズ（Ctrl+C / SIGTERM / /api/shutdown すべてここを通る） ──

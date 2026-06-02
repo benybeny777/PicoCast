@@ -6,6 +6,12 @@
 
 ## 2026-06-02
 
+### 設定画面の起動時プリロードを追加
+
+- Web UI 起動時に設定画面用の補助データ（Ollamaモデル一覧、`assets/bgm/` の音源ファイル一覧）をバックグラウンドで先読みするようにした。
+- `/settings` のHTML生成時にフルサービス診断を待たず、APIキー登録状態はDBの bool だけで表示するようにした。
+- プリロード未完了でも `/api/settings/ollama-models` / `/api/settings/bgm-files` は暫定値を即返し、設定項目本体が外部サービス待ちで出ない状態を避けるようにした。
+
 ### Web薄化とjob-runnerを導入
 
 - 生成・レンダージョブを Web プロセス内 subprocess IPC から、`metadata.db:jobs` を共有状態にした常駐 `workers.runner` 実行へ移行した。

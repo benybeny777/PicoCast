@@ -5,6 +5,11 @@ from pydantic import BaseModel
 from web_app.services.status_service import get_settings_status
 from web_app.services.config_service import get_editable_config, save_config
 from web_app.services.status_service import invalidate_settings_status_cache
+from web_app.services.settings_preload_service import (
+    get_cached_ollama_models,
+    get_cached_bgm_files,
+    invalidate_bgm_files_cache,
+)
 from web_app.services.secrets_service import (
     save_secrets,
     save_api_key,
@@ -45,6 +50,7 @@ def api_save_config(updates: dict[str, str]):
     errors = save_config(updates)
     if errors:
         raise HTTPException(status_code=422, detail=errors)
+    invalidate_bgm_files_cache()
     return {"saved": list(updates.keys()), "note": "保存しました。"}
 
 
@@ -152,15 +158,7 @@ def api_delete_legacy_file(req: DeleteLegacyFileRequest):
 @router.get("/bgm-files")
 def api_bgm_files():
     """assets/bgm/ 内の音声ファイル一覧を返す。"""
-    bgm_dir = os.path.join(cfg.ASSETS_DIR, "bgm")
-    try:
-        files = sorted(
-            f for f in os.listdir(bgm_dir)
-            if os.path.splitext(f)[1].lower() in (".mp3", ".wav", ".ogg", ".aac", ".flac", ".m4a")
-        )
-        return {"files": files, "available": True}
-    except Exception:
-        return {"files": [], "available": False}
+    return get_cached_bgm_files()
 
 
 class ReadingDictEntry(BaseModel):
@@ -234,11 +232,4 @@ def api_debug_log():
 @router.get("/ollama-models")
 def api_ollama_models():
     """Ollama が起動していれば利用可能なモデル一覧を返す。"""
-    import httpx
-    base = getattr(cfg, "OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/")
-    try:
-        r = httpx.get(f"{base}/api/tags", timeout=cfg.WEB_VOICEVOX_CHECK_TIMEOUT_SEC)
-        models = [m["name"] for m in r.json().get("models", [])]
-        return {"models": sorted(models), "available": True}
-    except Exception:
-        return {"models": [], "available": False}
+    return get_cached_ollama_models()

@@ -511,6 +511,8 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 
 - 同時実行数は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列）。2以上にすると runner 内で生成・レンダーを並列実行する。
 - Web は queued 登録と DB 参照だけを行うため、重い生成中でもジョブ一覧・履歴・設定画面の応答を維持する。
+
+設定画面 (`/settings`) で使う補助データ（Ollamaモデル一覧、`assets/bgm/` の音源ファイル一覧）は、Web UI 起動時に `settings_preload_service` がバックグラウンドでプリロードする。プリロードが未完了の状態で設定画面を開いた場合でも、`GET /api/settings/ollama-models` と `GET /api/settings/bgm-files` は待機せず暫定値を返し、設定項目本体を先に表示する。APIキー登録状態は `encrypted_secrets` の bool だけを使い、`/settings` のHTML生成時に VOICEVOX / ffmpeg / Ollama / Stable Diffusion のフル診断を実行しない。
 - `JOB_RUNNER_POLL_INTERVAL_SEC` ごとに queued/cancel を確認し、`JOB_LOG_FLUSH_INTERVAL_SEC` ごとにログをまとめ書きする。
 - 追加インフラ不要・純 Python + SQLite のため配布物にそのまま同梱できる（Kafka/Redis/Docker 等には依存しない）。
 
@@ -584,8 +586,8 @@ POST /api/settings/config                # 設定を DB 保存し現在プロセ
 POST /api/settings/secrets               # APIキー一括保存（後方互換エンドポイント）
 POST /api/settings/secrets/api-key       # APIキーを個別に暗号化保存（profile別）
 POST /api/settings/secrets/client-secrets # YouTube client_secrets(JSON) を暗号化保存
-GET  /api/settings/ollama-models         # Ollama で利用可能なモデル一覧
-GET  /api/settings/bgm-files             # assets/bgm/ 内の音源ファイル一覧
+GET  /api/settings/ollama-models         # Ollama で利用可能なモデル一覧（起動時プリロード、未完了時は暫定値を即返す）
+GET  /api/settings/bgm-files             # assets/bgm/ 内の音源ファイル一覧（起動時プリロード、未完了時は暫定値を即返す）
 GET  /api/settings/reading-dict          # よみがな辞書（同梱・ユーザー）を取得
 POST /api/settings/reading-dict/{dict_type}        # よみがな辞書にエントリ追加/上書き
 DELETE /api/settings/reading-dict/{dict_type}/{word}  # よみがな辞書からエントリ削除

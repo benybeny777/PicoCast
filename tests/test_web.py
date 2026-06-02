@@ -126,6 +126,43 @@ def test_settings_page(client):
     assert "chf-youtube_client_secrets" in res.text
 
 
+def test_settings_page_does_not_wait_full_status(client, monkeypatch):
+    import web_app.routes.pages as pages
+
+    def _raise_if_called():
+        raise AssertionError("settings page must not run full service status checks")
+
+    monkeypatch.setattr(pages.status_service, "get_cached_settings_status", _raise_if_called)
+    res = client.get("/settings")
+    assert res.status_code == 200
+
+
+def test_settings_preload_returns_placeholder_on_cache_miss(monkeypatch):
+    import web_app.services.settings_preload_service as preload
+
+    started = []
+    monkeypatch.setattr(preload, "_ollama_models_cache", None)
+    monkeypatch.setattr(preload, "_bgm_files_cache", None)
+    monkeypatch.setattr(preload, "_ollama_refreshing", False)
+    monkeypatch.setattr(preload, "_bgm_refreshing", False)
+    monkeypatch.setattr(preload, "_start_ollama_refresh", lambda: started.append("ollama"))
+    monkeypatch.setattr(preload, "_start_bgm_refresh", lambda: started.append("bgm"))
+
+    assert preload.get_cached_ollama_models() == {
+        "models": [],
+        "available": False,
+        "cached": False,
+        "refreshing": True,
+    }
+    assert preload.get_cached_bgm_files() == {
+        "files": [],
+        "available": True,
+        "cached": False,
+        "refreshing": True,
+    }
+    assert started == ["ollama", "bgm"]
+
+
 def test_dashboard_scheduled_count_only_future_scheduled(monkeypatch):
     from datetime import datetime, timedelta, timezone
     import core.upload_records as upload_records
