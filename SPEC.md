@@ -243,7 +243,7 @@ for item in dialogue_items:
 
 ### 背景・音声の再利用ロジック
 
-- **背景再利用**（履歴詳細「背景を再利用する」/ `reuse_backgrounds`）: 再生成時、退避済みバックアップの `bg_*.png` を復元して使い回し、未生成分だけ生成する。
+- **背景再利用**（履歴詳細「背景を再利用する」/ `reuse_backgrounds`）: 再生成時、退避済みバックアップの `bg_*.png` と `thumbnails/*.png` を復元して使い回し、背景は未生成分だけ生成する。`thumbnail.png` が復元できた場合はサムネイル生成もスキップする。
 - **音声再利用**（履歴詳細「音声を再利用する」/ `reuse_audio`、既定OFF）: 再生成時、退避済みバックアップの `audio/*.wav` を復元し、**同じ台本でファイル名が一致する音声は VOICEVOX 合成をスキップ**して使い回す（変わった行だけ再合成）。音声の再生成コスト・時間を節約できる。台本変更で不要になった旧WAV（孤児）は `_cleanup_orphan_audio()` で削除し、字幕数とWAV数の不一致を防ぐ。
 - **台本変更により必要な背景枚数が変わった場合**: 既存の背景（サムネ除く）を全削除して再生成。音声もファイル名が変わるため一致しない分は再合成される。
 - 503混雑などで一部背景が未生成のまま終わった場合は、履歴詳細の「⚠ 背景生成の失敗」カードの **「失敗した背景だけ再生成」** ボタンから、保存済みプロンプトで該当背景のみ作り直せる（`image_generation_failures` を参照、成功でその記録を消す）。
@@ -359,7 +359,7 @@ for item in dialogue_items:
 
 動画メタ・レビュー結果は `metadata.db` に保存する。ローカルJSON/TXTを正本・補完元として使わない。
 
-- `videos.script_content` が台本本文の**唯一の正本**。`script.txt` ファイルは生成・参照しない。生成パイプラインは出力ディレクトリ準備直後に `save_script_content()` で台本本文を DB へ先行保存し、終盤の `sync_folder_to_db(theme_dir, script_content=...)` でメタデータと合わせて同期する。再生成・レンダー（`native_renderer`）・アップロードのタグ抽出・履歴詳細表示・is_shorts 判定・CTA候補カウントはすべて `metadata_db.get_script_content(local_id)` で DB から読む。既存フォルダの取り込み（`import_output_dir` / `sync_folder_to_db` の引数省略時）に限り、後方互換として既存の `script.txt` を読む。
+- `videos.script_content` が台本本文の**唯一の正本**。`script.txt` ファイルは生成・参照しない。生成パイプラインは出力ディレクトリ準備直後に `save_script_content()` で台本本文を DB へ先行保存し、この保存は独立したDB接続で即時 `commit()` する。後段の音声・画像・レンダーで失敗しても保存済み台本はロールバックしない。終盤の `sync_folder_to_db(theme_dir, script_content=...)` でメタデータと合わせて再同期する。再生成・レンダー（`native_renderer`）・アップロードのタグ抽出・履歴詳細表示・is_shorts 判定・CTA候補カウントはすべて `metadata_db.get_script_content(local_id)` で DB から読む。既存フォルダの取り込み（`import_output_dir` / `sync_folder_to_db` の引数省略時）に限り、後方互換として既存の `script.txt` を読む。
 - `videos.output_dir` は `sync_folder_to_db()` のたびに同期フォルダの実体パスへ更新（`ON CONFLICT` で上書き）する。フォルダ移動（`videos/` → `000_uploaded/`）や旧パスからの移行に追随し、古いパスが残り続けないようにする。
 
 | 保存先 | 内容 |
@@ -1279,7 +1279,7 @@ AI編集者向けルール:
 
 ### 履歴から複数生成
 
-`履歴から複数生成` を押すと、`output/` 配下の履歴を複数選択できます。再生成に使う台本本文は `metadata.db` の `videos.script_content`（正本）から取得します。DB に台本本文が無い履歴は再生成対象になりません。
+`履歴から複数生成` を押すと、`output/` 配下の履歴を複数選択できます。再生成に使う台本本文は `metadata.db` の `videos.script_content`（正本）から取得します。DB に台本本文が保存済みの途中停止履歴は、MP4・サムネイル・音声・背景がまだ無くても一覧に表示し、再生成対象にできます。DB に台本本文が無い履歴は再生成対象になりません。
 
 ### 画像確認
 
@@ -1322,7 +1322,7 @@ Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リス
 
 いずれの場合も、既に同じ動画が登録済みなら重複追加しません。再生リスト操作に失敗した場合、アップロード自体は成功扱いのまま警告ログを出します。
 
-`💬 固定コメント` は、`output/{profile_id}/000_uploaded/` 配下のアップロード済み履歴から、`youtube_status` テーブルに `video_id` がある公開済み動画を選んでコメント投稿します。予約中動画は候補に表示しません。YouTube Data API で状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は `youtube_status` テーブルの `fixed_comment_id` に保存します。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted_at` を記録できます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
+`💬 固定コメント` は、`output/{profile_id}/000_uploaded/` 配下のアップロード済み履歴から、`youtube_status` テーブルに `video_id` がある公開済み動画を選んでコメント投稿します。候補の最終判定は YouTube Data API の現在状態を正とし、ローカルDBの `publish_status` が `scheduled` / `reserved` のまま残っていても YouTube 側が `public` なら候補に表示します。YouTube Data API で状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は `youtube_status` テーブルの `fixed_comment_id` に保存します。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted_at` を記録できます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
 
 固定コメントの手動画面は active profile のみを対象にします。自動投稿ウォッチャーは `AUTO_FIXED_COMMENT_PROFILE_SCOPE` で対象を切り替え、既定の `all` では登録済み channel profile すべての `metadata.db` と profile_id 別 YouTube OAuth token を使って未投稿候補を巡回します。`active` に設定すると従来通り active profile のみを対象にします。
 

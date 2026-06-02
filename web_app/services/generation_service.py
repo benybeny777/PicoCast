@@ -5,6 +5,29 @@ from core.gui_support import split_input_scripts
 from web_app.job_manager import _log, get_job_manager
 
 
+def _queue_wait_note() -> str:
+    """登録直後に、runner待ちが発生しそうなら画面ログへ出す補足を作る。"""
+    from config import JOB_MAX_CONCURRENT_WORKERS
+    from core.settings_store import get_all
+
+    mgr = get_job_manager()
+    jobs = mgr.list_jobs()
+    active_count = sum(
+        1
+        for j in jobs
+        if j.get("type") in ("generate", "render") and j.get("status") in ("queued", "running")
+    )
+    raw_limit = get_all().get("JOB_MAX_CONCURRENT_WORKERS", str(JOB_MAX_CONCURRENT_WORKERS))
+    try:
+        limit = max(1, int(raw_limit))
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError(f"JOB_MAX_CONCURRENT_WORKERS が整数ではありません: {raw_limit}") from exc
+    if active_count <= limit:
+        return ""
+    ahead = active_count - 1
+    return f"⏳ キュー待機中: 前に {ahead} 件あります（同時実行数 {limit}）"
+
+
 def submit_generate_job(
     script: str,
     image_style: str = "通常",
@@ -69,6 +92,9 @@ def _submit_generate_job_prepared(
         "bgm_volume_db": bgm_volume_db,
     })
     _log(job, "生成ジョブを登録しました", "info")
+    note = _queue_wait_note()
+    if note:
+        _log(job, note, "info")
     return job.job_id
 
 

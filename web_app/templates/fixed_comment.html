@@ -98,6 +98,7 @@ function applyFilters() {
   const showPosted = document.getElementById('show-posted').checked;
   const sortKey = document.getElementById('sort-select').value;
   const tbody = document.querySelector('.data-table tbody');
+  if (!tbody) return;
   const rows = Array.from(tbody.querySelectorAll('tr.comment-row'));
 
   // 表示/非表示

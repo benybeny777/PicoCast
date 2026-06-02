@@ -381,6 +381,32 @@ def test_history_excludes_script_only_drafts(tmp_path, monkeypatch):
     assert "Shorts_生成物あり" in names
 
 
+def test_history_includes_script_only_committed_records(tmp_path, monkeypatch):
+    import web_app.services.history_service as hs
+
+    fake_output = tmp_path / "output"
+    videos_dir = fake_output / "videos"
+    (videos_dir / "Shorts_保存済み台本").mkdir(parents=True)
+
+    _patch_service_output_dirs(monkeypatch, hs, fake_output)
+    monkeypatch.setattr(hs, "_fetch_yt_status_bulk", lambda _local_ids: {})
+    monkeypatch.setattr(
+        hs,
+        "_history_db_info_bulk",
+        lambda _local_ids: {
+            "Shorts_保存済み台本": {
+                "video_title": "保存済み台本",
+                "video_format": "Shorts",
+                "has_script_content": 1,
+            }
+        },
+    )
+
+    result = hs.list_histories(include_management=False)
+
+    assert [r["name"] for r in result] == ["Shorts_保存済み台本"]
+
+
 def test_history_initializes_empty_metadata_db(tmp_path, monkeypatch):
     import core.metadata_db as m
     import web_app.services.history_service as hs
@@ -580,6 +606,14 @@ def test_runner_worker_limit_reads_settings_db(monkeypatch):
     monkeypatch.setattr(runner, "_worker_limit_cache", (0.0, 1))
 
     assert runner._current_worker_limit(8) == 2
+
+
+def test_runner_treats_empty_or_error_message_as_failure():
+    from workers.runner import _result_error_message
+
+    assert _result_error_message({"message": ""}).startswith("❌ 生成が原因不明")
+    assert _result_error_message({"message": "Error: AI生成失敗"}) == "Error: AI生成失敗"
+    assert _result_error_message({"message": "✅ 完成! 出力フォルダ: output/x"}) == ""
 
 
 def test_config_image_style_choices_save_normalizes_quotes(tmp_path, monkeypatch):
@@ -813,6 +847,42 @@ def test_fixed_comment_candidates_filter_scheduled_locally(tmp_path, monkeypatch
     assert fcs.list_fixed_comment_candidates() == []
 
 
+def test_fixed_comment_candidates_include_scheduled_when_youtube_public(tmp_path, monkeypatch):
+    import web_app.services.fixed_comment_service as fcs
+
+    fake_output = tmp_path / "output"
+    theme_dir = fake_output / "000_uploaded" / "Shorts_公開済み予約テスト"
+    theme_dir.mkdir(parents=True)
+
+    _patch_service_output_dirs(monkeypatch, fcs, fake_output)
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    _seed_fixed_comment_db(
+        m,
+        "Shorts_公開済み予約テスト",
+        "public_scheduled123",
+        "公開後に投稿するコメントです",
+        publish_status="scheduled",
+    )
+    monkeypatch.setattr(
+        fcs,
+        "_fetch_youtube_statuses",
+        lambda _ids: {
+            "public_scheduled123": {
+                "privacyStatus": "public",
+                "publishedAt": "2026-06-02T12:00:00Z",
+                "title": "YouTube側の公開済みタイトル",
+            }
+        },
+    )
+
+    candidates = fcs.list_fixed_comment_candidates()
+
+    assert len(candidates) == 1
+    assert candidates[0]["video_id"] == "public_scheduled123"
+    assert candidates[0]["publish_status"] == "public"
+    assert candidates[0]["title"] == "YouTube側の公開済みタイトル"
+
+
 def test_fixed_comment_candidates_filter_missing_and_non_public_youtube(tmp_path, monkeypatch):
     import web_app.services.fixed_comment_service as fcs
 
@@ -1008,6 +1078,30 @@ def test_submit_generate_stores_reuse_audio_in_params(tmp_path, monkeypatch):
     row = next(r for r in rows if r["job_id"] == job_id)
     assert row["params"]["reuse_audio"] is True
     assert row["params"]["reuse_backgrounds"] is False
+
+
+def test_submit_generate_logs_queue_wait_note(tmp_path, monkeypatch):
+    """同時実行枠が埋まっている場合、登録直後にキュー待機理由をログへ出す。"""
+    import web_app.services.generation_service as gs
+    import core.metadata_db as m
+
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    monkeypatch.setattr("web_app.job_manager.JobManager._active_profile_id", lambda _self: "test_profile")
+    monkeypatch.setattr("core.settings_store.get_all", lambda: {"JOB_MAX_CONCURRENT_WORKERS": "1"})
+    m.upsert_job({
+        "job_id": "running-job",
+        "type": "generate",
+        "profile_id": "test_profile",
+        "status": "running",
+        "progress_text": "実行中",
+        "logs": [],
+        "params": {},
+    })
+
+    job_id = gs.submit_generate_job("動画形式: Shorts\n動画タイトル: queue-test\n")
+    row = next(r for r in m.load_jobs_from_db(max_n=10) if r["job_id"] == job_id)
+
+    assert any("キュー待機中" in log["message"] for log in row["logs"])
 
 
 def test_cancel_job_searches_all_profiles(tmp_path, monkeypatch):

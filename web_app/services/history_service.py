@@ -46,7 +46,9 @@ def _list_audio_files(theme_dir: str) -> list[str]:
 
 
 def _has_generated_artifact(theme_dir: str, db_info: dict[str, Any]) -> bool:
-    """台本だけ保存された途中データを履歴一覧から除外するための生成物判定。"""
+    """履歴一覧に出せるリトライ元があるか判定する。"""
+    if db_info.get("has_script_content"):
+        return True
     if db_info.get("render_engine"):
         return True
     if _find_mp4(theme_dir) or _find_thumbnail(theme_dir):
@@ -143,7 +145,11 @@ def _history_db_info(local_id: str) -> dict[str, Any]:
                    sq.actual_duration,
                    sq.actual_duration_status,
                    sq.final_review_score,
-                   sq.validation_status
+                   sq.validation_status,
+                   CASE
+                       WHEN v.script_content IS NOT NULL AND TRIM(v.script_content) != '' THEN 1
+                       ELSE 0
+                   END AS has_script_content
             FROM videos v
             LEFT JOIN render_info ri ON ri.local_id = v.local_id
             LEFT JOIN video_metadata vm ON vm.local_id = v.local_id
@@ -173,7 +179,11 @@ _HISTORY_DB_INFO_COLUMNS = """
     sq.actual_duration,
     sq.actual_duration_status,
     sq.final_review_score,
-    sq.validation_status
+    sq.validation_status,
+    CASE
+        WHEN v.script_content IS NOT NULL AND TRIM(v.script_content) != '' THEN 1
+        ELSE 0
+    END AS has_script_content
 """
 
 

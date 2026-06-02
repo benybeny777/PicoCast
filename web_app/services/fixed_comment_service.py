@@ -302,8 +302,8 @@ def _mark_fixed_comment_db(local_id: str, comment_thread_id: str | None = None, 
 
 def _is_local_displayable_publish_status(publish_status: str) -> bool:
     # YouTube API による実公開確認 (_filter_existing_public_videos) が最終フィルター。
-    # ローカル "private" はアップロード直後に残ることがあるため許容し、予約中は候補から除外する。
-    return publish_status not in ("scheduled", "reserved")
+    # 予約投稿は公開後もDB側に scheduled/reserved が残ることがあるため、ローカル状態だけでは除外しない。
+    return True
 
 
 def _published_at_text(upload_record: dict) -> str:

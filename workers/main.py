@@ -8,6 +8,7 @@ import uuid
 import json
 import shutil
 import threading
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.voicevox import VoicevoxAPI
 from core.reading_normalizer import ReadingNormalizer
@@ -77,6 +78,8 @@ from core.cta_policy import (
     check_shorts_navigation_ng,
     write_policy_file,
 )
+
+_logger = logging.getLogger("yj.pipeline")
 
 
 class OutputDirectoryLockedError(Exception):
@@ -872,7 +875,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     update_status(f"🗂  既存フォルダ確認中: {theme_dir}")
     _existing_theme_backup = None
     _saved_bg_dir = None
-    _saved_thumb_path = None
+    _saved_thumb_dir = None
     _saved_audio_dir = None
     if os.path.exists(theme_dir):
         backup_base = os.path.join("output", "000_backups")
@@ -938,10 +941,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     f.lower().endswith(".wav") for f in os.listdir(_old_audio_dir)
                 ):
                     _saved_audio_dir = _old_audio_dir
-            # サムネイルは再生成の有無に関係なく常に退避（再生成失敗時のフォールバック用）
-            _thumb_candidate = os.path.join(_existing_theme_backup, "thumbnails", "thumbnail.png")
-            if os.path.exists(_thumb_candidate):
-                _saved_thumb_path = _thumb_candidate
+            if reuse_backgrounds:
+                _old_thumb_dir = os.path.join(_existing_theme_backup, "thumbnails")
+                if os.path.isdir(_old_thumb_dir) and any(
+                    f.lower().endswith(".png") for f in os.listdir(_old_thumb_dir)
+                ):
+                    _saved_thumb_dir = _old_thumb_dir
 
     theme_audio_dir = os.path.join(theme_dir, "audio")
     theme_bg_dir = os.path.join(theme_dir, "backgrounds")
@@ -974,8 +979,17 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         _has_saved_bgs = restored_bg_count > 0
         if _has_saved_bgs:
             update_status(f"🖼  既存の背景を再利用します: {restored_bg_count}枚")
-    if _saved_thumb_path and os.path.exists(_saved_thumb_path):
-        shutil.copy2(_saved_thumb_path, os.path.join(_thumbs_dir(theme_dir), "thumbnail.png"))
+    _has_saved_thumb = False
+    if _saved_thumb_dir:
+        restored_thumb_count = 0
+        target_thumb_dir = _thumbs_dir(theme_dir)
+        for f in os.listdir(_saved_thumb_dir):
+            if f.lower().endswith(".png"):
+                shutil.copy2(os.path.join(_saved_thumb_dir, f), os.path.join(target_thumb_dir, f))
+                restored_thumb_count += 1
+        _has_saved_thumb = os.path.exists(os.path.join(target_thumb_dir, "thumbnail.png"))
+        if restored_thumb_count:
+            update_status(f"📌 既存のサムネイルを再利用します: {restored_thumb_count}件")
 
     # 音声再利用: バックアップの WAV を復元（同じ台本なら音声合成をスキップして使い回す）
     _has_saved_audio = False
@@ -1592,6 +1606,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     update_status(f"🎤 音声クエリ並列取得中（{len(_voice_chunks)}件、{_QUERY_WORKERS}並列）...")
     _queries: dict[int, tuple] = {}
     _query_error: str | None = None
+    _query_error_chunk: dict | None = None
 
     def _do_query(idx: int, c: dict):
         q, kana = vv.audio_query_only(c["speech_text"], c["speaker_id"], speed_scale=c["speed_scale"])
@@ -1608,11 +1623,27 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     _queries[idx] = (q, kana)
                 except Exception as _e:
                     _query_error = str(_e)
+                    _query_error_chunk = _voice_chunks[_futs[_fut]]
                     break
 
     if is_cancelled():
         return cancel_result()
     if _query_error:
+        _chunk_desc = ""
+        if _query_error_chunk:
+            _pv = _query_error_chunk["chunk_text"][:40] + ("…" if len(_query_error_chunk["chunk_text"]) > 40 else "")
+            _chunk_desc = (
+                f" target=[{_query_error_chunk['voice_num']}/{total_voices}]"
+                f" speaker={_query_error_chunk['char_key']}({_query_error_chunk['emotion']})"
+                f" text={_pv}"
+            )
+        _logger.error(
+            "VOICEVOX audio_query failed: chunks=%s workers=%s%s reason=%s",
+            len(_voice_chunks),
+            _QUERY_WORKERS,
+            _chunk_desc,
+            _query_error,
+        )
         return finish_result(f"❌ 音声クエリ失敗のため処理を中止しました\n理由: {_query_error}")
 
     # フェーズ1c: synthesis を並列実行
@@ -1680,10 +1711,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         return finish_result(msg)
 
     _existing_thumb = os.path.join(theme_dir, "thumbnails", "thumbnail.png")
-    if _has_saved_bgs and os.path.exists(_existing_thumb):
+    if reuse_backgrounds and _has_saved_thumb and os.path.exists(_existing_thumb):
         # 背景再利用時で既存サムネイルがあればそのまま使う
         thumb_path = _existing_thumb
-        update_status("  📌 既存サムネイルを再利用")
     else:
         # 新規生成、または再利用指定でもサムネイルが欠けている（503失敗など）場合は生成する。
         # 以前は再利用時にサムネが無いと thumb_path=None のまま中止していた。

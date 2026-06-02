@@ -30,6 +30,13 @@ _JST = timezone(timedelta(hours=9))
 _logger = logging.getLogger("yj.runner")
 _RUNNABLE_TYPES = ("generate", "render")
 _worker_limit_cache: tuple[float, int] = (0.0, max(1, JOB_MAX_CONCURRENT_WORKERS))
+_TAG_TO_LEVEL = {
+    "error": logging.ERROR,
+    "stderr": logging.ERROR,
+    "warning": logging.WARNING,
+    "success": logging.INFO,
+    "info": logging.INFO,
+}
 
 
 def _now_iso() -> str:
@@ -65,14 +72,33 @@ class _BufferedJobLog:
         self.job_id = job_id
         self._entries: list[dict[str, str]] = []
         self._last_flush = 0.0
+        self._last_tag = ""
+        self._last_message = ""
         self._lock = threading.Lock()
 
     def add(self, message: str, tag: str = "info", force: bool = False) -> None:
-        entry = {"time": _now_iso(), "tag": tag or "info", "message": str(message)}
+        normalized_tag = tag or "info"
+        normalized_message = str(message)
+        entry = {"time": _now_iso(), "tag": normalized_tag, "message": normalized_message}
         with self._lock:
             self._entries.append(entry)
+            self._last_tag = normalized_tag
+            self._last_message = normalized_message
+        try:
+            _logger.log(
+                _TAG_TO_LEVEL.get(normalized_tag, logging.INFO),
+                "[runner job=%s] %s",
+                self.job_id[:8],
+                normalized_message,
+            )
+        except Exception:
+            pass  # フォールバック許可: デバッグログへのミラー失敗はジョブ進行を妨げない
         if force or time.monotonic() - self._last_flush >= JOB_LOG_FLUSH_INTERVAL_SEC:
             self.flush()
+
+    def is_last(self, message: str, tag: str = "info") -> bool:
+        with self._lock:
+            return self._last_tag == (tag or "info") and self._last_message == str(message)
 
     def flush(self) -> None:
         with self._lock:
@@ -162,6 +188,16 @@ def _run_render(job: dict, cancel_event: threading.Event, log: _BufferedJobLog) 
     return {"output_path": output_path, "history_name": history_name}
 
 
+def _result_error_message(result: dict[str, Any] | None) -> str:
+    message = str((result or {}).get("message") or "").strip()
+    if not message:
+        return "❌ 生成が原因不明で終了しました（結果メッセージが空です）"
+    lowered = message.lower()
+    if message.lstrip().startswith("❌") or lowered.startswith("error"):
+        return message
+    return ""
+
+
 def _watch_cancel_and_heartbeat(profile_id: str, job_id: str, cancel_event: threading.Event, stop_event: threading.Event) -> None:
     from core.metadata_db import is_cancel_requested, update_job_progress
 
@@ -198,10 +234,11 @@ def _run_job(job: dict) -> None:
         if cancel_event.is_set() or (result or {}).get("cancelled"):
             status = "cancelled"
             log.add("キャンセル済み", "warning", force=True)
-        elif str((result or {}).get("message", "")).lstrip().startswith("❌"):
+        elif _result_error_message(result):
             status = "failed"
-            error = str((result or {}).get("message", "生成エラー"))
-            log.add(error, "error", force=True)
+            error = _result_error_message(result)
+            if not log.is_last(error, "error"):
+                log.add(error, "error", force=True)
         else:
             status = "success"
     except Exception as exc:

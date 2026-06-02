@@ -366,7 +366,7 @@ function pollJobs(tab) {
       let allDone = true;
       for (const jobId of [...activeJobIds]) {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`);
+          const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
           const job = await res.json();
           updateJobCard(container, job);
           if (['success', 'failed', 'cancelled'].includes(job.status)) {
