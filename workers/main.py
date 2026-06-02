@@ -1731,6 +1731,20 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
         bg_name = _bg_raw or "default_background"
 
+        # プロンプトは「生成/再利用」に関わらず常に保存する（画像ページの表示・個別再生成で必要）。
+        # 以前は実生成パスでしか書いておらず、背景再利用時は prompt_bg_XXXX.txt が欠落し、
+        # 画像ページのプロンプトが空・個別再生成が失敗していた。
+        bg_description = (
+            f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
+            f"【台本】\n{script_content}"
+        )
+        prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:04d}.txt")
+        os.makedirs(theme_bg_dir, exist_ok=True)
+        with open(prompt_file, "w", encoding="utf-8") as _pf:
+            _pf.write(bg_description)
+        if debug_mode:
+            update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
+
         # 背景再利用: 該当番号の既存ファイル（bg_NNN_001.png）が有れば使い回し、
         # 無ければ（503失敗などの欠番）下のタスクに積んで再生成する。
         # ※ 以前は並び順インデックスで判定していたため、欠番があると番号がズレ、
@@ -1743,19 +1757,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 continue
             update_status(f"🖼  背景 [{bg_num}/{total_bgs}] 欠番のため再生成します: {_expected_bg}")
 
-        # 実生成が必要 — プロンプトを保存してタスクリストに追加
-        bg_description = (
-            f"以下の台本を参考に、「{bg_name}」のシーンの背景画像を生成してください。\n\n"
-            f"【台本】\n{script_content}"
-        )
-        prompt_file = os.path.join(theme_bg_dir, f"prompt_bg_{bg_num:04d}.txt")
-        try:
-            with open(prompt_file, "w", encoding="utf-8") as _pf:
-                _pf.write(bg_description)
-        except Exception:
-            raise
-        if debug_mode:
-            update_status(f"  [DEBUG] 背景プロンプト保存: {prompt_file}")
+        # 実生成が必要 — タスクリストに追加（プロンプトは上で保存済み）
         _bg_gen_tasks.append({
             "bg_num": bg_num,
             "bg_name": bg_name,

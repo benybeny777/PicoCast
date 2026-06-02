@@ -26,8 +26,9 @@ def test_hook_called_once_on_shutdown(monkeypatch):
     called = []
     m.register_shutdown_hook("test_hook", lambda: called.append(1))
 
-    # _stop_server をモックして実際には停止しない
+    # _stop_server / 実行中ジョブ判定をモック（実DBの状態に依存させない）
     monkeypatch.setattr(m, "_stop_server", lambda: None)
+    monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
 
     result = m.request_shutdown(force=False)
     assert result["ok"] is True
@@ -47,6 +48,7 @@ def test_hook_exception_continues_next(monkeypatch):
     m.register_shutdown_hook("ok_hook", lambda: order.append("ok"))
 
     monkeypatch.setattr(m, "_stop_server", lambda: None)
+    monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
     m.request_shutdown(force=False)
     time.sleep(0.5)
 
@@ -94,6 +96,7 @@ def test_double_shutdown_returns_ok(monkeypatch):
     import core.app_shutdown as m
 
     monkeypatch.setattr(m, "_stop_server", lambda: None)
+    monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
 
     r1 = m.request_shutdown(force=False)
     time.sleep(0.3)
@@ -116,6 +119,7 @@ def test_is_shutdown_requested_true_after_shutdown(monkeypatch):
     _reload_module()
     import core.app_shutdown as m
     monkeypatch.setattr(m, "_stop_server", lambda: None)
+    monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
     m.request_shutdown(force=False)
     # フラグはリクエスト直後に立つ
     assert m.is_shutdown_requested() is True

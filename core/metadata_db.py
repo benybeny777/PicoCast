@@ -33,6 +33,10 @@ from typing import Any
 
 _logger = logging.getLogger(__name__)
 
+# プロセス内で初期化済みの DB パス。同一パスへの initialize_db 再呼び出しを
+# スキップし、ホットパス（runnerポーリング・ジョブ操作）でのDDL再実行とログ氾濫を防ぐ。
+_INITIALIZED_PATHS: set[str] = set()
+
 # 接続追跡（shutdown hook 用）
 _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
@@ -429,8 +433,14 @@ def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
 
 
 def initialize_db() -> None:
-    """DB を初期化する。既存 DB が存在する場合はスキーマ移行のみ行う。"""
+    """DB を初期化する。既存 DB が存在する場合はスキーマ移行のみ行う。
+
+    同一プロセス内では DB パス毎に1回だけ実行する（スキーマはプロセス実行中に
+    変わらないため）。これによりホットパスでのDDL再実行とログ氾濫を防ぐ。
+    """
     path = get_db_path()
+    if path in _INITIALIZED_PATHS:
+        return
     existed = os.path.isfile(path)
     with ManagedConnection() as conn:
         conn.executescript(_DDL)
@@ -444,6 +454,7 @@ def initialize_db() -> None:
         elif current_ver != SCHEMA_VERSION:
             conn.execute("UPDATE schema_version SET version=?", (SCHEMA_VERSION,))
         conn.commit()
+    _INITIALIZED_PATHS.add(path)
     if existed:
         _logger.info("[SQLite] DB 起動（既存 v%s）: %s", SCHEMA_VERSION, path)
     else:
