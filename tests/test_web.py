@@ -820,6 +820,45 @@ def test_submit_generate_stores_reuse_audio_in_params(tmp_path, monkeypatch):
     assert row["params"]["reuse_backgrounds"] is False
 
 
+def test_cancel_job_searches_all_profiles(tmp_path, monkeypatch):
+    import core.metadata_db as m
+    from web_app.job_manager import Job, JobManager
+
+    profiles = {}
+
+    def _switch_db(profile_id):
+        db_path = str(tmp_path / profile_id / "metadata.db")
+        monkeypatch.setattr(m, "get_db_path", lambda: db_path)
+        m.initialize_db()
+
+    class _Profile:
+        def __init__(self, profile_id):
+            self.profile_id = profile_id
+
+    monkeypatch.setattr("core.channel_profile.list_profiles", lambda: [_Profile("profile_a"), _Profile("profile_b")])
+    monkeypatch.setattr("core.channel_profile.get_profile", lambda profile_id: _Profile(profile_id))
+    monkeypatch.setattr("core.channel_profile.get_active_profile", lambda: _Profile("profile_a"))
+
+    original_enter = __import__("core.channel_profile", fromlist=["profile_context"]).profile_context.__enter__
+
+    def _enter(self):
+        result = original_enter(self)
+        profiles["current"] = self.profile_id
+        _switch_db(self.profile_id)
+        return result
+
+    monkeypatch.setattr("core.channel_profile.profile_context.__enter__", _enter)
+    _switch_db("profile_b")
+    m.upsert_job(Job("job-b", "generate", "profile_b", {}).to_dict())
+    _switch_db("profile_a")
+
+    assert JobManager().cancel_job("job-b") is True
+
+    _switch_db("profile_b")
+    row = next(r for r in m.load_jobs_from_db() if r["job_id"] == "job-b")
+    assert row["status"] == "cancelled"
+
+
 # ── 再生成エンドポイント ──────────────────────────────────────────────────────
 def test_history_regenerate_accepts_reuse_audio(client):
     """reuse_audio を含むリクエストがスキーマで受理される（422にならない）こと。
