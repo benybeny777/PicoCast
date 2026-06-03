@@ -50,6 +50,12 @@
     <div class="action-row" style="margin-top:0.75rem">
       <button id="upload-btn" class="btn btn-primary" onclick="uploadVideo()">▲ YouTubeにアップロード</button>
     </div>
+    {% else %}
+    <p class="hint" style="margin-top:0.75rem;color:var(--warning)">
+      ⚠ MP4が未生成のためアップロードできません。下の「動画・全工程の再生成」から
+      <strong>「動画再作成（レンダーのみ）」</strong>でMP4を作成してください
+      （サムネイルも無い場合は<strong>「動画再作成（レンダー以外）」</strong>で作り直してからレンダーしてください）。
+    </p>
     {% endif %}
   </div>
 </div>
