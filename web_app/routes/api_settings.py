@@ -287,3 +287,24 @@ def api_restore_backup(req: RestoreBackupRequest):
         return restore_backup(req.backup_path, confirmed=req.confirmed)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+
+
+class ApplyDetectedRequest(BaseModel):
+    config: dict
+
+
+@router.post("/detect-services")
+def api_detect_services():
+    """起動中プロセス・既知ポートから VOICEVOX / Ollama / Stable Diffusion WebUI / ffmpeg を走査する。"""
+    from core.service_detector import detect_services
+    return detect_services()
+
+
+@router.post("/detect-services/apply")
+def api_apply_detected_services(req: ApplyDetectedRequest):
+    """走査で得たパス/URLを設定へ適用する。"""
+    from core.service_detector import apply_detected
+    errors = apply_detected(req.config)
+    if errors:
+        raise HTTPException(status_code=422, detail="; ".join(errors))
+    return {"applied": {k: v for k, v in req.config.items()}}

@@ -11,10 +11,41 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[2]
 _BACKUP_DIR = _ROOT / "output" / "_backups"
 _SETTINGS_DB = _ROOT / "data" / "settings.db"
+_SQLITE_MAGIC = b"SQLite format 3\x00"
 
 
 def _stamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+
+
+def _is_sqlite_file(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    with open(path, "rb") as fh:
+        return fh.read(16) == _SQLITE_MAGIC
+
+
+def _checkpoint_sqlite(path: Path) -> None:
+    """WALモードのDBを main ファイルへチェックポイントし、ファイルコピーで取りこぼさないようにする。
+
+    SQLite以外のファイル（テスト用プレースホルダ等）はチェックポイント対象外。
+    DBエラーは握り潰さず上位へ伝播させる。
+    """
+    if not _is_sqlite_file(path):
+        return
+    conn = sqlite3.connect(path, timeout=5)
+    try:
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    finally:
+        conn.close()
+
+
+def _remove_wal_siblings(target: Path) -> None:
+    """復元後、古い -wal / -shm を消して main ファイルへの不整合な再生を防ぐ。"""
+    for suffix in ("-wal", "-shm"):
+        sibling = target.with_name(target.name + suffix)
+        if sibling.exists():
+            sibling.unlink()
 
 
 def _copy_if_exists(src: Path, dst: Path) -> None:
@@ -39,10 +70,12 @@ def create_backup() -> dict[str, str]:
     path = _BACKUP_DIR / f"backup_{_stamp()}.zip"
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         if _SETTINGS_DB.exists():
+            _checkpoint_sqlite(_SETTINGS_DB)
             zf.write(_SETTINGS_DB, "data/settings.db")
         for profile in list_profiles():
             meta = Path(profile.output_root_abs) / "000_data" / "metadata.db"
             if meta.exists():
+                _checkpoint_sqlite(meta)
                 zf.write(meta, f"output/{profile.profile_id}/000_data/metadata.db")
         manifest = {
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -95,4 +128,10 @@ def restore_backup(backup_path: str, *, confirmed: bool = False) -> dict:
             target.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(name) as source, open(target, "wb") as dest:
                 shutil.copyfileobj(source, dest)
-    return {"restored": str(src), "pre_restore_backup": str(pre)}
+            # 復元した main ファイルに古い WAL が再生されないよう -wal / -shm を除去する
+            _remove_wal_siblings(target)
+    return {
+        "restored": str(src),
+        "pre_restore_backup": str(pre),
+        "note": "復元を反映するためアプリの再起動を推奨します。",
+    }

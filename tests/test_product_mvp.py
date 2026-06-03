@@ -61,6 +61,41 @@ def test_diagnostics_masks_secret_values(tmp_path, monkeypatch):
     assert "***MASKED***" in blob
 
 
+def test_detect_services_proposes_known_paths(monkeypatch):
+    import psutil
+    import core.service_detector as sd
+
+    class _Addr:
+        def __init__(self, port):
+            self.port = port
+
+    class _Conn:
+        def __init__(self, port, pid):
+            self.status = psutil.CONN_LISTEN
+            self.laddr = _Addr(port)
+            self.pid = pid
+
+    monkeypatch.setattr(
+        sd.psutil, "net_connections",
+        lambda kind="tcp": [_Conn(50021, 111), _Conn(11434, 222), _Conn(7860, 333)],
+    )
+    monkeypatch.setattr(sd, "_proc_exe", lambda pid: f"/proc/{pid}/exe")
+    monkeypatch.setattr(sd, "_find_process_exe_by_keyword", lambda kws: "C:/VOICEVOX/VOICEVOX.exe")
+    monkeypatch.setattr(sd.shutil, "which", lambda name: "C:/ffmpeg/bin/ffmpeg.exe")
+
+    result = sd.detect_services()
+    proposed = result["proposed"]
+    assert proposed["VOICEVOX_URL"] == "http://127.0.0.1:50021"
+    assert proposed["VOICEVOX_PATH"] == "C:/VOICEVOX/VOICEVOX.exe"
+    assert proposed["OLLAMA_BASE_URL"] == "http://127.0.0.1:11434"
+    assert proposed["SD_WEBUI_BASE_URL"] == "http://127.0.0.1:7860"
+    assert proposed["FFMPEG_BIN"] == "C:/ffmpeg/bin/ffmpeg.exe"
+    # 全キーが EDITABLE_CONFIG に存在し、適用可能であること
+    from web_app.services.config_service import EDITABLE_CONFIG
+    editable = {item["key"] for item in EDITABLE_CONFIG}
+    assert set(proposed).issubset(editable)
+
+
 def test_product_seed_profiles_excludes_existing_channel_specific_profiles():
     from core.prompt_profile_loader import list_product_seed_profiles
     profiles = list_product_seed_profiles()

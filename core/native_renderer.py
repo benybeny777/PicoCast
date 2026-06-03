@@ -41,6 +41,9 @@ from config import (
     NATIVE_FFMPEG_TIMEOUT_SEC,
     NATIVE_FFPROBE_TIMEOUT_SEC,
     NATIVE_MAX_ICON_COUNT_SHORTS,
+    TRIAL_WATERMARK_TEXT,
+    TRIAL_WATERMARK_FONT_SCALE,
+    TRIAL_WATERMARK_FONT_MIN_PX,
     NATIVE_MAX_SHAKE_COUNT_SHORTS,
     NATIVE_RENDER_CHARACTERS,
     NATIVE_SHORTS_CHARACTER_SCALE,
@@ -111,29 +114,24 @@ def _drawtext_escape(text: str) -> str:
     return text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
 
-def _apply_trial_watermark(output_path: str, width: int, height: int, progress_callback=None) -> None:
+def _trial_watermark_filter(width: int, height: int) -> str | None:
+    """Trial エディションのときだけ右下透かしの drawtext フィルタ文字列を返す。
+
+    それ以外（透かし不要なエディション）は None を返す。最終出力エンコードの
+    `-vf` / `-filter_complex` に畳み込んで使うことで、透かし用の追加エンコード
+    パスを発生させない。
+    """
     from core.license_manager import should_watermark
     if not should_watermark():
-        return
-    tmp_path = output_path + ".watermark.mp4"
-    text = _drawtext_escape("Native Video Factory Trial")
-    font_size = max(18, int(min(width, height) * 0.025))
-    vf = (
+        return None
+    text = _drawtext_escape(TRIAL_WATERMARK_TEXT)
+    font_size = max(TRIAL_WATERMARK_FONT_MIN_PX, int(min(width, height) * TRIAL_WATERMARK_FONT_SCALE))
+    return (
         "drawtext="
         f"text='{text}':"
         f"x=w-tw-24:y=h-th-24:fontsize={font_size}:"
         "fontcolor=white@0.72:box=1:boxcolor=black@0.35:boxborderw=8"
     )
-    if progress_callback:
-        progress_callback("🏷 Trial 透かしを追加中...")
-    _run_ffmpeg([
-        FFMPEG_BIN, "-y", "-i", output_path,
-        "-vf", vf,
-        "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-c:a", "copy",
-        tmp_path,
-    ])
-    os.replace(tmp_path, output_path)
 
 
 def _clear_native_work_dir(work_dir: str) -> None:
@@ -1073,7 +1071,7 @@ class RenderCancelled(Exception):
     """レンダーがキャンセル要求により中断されたことを表す。"""
 
 
-def render_native_test(
+def render_native(
     output_dir: str,
     progress_callback=None,
     voice_speed_intro: float | None = None,
@@ -1283,9 +1281,12 @@ def render_native_test(
     _run_ffmpeg([FFMPEG_BIN, "-y", "-f", "concat", "-safe", "0", "-i", segment_list, "-c", "copy", video_path])
 
     loudnorm_filter = _native_loudnorm_filter()
+    # Trial エディションは最終エンコードへ透かしを畳み込む（別パスの再エンコードを避ける）
+    watermark = _trial_watermark_filter(width, height)
+    wm_note = " + Trial透かし" if watermark else ""
     if bgm_selection["bgm_mode"] != "none":
         if progress_callback:
-            progress_callback(f"🔊 BGMミックス・最終エンコード中... ({bgm_selection['bgm_display_name']})")
+            progress_callback(f"🔊 BGMミックス・最終エンコード中...{wm_note} ({bgm_selection['bgm_display_name']})")
         audio_filter = (
             f"[0:a]volume=1.0[a0];[1:a]volume={float(bgm_selection['bgm_volume_db']):.1f}dB[a1];"
             "[a0][a1]amix=inputs=2:duration=first:dropout_transition=0"
@@ -1294,29 +1295,45 @@ def render_native_test(
             audio_filter += f"[mixed];[mixed]{loudnorm_filter}[a]"
         else:
             audio_filter += "[a]"
+        if watermark:
+            filter_complex = f"[0:v]{watermark}[vout];{audio_filter}"
+            video_map = ["-map", "[vout]"]
+            video_codec = [*_video_encode_args(), "-pix_fmt", "yuv420p"]
+        else:
+            filter_complex = audio_filter
+            video_map = ["-map", "0:v"]
+            video_codec = ["-c:v", "copy"]
         bgm_input_args = ["-stream_loop", "-1"] if bgm_selection["bgm_loop_enabled"] else []
         _run_ffmpeg([
             FFMPEG_BIN, "-y", "-i", video_path, *bgm_input_args, "-i", bgm_selection["bgm_file_path"],
-            "-filter_complex", audio_filter,
-            "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-ar", "48000", "-ac", "2", "-shortest", output_path,
+            "-filter_complex", filter_complex,
+            *video_map, "-map", "[a]", *video_codec, "-c:a", "aac", "-ar", "48000", "-ac", "2", "-shortest", output_path,
         ])
     else:
+        if watermark:
+            video_args = ["-vf", watermark, *_video_encode_args(), "-pix_fmt", "yuv420p"]
+        else:
+            video_args = ["-c:v", "copy"]
         if NATIVE_AUDIO_LOUDNORM_ENABLED:
             if progress_callback:
-                progress_callback("🔊 音量正規化・最終エンコード中...")
+                progress_callback(f"🔊 音量正規化・最終エンコード中...{wm_note}")
             _run_ffmpeg([
                 FFMPEG_BIN, "-y", "-i", video_path,
                 "-map", "0:v", "-map", "0:a",
-                "-c:v", "copy", "-af", loudnorm_filter,
+                *video_args, "-af", loudnorm_filter,
                 "-c:a", "aac", "-ar", "48000", "-ac", "2",
                 output_path,
             ])
         else:
             if progress_callback:
-                progress_callback("📦 最終出力中...")
-            _run_ffmpeg([FFMPEG_BIN, "-y", "-i", video_path, "-c", "copy", output_path])
-
-    _apply_trial_watermark(output_path, width, height, progress_callback)
+                progress_callback(f"📦 最終出力中...{wm_note}")
+            if watermark:
+                _run_ffmpeg([
+                    FFMPEG_BIN, "-y", "-i", video_path,
+                    *video_args, "-c:a", "copy", output_path,
+                ])
+            else:
+                _run_ffmpeg([FFMPEG_BIN, "-y", "-i", video_path, "-c", "copy", output_path])
 
     actual_duration = media_duration_sec(output_path) or total_audio
     is_shorts = height > width

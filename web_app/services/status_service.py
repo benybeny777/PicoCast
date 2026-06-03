@@ -147,6 +147,10 @@ def get_settings_status() -> dict[str, Any]:
     secret_profile_id = active_profile.profile_id if active_profile is not None else "default"
     secret_status = list_secret_status(profile_id=secret_profile_id)
 
+    # 初回起動（active profile 未設定）では output_dir を解決できないため空にする。
+    # /setup はこの状態でも状態表示する必要がある（require_active_profile で落とさない）。
+    videos_dir = get_output_videos_dir() if active_profile is not None else ""
+
     return {
         "voicevox": voicevox_result,
         "ffmpeg": ffmpeg_result,
@@ -163,8 +167,8 @@ def get_settings_status() -> dict[str, Any]:
         "legacy_client_secrets_json": os.path.isfile(os.path.join(root, "client_secrets.json")),
         "legacy_token_json": os.path.isfile(os.path.join(root, "token.json")),
         "legacy_token_analytics_json": os.path.isfile(os.path.join(root, "token_analytics.json")),
-        "output_dir": get_output_videos_dir(),
-        "output_dir_exists": os.path.isdir(get_output_videos_dir()),
+        "output_dir": videos_dir,
+        "output_dir_exists": bool(videos_dir) and os.path.isdir(videos_dir),
         "render_engine": "native",
         "native_shorts_body_voice_speed": config.NATIVE_SHORTS_BODY_VOICE_SPEED,
         "native_shorts_intro_voice_speed": config.NATIVE_SHORTS_INTRO_VOICE_SPEED,

@@ -274,6 +274,11 @@ NATIVE_FFMPEG_PRESET  = os.environ.get("NATIVE_FFMPEG_PRESET", "p5" if NATIVE_FF
 NATIVE_FFMPEG_CRF     = os.environ.get("NATIVE_FFMPEG_CRF",     "20")          # CRF 値（libx264 用）
 NATIVE_FFMPEG_CQ      = os.environ.get("NATIVE_FFMPEG_CQ",      "23")          # CQ 値（NVENC 用）
 
+# Trial エディションの透かし設定（焼き込み）
+TRIAL_WATERMARK_TEXT        = os.environ.get("TRIAL_WATERMARK_TEXT", "Native Video Factory Trial")  # Trial版MP4の右下に焼き込む透かし文字
+TRIAL_WATERMARK_FONT_SCALE  = float(os.environ.get("TRIAL_WATERMARK_FONT_SCALE", "0.025"))  # 透かし文字サイズ（短辺に対する倍率）
+TRIAL_WATERMARK_FONT_MIN_PX = int(os.environ.get("TRIAL_WATERMARK_FONT_MIN_PX", "18"))      # 透かし文字サイズの下限px
+
 # ───────────────────────────────────────────────
 # native キャラクター描画
 # ───────────────────────────────────────────────

@@ -533,6 +533,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - active channel が登録済みであれば、`PRODUCT_SETUP_COMPLETED` が未完了でも通常画面・設定画面には入れる。未完了状態では生成・アップロード API を分かりやすい 403 でブロックする（`core/setup_state.py` の gate と `core/license_manager.py`）。完了状態は `data/settings.db:settings.PRODUCT_SETUP_COMPLETED` に保存する。
 - `/setup` ではチャンネル名・ハンドル・製品版 seed profile、APIキー登録導線、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録導線、サンプル台本のテスト生成、完了保存を扱う。
 - サンプル生成だけは `setup_test=true` により未完了状態でも登録できる。
+- 「プロセスを走査して自動設定」で外部依存サービスを検出できる（`core/service_detector.py`）。起動中プロセスと既定ポート（VOICEVOX 50021 / Ollama 11434 / Stable Diffusion WebUI 7860）、PATH 上の ffmpeg を走査し、`VOICEVOX_PATH` / `VOICEVOX_URL` / `OLLAMA_BASE_URL` / `SD_WEBUI_BASE_URL` / `FFMPEG_BIN` を `POST /api/settings/detect-services` で検出、`POST /api/settings/detect-services/apply` で EDITABLE_CONFIG 経由保存・即時反映する。秘密情報は扱わない。
 
 ### ライセンス管理
 

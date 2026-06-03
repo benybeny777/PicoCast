@@ -69,10 +69,14 @@ def _gpu_info() -> dict[str, Any]:
     smi = shutil.which("nvidia-smi")
     if not smi:
         return {"detected": False, "reason": "nvidia-smi が見つかりません"}
-    proc = subprocess.run(
-        [smi, "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"],
-        capture_output=True, text=True, timeout=15,
-    )
+    try:
+        proc = subprocess.run(
+            [smi, "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=15,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        # 診断データ収集なので、プローブ失敗は状態として記録する（パッケージ全体は止めない）
+        return {"detected": False, "reason": f"nvidia-smi 実行エラー: {type(exc).__name__}"}
     if proc.returncode != 0:
         return {"detected": False, "reason": f"nvidia-smi 失敗 (code={proc.returncode})"}
     gpus = [line.strip() for line in proc.stdout.splitlines() if line.strip()]

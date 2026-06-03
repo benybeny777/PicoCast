@@ -154,6 +154,8 @@ graph LR
 
 新規環境で active channel がない場合、通常画面ではなく `/setup` に誘導されます。チャンネル名・ハンドル・製品版seed profile、APIキー登録、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI の診断、BGM登録、サンプル台本生成を順に確認してください。
 
+外部サービス診断の「プロセスを走査して自動設定」を押すと、起動中の VOICEVOX / Ollama / Stable Diffusion WebUI（既定ポート）と PATH 上の ffmpeg を検出し、VOICEVOX 実行ファイルパス・各API URL・ffmpegパスを自動入力できます。各サービスを起動してから走査してください。
+
 セットアップ未完了でも設定画面には入れますが、通常の生成・アップロードはブロックされます。サンプル生成だけは `/setup` から確認できます。
 
 ### ライセンス

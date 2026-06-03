@@ -104,11 +104,11 @@ class JobManager:
         atexit.register(lambda: self._executor.shutdown(wait=False))
 
     def _active_profile_id(self) -> str | None:
-        try:
-            from core.channel_profile import require_active_profile
-            return require_active_profile().profile_id
-        except Exception:
-            return None
+        # active profile 未設定は None（正常系）。get_active_profile は未設定時のみ
+        # None を返し、DB エラー等は例外として上位へ伝播させる（サイレント握り潰し禁止）。
+        from core.channel_profile import get_active_profile
+        profile = get_active_profile()
+        return profile.profile_id if profile else None
 
     def create_job(self, job_type: str, params: dict | None = None, queued: bool = True) -> Job:
         from core.metadata_db import initialize_db, is_initialized, upsert_job

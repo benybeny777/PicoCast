@@ -23,13 +23,16 @@ def client():
 
 
 @pytest.fixture(autouse=True)
-def _configured_active_profile(monkeypatch, tmp_path_factory):
+def _configured_active_profile(request, monkeypatch, tmp_path_factory):
     """設定済み（active channel あり）の状態を前提にする。
 
     初回セットアップ redirect ミドルウェアは active channel 未登録時のみ /setup へ
     誘導するため、通常ページのテストでは active profile を用意する。個別に
     get_active_profile を差し替えるテストは本体側の monkeypatch が優先される。
+    `@pytest.mark.no_active_profile` を付けたテストでは未設定状態のままにする。
     """
+    if request.node.get_closest_marker("no_active_profile"):
+        return
     import core.channel_profile as cp
     root = tmp_path_factory.mktemp("active_profile_output")
     dummy = cp.ChannelProfile(
@@ -126,6 +129,17 @@ def test_generate_page(client):
 def test_history_page(client):
     res = client.get("/history")
     assert res.status_code == 200
+
+
+@pytest.mark.no_active_profile
+def test_setup_page_renders_without_active_profile(client, monkeypatch):
+    # 初回起動（active profile 未設定）でも /setup は 200 で描画できること
+    import core.channel_profile as cp
+    monkeypatch.setattr(cp, "get_active_profile", lambda: None)
+    res = client.get("/setup")
+    assert res.status_code == 200
+    assert "初回セットアップ" in res.text
+    assert "setupDetectServices" in res.text
 
 
 def test_schedule_page_uses_new_default_slot_candidates(client):

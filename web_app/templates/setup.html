@@ -31,7 +31,12 @@
 
 <div class="card">
   <h2>3. 外部サービス診断</h2>
-  <button class="btn btn-secondary" onclick="setupRefreshStatus()">再診断</button>
+  <p class="hint">VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI を起動した状態で「プロセスを走査」を押すと、起動中プロセスや既定ポートからパス・URLを検出して自動設定できます。</p>
+  <div class="action-row">
+    <button class="btn btn-secondary" onclick="setupRefreshStatus()">再診断</button>
+    <button class="btn btn-primary" onclick="setupDetectServices()">プロセスを走査して自動設定</button>
+  </div>
+  <div id="setup-detect-result" class="mt"></div>
   <pre id="setup-status" class="log-box mt">{{ status | tojson(indent=2) }}</pre>
 </div>
 
@@ -111,6 +116,39 @@ async function setupCreateChannel() {
 async function setupRefreshStatus() {
   const res = await fetch('/api/settings/status/refresh', {method:'POST'});
   document.getElementById('setup-status').textContent = JSON.stringify(await res.json(), null, 2);
+}
+let _setupDetectProposed = {};
+async function setupDetectServices() {
+  const box = document.getElementById('setup-detect-result');
+  box.textContent = '走査中...';
+  try {
+    const res = await fetch('/api/settings/detect-services', {method:'POST'});
+    const data = await res.json();
+    if (!res.ok) { box.textContent = data.detail || '走査に失敗しました'; return; }
+    _setupDetectProposed = data.proposed || {};
+    const rows = (data.services || []).map(s => {
+      const cfg = Object.entries(s.config || {}).map(([k,v]) => `${k} = ${v}`).join('<br>');
+      const mark = s.running ? '✅' : '—';
+      return `<tr><td>${mark} ${s.label}</td><td>${s.detail || ''}</td><td>${cfg || '<span class="hint">自動設定なし</span>'}</td></tr>`;
+    }).join('');
+    const hasProposed = Object.keys(_setupDetectProposed).length > 0;
+    box.innerHTML =
+      `<table class="status-table"><tr><th>サービス</th><th>状態</th><th>検出した設定</th></tr>${rows}</table>` +
+      (hasProposed
+        ? `<div class="action-row mt"><button class="btn btn-primary" onclick="setupApplyDetected()">検出した設定を適用</button></div><div id="setup-detect-apply" class="hint mt"></div>`
+        : `<p class="hint mt">適用できる検出値はありませんでした。各サービスを起動してから再度走査してください。</p>`);
+  } catch(e) {
+    box.textContent = '走査エラー: ' + e;
+  }
+}
+async function setupApplyDetected() {
+  const out = document.getElementById('setup-detect-apply');
+  out.textContent = '適用中...';
+  const res = await fetch('/api/settings/detect-services/apply', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({config:_setupDetectProposed})});
+  const data = await res.json();
+  if (!res.ok) { out.textContent = data.detail || '適用に失敗しました'; return; }
+  out.textContent = '適用しました: ' + Object.keys(data.applied || {}).join(', ');
+  setupRefreshStatus();
 }
 async function setupTestGenerate() {
   const script = document.getElementById('setup-sample-script').value;

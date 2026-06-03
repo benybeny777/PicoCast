@@ -14,6 +14,15 @@
 - バックアップは `data/settings.db` と各 profile の `metadata.db` を対象にし、復元前に現在DBを自動退避する。schema version が安全に扱えない場合は fail closed で中止する。
 - 初期データ類を `config/SEED/` に寄せ、製品版テンプレートパックを `config/SEED/prompt_packs/product/` として分離した。製品版seedには `@zunkami` 食べ物雑学専用テンプレートや実績入りテンプレートを含めない。
 
+### 初回セットアップのサービス自動検出・透かし/バックアップの堅牢化
+
+- 初回起動（active profile 未設定）で `/setup` が 500 になっていた不具合を修正（`get_settings_status` が output_dir 解決で `require_active_profile` を呼んでいた）。未設定時は output_dir を空にして状態表示する。
+- `/setup` に「プロセスを走査して自動設定」を追加。起動中プロセスと既定ポート（VOICEVOX 50021 / Ollama 11434 / Stable Diffusion WebUI 7860）と PATH 上の ffmpeg を走査し、`VOICEVOX_PATH` / `VOICEVOX_URL` / `OLLAMA_BASE_URL` / `SD_WEBUI_BASE_URL` / `FFMPEG_BIN` を検出して設定へ適用できるようにした（`core/service_detector.py`）。`OLLAMA_BASE_URL` を編集可能設定に追加。
+- Trial 透かしを最終エンコードへ畳み込み、透かし専用の追加再エンコードパスを廃止（`core/native_renderer.py`）。透かし文字・サイズは `config/config.py` の `TRIAL_WATERMARK_*` で設定可能にした。
+- バックアップ作成前に対象DBを `wal_checkpoint(TRUNCATE)` し、WALの取りこぼしを防止。復元時は対象DBの `-wal` / `-shm` を除去して古いWALの再生による破損を防ぐようにした（`web_app/services/backup_service.py`）。
+- `JobManager._active_profile_id` の `except Exception` 握り潰しを `get_active_profile()`（未設定時 None）へ置き換え、想定外エラーを伝播させるようにした。
+- 本番レンダー関数 `render_native_test` を実体に合わせて `render_native` へ改名。
+
 ### 製品版MVPの設定モード分離・テンプレートパックUI・診断強化を追加
 
 - 設定画面に **通常 / 詳細 / 開発者** の表示モード切替を実装し、危険設定・開発者向けタブ（管理者設定など）を通常利用時は隠すようにした。選択はブラウザ `localStorage` に保持する純UI設定で、設定DBの正本にはしない。

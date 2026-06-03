@@ -170,9 +170,9 @@ def _run_render(job: dict, cancel_event: threading.Event, log: _BufferedJobLog) 
     log.add(f"対象フォルダ: {theme_dir}")
     if cancel_event.is_set():
         return {"cancelled": True}
-    from core.native_renderer import render_native_test, RenderCancelled
+    from core.native_renderer import render_native, RenderCancelled
     try:
-        render_result = render_native_test(
+        render_result = render_native(
             output_dir=theme_dir,
             progress_callback=lambda message, tag="info": log.add(message, tag),
             bgm_mode=params.get("bgm_mode", "profile_default"),

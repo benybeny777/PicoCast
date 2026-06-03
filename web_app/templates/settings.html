@@ -119,6 +119,20 @@
       <button class="btn btn-secondary" onclick="loadConfig()">リセット</button>
     </div>
   </div>
+
+  <!-- 一時的なデバッグ用: ライセンス edition の即時切替（後で削除する） -->
+  <div class="card" style="border-left:4px solid var(--accent2)">
+    <h2>⚠ ライセンス edition 切替（デバッグ用・後で削除）</h2>
+    <p class="hint">動作確認用にライセンス edition を即時切替します。製品リリース前に削除してください。</p>
+    <div id="dev-edition-current" class="hint">現在: 読み込み中...</div>
+    <div class="action-row mt">
+      <button class="btn btn-secondary" onclick="devSetEdition('trial')">trial</button>
+      <button class="btn btn-secondary" onclick="devSetEdition('personal')">personal</button>
+      <button class="btn btn-secondary" onclick="devSetEdition('pro')">pro</button>
+      <button class="btn btn-secondary" onclick="devSetEdition('studio')">studio</button>
+    </div>
+    <div id="dev-edition-result" class="hint mt"></div>
+  </div>
 </div>
 
 <!-- ── タブ: BGM ── -->
@@ -510,6 +524,27 @@ function switchTab(name, btn) {
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
   if (name === 'product') loadProductStatus();
+  if (name === 'admin') devLoadEdition();
+}
+
+// 一時的なデバッグ用: ライセンス edition 切替（後で削除する）
+async function devLoadEdition() {
+  try {
+    const res = await fetch('/api/settings/license');
+    const data = await res.json();
+    document.getElementById('dev-edition-current').textContent = `現在: ${data.edition}（透かし=${data.limits && data.limits.watermark}）`;
+  } catch(e) {
+    document.getElementById('dev-edition-current').textContent = '現在: 取得失敗 ' + e;
+  }
+}
+async function devSetEdition(edition) {
+  const out = document.getElementById('dev-edition-result');
+  out.textContent = `${edition} に切替中...`;
+  const res = await fetch('/api/settings/license', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({edition})});
+  const data = await res.json();
+  if (!res.ok) { out.textContent = '切替失敗: ' + (data.detail || ''); return; }
+  out.textContent = `edition を ${data.edition} に切り替えました`;
+  devLoadEdition();
 }
 
 // ── 設定モード（通常 / 詳細 / 開発者）でタブの表示範囲を切り替える ──
