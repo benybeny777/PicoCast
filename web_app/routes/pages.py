@@ -192,8 +192,12 @@ def page_fixed_comment(request: Request):
 @router.get("/settings", response_class=HTMLResponse)
 def page_settings(request: Request):
     from web_app.services.secrets_service import get_secret_status
+    from web_app.services.config_service import developer_tools_enabled
     status = get_secret_status()
-    return _render(request, "settings.html", {"status": status})
+    return _render(request, "settings.html", {
+        "status": status,
+        "developer_tools_enabled": developer_tools_enabled(),
+    })
 
 
 @router.get("/setup", response_class=HTMLResponse)

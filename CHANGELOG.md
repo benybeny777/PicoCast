@@ -14,6 +14,11 @@
 - バックアップは `data/settings.db` と各 profile の `metadata.db` を対象にし、復元前に現在DBを自動退避する。schema version が安全に扱えない場合は fail closed で中止する。
 - 初期データ類を `config/SEED/` に寄せ、製品版テンプレートパックを `config/SEED/prompt_packs/product/` として分離した。製品版seedには `@zunkami` 食べ物雑学専用テンプレートや実績入りテンプレートを含めない。
 
+### 販売版で開発者向け設定をサーバー側で非表示にするフラグを追加
+
+- `DEVELOPER_TOOLS_ENABLED`（`config/config.py`、既定1）を追加。`0` で管理者設定タブ・「開発者」表示モード・edition切替デバッグUIを **テンプレート描画時に出力しない**。
+- 併せて `admin` 指定の設定項目を `get_editable_config()` から除外し、`save_config()` も拒否する。表示モードは localStorage 依存で秘匿にならないため、サーバー側フラグで保護する。
+
 ### 初回セットアップのサービス自動検出・透かし/バックアップの堅牢化
 
 - 初回起動（active profile 未設定）で `/setup` が 500 になっていた不具合を修正（`get_settings_status` が output_dir 解決で `require_active_profile` を呼んでいた）。未設定時は output_dir を空にして状態表示する。

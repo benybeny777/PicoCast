@@ -573,6 +573,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - 詳細: ＋ よみがな辞書 / Stable Diffusion WebUI 詳細（モデル選択）。
 - 開発者: ＋ 管理者設定（ジョブ並列数・ログ保持・DB診断・危険操作）。
 - 隠れたタブへの URL ハッシュ遷移時は必要なモードまで自動で引き上げる。破壊的操作は従来どおり `confirmed=true` と確認ダイアログを必須にする。
+- 販売版では `DEVELOPER_TOOLS_ENABLED=0`（`config/config.py`）にすることで、管理者設定タブ・「開発者」モード・edition切替などの開発者向けUIをサーバー側で描画しない。あわせて `admin` 指定の設定項目は `get_editable_config()` から除外し、`save_config()` も拒否する（HTML非表示だけでなくAPIでも保護する）。表示モードは localStorage 依存のため、秘匿はこのフラグで行う。
 
 ### 主要画面
 

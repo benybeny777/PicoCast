@@ -22,7 +22,7 @@
   <div id="settings-mode-switch" role="group" style="display:inline-flex;gap:4px">
     <button class="btn btn-secondary mode-btn" data-mode="normal" onclick="setSettingsMode('normal')">通常</button>
     <button class="btn btn-secondary mode-btn" data-mode="advanced" onclick="setSettingsMode('advanced')">詳細</button>
-    <button class="btn btn-secondary mode-btn" data-mode="developer" onclick="setSettingsMode('developer')">開発者</button>
+    {% if developer_tools_enabled %}<button class="btn btn-secondary mode-btn" data-mode="developer" onclick="setSettingsMode('developer')">開発者</button>{% endif %}
   </div>
   <span id="settings-mode-hint" class="hint" style="margin:0"></span>
 </div>
@@ -33,7 +33,7 @@
   <button class="tab-btn" id="tab-btn-apikey" data-mode="normal" onclick="switchTab('apikey', this)">APIキー</button>
   <button class="tab-btn" id="tab-btn-dict-base" data-mode="advanced" onclick="switchTab('dict-base', this)">よみがな辞書</button>
   <button class="tab-btn" id="tab-btn-sd-models" data-mode="advanced" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
-  <button class="tab-btn" id="tab-btn-admin" data-mode="developer" onclick="switchTab('admin', this)">管理者設定</button>
+  {% if developer_tools_enabled %}<button class="tab-btn" id="tab-btn-admin" data-mode="developer" onclick="switchTab('admin', this)">管理者設定</button>{% endif %}
   <button class="tab-btn" id="tab-btn-product" data-mode="normal" onclick="switchTab('product', this)">製品管理</button>
   <button class="tab-btn" id="tab-btn-channels" data-mode="normal" onclick="switchTab('channels', this)">チャンネル</button>
   <button class="tab-btn" id="tab-btn-templates" data-mode="normal" onclick="switchTab('templates', this)">テンプレート</button>
@@ -47,7 +47,7 @@
     <table class="status-table">
       <tr><th>通常モード</th><td>設定変更 / チャンネル / APIキー / BGM / テンプレート / 製品管理</td></tr>
       <tr><th>詳細モード</th><td>＋ よみがな辞書 / Stable Diffusion WebUI 詳細</td></tr>
-      <tr><th>開発者モード</th><td>＋ 管理者設定（ジョブ並列数・ログ保持・DB診断・危険操作）</td></tr>
+      {% if developer_tools_enabled %}<tr><th>開発者モード</th><td>＋ 管理者設定（ジョブ並列数・ログ保持・DB診断・危険操作）</td></tr>{% endif %}
     </table>
   </div>
   <div class="card">
@@ -105,6 +105,7 @@
 </div>
 
 <!-- ── タブ: 管理者設定 ── -->
+{% if developer_tools_enabled %}
 <div id="tab-admin" class="tab-panel">
   <div class="card">
     <h2>管理者設定</h2>
@@ -134,6 +135,7 @@
     <div id="dev-edition-result" class="hint mt"></div>
   </div>
 </div>
+{% endif %}
 
 <!-- ── タブ: BGM ── -->
 <div id="tab-bgm" class="tab-panel">
@@ -548,6 +550,7 @@ async function devSetEdition(edition) {
 }
 
 // ── 設定モード（通常 / 詳細 / 開発者）でタブの表示範囲を切り替える ──
+const DEVELOPER_TOOLS_ENABLED = {{ developer_tools_enabled | tojson }};
 const SETTINGS_MODE_LEVELS = { normal: 1, advanced: 2, developer: 3 };
 const SETTINGS_MODE_STORAGE_KEY = 'nvf_settings_mode';
 const SETTINGS_MODE_HINTS = {
@@ -556,13 +559,20 @@ const SETTINGS_MODE_HINTS = {
   developer: '開発者向け（管理者設定・危険操作）まですべて表示しています。',
 };
 
+// 販売版（DEVELOPER_TOOLS_ENABLED=false）では開発者モードを許可しない
+function _clampMode(mode) {
+  if (mode === 'developer' && !DEVELOPER_TOOLS_ENABLED) return 'advanced';
+  return mode;
+}
+
 function getSettingsMode() {
   const saved = localStorage.getItem(SETTINGS_MODE_STORAGE_KEY);
-  return SETTINGS_MODE_LEVELS[saved] ? saved : 'normal';
+  return _clampMode(SETTINGS_MODE_LEVELS[saved] ? saved : 'normal');
 }
 
 function setSettingsMode(mode) {
   if (!SETTINGS_MODE_LEVELS[mode]) mode = 'normal';
+  mode = _clampMode(mode);
   localStorage.setItem(SETTINGS_MODE_STORAGE_KEY, mode);
   const level = SETTINGS_MODE_LEVELS[mode];
   // モード選択ボタンの active 表示

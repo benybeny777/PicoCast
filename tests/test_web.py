@@ -163,6 +163,30 @@ def test_settings_page(client):
     assert "admin-config-form" in res.text
 
 
+def test_settings_hides_admin_when_developer_tools_disabled(client, monkeypatch):
+    # 販売版（DEVELOPER_TOOLS_ENABLED=False）では管理者設定タブ・開発者モード・edition切替を隠す
+    import config.config as cfg
+    import web_app.services.config_service as cs
+    monkeypatch.setattr(cfg, "DEVELOPER_TOOLS_ENABLED", False)
+    res = client.get("/settings")
+    assert res.status_code == 200
+    assert "tab-btn-admin" not in res.text
+    assert 'data-mode="developer"' not in res.text
+    assert "devSetEdition('trial'" not in res.text
+    # admin 項目は API から除外され、保存も拒否される
+    assert all(not item.get("admin") for item in cs.get_editable_config())
+    assert cs.save_config({"VOICEVOX_QUERY_TIMEOUT_SEC": "5"})
+
+
+def test_settings_shows_admin_when_developer_tools_enabled(client, monkeypatch):
+    import config.config as cfg
+    import web_app.services.config_service as cs
+    monkeypatch.setattr(cfg, "DEVELOPER_TOOLS_ENABLED", True)
+    res = client.get("/settings")
+    assert "tab-btn-admin" in res.text
+    assert any(item.get("admin") for item in cs.get_editable_config())
+
+
 def test_settings_page_does_not_wait_full_status(client, monkeypatch):
     import web_app.routes.pages as pages
 

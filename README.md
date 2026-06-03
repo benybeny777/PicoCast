@@ -199,6 +199,8 @@ pip install --upgrade -r config/requirements.txt
 - 診断パッケージは設定画面「製品管理」から作成します。ZIPには設定状態・ジョブログ・エラーコード・スキーマ情報を含めますが、APIキー、OAuth token、client_secrets、台本本文、生成動画、画像は含めません。
 - バックアップは `data/settings.db` と profile 別 `metadata.db` をZIP化します。`encrypted_secrets` は同一PCのマスターキーでのみ復号可能なため、別PC復元時は認証情報を再登録してください。
 - 製品版初期テンプレートは `config/SEED/prompt_packs/product/` 配下に置きます。食べ物雑学専用・実績入りテンプレートは製品版seedへ入れません。
+- 外部サービスのパス/URLは、初回セットアップの「プロセスを走査して自動設定」で起動中の VOICEVOX / Ollama / Stable Diffusion WebUI / ffmpeg から自動検出できます。
+- 販売版では環境変数 `DEVELOPER_TOOLS_ENABLED=0` で起動すると、管理者設定タブ・開発者モード・edition切替などの開発者向けUIをサーバー側で非表示にし、管理者向け設定項目のAPI変更も拒否します。
 
 ---
 

@@ -97,14 +97,23 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
 ]
 
 _ALLOWED_KEYS = {item["key"] for item in EDITABLE_CONFIG}
+_ADMIN_KEYS = {item["key"] for item in EDITABLE_CONFIG if item.get("admin")}
+
+
+def developer_tools_enabled() -> bool:
+    """開発者向け機能（管理者設定など）を表示/許可するか。販売版では False。"""
+    return bool(getattr(cfg, "DEVELOPER_TOOLS_ENABLED", True))
 
 
 def get_editable_config() -> list[dict[str, Any]]:
-    """現在値付きの設定項目リストを返す。"""
+    """現在値付きの設定項目リストを返す。販売版では admin 項目を除外する。"""
     from core.settings_store import get_all as _db_get_all
     db_values = _db_get_all()
+    include_admin = developer_tools_enabled()
     result = []
     for item in EDITABLE_CONFIG:
+        if item.get("admin") and not include_admin:
+            continue
         key = item["key"]
         raw = getattr(cfg, key, None)
         if raw is None:
@@ -124,6 +133,10 @@ def save_config(updates: dict[str, str]) -> list[str]:
     更新値を検証して設定 DB に書き込む。
     戻り値: バリデーションエラーのリスト（空なら成功）
     """
+    if not developer_tools_enabled():
+        blocked = [k for k in updates if k in _ADMIN_KEYS]
+        if blocked:
+            return [f"管理者設定は無効化されています（販売版）: {', '.join(blocked)}"]
     errors = _validate(updates)
     if errors:
         return errors
