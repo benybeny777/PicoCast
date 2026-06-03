@@ -1,7 +1,7 @@
 # Native Video Factory 仕様書
 
 対象: 複数YouTubeチャンネル共通
-最終更新: 2026-06-01
+最終更新: 2026-06-03
 
 ---
 
@@ -135,7 +135,9 @@ yukkurijidou/
 │   └── prompt_profiles/
 │       └── genres/          # ジャンル別プロンプトファイル（seed 用）
 │           ├── food_trivia/
-│           └── zundamon_kowai/
+│           ├── urban_legend/
+│           ├── zundamon_kowai/
+│           └── zunkami/
 └── output/                 # 生成物出力先
 ```
 
@@ -202,7 +204,7 @@ yukkurijidou/
 
 ```
 1. 出力ディレクトリ準備
-2. 台本保存
+2. 台本本文を `metadata.db:videos.script_content` へ先行保存
 3. 台本パース (ScriptParser)
 4. メタデータ抽出 (タイトル / サムネ文字 / 説明文 / タグ / 固定コメント)
 5. 冒頭品質レビュー
@@ -228,16 +230,16 @@ yukkurijidou/
 ### 尺推定（native基準）
 
 ```python
-CHARS_PER_SEC_AT_1X = 5.4
-INTRO_SPEED = 2.0   # 最初5秒
-BODY_SPEED = 1.65   # 本編
-ADDITIONAL = 0.3 + 0.5 + 0.2  # クロスフェード + 末尾無音 + 行間
+CHARS_PER_SEC_AT_1X = NATIVE_SHORTS_ESTIMATE_BASE_CPS  # 既定 5.4
+INTRO_SPEED = NATIVE_SHORTS_INTRO_VOICE_SPEED          # 既定 1.40
+BODY_SPEED = NATIVE_SHORTS_BODY_VOICE_SPEED            # 既定 1.25
+INTRO_LINES = VOICE_INTRO_FAST_LINES                   # 既定 3行
 
 elapsed = 0.0
-for item in dialogue_items:
+for idx, item in enumerate(dialogue_items):
     chars = len(item["text"])
-    speed = INTRO_SPEED if elapsed < 5.0 else BODY_SPEED
-    line_time = chars / (CHARS_PER_SEC_AT_1X * speed) + 0.1 * speed + ADDITIONAL
+    speed = INTRO_SPEED if idx < INTRO_LINES else BODY_SPEED
+    line_time = chars / (CHARS_PER_SEC_AT_1X * speed) + 0.1 * speed
     elapsed += line_time
 ```
 
@@ -371,7 +373,7 @@ for item in dialogue_items:
 
 ### LLMレビューの有効化
 
-デフォルトはLLMレビュー有効（`OPENING_REVIEW_USE_LLM=1`）。冒頭LLMレビューと冒頭リライトはローカルの Ollama を使う。無効化する場合は `.env` で `OPENING_REVIEW_USE_LLM=0` を設定する。
+デフォルトはLLMレビュー有効（`OPENING_REVIEW_USE_LLM=1`）。冒頭LLMレビューと冒頭リライトはローカルの Ollama を使う。無効化する場合は設定画面、または環境変数 `OPENING_REVIEW_USE_LLM=0` で設定する。
 
 ```text
 OPENING_REVIEW_USE_LLM=1
@@ -429,7 +431,7 @@ Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook`
 | Shorts | 7:00 / 12:00 / 21:00 | 毎日 |
 | Long | 22:00 | 毎日 |
 
-- スロット設定は `data/settings.db` の `channel_schedule_settings` テーブルで profile_id ごとに管理する。既定値は食べ物雑学チャンネル・都市伝説チャンネル・今後追加されるチャンネルで共通。タイムゾーンは `Asia/Tokyo`。
+- スロット設定は `data/settings.db` の `channel_schedule_settings` テーブルで profile_id ごとに管理する。既定値は全チャンネル共通。タイムゾーンは `Asia/Tokyo`。
 - チャンネル詳細フォームで Shorts / Long の投稿予約スロットとタイムゾーンを編集できる。既存チャンネルに設定がない場合は自動作成する。2026-06-01 の既定値変更では既存の個別設定も Shorts 7:00 / 12:00 / 21:00、Long 22:00 へ更新する。
 - スロット割当範囲: 最大90日先まで探索
 - アップロード実行後:
@@ -440,7 +442,7 @@ Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook`
   5. `output/{profile_id}/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
 - スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。アップロード状態は `metadata.db` の `youtube_status` テーブルが正本
 - `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す
-- `sync_schedule_from_youtube()`: YouTube API を正として `youtube_status` テーブルへ書き戻す。チャンネル全件取得に失敗した場合は既知 video_id のみでフォールバック
+- `sync_schedule_from_youtube()`: YouTube API を正として `youtube_status` テーブルへ書き戻す。チャンネル全件取得に失敗した場合は既知 video_id の照会に限定して同期する。
 - 投稿予約スロットと `publish_at` はチャンネル設定のタイムゾーンで扱う。既定は `Asia/Tokyo`。
 - `infer_video_type()`: タイトルプレフィックス優先。タイトルなしの場合は duration ≤ 60s を shorts と推定
 
@@ -480,6 +482,8 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 
 アクセス: `http://127.0.0.1:58080`
 
+生成・レンダーを処理する `workers.runner` は Web UI 起動時に別プロセスとして自動起動・監視される。検証などで自動起動を止める場合のみ、環境変数 `NVF_DISABLE_JOB_RUNNER=1` を指定する。
+
 ### FastAPI 構成
 
 - フレームワーク: FastAPI + Uvicorn + Jinja2
@@ -495,10 +499,13 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 |---|---|
 | job_id | UUID |
 | type | generate / check / render / upload / analytics_refresh / schedule_sync / schedule_rebalance / schedule_update / fixed_comment / image_regenerate |
+| profile_id | ジョブ投入時の channel profile ID |
 | status | queued / running / success / failed / cancelled |
 | progress_text | 直近の進行メッセージ |
 | started_at / finished_at | ISO8601 タイムスタンプ |
 | logs | [{time, tag, message}] のリスト |
+| params_json | 実行パラメータ |
+| cancel_requested / heartbeat_at / runner_pid | キャンセル・runner生存監視用 |
 | result / error | 成功時の結果 / 失敗時のエラーメッセージ |
 
 ジョブ情報は active profile の `metadata.db` の `jobs` テーブルへ永続化され（`upsert_job` / `load_jobs_from_db`）、アプリ再起動後も指定件数分を参照できる。生成・レンダーのジョブは Web プロセスでは実行せず、`workers.runner` が `queued` を取得して `running` へ原子的に更新してから実行する。ジョブには `profile_id` と `params_json` を保存し、runner はジョブ実行中にその profile をスレッドローカルで固定するため、Web UI のチャンネル切替と生成先が混線しない。
@@ -507,7 +514,7 @@ runner は `generate` / `render` ジョブの `heartbeat_at` を定期更新し�
 
 ### ジョブの同時実行制御（キュー）
 
-Web UI は生成・レンダーを直接実行しない。`app.py` が起動時に `python -m workers.runner` を常駐プロセスとして起動・監視し、runner が DB queue から `generate` / `render` を取得して処理する。
+Web UI は生成・レンダーを直接実行しない。`app.py` が起動時に `workers.runner` を別プロセスとして起動・監視し、runner が DB queue から `generate` / `render` を取得して処理する。
 
 - 同時実行数は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列）。設定画面の「管理者設定」タブから変更でき、runner は設定DBを定期的に読み直して次のジョブ取得から反映する。2以上にすると runner 内で生成・レンダーを並列実行する。
 - Web は queued 登録と DB 参照だけを行うため、重い生成中でもジョブ一覧・履歴・設定画面の応答を維持する。
@@ -1561,13 +1568,13 @@ YouTube OAuth:
 - `data/settings.db` / `data/settings.db-wal` / `data/settings.db-shm` の `encrypted_secrets` 登録値
 - `data/secret_master.key`
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json`
-### 設定ファイルで変えられること
+### 設定の扱い
 
-主な設定は設定画面（`/settings`）から設定DBへ保存します。定数定義と初期値は [config/config.py](config/config.py) にあり、`.env` は起動時の初期移行・環境依存値の補助として扱います。
+主な設定は設定画面（`/settings`）から `data/settings.db:settings` へ保存する。定数定義と初期値は [config/config.py](config/config.py) にあり、環境変数は初期値・起動時補助として扱う。Web UIで保存できる項目は設定DBが優先され、保存後は `config_service._apply_runtime_updates()` によりアプリ再起動なしで反映する（`WEB_UI_PORT` など起動時固定パラメータを除く）。
 
 | 設定 | 場所 | 内容 |
 |---|---|---|
-| 備考 | 設定DB / `config/config.py` / `.env` | 表中の `config.py` は `config/config.py` を指す。Web UIで保存できる項目は設定DBが優先され、`.env` は起動時初期移行・環境依存値の補助として扱う |
+| 備考 | 設定DB / `config/config.py` / 環境変数 | 表中の `config.py` は `config/config.py` を指す。認証情報はこの表では扱わず `encrypted_secrets` が正本 |
 | `VOICEVOX_URL` | `config.py` | VOICEVOX API のURL |
 | `VOICEVOX_PATH` | `config.py` | VOICEVOX実行ファイルの場所 |
 | `NATIVE_SHORTS_BODY_VOICE_SPEED` | `.env` / `config.py` | native Shorts本編の音声速度 |
@@ -1638,25 +1645,6 @@ YouTube OAuth:
 | `LONG_UPLOAD_PLAYLIST_NAME` | `.env` / `config.py` | Longアップロード後に自動追加する再生リスト名。未設定時は `ロング動画`。完全一致で検索 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | `.env` / `config.py` | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。未設定時は5。0なら自動付与しない |
 
-`.env` の例:
-
-```env
-OPENING_REVIEW_USE_LLM=1
-OLLAMA_REVIEW_MODEL=qwen3:8b
-OPENING_SCORE_ABORT_THRESHOLD=80
-OPENAI_FINAL_REVIEW_ENABLED=1
-OPENAI_FINAL_REVIEW_MODEL=gpt-5.2
-GEMINI_MODEL=gemini-3.1-pro-preview
-NANOBANANA_PRO_MODEL=gemini-3-pro-image-preview
-NANOBANANA_FLASH_MODEL=gemini-3.1-flash-image-preview
-NATIVE_AUDIO_LOUDNORM_ENABLED=1
-NATIVE_AUDIO_LOUDNORM_I=-15
-NATIVE_AUDIO_LOUDNORM_TP=-1.5
-NATIVE_AUDIO_LOUDNORM_LRA=6
-LONG_FULL_SCRIPT_REVIEW=0
-LONG_UPLOAD_PLAYLIST_NAME=ロング動画
-TOPIC_REQUEST_CTA_EVERY_N=5
-```
 ## CTA / 導線制御
 
 - Shortsは本編内の他動画誘導より、完走率・平均視聴率・ループ視聴を優先する。
@@ -1776,23 +1764,16 @@ config/prompt_profiles/
       meeting_context.md    ← ネタ会議プロンプト
       playlist_categories.md← 再生リストカテゴリ名
       used_topics.txt       ← 使用済みトピック
+    urban_legend/           ← 同構成
     zundamon_kowai/         ← 同構成
+    zunkami/                ← 同構成
 ```
 
 `genres/{genre_profile}/` ファイルは起動時 seed 専用。実行時は DB テンプレートを参照する。genre_profile が存在しない場合はエラー停止（別ジャンルへのフォールバック禁止）。
 
-### 設定例（.env）
+### チャンネル登録・設定
 
-```
-CHANNEL_PROFILE=channel_handle_without_at
-CHANNEL_NAME=チャンネル名
-CHANNEL_HANDLE=@channel_handle
-CHANNEL_THEME=食べ物雑学
-CHANNEL_ACCENT_COLOR=#7c2d12
-DEFAULT_HASHTAGS=#ずんだもん #ゆっくり解説 #食べ物雑学 #VOICEVOX
-```
-
-### 挙動
+チャンネルは設定画面の「チャンネル」タブまたは `/api/channels` で登録する。保存時に `channel_handle` から `@` を除いた小文字を `profile_id` として使い、`genre_profile` と `output_root` も同じ値へ統一する。チャンネル固有の APIキー・YouTube client_secrets・BGM・投稿予約スロットは profile_id 単位で保存する。
 
 - Web UI 全画面上部のバナー（sticky）に active channel 名・ハンドルを常時表示する。ドロップダウンで別チャンネルへ切替可能。
 - 切替ボタン押下 → `POST /api/channels/{id}/activate` → 成功後 `location.reload()` で全画面更新。
@@ -1830,7 +1811,7 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 | 列 | 型 | 説明 |
 |---|---|---|
 | `secret_id` | TEXT PK | `SHA256(profile_id:secret_type)[:32]` |
-| `profile_id` | TEXT | チャンネル識別子（単一チャンネルは `"default"`） |
+| `profile_id` | TEXT | チャンネル識別子（チャンネルハンドルから `@` を除いた値） |
 | `secret_type` | TEXT | `google_api_key` / `openai_api_key` / `hf_token` / `youtube_client_secrets` / `youtube_upload_token` / `youtube_analytics_token` |
 | `encrypted_value` | BLOB | AES-GCM 暗号文 |
 | `nonce` | BLOB | 12 byte ランダム nonce（保存ごとに新規生成） |
@@ -1862,7 +1843,7 @@ APIキー・OAuthトークン・client_secrets を AES-GCM で暗号化して保
 
 ### `output/{profile_id}/000_data/metadata.db` テーブル定義
 
-現在のスキーマバージョン: **4**
+現在のスキーマバージョン: **7**
 
 #### `videos` — 動画基本情報
 
@@ -2058,15 +2039,20 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 |---|---|---|
 | `job_id` | TEXT PK | UUID |
 | `job_type` | TEXT | "upload" / "generate" / "analytics_import" など |
+| `profile_id` | TEXT | ジョブ投入時の channel profile ID |
 | `status` | TEXT | "queued" / "running" / "success" / "failed" / "cancelled" |
 | `progress_text` | TEXT | 最新進捗メッセージ |
 | `started_at` / `finished_at` | TEXT | JST ISO 8601 |
 | `logs_json` | TEXT | `[{time, tag, message}, ...]` の JSON 配列 |
 | `result_json` | TEXT | 結果 JSON |
 | `error` | TEXT | エラーメッセージ |
+| `params_json` | TEXT | ジョブ実行パラメータ |
+| `cancel_requested` | INTEGER | 0/1。キャンセル要求フラグ |
+| `heartbeat_at` | TEXT | runner が更新する最終生存時刻 |
+| `runner_pid` | INTEGER | 実行中 runner のプロセスID |
 | `created_at` | TEXT | |
 
-保持件数は `JOB_LOG_MAX_JOBS`（既定 300）。古い順に自動削除される。
+保持件数は `JOB_LOG_MAX_JOBS`（既定 300）。古い順に自動削除される。生成・レンダーの `queued` は `workers.runner` が原子的に claim し、起動時に前回セッションで残った未実行 `queued` を `cancelled` に破棄する。
 
 #### `image_generation_failures` — 背景画像生成の失敗記録（v6）
 
@@ -2090,7 +2076,7 @@ YouTube Data API を正としてDBを補完・更新する場合は `sync_youtub
 
 ### `data/settings.db` テーブル定義
 
-テーブル: `channel_profiles` / `encrypted_secrets` / `settings` / `prompt_templates` / `reading_dictionary_entries` / `reading_candidates`
+主なテーブル: `channel_profiles` / `encrypted_secrets` / `settings` / `prompt_templates` / `bgm_assets` / `channel_schedule_settings` / `reading_dictionary_entries` / `reading_candidates`
 
 #### `settings` — アプリ設定
 

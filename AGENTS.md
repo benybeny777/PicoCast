@@ -21,32 +21,31 @@
 - ファイル編集は `Edit` ツール（Claude Code）または `apply_patch`（Codex）を使う。検索はまず `rg` / `rg --files` を使う。
 - **エラーはすべてそのまま例外として上位に伝播させる。`except Exception: pass` / `except Exception: return default` のようなサイレントスキップ・無言フォールバック・無言デフォルト降格は禁止。** 失敗時は原因が分かるエラーとして即中止する。フォールバック処理はユーザーが明示的に許可した場合のみ実装し、その箇所に `# フォールバック許可: 理由` コメントを付ける。
 - ファイルポインタ、ネットワーク接続、画像/動画オブジェクト、subprocess、ブラウザ/GUIハンドルなどのリソースは明示的に解放する。`with`、`close()`、`terminate()`、一時ファイル削除などを使い、長時間処理では不要な大きい参照を手放してメモリも解放する。
-- プロンプトテンプレートは `data/settings.db` の `prompt_templates` テーブルで管理する（DB が正本）。
+- プロンプトテンプレートは `data/settings.db` の `prompt_templates` テーブルを正本にする。
   - テンプレートは `profile_id` 単位で所有。別 profile のテンプレートは使用不可。
   - `template_kind`: `script` / `title` / `meeting` の3種。`(profile_id, template_kind)` 単位でデフォルト1件。
   - 初期データは起動時 `seed_all_profiles()` が `config/prompt_profiles/genres/{genre_profile}/` から投入する。
   - 実行時のプロンプト組み立ては `core/script_prompts.py` が DB テンプレートから直接行う（ファイル読み込みなし）。
   - テンプレートが DB に未登録なら RuntimeError（フォールバックなし）。
   - 編集は設定画面「テンプレート」タブ または `POST /api/prompt-templates` で行う。
-- `config/prompt_profiles/genres/{genre_profile}/` はテンプレート seed 用ファイル置き場（`prompt_profile_loader.py` 経由）。seed 以外では参照しない。
-- プロンプトテンプレートは DB を正本とし、ファイルは初期 seed 用としてのみ扱う。
-- genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
+- `config/prompt_profiles/genres/{genre_profile}/` はテンプレート seed 用ファイル置き場（`prompt_profile_loader.py` 経由）。実行時プロンプトでは参照しない。
+- genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバックは禁止。
 - 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。必ず `config/config.py` に `os.environ.get(...)` 付きで定数として定義する。ループインデックスや内部カウンタなど実装上の定数は対象外。
 - `config/config.py` の各定数には必ず末尾コメント（`# 説明`）を付ける。新規追加・変更時もコメントを省略しない。
 - native立ち絵に表情PNG（`expression` 指定）を使用している場合、口パク・まばたきの差分オーバーレイを同セグメントで無効化する。表情PNGはPSDから合成した専用口・目レイヤーを含むため、base.pngとの差分オーバーレイと重ねると二重口・二重目が生じる。
 詳細仕様は [SPEC.md](SPEC.md) を参照。ここには作業上の注意点だけを書く。
 
-## チャンネルプロファイル管理
+## チャンネルプロファイル・DB正本
 
-- 複数チャンネル・ジャンルは `channel_profiles` テーブル（`data/settings.db`）で管理する。is_active=1 が active profile。
-- `profile_id` / `genre_profile` / `output_root` はチャンネルハンドルから `@` を除いた値に統一する。既存値が違う場合は関連テーブルと output フォルダも移行する。
-- すべての出力パス・metadata.db・プロンプト・Analytics・再生リストは active profile を基準に解決する。
+- 複数チャンネル・ジャンルは `data/settings.db:channel_profiles` で管理する。`is_active=1` が active profile。
+- `profile_id` / `genre_profile` / `output_root` はチャンネルハンドルから `@` を除いた値に統一する。既存値が違う場合は関連テーブル・prompt seed フォルダ・output フォルダも移行する。
+- 動画生成・履歴・画像確認・再レンダー・アップロード候補・Analytics・固定コメント・スケジュール・再生リストは active profile の `output_root` 配下だけを参照する。
 - 特定チャンネル名・ハンドル・URLをコードにハードコードしない。未設定時に特定チャンネルへフォールバックしない。
-- `require_active_profile()` は未設定なら例外。`get_active_profile()` なら None。フォールバックで food_trivia や default を使わない。
-- 別 profile の output_root へのアクセスは `safe_output_path()` が 403 で拒否する。profile 間で output が混ざることを防ぐ。
-- genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバック禁止。
-- APIキー（`google_api_key` / `openai_api_key` / `hf_token`）・YouTube client_secrets・OAuth token（`youtube_upload_token` / `youtube_analytics_token`）は profile_id 単位で encrypted_secrets に保存する。
-- BGM は `data/settings.db` の `bgm_assets` テーブルで profile_id 単位に管理する。旧 `BGM_FILE` は初回移行用としてのみ扱い、生成・再レンダー時は `profile_default` / `selected` / `none` の明示指定を使う。
+- `require_active_profile()` は未設定なら例外。`get_active_profile()` は未設定時のみ None。food_trivia や default へのフォールバックを書かない。
+- 別 profile の `output_root` へのアクセスは `web_app/security.py:safe_output_path()` が 403 で拒否する。
+- APIキー（`google_api_key` / `openai_api_key` / `hf_token`）・YouTube client_secrets・OAuth token（`youtube_upload_token` / `youtube_analytics_token`）は profile_id 単位で `encrypted_secrets` に保存する。
+- BGM は `data/settings.db:bgm_assets` で profile_id 単位に管理する。生成・再レンダー時は `profile_default` / `selected` / `none` の明示指定を使う。
+- よみがな辞書は全チャンネル共通（プロファイル非依存）。`data/settings.db` の `reading_dictionary_entries` / `reading_candidates` が正本で、JSON ファイルや `output/{profile_id}/` 配下へ戻さない。
 
 ## Web UI 作業時の注意点
 
@@ -57,10 +56,10 @@
 - DB 復号失敗・master key 取得失敗は例外を上位に伝播させる（フォールバック禁止）。
 - OAuth refresh 後のトークンは `save_secret()` で DB へ再保存する。`token.json` / `token_analytics.json` を恒久ファイルとして新規作成しない。
 - Web UI を唯一の操作入口とする。`workers/main.py` は生成パイプラインとしてのみ使う。
-- 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。
+- 長時間処理はすべて `job_manager.py` でジョブ化する。HTTPリクエスト内で直接待たない。生成・レンダーは Web プロセスで実行せず、`metadata.db:jobs` に queued 登録して `workers.runner` が `profile_id` を固定して実行する。
 - output/ 配下のファイルアクセスは `security.py: safe_output_path()` を必ず通す。
 - 履歴フォルダ名（`history_name`）から実体パスを引くときは `security.py: find_history_dir()` に統一する（`videos/` → `000_uploaded/` の順で解決）。テーマフォルダは `output_root` 直下ではなく `videos/`・`000_uploaded/` 配下にあるため、`safe_output_path(history_name)`（base=`output_root`）で直接引かない。
-- 台本本文の正本は `metadata.db` の `videos.script_content`。**`script.txt` ファイルは生成も参照もしない**。生成時は `sync_folder_to_db(theme_dir, script_content=...)` で DB に直接保存し、台本を読む処理（再生成・レンダー・アップロード・表示・is_shorts・CTAカウント）は `metadata_db.get_script_content(local_id)` を使う。既存フォルダの取り込み時に限り後方互換で `script.txt` を読んでよい。`videos.output_dir` は `sync_folder_to_db()` のたびに実体パスへ更新する。
+- 台本本文の正本は `metadata.db` の `videos.script_content`。**`script.txt` ファイルは生成も参照もしない**。生成時は `save_script_content()` / `sync_folder_to_db(theme_dir, script_content=...)` で DB に保存し、台本を読む処理（再生成・レンダー・アップロード・表示・is_shorts・CTAカウント）は `metadata_db.get_script_content(local_id)` を使う。既存フォルダの取り込み時に限り後方互換で `script.txt` を読んでよい。`videos.output_dir` は `sync_folder_to_db()` のたびに実体パスへ更新する。
 - 破壊的操作（アップロード・固定コメント・スケジュール変更）は `confirmed=true` 必須 + 画面確認ダイアログ必須。
 - 画像手動差し替え・復元は `confirmed=true` 必須。元画像は `000_backups/image_replacements/` に退避し、履歴は active profile の `metadata.db:image_replacements` に記録する。
 - 実装が不安定な機能は `[DISABLED]` / `[dry-run]` として画面とコードコメントに明記し、無効ではなくユーザーに理由を提示する。
@@ -72,16 +71,14 @@
 
 - Web UIヘッダーに現在の active channel profile（チャンネル名 / ハンドル）を常時表示する。
 - Web UI上で登録済み channel profile をいつでも切り替えられること。1つのWeb UIで複数プロファイルを選択・切替できることが完了条件であり、cloneごとに1プロファイルを固定する運用だけでは不十分。
-- チャンネル切替後、以下はすべて active profile 基準に切り替わること：履歴・生成・プロンプト・アップロード候補・Analytics・固定コメント・スケジュール・再生リスト。
 - 固定コメントの手動画面は active profile 基準。自動投稿ウォッチャーのみ `AUTO_FIXED_COMMENT_PROFILE_SCOPE` に従い、`all` の場合は全 channel profile の metadata.db と profile_id 別 YouTube OAuth token を巡回する。
 - active profile 未設定時は YouTube操作とプロンプト生成を禁止する（`require_active_profile()` で例外）。
-- 別 profile の `output_root` へのアクセスは `security.py: safe_output_path()` が 403 で拒否する。profile 間で output が混ざることを防ぐ。
 
 ## プロジェクト概要
 
 複数のYouTubeチャンネル向けに、台本生成・VOICEVOX音声・画像生成・native MP4・YouTubeアップロード・Analytics確認までを行うローカルWebツール。
-「食べ物雑学堂」「都市伝説」などは channel profile の一例。チャンネル固有の設定はすべて channel_profiles テーブルで管理する。
-台本 → VOICEVOX音声 → Nano Banana背景画像 → native MP4 → YouTubeアップロード。
+チャンネル固有の設定はすべて channel profile と関連DBテーブルで管理する。
+台本 → VOICEVOX音声 → Nano Banana / Stable Diffusion WebUI 画像 → native MP4 → YouTubeアップロード。
 
 ## 実行環境
 
@@ -123,15 +120,12 @@ output/{profile_id}/          ← active profile の output_root
 │       └── backgrounds/
 ├── 000_uploaded/             ← アップロード済みアーカイブ（履歴にも表示）
 ├── 000_backups/              ← 生成時のフォルダバックアップ
+├── 000_assets/               ← profile 別BGMなどの登録済み素材
 └── 000_data/
     └── metadata.db           ← 動画メタ・youtube_status・Analytics・ジョブ履歴（正本）
 ```
 
-動画生成・履歴・画像確認・再レンダー・アップロード候補・Analytics・固定コメント・スケジュールは、必ず active profile の `output_root` 配下だけを参照する。別 profile の `output_root` へのアクセスは `safe_output_path()` が拒否する。
-
-生成・レンダーは Web プロセスで直接実行しない。Web は `jobs` へ queued 登録し、`workers.runner` が `profile_id` を固定して実行する。ジョブ登録時は必ず `profile_id` を保存し、runner 内では `core.channel_profile.profile_context(profile_id)` を使って profile 混線を防ぐ。
-
-**例外: よみがな辞書は全チャンネル共通（プロファイル非依存）。** `data/settings.db` の `reading_dictionary_entries` / `reading_candidates` テーブルで管理し、`output/{profile_id}/` 配下に分けない。チャンネル別にしないこと（登録した読みは全チャンネルで共有する仕様）。よみがな辞書・自動学習辞書・候補を JSON ファイルへ戻さない。
+profile 別出力と共通DBの扱いは「チャンネルプロファイル・DB正本」に従う。
 
 ## 重要な規約・注意点
 

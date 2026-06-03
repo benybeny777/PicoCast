@@ -50,6 +50,7 @@
    ./start.command
    ```
 3. 自動的にブラウザが立ち上がり、システムにアクセスできます。
+4. Web UI起動時に job-runner も自動起動します。runner は `metadata.db` のキューを監視し、Webとは別プロセスで生成・レンダーを実行します。
 
 > [!TIP]
 > 開発時（ソース変更を即時反映したい場合）は `start-dev.ps1` / `start-dev.command` を使ってください。
@@ -63,7 +64,7 @@ graph TD
     A[台本入力] --> B[LLMによる品質レビュー]
     B -->|品質クリア| C[よみがな正規化]
     C --> D[音声生成 VOICEVOX]
-    C --> E[画像生成 Gemini/SD WebUI]
+    C --> E[画像生成 Nano Banana/SD WebUI]
     D --> F[ネイティブレンダリング ffmpeg]
     E --> F
     F --> G[YouTube予約アップロード]
@@ -98,7 +99,7 @@ graph TD
 | **VOICEVOX** | 音声合成 | デフォルトポート `50021` |
 | **ffmpeg** | 動画レンダリング | `h264_nvenc`（GPU）または `libx264`（CPU）|
 | **Ollama** | 品質レビュー等 | デフォルトモデル: `qwen3:8b` |
-| **Google AI Studio** | 台本・画像生成 | `GOOGLE_API_KEY` 必須 |
+| **Google AI Studio** | 台本・Gemini画像生成 | APIキーは設定画面で登録 |
 
 ---
 
@@ -136,7 +137,7 @@ pip install --upgrade -r config/requirements.txt
 | **YouTube Client Secrets** | OAuth クライアント情報（JSON文字列） |
 
 > [!IMPORTANT]
-> OAuthやAPIキーを含んだファイル（`.env` 等）は **絶対に Git にコミットしないでください**。
+> OAuthやAPIキーを含んだファイル（`.env` 等）は **絶対に Git にコミットしないでください**。認証情報の正本は `data/settings.db` の暗号化テーブルです。
 
 ### Step 3. YouTube OAuth 認証
 
@@ -230,9 +231,10 @@ pip install --upgrade -r config/requirements.txt
 | 種別 | 保存場所 |
 |:---|:---|
 | 設定・プロンプト・BGM・**認証情報（暗号化）** | `data/settings.db` |
-| 動画メタ・YouTube状態・Analytics・ジョブ履歴 | `output/{channel}/000_data/metadata.db` |
-| 生成物（MP4 / 背景 / サムネ / 音声） | `output/{channel}/videos/{テーマ名}/` |
-| アップロード済みアーカイブ | `output/{channel}/000_uploaded/{テーマ名}/` |
+| 動画メタ・YouTube状態・Analytics・ジョブ履歴 | `output/{profile_id}/000_data/metadata.db` |
+| 生成物（MP4 / 背景 / サムネ / 音声） | `output/{profile_id}/videos/{テーマ名}/` |
+| アップロード済みアーカイブ | `output/{profile_id}/000_uploaded/{テーマ名}/` |
+| profile別登録素材（BGMなど） | `output/{profile_id}/000_assets/` |
 | よみがな辞書・自動学習候補（**全チャンネル共通**） | `data/settings.db` (`reading_dictionary_entries` / `reading_candidates`) |
 | デバッグログ | `output/000_data/debug_logs/app_debug_web.log` / `app_debug_runner.log` |
 

@@ -4,6 +4,16 @@
 
 ---
 
+## 2026-06-03
+
+### ドキュメントを現行runner・DB正本仕様へ整理
+
+- README / MANUAL / SPEC / AGENTS の旧仕様・重複説明を整理し、生成・レンダーは別プロセスの `workers.runner` が `metadata.db:jobs` を処理する運用へ統一した。
+- SPEC のスキーマ版数を v7 に更新し、`jobs` の `profile_id` / `params_json` / `cancel_requested` / `heartbeat_at` / `runner_pid` を明記した。
+- 旧 `.env` チャンネル設定例や古い尺推定値を削除し、チャンネル登録は `channel_profiles`、台本本文は `videos.script_content`、設定は `data/settings.db` 優先という現行仕様へ揃えた。
+
+---
+
 ## 2026-06-02
 
 ### 履歴詳細の音声・背景件数を「生成済み / 期待数」表示に変更
