@@ -127,6 +127,11 @@ def api_current_channel():
 @router.post("")
 def api_create_channel(req: ChannelProfileRequest):
     """プロファイルを作成する。"""
+    try:
+        from core.license_manager import assert_profile_limit_for_create
+        assert_profile_limit_for_create()
+    except RuntimeError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     derived_profile_id = profile_id_from_handle(req.channel_handle)
     profile = ChannelProfile(
         profile_id=derived_profile_id,
@@ -233,3 +238,10 @@ def api_prompt_profiles_redirect():
     """利用可能な genre_profile 一覧（/api/channels エンドポイント内）。"""
     from core.prompt_profile_loader import list_available_genre_profiles
     return {"genre_profiles": list_available_genre_profiles()}
+
+
+@router.get("/product-seed-profiles")
+def api_product_seed_profiles():
+    """製品版初期セットアップ用の seed profile 一覧。"""
+    from core.prompt_profile_loader import list_product_seed_profiles
+    return {"genre_profiles": list_product_seed_profiles()}

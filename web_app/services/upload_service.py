@@ -73,6 +73,10 @@ def list_upload_candidates() -> list[dict[str, Any]]:
 
 
 def submit_upload_job(history_name: str) -> str:
+    from core.setup_state import require_setup_completed_for
+    from core.license_manager import assert_can_upload
+    require_setup_completed_for("YouTubeアップロード")
+    assert_can_upload()
     if ".." in history_name:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="無効な履歴名です")

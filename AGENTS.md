@@ -21,14 +21,16 @@
 - ファイル編集は `Edit` ツール（Claude Code）または `apply_patch`（Codex）を使う。検索はまず `rg` / `rg --files` を使う。
 - **エラーはすべてそのまま例外として上位に伝播させる。`except Exception: pass` / `except Exception: return default` のようなサイレントスキップ・無言フォールバック・無言デフォルト降格は禁止。** 失敗時は原因が分かるエラーとして即中止する。フォールバック処理はユーザーが明示的に許可した場合のみ実装し、その箇所に `# フォールバック許可: 理由` コメントを付ける。
 - ファイルポインタ、ネットワーク接続、画像/動画オブジェクト、subprocess、ブラウザ/GUIハンドルなどのリソースは明示的に解放する。`with`、`close()`、`terminate()`、一時ファイル削除などを使い、長時間処理では不要な大きい参照を手放してメモリも解放する。
+- 初期データ類は `config/SEED/` 配下へ集約する。製品版として配布するテンプレート・初期パックは `config/SEED/prompt_packs/product/` に置き、チャンネル固有の勝ちプロンプト・実績入りテンプレート・ユーザー固有データを混ぜない。
 - プロンプトテンプレートは `data/settings.db` の `prompt_templates` テーブルを正本にする。
   - テンプレートは `profile_id` 単位で所有。別 profile のテンプレートは使用不可。
   - `template_kind`: `script` / `title` / `meeting` の3種。`(profile_id, template_kind)` 単位でデフォルト1件。
-  - 初期データは起動時 `seed_all_profiles()` が `config/prompt_profiles/genres/{genre_profile}/` から投入する。
+  - 初期データは起動時 `seed_all_profiles()` が seed 用テンプレートファイルから投入する。製品版初期データは `config/SEED/prompt_packs/product/{seed_profile}/`、既存チャンネル互換データは `config/prompt_profiles/genres/{genre_profile}/` を使う。
   - 実行時のプロンプト組み立ては `core/script_prompts.py` が DB テンプレートから直接行う（ファイル読み込みなし）。
   - テンプレートが DB に未登録なら RuntimeError（フォールバックなし）。
   - 編集は設定画面「テンプレート」タブ または `POST /api/prompt-templates` で行う。
-- `config/prompt_profiles/genres/{genre_profile}/` はテンプレート seed 用ファイル置き場（`prompt_profile_loader.py` 経由）。実行時プロンプトでは参照しない。
+- `config/SEED/prompt_packs/product/{seed_profile}/` は製品版初期データ置き場。`/setup` のジャンル選択にはここだけを表示する。
+- `config/prompt_profiles/genres/{genre_profile}/` は既存チャンネル互換のテンプレート seed 用ファイル置き場（`prompt_profile_loader.py` 経由）。実行時プロンプトでは参照しない。
 - genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバックは禁止。
 - 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。必ず `config/config.py` に `os.environ.get(...)` 付きで定数として定義する。ループインデックスや内部カウンタなど実装上の定数は対象外。
 - `config/config.py` の各定数には必ず末尾コメント（`# 説明`）を付ける。新規追加・変更時もコメントを省略しない。

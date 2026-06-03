@@ -107,6 +107,35 @@ def _native_output_path(output_dir: str) -> str:
     return os.path.join(output_dir, f"{_safe_output_stem(output_dir)}_native.mp4")
 
 
+def _drawtext_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
+
+
+def _apply_trial_watermark(output_path: str, width: int, height: int, progress_callback=None) -> None:
+    from core.license_manager import should_watermark
+    if not should_watermark():
+        return
+    tmp_path = output_path + ".watermark.mp4"
+    text = _drawtext_escape("Native Video Factory Trial")
+    font_size = max(18, int(min(width, height) * 0.025))
+    vf = (
+        "drawtext="
+        f"text='{text}':"
+        f"x=w-tw-24:y=h-th-24:fontsize={font_size}:"
+        "fontcolor=white@0.72:box=1:boxcolor=black@0.35:boxborderw=8"
+    )
+    if progress_callback:
+        progress_callback("🏷 Trial 透かしを追加中...")
+    _run_ffmpeg([
+        FFMPEG_BIN, "-y", "-i", output_path,
+        "-vf", vf,
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-c:a", "copy",
+        tmp_path,
+    ])
+    os.replace(tmp_path, output_path)
+
+
 def _clear_native_work_dir(work_dir: str) -> None:
     if not os.path.isdir(work_dir):
         return
@@ -1286,6 +1315,8 @@ def render_native_test(
             if progress_callback:
                 progress_callback("📦 最終出力中...")
             _run_ffmpeg([FFMPEG_BIN, "-y", "-i", video_path, "-c", "copy", output_path])
+
+    _apply_trial_watermark(output_path, width, height, progress_callback)
 
     actual_duration = media_duration_sec(output_path) or total_audio
     is_shorts = height > width

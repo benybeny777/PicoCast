@@ -24,6 +24,7 @@ class GenerateRequest(BaseModel):
     bgm_mode: str = "profile_default"  # profile_default / selected / none
     bgm_id: str | None = None
     bgm_volume_db: float | None = None
+    setup_test: bool = False
 
     @field_validator("script")
     @classmethod

@@ -10,14 +10,62 @@
 </div>
 
 <div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('config', this)">設定変更</button>
-  <button class="tab-btn" onclick="switchTab('bgm', this)">BGM</button>
-  <button class="tab-btn" onclick="switchTab('apikey', this)">APIキー</button>
-  <button class="tab-btn" onclick="switchTab('dict-base', this)">よみがな辞書</button>
-  <button class="tab-btn" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
-  <button class="tab-btn" onclick="switchTab('admin', this)">管理者設定</button>
+  <button class="tab-btn active" id="tab-btn-config" onclick="switchTab('config', this)">設定変更</button>
+  <button class="tab-btn" id="tab-btn-bgm" onclick="switchTab('bgm', this)">BGM</button>
+  <button class="tab-btn" id="tab-btn-apikey" onclick="switchTab('apikey', this)">APIキー</button>
+  <button class="tab-btn" id="tab-btn-dict-base" onclick="switchTab('dict-base', this)">よみがな辞書</button>
+  <button class="tab-btn" id="tab-btn-sd-models" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
+  <button class="tab-btn" id="tab-btn-admin" onclick="switchTab('admin', this)">管理者設定</button>
+  <button class="tab-btn" id="tab-btn-product" onclick="switchTab('product', this)">製品管理</button>
   <button class="tab-btn" id="tab-btn-channels" onclick="switchTab('channels', this)">チャンネル</button>
   <button class="tab-btn" id="tab-btn-templates" onclick="switchTab('templates', this)">テンプレート</button>
+</div>
+
+<!-- ── タブ: 製品管理 ── -->
+<div id="tab-product" class="tab-panel">
+  <div class="card">
+    <h2>設定モード</h2>
+    <table class="status-table">
+      <tr><th>通常モード</th><td>チャンネル / APIキー / BGM / テンプレート / 画像エンジン選択</td></tr>
+      <tr><th>詳細モード</th><td>音声速度 / ジョブ並列数 / Stable Diffusion WebUI 詳細</td></tr>
+      <tr><th>開発者モード</th><td>DB診断 / マイグレーション / 危険操作 / デバッグ</td></tr>
+    </table>
+  </div>
+  <div class="card">
+    <h2>ライセンス</h2>
+    <div id="license-status" class="hint">読み込み中...</div>
+    <div class="form-row mt">
+      <select id="license-edition" class="form-input" style="width:160px">
+        <option value="trial">trial</option>
+        <option value="personal">personal</option>
+        <option value="pro">pro</option>
+        <option value="studio">studio</option>
+      </select>
+      <input id="license-id" class="form-input" style="width:260px" placeholder="ライセンスID（任意）">
+      <button class="btn btn-primary" onclick="saveLicense()">保存</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>診断パッケージ</h2>
+    <p class="hint">秘密情報・台本本文・生成物を含まないZIPを作成します。</p>
+    <button class="btn btn-secondary" onclick="createDiagnostics()">診断パッケージ作成</button>
+    <div id="diagnostics-result" class="hint mt"></div>
+  </div>
+  <div class="card">
+    <h2>バックアップ / 復元</h2>
+    <button class="btn btn-secondary" onclick="createBackup()">バックアップ作成</button>
+    <div class="form-row mt">
+      <input id="restore-path" class="form-input" style="width:520px" placeholder="復元する backup_*.zip のパス">
+      <button class="btn btn-danger" onclick="restoreBackup()">復元</button>
+    </div>
+    <div id="backup-result" class="hint mt"></div>
+  </div>
+  <div class="card">
+    <h2>初回セットアップ</h2>
+    <button class="btn btn-secondary" onclick="location.href='/setup'">/setup を開く</button>
+    <button class="btn btn-primary" onclick="markSetupComplete()">セットアップ完了にする</button>
+    <div id="setup-admin-result" class="hint mt"></div>
+  </div>
 </div>
 
 <!-- ── タブ: 設定変更 ── -->
@@ -437,6 +485,57 @@ function switchTab(name, btn) {
   if (name === 'channels' && !_chLoaded) chLoadChannels();
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
+  if (name === 'product') loadProductStatus();
+}
+
+async function loadProductStatus() {
+  try {
+    const res = await fetch('/api/settings/license');
+    const data = await res.json();
+    document.getElementById('license-edition').value = data.edition || 'trial';
+    document.getElementById('license-status').textContent = `edition=${data.edition}, registered=${data.registered}, limits=${JSON.stringify(data.limits)}`;
+  } catch(e) {
+    document.getElementById('license-status').textContent = 'ライセンス状態の取得に失敗: ' + e;
+  }
+}
+
+async function saveLicense() {
+  const body = {
+    edition: document.getElementById('license-edition').value,
+    license_id: document.getElementById('license-id').value,
+  };
+  const res = await fetch('/api/settings/license', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  if (!res.ok) { showToast('ライセンス保存失敗: ' + (data.detail || ''), true); return; }
+  showToast('ライセンスを保存しました', false);
+  await loadProductStatus();
+}
+
+async function createDiagnostics() {
+  const res = await fetch('/api/settings/diagnostics', {method:'POST'});
+  const data = await res.json();
+  document.getElementById('diagnostics-result').textContent = res.ok ? `作成しました: ${data.path}` : (data.detail || '作成失敗');
+}
+
+async function createBackup() {
+  const res = await fetch('/api/settings/backup', {method:'POST'});
+  const data = await res.json();
+  document.getElementById('backup-result').textContent = res.ok ? `作成しました: ${data.path}` : (data.detail || '作成失敗');
+}
+
+async function restoreBackup() {
+  const backup_path = document.getElementById('restore-path').value.trim();
+  if (!backup_path) { showToast('復元するZIPパスを入力してください', true); return; }
+  if (!confirm('現在の settings.db と metadata.db を退避してから復元します。続行しますか？')) return;
+  const res = await fetch('/api/settings/restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({backup_path, confirmed:true})});
+  const data = await res.json();
+  document.getElementById('backup-result').textContent = res.ok ? `復元しました: ${data.restored}` : (data.detail || '復元失敗');
+}
+
+async function markSetupComplete() {
+  const res = await fetch('/api/settings/setup', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({completed:true})});
+  const data = await res.json();
+  document.getElementById('setup-admin-result').textContent = data.completed ? 'セットアップ完了にしました' : '未完了です';
 }
 
 function authBadge(label, ok) {
@@ -1291,12 +1390,6 @@ async function chDelete(profileId) {
   } catch(e) { chShowStatus('通信エラー: ' + e, true); }
 }
 
-// URL ハッシュ #channels でチャンネルタブを自動選択
-if (window.location.hash === '#channels') {
-  const btn = document.getElementById('tab-btn-channels');
-  if (btn) switchTab('channels', btn);
-}
-
 /* ══════════════════════════════════════════════
    テンプレート管理タブ
 ══════════════════════════════════════════════ */
@@ -1490,10 +1583,12 @@ async function tmplDelete(templateId, name) {
   } catch(e) { showToast('通信エラー: ' + e, true); }
 }
 
-// URL ハッシュ #templates でテンプレートタブを自動選択
-if (window.location.hash === '#templates') {
-  const btn = document.getElementById('tab-btn-templates');
-  if (btn) switchTab('templates', btn);
+// URL ハッシュで設定画面の各タブを自動選択
+const hashTab = window.location.hash ? window.location.hash.slice(1) : '';
+const knownHashTabs = new Set(['config', 'bgm', 'apikey', 'dict-base', 'sd-models', 'admin', 'product', 'channels', 'templates']);
+if (knownHashTabs.has(hashTab)) {
+  const btn = document.getElementById(`tab-btn-${hashTab}`);
+  if (btn) switchTab(hashTab, btn);
 }
 </script>
 {% endblock %}

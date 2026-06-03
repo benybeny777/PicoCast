@@ -40,6 +40,11 @@ def api_analytics_long_title_prompt():
 
 @router.post("/refresh")
 def api_analytics_refresh():
+    try:
+        from core.license_manager import assert_can_use_analytics
+        assert_can_use_analytics()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     job_id = submit_refresh_job()
     return {"job_id": job_id, "status": "queued"}
 
@@ -50,6 +55,11 @@ def api_analytics_retention(
     duration: int = Query(..., ge=1),
 ):
     """指定動画の視聴者維持率を取得して分析結果を返す。"""
+    try:
+        from core.license_manager import assert_can_use_analytics
+        assert_can_use_analytics()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     from datetime import datetime, timedelta, timezone
     from core.youtube_analytics import fetch_audience_retention
     from core.retention_analysis import analyze_retention

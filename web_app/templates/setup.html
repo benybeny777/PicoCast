@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}初回セットアップ{% endblock %}
+{% block content %}
+<h1>初回セットアップ</h1>
+
+<div class="card">
+  <h2>1. チャンネル</h2>
+  <div class="form-row">
+    <div class="form-group">
+      <label>チャンネル名</label>
+      <input id="setup-channel-name" class="form-input" placeholder="チャンネル名">
+    </div>
+    <div class="form-group">
+      <label>ハンドル</label>
+      <input id="setup-channel-handle" class="form-input" placeholder="@your_channel">
+    </div>
+    <div class="form-group">
+      <label>初期ジャンル</label>
+      <select id="setup-genre" class="form-input"></select>
+    </div>
+  </div>
+  <button class="btn btn-primary" onclick="setupCreateChannel()">チャンネルを保存</button>
+  <div id="setup-channel-result" class="hint mt"></div>
+</div>
+
+<div class="card">
+  <h2>2. APIキー</h2>
+  <p class="hint">APIキーは設定画面で暗号化保存します。値はこの画面やログには表示しません。</p>
+  <a class="btn btn-secondary" href="/settings#apikey">APIキー設定を開く</a>
+</div>
+
+<div class="card">
+  <h2>3. 外部サービス診断</h2>
+  <button class="btn btn-secondary" onclick="setupRefreshStatus()">再診断</button>
+  <pre id="setup-status" class="log-box mt">{{ status | tojson(indent=2) }}</pre>
+</div>
+
+<div class="card">
+  <h2>4. BGM</h2>
+  <p class="hint">BGMはチャンネル別に登録されます。</p>
+  <a class="btn btn-secondary" href="/settings#bgm">BGM設定を開く</a>
+</div>
+
+<div class="card">
+  <h2>5. サンプル台本テスト</h2>
+  <textarea id="setup-sample-script" class="form-input" rows="10">動画形式: Shorts
+タイトル: セットアップテスト動画
+サムネ文字: テスト
+説明文: セットアップ確認用です。
+タグ: テスト,VOICEVOX
+再生リスト: テスト
+固定コメント: セットアップ確認です。
+
+ずんだもん: これはセットアップ確認用の短い台本なのだ。
+四国めたん: 本番前に動くか見るだけですわね。
+ずんだもん: 音声と画像とレンダーの流れを確認するのだ。
+四国めたん: 失敗したらログを見る、基本ですわ。
+ずんだもん: まずチャンネル設定が保存されているか確認するのだ。
+四国めたん: 名前だけ入れて満足したら事故りますわ。
+ずんだもん: 次にAPIキーの登録状態を見るのだ。
+四国めたん: 値は表示しない、そこはちゃんとしてますわね。
+ずんだもん: VOICEVOXが動けば音声が作れるのだ。
+四国めたん: 起動してないなら当然しゃべれませんわ。
+ずんだもん: ffmpegがあれば動画にまとめられるのだ。
+四国めたん: ここで詰まるとMP4は生まれませんわ。
+ずんだもん: Ollamaは台本チェックで使うのだ。
+四国めたん: 賢そうな顔で止まってたら意味ないですわ。
+ずんだもん: 画像エンジンも疎通確認しておくのだ。
+四国めたん: 背景なし動画はさすがに寂しいですわね。
+ずんだもん: BGMを登録すれば雰囲気も整うのだ。
+四国めたん: 音量だけは大きすぎ注意ですわ。
+ずんだもん: このテストで一連の流れを確認するのだ。
+四国めたん: 本番前の点検としては悪くないですわ。
+ずんだもん: 問題が出たら診断パッケージを作るのだ。
+四国めたん: 秘密情報を入れないのが大事ですわ。
+ずんだもん: 準備ができたら本番の台本に進むのだ。
+四国めたん: では製品版らしく、落ち着いて始めますわ。</textarea>
+  <button class="btn btn-primary" onclick="setupTestGenerate()">テスト生成ジョブを登録</button>
+  <div id="setup-generate-result" class="hint mt"></div>
+</div>
+
+<div class="card">
+  <h2>完了</h2>
+  <p class="hint">完了後、生成とアップロードのブロックが解除されます。</p>
+  <button class="btn btn-primary" onclick="setupComplete()">セットアップ完了</button>
+  <div id="setup-complete-result" class="hint mt"></div>
+</div>
+
+<script>
+async function setupLoadGenres() {
+  const res = await fetch('/api/channels/product-seed-profiles');
+  const data = await res.json();
+  const sel = document.getElementById('setup-genre');
+  sel.innerHTML = (data.genre_profiles || []).map(g => `<option value="${g}">${g}</option>`).join('');
+}
+async function setupCreateChannel() {
+  const body = {
+    channel_name: document.getElementById('setup-channel-name').value,
+    channel_handle: document.getElementById('setup-channel-handle').value,
+    genre_profile: document.getElementById('setup-genre').value,
+    output_root: '',
+    default_hashtags: '',
+    channel_theme: '',
+    channel_accent_color: '#4a5568'
+  };
+  const res = await fetch('/api/channels', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  document.getElementById('setup-channel-result').textContent = res.ok ? `保存しました: ${data.saved}` : (data.detail || '保存失敗');
+  if (res.ok) await fetch(`/api/channels/${data.saved}/activate`, {method:'POST'});
+}
+async function setupRefreshStatus() {
+  const res = await fetch('/api/settings/status/refresh', {method:'POST'});
+  document.getElementById('setup-status').textContent = JSON.stringify(await res.json(), null, 2);
+}
+async function setupTestGenerate() {
+  const script = document.getElementById('setup-sample-script').value;
+  const res = await fetch('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({script, with_render:false, setup_test:true})});
+  const data = await res.json();
+  document.getElementById('setup-generate-result').textContent = res.ok ? `ジョブ登録: ${(data.job_ids || []).join(', ')}` : (data.detail || '登録失敗');
+}
+async function setupComplete() {
+  const res = await fetch('/api/settings/setup', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({completed:true})});
+  const data = await res.json();
+  document.getElementById('setup-complete-result').textContent = data.completed ? 'セットアップ完了。通常画面へ移動できます。' : '未完了です';
+  if (data.completed) setTimeout(() => location.href='/', 600);
+}
+setupLoadGenres();
+</script>
+{% endblock %}

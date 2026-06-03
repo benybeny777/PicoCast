@@ -106,6 +106,9 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
     genre_cfg = _load_genre_config(genre_profile)
     display_name = genre_cfg.get("display_name", genre_profile)
     default_hashtags = genre_cfg.get("default_hashtags", "")
+    template_pack = genre_cfg.get("template_pack", f"genre/{genre_profile}")
+    visibility = genre_cfg.get("visibility", "private")
+    product_bundle = genre_cfg.get("product_bundle", "")
 
     script_context = _read_genre_file(genre_profile, "script_context.md")
     title_context  = _read_genre_file(genre_profile, "title_context.md")
@@ -136,6 +139,9 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
         description=f"{display_name}チャンネル向けShorts台本生成テンプレート",
         default_hashtags=default_hashtags,
         default_playlist_category=default_playlist,
+        template_pack=template_pack,
+        visibility=visibility,
+        product_bundle=product_bundle,
         is_default=True,
     )
     created += 1
@@ -151,6 +157,9 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
         description=f"{display_name}チャンネル向けタイトル案生成テンプレート",
         default_hashtags=default_hashtags,
         default_playlist_category=default_playlist,
+        template_pack=template_pack,
+        visibility=visibility,
+        product_bundle=product_bundle,
         is_default=True,
     )
     created += 1
@@ -168,6 +177,9 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
             description=f"{display_name}チャンネル向けネタ会議テンプレート",
             default_hashtags=default_hashtags,
             default_playlist_category=default_playlist,
+            template_pack=template_pack,
+            visibility=visibility,
+            product_bundle=product_bundle,
             is_default=True,
         )
         created += 1

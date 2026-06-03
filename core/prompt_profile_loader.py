@@ -19,6 +19,7 @@ _logger = logging.getLogger(__name__)
 _PROJECT_ROOT = Path(__file__).parent.parent
 _PROFILES_DIR = _PROJECT_ROOT / "config" / "prompt_profiles"
 _GENRES_DIR = _PROFILES_DIR / "genres"
+_PRODUCT_SEED_DIR = _PROJECT_ROOT / "config" / "SEED" / "prompt_packs" / "product"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -50,9 +51,19 @@ def validate_genre_profile_exists(genre_profile: str) -> None:
 
 def list_available_genre_profiles() -> list[str]:
     """利用可能な genre_profile 名のリストを返す。"""
-    if not _GENRES_DIR.is_dir():
+    names: set[str] = set()
+    if _GENRES_DIR.is_dir():
+        names.update(d.name for d in _GENRES_DIR.iterdir() if d.is_dir())
+    if _PRODUCT_SEED_DIR.is_dir():
+        names.update(d.name for d in _PRODUCT_SEED_DIR.iterdir() if d.is_dir())
+    return sorted(names)
+
+
+def list_product_seed_profiles() -> list[str]:
+    """製品版初期セットアップで使う product seed profile 名を返す。"""
+    if not _PRODUCT_SEED_DIR.is_dir():
         return []
-    return sorted(d.name for d in _GENRES_DIR.iterdir() if d.is_dir())
+    return sorted(d.name for d in _PRODUCT_SEED_DIR.iterdir() if d.is_dir())
 
 
 # ─────────────────────────────────────────────────────────────────────────────

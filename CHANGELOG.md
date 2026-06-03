@@ -6,6 +6,14 @@
 
 ## 2026-06-03
 
+### 製品版MVP向けの初回設定・ライセンス・保守機能を追加
+
+- active channel 未作成またはセットアップ未完了の新規環境を `/setup` へ誘導し、チャンネル作成、APIキー登録状態確認、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録、サンプル台本生成を順に進められるようにした。未完了時も設定画面は開けるが、生成・アップロードは明示的にブロックする。
+- `data/settings.db` にライセンス edition を保存し、未登録時は trial として扱うようにした。edition に応じて透かし、1日生成本数、channel profile 数、YouTubeアップロード、Analytics、テンプレート数上限を制御する。
+- 設定画面に製品管理タブを追加し、診断パッケージ作成、バックアップ作成、復元、セットアップ完了状態、ライセンス設定を管理できるようにした。診断ZIPは秘密情報・台本本文・生成動画・画像を含めず、設定値やジョブログはマスクして保存する。
+- バックアップは `data/settings.db` と各 profile の `metadata.db` を対象にし、復元前に現在DBを自動退避する。schema version が安全に扱えない場合は fail closed で中止する。
+- 初期データ類を `config/SEED/` に寄せ、製品版テンプレートパックを `config/SEED/prompt_packs/product/` として分離した。製品版seedには `@zunkami` 食べ物雑学専用テンプレートや実績入りテンプレートを含めない。
+
 ### ドキュメントを現行runner・DB正本仕様へ整理
 
 - README / MANUAL / SPEC / AGENTS の旧仕様・重複説明を整理し、生成・レンダーは別プロセスの `workers.runner` が `metadata.db:jobs` を処理する運用へ統一した。

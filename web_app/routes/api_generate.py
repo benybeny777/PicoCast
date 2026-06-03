@@ -12,10 +12,21 @@ router = APIRouter(prefix="/api/generate", tags=["generate"])
 @router.post("")
 def api_generate(req: GenerateRequest):
     """台本1本分または複数台本の動画生成ジョブを登録する。"""
+    if not req.setup_test:
+        try:
+            from core.setup_state import require_setup_completed_for
+            require_setup_completed_for("動画生成")
+        except RuntimeError as exc:
+            raise HTTPException(status_code=403, detail=str(exc))
     # 複数台本が混在している場合は自動分割してバッチ処理
     scripts = split_scripts(req.script)
     if not scripts:
         raise HTTPException(status_code=400, detail="台本が空です")
+    try:
+        from core.license_manager import assert_can_generate
+        assert_can_generate(len(scripts))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
 
     if len(scripts) == 1:
         job_id = submit_generate_job(
@@ -52,8 +63,18 @@ def api_generate(req: GenerateRequest):
 @router.post("/batch")
 def api_batch_generate(req: BatchGenerateRequest):
     """明示的に複数台本を指定して生成ジョブを登録する。"""
+    try:
+        from core.setup_state import require_setup_completed_for
+        require_setup_completed_for("動画生成")
+    except RuntimeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     if not req.scripts:
         raise HTTPException(status_code=400, detail="台本リストが空です")
+    try:
+        from core.license_manager import assert_can_generate
+        assert_can_generate(len(req.scripts))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     job_ids = submit_batch_generate_jobs(
         req.scripts,
         req.image_style,

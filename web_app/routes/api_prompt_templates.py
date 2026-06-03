@@ -80,6 +80,11 @@ class CloneRequest(BaseModel):
     new_name: str
 
 
+class ImportPackRequest(BaseModel):
+    pack_json: dict
+    confirmed: bool = False
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # エンドポイント
 # ─────────────────────────────────────────────────────────────────────────────
@@ -98,6 +103,11 @@ def api_list_templates(kind: str | None = Query(default=None)):
 def api_create_template(req: CreateTemplateRequest):
     """active profile にテンプレートを作成する。"""
     profile_id = _active_profile_id()
+    try:
+        from core.license_manager import assert_template_limit
+        assert_template_limit(profile_id, adding=1)
+    except RuntimeError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     if req.template_kind not in TEMPLATE_KINDS:
         raise HTTPException(status_code=422, detail=f"template_kind は {TEMPLATE_KINDS} のいずれかで指定してください")
     if not req.template_name.strip():
@@ -118,6 +128,38 @@ def api_create_template(req: CreateTemplateRequest):
             is_default=req.is_default,
         )
         return _tmpl_to_dict(tmpl)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.post("/seed")
+def api_seed():
+    """
+    ファイルから全 channel profile へのテンプレート seed を実行する。
+    既にテンプレートがある profile はスキップする。
+    """
+    from core.prompt_template_seeder import seed_all_profiles
+    results = seed_all_profiles()
+    return {"results": results}
+
+
+@router.get("/export")
+def api_export_templates():
+    """active profile のテンプレートパックを秘密情報なしでエクスポートする。"""
+    from core.template_pack_service import export_template_pack
+    profile_id = _active_profile_id()
+    return export_template_pack(profile_id)
+
+
+@router.post("/import")
+def api_import_templates(req: ImportPackRequest):
+    """テンプレートパックを active profile へインポートする。"""
+    if not req.confirmed:
+        raise HTTPException(status_code=422, detail="confirmed=true が必要です")
+    from core.template_pack_service import import_template_pack
+    profile_id = _active_profile_id()
+    try:
+        return import_template_pack(profile_id, req.pack_json)
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 
@@ -208,17 +250,6 @@ def api_delete_template(template_id: str):
         raise HTTPException(status_code=422, detail=str(e))
 
 
-@router.post("/seed")
-def api_seed():
-    """
-    ファイルから全 channel profile へのテンプレート seed を実行する。
-    既にテンプレートがある profile はスキップする。
-    """
-    from core.prompt_template_seeder import seed_all_profiles
-    results = seed_all_profiles()
-    return {"results": results}
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # シリアライズ
 # ─────────────────────────────────────────────────────────────────────────────
@@ -240,6 +271,9 @@ def _tmpl_to_dict(tmpl) -> dict:
         "description": tmpl.description,
         "default_hashtags": tmpl.default_hashtags,
         "default_playlist_category": tmpl.default_playlist_category,
+        "template_pack": getattr(tmpl, "template_pack", None),
+        "visibility": getattr(tmpl, "visibility", None),
+        "product_bundle": getattr(tmpl, "product_bundle", None),
         "created_at": tmpl.created_at,
         "updated_at": tmpl.updated_at,
     }

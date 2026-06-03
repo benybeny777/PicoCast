@@ -213,6 +213,8 @@ def _ensure_handle_genre_profile(source_genre: str, target_genre: str) -> None:
     if os.path.isdir(target_dir):
         return
     source_dir = os.path.join(genres_dir, source_genre)
+    if not os.path.isdir(source_dir):
+        source_dir = os.path.join(_ROOT, "config", "SEED", "prompt_packs", "product", source_genre)
     if not source_genre or not os.path.isdir(source_dir):
         return
     shutil.copytree(source_dir, target_dir)

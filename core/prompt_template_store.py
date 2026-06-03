@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
     description               TEXT,
     default_hashtags          TEXT,
     default_playlist_category TEXT,
+    template_pack             TEXT NOT NULL DEFAULT 'legacy',
+    visibility                TEXT NOT NULL DEFAULT 'private',
+    product_bundle            TEXT NOT NULL DEFAULT '',
     created_at                TEXT NOT NULL,
     updated_at                TEXT NOT NULL,
     UNIQUE(profile_id, template_name),
@@ -71,8 +74,21 @@ def _open_db() -> sqlite3.Connection:
         stmt = stmt.strip()
         if stmt:
             conn.execute(stmt)
+    _ensure_columns(conn)
     conn.commit()
     return conn
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(prompt_templates)").fetchall()}
+    additions = {
+        "template_pack": "TEXT NOT NULL DEFAULT 'legacy'",
+        "visibility": "TEXT NOT NULL DEFAULT 'private'",
+        "product_bundle": "TEXT NOT NULL DEFAULT ''",
+    }
+    for col, ddl in additions.items():
+        if col not in cols:
+            conn.execute(f"ALTER TABLE prompt_templates ADD COLUMN {col} {ddl}")
 
 
 def _now() -> str:
@@ -104,6 +120,9 @@ class PromptTemplate:
     description: str | None
     default_hashtags: str | None
     default_playlist_category: str | None
+    template_pack: str
+    visibility: str
+    product_bundle: str
     created_at: str
     updated_at: str
 
@@ -126,6 +145,9 @@ class PromptTemplate:
             description=d.get("description"),
             default_hashtags=d.get("default_hashtags"),
             default_playlist_category=d.get("default_playlist_category"),
+            template_pack=d.get("template_pack") or "legacy",
+            visibility=d.get("visibility") or "private",
+            product_bundle=d.get("product_bundle") or "",
             created_at=d["created_at"],
             updated_at=d["updated_at"],
         )
@@ -191,6 +213,9 @@ def create_template(
     description: str | None = None,
     default_hashtags: str | None = None,
     default_playlist_category: str | None = None,
+    template_pack: str = "legacy",
+    visibility: str = "private",
+    product_bundle: str = "",
     is_default: bool = False,
     is_enabled: bool = True,
 ) -> PromptTemplate:
@@ -213,12 +238,13 @@ def create_template(
                    (template_id, profile_id, template_name, template_kind, genre_profile,
                     is_default, is_enabled, system_rules, script_rules, title_rules,
                     meeting_rules, ng_rules, description, default_hashtags,
-                    default_playlist_category, created_at, updated_at)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    default_playlist_category, template_pack, visibility, product_bundle,
+                    created_at, updated_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (template_id, profile_id, template_name, template_kind, genre_profile,
                  int(is_default), int(is_enabled), system_rules, script_rules, title_rules,
                  meeting_rules, ng_rules, description, default_hashtags,
-                 default_playlist_category, now, now),
+                 default_playlist_category, template_pack, visibility, product_bundle, now, now),
             )
             conn.commit()
             row = conn.execute(
@@ -242,6 +268,9 @@ def update_template(
     description: str | None = None,
     default_hashtags: str | None = None,
     default_playlist_category: str | None = None,
+    template_pack: str | None = None,
+    visibility: str | None = None,
+    product_bundle: str | None = None,
     is_enabled: bool | None = None,
 ) -> PromptTemplate:
     """active profile 所属のテンプレートだけ更新できる。"""
@@ -276,6 +305,12 @@ def update_template(
                 updates["default_hashtags"] = default_hashtags
             if default_playlist_category is not None:
                 updates["default_playlist_category"] = default_playlist_category
+            if template_pack is not None:
+                updates["template_pack"] = template_pack
+            if visibility is not None:
+                updates["visibility"] = visibility
+            if product_bundle is not None:
+                updates["product_bundle"] = product_bundle
             if is_enabled is not None:
                 updates["is_enabled"] = int(is_enabled)
 
@@ -359,6 +394,9 @@ def clone_template(template_id: str, target_profile_id: str, new_name: str) -> P
         description=src.description,
         default_hashtags=src.default_hashtags,
         default_playlist_category=src.default_playlist_category,
+        template_pack=src.template_pack,
+        visibility=src.visibility,
+        product_bundle=src.product_bundle,
         is_default=False,
         is_enabled=src.is_enabled,
     )

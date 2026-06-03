@@ -196,6 +196,16 @@ def page_settings(request: Request):
     return _render(request, "settings.html", {"status": status})
 
 
+@router.get("/setup", response_class=HTMLResponse)
+def page_setup(request: Request):
+    from core.setup_state import setup_gate_status
+    from web_app.services.status_service import get_cached_settings_status
+    return _render(request, "setup.html", {
+        "setup": setup_gate_status(),
+        "status": get_cached_settings_status(),
+    })
+
+
 @router.get("/logs", response_class=HTMLResponse)
 def page_logs(request: Request):
     jobs = get_job_manager().list_jobs()

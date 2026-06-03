@@ -162,6 +162,22 @@ app = FastAPI(
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+
+@app.middleware("http")
+async def setup_redirect_middleware(request: Request, call_next):
+    path = request.url.path
+    if request.method == "GET" and not (
+        path == "/setup"
+        or path.startswith("/static")
+        or path.startswith("/api")
+        or path in ("/favicon.ico", "/health", "/settings")
+    ):
+        from core.channel_profile import get_active_profile
+        from core.setup_state import is_setup_completed
+        if get_active_profile() is None or not is_setup_completed():
+            return RedirectResponse(url="/setup", status_code=303)
+    return await call_next(request)
+
 # ── ルート登録 ────────────────────────────────────────────────────────────
 from web_app.routes.pages import router as pages_router
 from web_app.routes.api_status import router as status_router

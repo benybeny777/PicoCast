@@ -40,6 +40,7 @@
 
 **Web UI・運用**
 - [ローカル Web UI](#ローカル-web-ui-webapp)（FastAPI構成・ジョブ管理・キュー・画面・**API概要**・セキュリティ）
+- [製品版MVP機能](#製品版mvp機能)
 - [アップロードスケジューラー](#アップロードスケジューラー-coreuploadschedulerpy)／ [CTA / 導線制御](#cta-導線制御)
 - [操作手順](#操作手順)
 
@@ -523,6 +524,45 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 設定画面 (`/settings`) で使う補助データ（Ollamaモデル一覧、`assets/bgm/` の音源ファイル一覧）は、Web UI 起動時に `settings_preload_service` がバックグラウンドでプリロードする。プリロードが未完了の状態で設定画面を開いた場合でも、`GET /api/settings/ollama-models` と `GET /api/settings/bgm-files` は待機せず暫定値を返し、設定項目本体を先に表示する。APIキー登録状態は `encrypted_secrets` の bool だけを使い、`/settings` のHTML生成時に VOICEVOX / ffmpeg / Ollama / Stable Diffusion のフル診断を実行しない。ジョブ実行・ログ保持・各種タイムアウト・Web UI 表示名など運用負荷やアプリ全体に影響する項目は「管理者設定」タブに分離する。
 - `JOB_RUNNER_POLL_INTERVAL_SEC` ごとに queued/cancel を確認し、`JOB_LOG_FLUSH_INTERVAL_SEC` ごとにログをまとめ書きする。
 - 追加インフラ不要・純 Python + SQLite のため配布物にそのまま同梱できる（Kafka/Redis/Docker 等には依存しない）。
+
+## 製品版MVP機能
+
+### 初回セットアップ
+
+- active channel profile が存在しない、または `data/settings.db:settings.PRODUCT_SETUP_COMPLETED` が未完了の場合、通常画面への GET は `/setup` へ誘導する。
+- `/settings` と設定系 API には未完了でも入れる。通常の生成・アップロード API は分かりやすい 403 でブロックする。
+- `/setup` ではチャンネル名・ハンドル・製品版 seed profile、APIキー登録導線、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録導線、サンプル台本のテスト生成、完了保存を扱う。
+- サンプル生成だけは `setup_test=true` により未完了状態でも登録できる。
+
+### ライセンス管理
+
+- ライセンス情報は `data/settings.db:settings` を正本とする。`LICENSE_EDITION` 未設定時は `trial`。
+- edition は `trial` / `personal` / `pro` / `studio`。秘密情報や購入者情報をログ・レスポンスへ出さない。
+- 制限項目: Trial 透かし、1日生成本数、最大 channel profile 数、YouTubeアップロード可否、Analytics可否、テンプレート数上限。
+- Trial は native MP4 の最終出力へ `Native Video Factory Trial` の小さな透かしを焼き込む。
+
+### 診断パッケージ
+
+- 設定画面「製品管理」から `output/_diagnostics/diagnostics_*.zip` を作成する。
+- ZIPに含める: app version、OS / Python / ffmpeg / VOICEVOX / Ollama / Stable Diffusion WebUI 診断、マスク済み設定値、最新ジョブログ、直近失敗ジョブ、エラーコード一覧、DB schema version。
+- ZIPに含めない: APIキー、OAuth token、client_secrets、台本本文、生成動画、背景画像、サムネ画像。
+- ジョブログ内の `key` / `token` / `secret` / `oauth` / `password` 形式の値はマスクする。
+
+### バックアップ / 復元
+
+- 設定画面「製品管理」からバックアップZIPを作成する。出力先は `output/_backups/`。
+- バックアップ対象は `data/settings.db` と各 `output/{profile_id}/000_data/metadata.db`。`prompt_templates` / `channel_profiles` / `bgm_assets` は `settings.db` 内のテーブルとして含まれる。
+- 復元前には現在の `settings.db` と profile 別 `metadata.db` を `pre_restore_*` に自動退避する。
+- バックアップの `metadata_schema_version` が現行より新しい場合は fail closed で中止する。
+- `encrypted_secrets` は同一PCのマスターキーでのみ復号可能。別PC復元時はAPIキー・OAuthを再登録する。
+
+### 製品版SEED
+
+- 初期データ類は `config/SEED/` 配下に集約する。
+- 製品版テンプレートパックは `config/SEED/prompt_packs/product/{seed_profile}/` に置く。現行の汎用製品seedは `general`。
+- `/setup` のジャンル選択は product seed profile だけを表示するため、`@zunkami` 食べ物雑学専用テンプレートは製品版seedに混入しない。
+- 既存 `config/prompt_profiles/genres/` は互換用・既存チャンネル用として残す。チャンネル作成時、product seed を選ぶと handle 名の genre_profile へコピーしてから DB seed する。
+- テンプレートには `template_pack` / `visibility` / `product_bundle` を保存できる。テンプレートパック export には APIキー・Analytics実績・ユーザー固有データを含めない。
 
 ### 主要画面
 

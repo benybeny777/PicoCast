@@ -217,3 +217,73 @@ def api_debug_log():
 def api_ollama_models():
     """Ollama が起動していれば利用可能なモデル一覧を返す。"""
     return get_cached_ollama_models()
+
+
+class LicenseRequest(BaseModel):
+    edition: str
+    license_id: str = ""
+
+
+class SetupCompleteRequest(BaseModel):
+    completed: bool = True
+
+
+class RestoreBackupRequest(BaseModel):
+    backup_path: str
+    confirmed: bool = False
+
+
+@router.get("/setup")
+def api_setup_status():
+    """初回セットアップ状態を返す。"""
+    from core.setup_state import setup_gate_status
+    return setup_gate_status()
+
+
+@router.post("/setup")
+def api_setup_complete(req: SetupCompleteRequest):
+    """初回セットアップ完了状態を保存する。"""
+    from core.setup_state import set_setup_completed, setup_gate_status
+    set_setup_completed(req.completed)
+    return setup_gate_status()
+
+
+@router.get("/license")
+def api_license_status():
+    """ライセンス状態を返す。購入者情報や秘密値は返さない。"""
+    from core.license_manager import get_license_info
+    return get_license_info()
+
+
+@router.post("/license")
+def api_save_license(req: LicenseRequest):
+    """ライセンス edition を保存する。"""
+    try:
+        from core.license_manager import save_license
+        return save_license(req.edition, req.license_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@router.post("/diagnostics")
+def api_create_diagnostics():
+    """秘密情報を含めない診断パッケージを作成する。"""
+    from web_app.services.diagnostics_service import create_diagnostics_package
+    return create_diagnostics_package()
+
+
+@router.post("/backup")
+def api_create_backup():
+    """settings.db と profile 別 metadata.db のバックアップを作成する。"""
+    from web_app.services.backup_service import create_backup
+    return create_backup()
+
+
+@router.post("/restore")
+def api_restore_backup(req: RestoreBackupRequest):
+    """バックアップZIPから復元する。confirmed=true 必須。"""
+    try:
+        from web_app.services.backup_service import restore_backup
+        return restore_backup(req.backup_path, confirmed=req.confirmed)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
