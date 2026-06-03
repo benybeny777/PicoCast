@@ -1139,6 +1139,9 @@ Long ではタイトル候補（A/B/C案）を生成し、アップロード時�
 
 デバッグログは `QueueHandler` / `QueueListener` 構成で、アプリ処理スレッドはキュー投入だけを行う。ファイルは role 別に `app_debug_web.log` / `app_debug_runner.log` へ分け、1ファイル1書き手にして Windows のローテーション rename 衝突を防ぐ。`TimedRotatingFileHandler` で日次ローテートし、フォーマットは `%(asctime)s %(levelname)s [pid] %(name)s %(funcName)s:%(lineno)d: %(message)s`。秘密値は `_SecretRedactingFilter` でマスクする。
 
+- **ジョブ失敗は必ずデバッグログに残す。** 全ジョブ（generate / render / 未知種別）が通る `runner._run_job` の funnel で、例外経路は `_logger.error(..., exc_info=…)`（スタックつき）、結果メッセージ異常経路（`_result_error_message` が ❌ / 空を検出）は `_logger.error` に記録する。完了行も `status="failed"` のときは error レベルで出す。job ログだけに出して debug ログに残さない経路を作らない。
+- レンダージョブ成功時の結果には必ず `message`（`✅ MP4 生成完了: …`）を含める。これが無いと `_result_error_message` が空メッセージを失敗と誤判定する。
+
 ### Long画像節約モード
 
 Web UI の **「Long節約」チェックボックス**（デフォルト OFF）または `WEB_DEFAULT_LONG_BUDGET_MODE` で制御する。Shorts には影響しない。

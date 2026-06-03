@@ -675,6 +675,28 @@ def test_runner_treats_empty_or_error_message_as_failure():
     assert _result_error_message({"message": "✅ 完成! 出力フォルダ: output/x"}) == ""
 
 
+def test_run_render_success_includes_message(monkeypatch, tmp_path):
+    """レンダー成功時の結果は message を持ち、原因不明エラーに誤判定されない。"""
+    import threading
+    from types import SimpleNamespace
+    import workers.runner as runner
+
+    monkeypatch.setattr(
+        "core.native_renderer.render_native",
+        lambda **kw: SimpleNamespace(output_path=str(tmp_path / "out.mp4")),
+    )
+
+    class _StubLog:
+        def add(self, *a, **k):
+            pass
+
+    job = {"params": {"history_name": "h", "theme_dir": str(tmp_path)}}
+    result = runner._run_render(job, threading.Event(), _StubLog())
+
+    assert result.get("message")
+    assert runner._result_error_message(result) == ""
+
+
 def test_discard_pending_jobs_cancels_only_queued_runnable(tmp_path, monkeypatch):
     """起動時破棄は queued の generate/render だけを cancelled にし、他状態は触らない。"""
     m = _patch_metadata_db(monkeypatch, tmp_path)

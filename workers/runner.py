@@ -183,8 +183,11 @@ def _run_render(job: dict, cancel_event: threading.Event, log: _BufferedJobLog) 
     except RenderCancelled:
         return {"cancelled": True}
     output_path = render_result.output_path if hasattr(render_result, "output_path") else str(render_result)
-    log.add(f"MP4 生成完了: {os.path.basename(output_path)}", "success")
-    return {"output_path": output_path, "history_name": history_name}
+    done_msg = f"✅ MP4 生成完了: {os.path.basename(output_path)}"
+    log.add(done_msg, "success")
+    # message が空だと _result_error_message が「原因不明で終了」と誤判定するため、
+    # レンダー成功時も必ず結果メッセージを返す（生成ジョブと揃える）。
+    return {"output_path": output_path, "history_name": history_name, "message": done_msg}
 
 
 def _result_error_message(result: dict[str, Any] | None) -> str:
@@ -238,6 +241,11 @@ def _run_job(job: dict) -> None:
             error = _result_error_message(result)
             if not log.is_last(error, "error"):
                 log.add(error, "error", force=True)
+            # ジョブ失敗は job ログだけでなく debug ログにも必ず残す（結果メッセージ異常経路）。
+            _logger.error(
+                "job失敗(結果メッセージ): job=%s type=%s profile=%s result=%r error=%s",
+                job_id[:8], job_type, profile_id, result, error,
+            )
         else:
             status = "success"
     except Exception as exc:
@@ -245,13 +253,22 @@ def _run_job(job: dict) -> None:
         error = str(exc)
         log.add(f"エラー: {exc}", "error", force=True)
         log.add(traceback.format_exc(), "error", force=True)
+        # ジョブ失敗は job ログだけでなく debug ログにもスタックつきで必ず残す（例外経路）。
+        _logger.error(
+            "job失敗(例外): job=%s type=%s profile=%s: %s",
+            job_id[:8], job_type, profile_id, exc, exc_info=exc,
+        )
     finally:
         stop_event.set()
         log.flush()
         from core.metadata_db import set_job_result
         with profile_context(profile_id):
             set_job_result(job_id, status, result, error, _now_iso())
-        _logger.info("job完了: job=%s type=%s status=%s profile=%s", job_id[:8], job_type, status, profile_id)
+        if status == "failed":
+            _logger.error("job完了: job=%s type=%s status=%s profile=%s error=%s",
+                          job_id[:8], job_type, status, profile_id, error)
+        else:
+            _logger.info("job完了: job=%s type=%s status=%s profile=%s", job_id[:8], job_type, status, profile_id)
 
 
 def _discard_pending_on_startup() -> None:
