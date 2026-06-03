@@ -529,8 +529,8 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 
 ### 初回セットアップ
 
-- active channel profile が存在しない、または `data/settings.db:settings.PRODUCT_SETUP_COMPLETED` が未完了の場合、通常画面への GET は `/setup` へ誘導する。
-- `/settings` と設定系 API には未完了でも入れる。通常の生成・アップロード API は分かりやすい 403 でブロックする。
+- active channel profile が存在しない初回起動時のみ、通常画面への GET を `/setup` へ誘導する（`web_app/app.py:setup_redirect_middleware`）。
+- active channel が登録済みであれば、`PRODUCT_SETUP_COMPLETED` が未完了でも通常画面・設定画面には入れる。未完了状態では生成・アップロード API を分かりやすい 403 でブロックする（`core/setup_state.py` の gate と `core/license_manager.py`）。完了状態は `data/settings.db:settings.PRODUCT_SETUP_COMPLETED` に保存する。
 - `/setup` ではチャンネル名・ハンドル・製品版 seed profile、APIキー登録導線、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録導線、サンプル台本のテスト生成、完了保存を扱う。
 - サンプル生成だけは `setup_test=true` により未完了状態でも登録できる。
 
@@ -544,7 +544,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 ### 診断パッケージ
 
 - 設定画面「製品管理」から `output/_diagnostics/diagnostics_*.zip` を作成する。
-- ZIPに含める: app version、OS / Python / ffmpeg / VOICEVOX / Ollama / Stable Diffusion WebUI 診断、マスク済み設定値、最新ジョブログ、直近失敗ジョブ、エラーコード一覧、DB schema version。
+- ZIPに含める: app version、OS / Python / GPU（nvidia-smi で検出）/ ffmpeg / VOICEVOX / Ollama / Stable Diffusion WebUI 診断、マスク済み設定値、最新ジョブログ、直近失敗ジョブ、エラーコード一覧、DB schema version。
 - ZIPに含めない: APIキー、OAuth token、client_secrets、台本本文、生成動画、背景画像、サムネ画像。
 - ジョブログ内の `key` / `token` / `secret` / `oauth` / `password` 形式の値はマスクする。
 
@@ -563,6 +563,15 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - `/setup` のジャンル選択は product seed profile だけを表示するため、`@zunkami` 食べ物雑学専用テンプレートは製品版seedに混入しない。
 - 既存 `config/prompt_profiles/genres/` は互換用・既存チャンネル用として残す。チャンネル作成時、product seed を選ぶと handle 名の genre_profile へコピーしてから DB seed する。
 - テンプレートには `template_pack` / `visibility` / `product_bundle` を保存できる。テンプレートパック export には APIキー・Analytics実績・ユーザー固有データを含めない。
+- テンプレートパックのインポート/エクスポートは設定画面「テンプレート」タブから行う。エクスポートは `GET /api/prompt-templates/export`（JSONダウンロード）、インポートは `POST /api/prompt-templates/import`（`confirmed=true` 必須・active profile へ追加）。
+
+### 設定画面の表示モード
+
+- 設定画面（`/settings`）上部の「表示モード」で **通常 / 詳細 / 開発者** を切り替え、危険設定・開発者向け機能を通常利用時は隠す。選択はブラウザの `localStorage`（`nvf_settings_mode`）に保持する純UI設定で、設定DBの正本ではない。
+- 通常: 設定変更 / チャンネル / APIキー / BGM / テンプレート / 製品管理。
+- 詳細: ＋ よみがな辞書 / Stable Diffusion WebUI 詳細（モデル選択）。
+- 開発者: ＋ 管理者設定（ジョブ並列数・ログ保持・DB診断・危険操作）。
+- 隠れたタブへの URL ハッシュ遷移時は必要なモードまで自動で引き上げる。破壊的操作は従来どおり `confirmed=true` と確認ダイアログを必須にする。
 
 ### 主要画面
 

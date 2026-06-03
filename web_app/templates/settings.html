@@ -9,26 +9,45 @@
   color:#fff; box-shadow:0 2px 8px rgba(0,0,0,.3); pointer-events:none;">
 </div>
 
+<style>
+  #settings-mode-switch .mode-btn.active {
+    background: var(--accent, #4a5568);
+    color: #fff;
+    font-weight: 700;
+  }
+</style>
+<!-- ── 設定モード切替（通常 / 詳細 / 開発者） ── -->
+<div class="mode-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+  <span class="hint" style="margin:0">表示モード:</span>
+  <div id="settings-mode-switch" role="group" style="display:inline-flex;gap:4px">
+    <button class="btn btn-secondary mode-btn" data-mode="normal" onclick="setSettingsMode('normal')">通常</button>
+    <button class="btn btn-secondary mode-btn" data-mode="advanced" onclick="setSettingsMode('advanced')">詳細</button>
+    <button class="btn btn-secondary mode-btn" data-mode="developer" onclick="setSettingsMode('developer')">開発者</button>
+  </div>
+  <span id="settings-mode-hint" class="hint" style="margin:0"></span>
+</div>
+
 <div class="tab-bar">
-  <button class="tab-btn active" id="tab-btn-config" onclick="switchTab('config', this)">設定変更</button>
-  <button class="tab-btn" id="tab-btn-bgm" onclick="switchTab('bgm', this)">BGM</button>
-  <button class="tab-btn" id="tab-btn-apikey" onclick="switchTab('apikey', this)">APIキー</button>
-  <button class="tab-btn" id="tab-btn-dict-base" onclick="switchTab('dict-base', this)">よみがな辞書</button>
-  <button class="tab-btn" id="tab-btn-sd-models" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
-  <button class="tab-btn" id="tab-btn-admin" onclick="switchTab('admin', this)">管理者設定</button>
-  <button class="tab-btn" id="tab-btn-product" onclick="switchTab('product', this)">製品管理</button>
-  <button class="tab-btn" id="tab-btn-channels" onclick="switchTab('channels', this)">チャンネル</button>
-  <button class="tab-btn" id="tab-btn-templates" onclick="switchTab('templates', this)">テンプレート</button>
+  <button class="tab-btn active" id="tab-btn-config" data-mode="normal" onclick="switchTab('config', this)">設定変更</button>
+  <button class="tab-btn" id="tab-btn-bgm" data-mode="normal" onclick="switchTab('bgm', this)">BGM</button>
+  <button class="tab-btn" id="tab-btn-apikey" data-mode="normal" onclick="switchTab('apikey', this)">APIキー</button>
+  <button class="tab-btn" id="tab-btn-dict-base" data-mode="advanced" onclick="switchTab('dict-base', this)">よみがな辞書</button>
+  <button class="tab-btn" id="tab-btn-sd-models" data-mode="advanced" onclick="switchTab('sd-models', this)">Stable Diffusionモデル</button>
+  <button class="tab-btn" id="tab-btn-admin" data-mode="developer" onclick="switchTab('admin', this)">管理者設定</button>
+  <button class="tab-btn" id="tab-btn-product" data-mode="normal" onclick="switchTab('product', this)">製品管理</button>
+  <button class="tab-btn" id="tab-btn-channels" data-mode="normal" onclick="switchTab('channels', this)">チャンネル</button>
+  <button class="tab-btn" id="tab-btn-templates" data-mode="normal" onclick="switchTab('templates', this)">テンプレート</button>
 </div>
 
 <!-- ── タブ: 製品管理 ── -->
 <div id="tab-product" class="tab-panel">
   <div class="card">
     <h2>設定モード</h2>
+    <p class="hint">画面上部の「表示モード」で切り替えます。危険な設定や開発者向け機能を通常利用時は隠します。</p>
     <table class="status-table">
-      <tr><th>通常モード</th><td>チャンネル / APIキー / BGM / テンプレート / 画像エンジン選択</td></tr>
-      <tr><th>詳細モード</th><td>音声速度 / ジョブ並列数 / Stable Diffusion WebUI 詳細</td></tr>
-      <tr><th>開発者モード</th><td>DB診断 / マイグレーション / 危険操作 / デバッグ</td></tr>
+      <tr><th>通常モード</th><td>設定変更 / チャンネル / APIキー / BGM / テンプレート / 製品管理</td></tr>
+      <tr><th>詳細モード</th><td>＋ よみがな辞書 / Stable Diffusion WebUI 詳細</td></tr>
+      <tr><th>開発者モード</th><td>＋ 管理者設定（ジョブ並列数・ログ保持・DB診断・危険操作）</td></tr>
     </table>
   </div>
   <div class="card">
@@ -351,7 +370,12 @@
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-primary" onclick="tmplShowForm(null)">＋ テンプレートを追加</button>
       <button class="btn btn-secondary" onclick="tmplLoad()">再読込</button>
+      <button class="btn btn-secondary" onclick="tmplExportPack()">パックをエクスポート</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('tmpl-import-file').click()">パックをインポート</button>
+      <input id="tmpl-import-file" type="file" accept=".json,application/json" style="display:none" onchange="tmplImportPack(this)">
     </div>
+    <p class="hint mt">エクスポートにはAPIキー・Analytics実績・ユーザー固有データを含みません。インポートは現在のチャンネルへ追加します。</p>
+    <div id="tmpl-pack-result" class="hint mt"></div>
   </div>
 
   <div id="tmpl-form-card" class="card" style="display:none;margin-top:10px">
@@ -486,6 +510,45 @@ function switchTab(name, btn) {
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
   if (name === 'product') loadProductStatus();
+}
+
+// ── 設定モード（通常 / 詳細 / 開発者）でタブの表示範囲を切り替える ──
+const SETTINGS_MODE_LEVELS = { normal: 1, advanced: 2, developer: 3 };
+const SETTINGS_MODE_STORAGE_KEY = 'nvf_settings_mode';
+const SETTINGS_MODE_HINTS = {
+  normal: '通常利用に必要な設定のみ表示しています。',
+  advanced: '詳細設定（よみがな辞書・Stable Diffusion WebUI 詳細）を表示しています。',
+  developer: '開発者向け（管理者設定・危険操作）まですべて表示しています。',
+};
+
+function getSettingsMode() {
+  const saved = localStorage.getItem(SETTINGS_MODE_STORAGE_KEY);
+  return SETTINGS_MODE_LEVELS[saved] ? saved : 'normal';
+}
+
+function setSettingsMode(mode) {
+  if (!SETTINGS_MODE_LEVELS[mode]) mode = 'normal';
+  localStorage.setItem(SETTINGS_MODE_STORAGE_KEY, mode);
+  const level = SETTINGS_MODE_LEVELS[mode];
+  // モード選択ボタンの active 表示
+  document.querySelectorAll('#settings-mode-switch .mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  const hintEl = document.getElementById('settings-mode-hint');
+  if (hintEl) hintEl.textContent = SETTINGS_MODE_HINTS[mode] || '';
+  // 各タブボタンを data-mode のレベルで表示/非表示
+  let activeHidden = false;
+  document.querySelectorAll('.tab-bar .tab-btn').forEach(btn => {
+    const btnLevel = SETTINGS_MODE_LEVELS[btn.dataset.mode || 'normal'] || 1;
+    const visible = btnLevel <= level;
+    btn.style.display = visible ? '' : 'none';
+    if (!visible && btn.classList.contains('active')) activeHidden = true;
+  });
+  // 現在のタブが隠れたら「設定変更」に戻す
+  if (activeHidden) {
+    const fallback = document.getElementById('tab-btn-config');
+    if (fallback) switchTab('config', fallback);
+  }
 }
 
 async function loadProductStatus() {
@@ -1400,6 +1463,49 @@ let _tmplEditing = null; // 編集中の template_id
 const _TMPL_KIND_LABEL = { script: '台本生成', title: 'タイトル案', meeting: 'ネタ会議' };
 const _TMPL_KIND_COLOR = { script: '#2563eb', title: '#059669', meeting: '#7c3aed' };
 
+async function tmplExportPack() {
+  const result = document.getElementById('tmpl-pack-result');
+  try {
+    const res = await fetch('/api/prompt-templates/export');
+    const data = await res.json();
+    if (!res.ok) { result.textContent = data.detail || 'エクスポート失敗'; return; }
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `template_pack_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    result.textContent = `エクスポートしました（${data.template_count} 件）`;
+  } catch (e) {
+    result.textContent = 'エクスポート失敗: ' + e;
+  }
+}
+
+async function tmplImportPack(input) {
+  const result = document.getElementById('tmpl-pack-result');
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  if (!confirm('このテンプレートパックを現在のチャンネルへ追加します。続行しますか？')) return;
+  try {
+    const pack_json = JSON.parse(await file.text());
+    const res = await fetch('/api/prompt-templates/import', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pack_json, confirmed: true}),
+    });
+    const data = await res.json();
+    if (!res.ok) { result.textContent = data.detail || 'インポート失敗'; return; }
+    result.textContent = `インポートしました（${data.count} 件）`;
+    tmplLoad();
+  } catch (e) {
+    result.textContent = 'インポート失敗: ' + e;
+  }
+}
+
 async function tmplLoad() {
   _tmplLoaded = true;
   const el = document.getElementById('tmpl-list');
@@ -1583,12 +1689,22 @@ async function tmplDelete(templateId, name) {
   } catch(e) { showToast('通信エラー: ' + e, true); }
 }
 
+// 保存済みの表示モードを初期適用
+setSettingsMode(getSettingsMode());
+
 // URL ハッシュで設定画面の各タブを自動選択
 const hashTab = window.location.hash ? window.location.hash.slice(1) : '';
 const knownHashTabs = new Set(['config', 'bgm', 'apikey', 'dict-base', 'sd-models', 'admin', 'product', 'channels', 'templates']);
 if (knownHashTabs.has(hashTab)) {
   const btn = document.getElementById(`tab-btn-${hashTab}`);
-  if (btn) switchTab(hashTab, btn);
+  if (btn) {
+    // 隠れているタブへのハッシュ遷移時は必要なモードまで引き上げる
+    const need = btn.dataset.mode || 'normal';
+    if ((SETTINGS_MODE_LEVELS[need] || 1) > (SETTINGS_MODE_LEVELS[getSettingsMode()] || 1)) {
+      setSettingsMode(need);
+    }
+    switchTab(hashTab, btn);
+  }
 }
 </script>
 {% endblock %}

@@ -14,6 +14,13 @@
 - バックアップは `data/settings.db` と各 profile の `metadata.db` を対象にし、復元前に現在DBを自動退避する。schema version が安全に扱えない場合は fail closed で中止する。
 - 初期データ類を `config/SEED/` に寄せ、製品版テンプレートパックを `config/SEED/prompt_packs/product/` として分離した。製品版seedには `@zunkami` 食べ物雑学専用テンプレートや実績入りテンプレートを含めない。
 
+### 製品版MVPの設定モード分離・テンプレートパックUI・診断強化を追加
+
+- 設定画面に **通常 / 詳細 / 開発者** の表示モード切替を実装し、危険設定・開発者向けタブ（管理者設定など）を通常利用時は隠すようにした。選択はブラウザ `localStorage` に保持する純UI設定で、設定DBの正本にはしない。
+- 設定画面「テンプレート」タブにテンプレートパックのインポート/エクスポートUIを追加した（既存の `/api/prompt-templates/export` `/import` を利用）。エクスポートはJSONダウンロード、インポートは確認ダイアログ + `confirmed=true` 必須。
+- 診断パッケージの `environment.json` に nvidia-smi による GPU 診断を追加した（未検出時は状態として記録）。
+- 初回セットアップ redirect を「active channel 未登録の初回起動時のみ」に限定した。active channel があればセットアップ未完了でも通常画面に入れ、生成・アップロードのみブロックする（従来は未完了で全画面が `/setup` へ誘導され、既存画面が利用できなかった）。
+
 ### ドキュメントを現行runner・DB正本仕様へ整理
 
 - README / MANUAL / SPEC / AGENTS の旧仕様・重複説明を整理し、生成・レンダーは別プロセスの `workers.runner` が `metadata.db:jobs` を処理する運用へ統一した。

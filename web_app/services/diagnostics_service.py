@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
 import sys
 import zipfile
@@ -63,6 +62,23 @@ def _safe_job(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _gpu_info() -> dict[str, Any]:
+    """nvidia-smi で GPU を診断する。未検出やエラーは状態として記録する（秘密情報は含まない）。"""
+    import shutil
+    import subprocess
+    smi = shutil.which("nvidia-smi")
+    if not smi:
+        return {"detected": False, "reason": "nvidia-smi が見つかりません"}
+    proc = subprocess.run(
+        [smi, "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"],
+        capture_output=True, text=True, timeout=15,
+    )
+    if proc.returncode != 0:
+        return {"detected": False, "reason": f"nvidia-smi 失敗 (code={proc.returncode})"}
+    gpus = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    return {"detected": bool(gpus), "gpus": gpus}
+
+
 def _schema_versions() -> dict[str, Any]:
     result: dict[str, Any] = {}
     try:
@@ -106,6 +122,7 @@ def create_diagnostics_package() -> dict[str, str]:
             "os": platform.platform(),
             "python": sys.version,
             "executable": sys.executable,
+            "gpu": _gpu_info(),
         },
         "service_status.json": get_settings_status(),
         "settings_masked.json": _mask_settings(get_all()),

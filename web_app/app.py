@@ -165,6 +165,12 @@ app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 @app.middleware("http")
 async def setup_redirect_middleware(request: Request, call_next):
+    """初回起動（active channel が未登録）のときだけ /setup へ誘導する。
+
+    active channel が存在すれば、セットアップ未完了でも通常画面には入れる
+    （生成・アップロードは各ルートの setup_gate / license で別途ブロックする）。
+    設定画面はどの状態でも入れるよう除外する。
+    """
     path = request.url.path
     if request.method == "GET" and not (
         path == "/setup"
@@ -173,8 +179,7 @@ async def setup_redirect_middleware(request: Request, call_next):
         or path in ("/favicon.ico", "/health", "/settings")
     ):
         from core.channel_profile import get_active_profile
-        from core.setup_state import is_setup_completed
-        if get_active_profile() is None or not is_setup_completed():
+        if get_active_profile() is None:
             return RedirectResponse(url="/setup", status_code=303)
     return await call_next(request)
 

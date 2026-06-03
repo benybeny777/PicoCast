@@ -22,6 +22,27 @@ def client():
         yield c
 
 
+@pytest.fixture(autouse=True)
+def _configured_active_profile(monkeypatch, tmp_path_factory):
+    """設定済み（active channel あり）の状態を前提にする。
+
+    初回セットアップ redirect ミドルウェアは active channel 未登録時のみ /setup へ
+    誘導するため、通常ページのテストでは active profile を用意する。個別に
+    get_active_profile を差し替えるテストは本体側の monkeypatch が優先される。
+    """
+    import core.channel_profile as cp
+    root = tmp_path_factory.mktemp("active_profile_output")
+    dummy = cp.ChannelProfile(
+        profile_id="test_profile",
+        channel_name="テストチャンネル",
+        channel_handle="@test",
+        genre_profile="general",
+        output_root=str(root),
+        is_active=True,
+    )
+    monkeypatch.setattr(cp, "get_active_profile", lambda: dummy)
+
+
 def _patch_service_output_dirs(monkeypatch, service, output_root):
     videos_dir = output_root / "videos"
     uploaded_dir = output_root / "000_uploaded"
