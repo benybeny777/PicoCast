@@ -1130,8 +1130,10 @@ Long ではタイトル候補（A/B/C案）を生成し、アップロード時�
 
 - `ErrorDef(code, message, category, retry_recommended)` を保持し、`format_error(code, detail)` が `[CODE] 文言（detail）` を返す。`AppError(code, detail)` はコード付き例外。
 - 未登録コードは `E-UNKNOWN` にフォールバックする（参照で落とさない）。
-- 主なコード: `E-IMG-BUSY`（503混雑・再実行推奨）/ `E-IMG-AUTH`（401/403）/ `E-IMG-QUOTA`（429）/ `E-IMG-FAIL`（画像生成その他）/ `E-SECRET-MISSING` / `E-SCRIPT-MISSING` / `E-VOICE-FAIL` / `E-RENDER-FAIL` / `E-UNKNOWN`。
+- 主なコード: `E-IMG-BUSY`（503混雑・再実行推奨）/ `E-IMG-AUTH`（401/403）/ `E-IMG-QUOTA`（429・レート制限/クォータ/残高）/ `E-IMG-FAIL`（画像生成その他）/ `E-SECRET-MISSING` / `E-SCRIPT-MISSING` / `E-VOICE-FAIL` / `E-RENDER-FAIL` / `E-UNKNOWN`。
 - 画像APIの `category` → コードは `image_error_code()` で変換する。新種別を増やすときは `ERROR_CATALOG` に追記する。
+- 画像生成失敗の表示は `format_image_error(code, backend=…, model=…, status_code=…, detail=…)` を使い、`[CODE] バックエンド名：文言（HTTP=… / model=… / detail）` の形にする。`backend_label()` が `nanobanana`→`Gemini` / `sd_webui`→`Stable Diffusion WebUI` に変換し、**どのバックエンドで・どの種別（混雑 / クォータ・残高 / 認証 / その他）の失敗か**を一目で判別できるようにする。残高切れと一時混雑を取り違える誤誘導文言（「接続・残高を確認」等）は使わない。
+- **サムネイル生成失敗は握りつぶさず `ImageGenerationError` を上位伝播する。** `generate_thumbnail()` は失敗時に分類済み例外を投げ、`run_pipeline` 側の `_report_thumbnail_failure()` が job ログ・デバッグログ（`_logger.error` にスタックと code/backend/category/HTTP）・`image_generation_failures`（`prompt="thumbnail"`）へ判別情報つきで記録し、トレースバックを生で出さずに `finish_result` で正常終了する（背景生成失敗と同じ扱い）。
 
 ### デバッグログの内容
 

@@ -6,6 +6,13 @@
 
 ## 2026-06-03
 
+### サムネイル生成失敗の文言を判別可能なエラーコード表示に統一
+
+- サムネイル生成失敗時に、原因（503混雑）と無関係な「接続・残高を確認してください」という**誤誘導の汎用文言＋生トレースバック**を出していたのを修正。残高切れだと誤解させる表示をやめた。
+- `generate_thumbnail()` が失敗を握りつぶして `None` を返していたのをやめ、分類済みの `ImageGenerationError`（backend / category / HTTP）を上位伝播するようにした。`run_pipeline` 側の `_report_thumbnail_failure()` が **backend（Gemini / Stable Diffusion WebUI）と種別（混雑 / クォータ・残高 / 認証 / その他）を判別**して表示・記録する。
+- 失敗を **debug ログ**（`_logger.error` にスタックと code/backend/category/HTTP）と **job ログ**、`image_generation_failures`（`prompt="thumbnail"`）に記録するようにした（従来はデバッグログに出ていなかった）。
+- `core/error_codes.py` に `format_image_error()` / `backend_label()` を追加。エラーコード文言（`E-IMG-BUSY` / `E-IMG-QUOTA` / `E-IMG-AUTH` / `E-IMG-FAIL`）を、残高切れと一時混雑を取り違えないよう明確化した。
+
 ### 製品版MVP向けの初回設定・ライセンス・保守機能を追加
 
 - active channel 未作成またはセットアップ未完了の新規環境を `/setup` へ誘導し、チャンネル作成、APIキー登録状態確認、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録、サンプル台本生成を順に進められるようにした。未完了時も設定画面は開けるが、生成・アップロードは明示的にブロックする。

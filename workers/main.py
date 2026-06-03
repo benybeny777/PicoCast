@@ -449,6 +449,54 @@ def _estimate_script_duration(items, is_shorts: bool):
 
 
 
+def _report_thumbnail_failure(err, topic, theme_dir, update_status):
+    """サムネイル生成失敗を job ログ・debug ログ・metadata.db に判別情報つきで記録し、表示用メッセージを返す。
+
+    どのバックエンド（Gemini / Stable Diffusion WebUI）で、どの種別
+    （混雑 / クォータ・残高 / 認証 / その他）の失敗かが分かる形で残す。
+    """
+    from core.error_codes import format_image_error, image_error_code
+
+    category = getattr(err, "category", "generic")
+    status   = getattr(err, "status_code", None)
+    model    = getattr(err, "model", "") or ""
+    backend  = getattr(err, "backend", "") or ""
+    code     = getattr(err, "code", None) or image_error_code(category)
+    retry    = getattr(err, "retry_recommended", category in ("api_busy", "quota"))
+
+    msg = "❌ " + format_image_error(
+        code, backend=backend, model=model, status_code=status,
+        detail=f"サムネイル / 動画「{topic}」",
+    )
+    if retry:
+        msg += "\n（生成済みの素材は保持されます。時間を置いて再実行してください。）"
+
+    update_status(msg, "error")
+    update_status(f"    error: {err}", "error")
+    # debug ログ（スタックつきで判別情報を残す）
+    _logger.error(
+        "サムネイル生成失敗 code=%s backend=%s category=%s HTTP=%s model=%s topic=%s",
+        code, backend, category, status, model, topic, exc_info=err,
+    )
+    # metadata.db へ記録（背景生成の失敗記録と同じ仕組み）
+    try:
+        from core.metadata_db import record_image_generation_failure
+        local_id = os.path.basename(os.path.abspath(theme_dir).rstrip("/\\"))
+        record_image_generation_failure(local_id, {
+            "model": model,
+            "backend": backend,
+            "status_code": status,
+            "category": category,
+            "error_code": code,
+            "error_message": str(err),
+            "prompt": "thumbnail",
+            "retry_recommended": retry,
+        })
+    except Exception as rec_e:
+        update_status(f"    ⚠ 失敗記録の保存に失敗: {rec_e}", "warning")
+    return msg
+
+
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
                        script_content=None, debug_mode=False, long_thumbnail_ab_test=None):
     """台本内容をもとにサムネイル画像を生成する（IMAGE_BACKEND に従い Nano Banana または Stable Diffusion WebUI Forge を使用）。"""
@@ -518,12 +566,16 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     if is_shorts:
         try:
             saved_path = _generate_one(prompt, thumb_path, "thumbnail")
-        except Exception as e:
-            _log(f"  サムネイル生成失敗: {e}")
-            return _finish_thumbnail(None)
-        if not saved_path:
-            _log("  サムネイル生成をスキップしました")
-            return _finish_thumbnail(None)
+            if not saved_path:
+                raise ImageGenerationError(
+                    "サムネイル画像が生成されませんでした。",
+                    category="generic", backend=thumb_engine,
+                )
+        except Exception:
+            # 判別情報（backend / category / HTTP）を保持したまま上位へ伝播する。
+            # 握りつぶして None を返すと原因不明の汎用エラーに化けるため禁止。
+            thumb_img_gen.close()
+            raise
         _log(f"  サムネイル保存: {saved_path}")
         return _finish_thumbnail(saved_path)
 
@@ -555,8 +607,10 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             variant_prompt = f"{prompt}{common_rules}\n\n{variant['prompt']}"
             saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
             if not saved_path:
-                _log(f"  サムネイル案{variant_id}をスキップしました")
-                return _finish_thumbnail(None)
+                raise ImageGenerationError(
+                    "サムネイル画像が生成されませんでした。",
+                    category="generic", backend=thumb_engine,
+                )
             if first_variant_path is None:
                 first_variant_path = saved_path
             manifest_variants.append({
@@ -565,13 +619,17 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
                 "concept": variant["concept"],
                 "text": thumbnail_text or variant["text"],
             })
-    except Exception as e:
-        _log(f"  サムネイル生成失敗: {e}")
-        return _finish_thumbnail(None)
+    except Exception:
+        # 判別情報を保持したまま上位へ伝播する（握りつぶし禁止）。
+        thumb_img_gen.close()
+        raise
 
     if not first_variant_path:
-        _log("  サムネイル生成をスキップしました")
-        return _finish_thumbnail(None)
+        thumb_img_gen.close()
+        raise ImageGenerationError(
+            "サムネイル画像が生成されませんでした。",
+            category="generic", backend=thumb_engine,
+        )
     if os.path.exists(thumb_path):
         os.remove(thumb_path)
     shutil.copy2(first_variant_path, thumb_path)
@@ -1698,18 +1756,21 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         # 以前は再利用時にサムネが無いと thumb_path=None のまま中止していた。
         if is_cancelled():
             return cancel_result()
-        thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
-                                        script_content=script_content, debug_mode=debug_mode,
-                                        long_thumbnail_ab_test=long_thumbnail_ab_test)
+        try:
+            thumb_path = generate_thumbnail(img_gen, thumbnail_title, is_shorts, theme_dir, theme_bg_dir, update_status,
+                                            script_content=script_content, debug_mode=debug_mode,
+                                            long_thumbnail_ab_test=long_thumbnail_ab_test)
+        except ImageGenerationError as thumb_err:
+            return finish_result(_report_thumbnail_failure(thumb_err, thumbnail_title, theme_dir, update_status))
         if is_cancelled():
             return cancel_result()
 
     if thumb_path is None:
-        raise Exception(
-            "サムネイル画像を生成できませんでした。\n"
-            "IMAGE_BACKEND=gemini の場合: Nano Banana の接続・残高を確認してください。\n"
-            "IMAGE_BACKEND=sd_webui の場合: Stable Diffusion WebUI の起動状態を確認してください。"
+        thumb_err = ImageGenerationError(
+            "サムネイル画像が生成されませんでした。",
+            category="generic", backend=getattr(img_gen, "background_engine", ""),
         )
+        return finish_result(_report_thumbnail_failure(thumb_err, thumbnail_title, theme_dir, update_status))
 
     if is_shorts:
         update_status("  📌 サムネイルをショート先頭に挿入予定(native)")

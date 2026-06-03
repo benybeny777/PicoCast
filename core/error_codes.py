@@ -27,10 +27,10 @@ class ErrorDef:
 # ─────────────────────────────────────────────────────────────────────────────
 ERROR_CATALOG: dict[str, ErrorDef] = {
     # 画像生成（Gemini / Nano Banana / Stable Diffusion WebUI）
-    "E-IMG-BUSY":  ErrorDef("E-IMG-BUSY",  "画像生成APIが混雑しています。台本やプロンプトの問題ではありません。時間を置いて再生成してください。", "api_busy", True),
-    "E-IMG-AUTH":  ErrorDef("E-IMG-AUTH",  "画像生成APIの認証・権限エラーです。設定画面のAPIキーを確認してください。", "auth", False),
-    "E-IMG-QUOTA": ErrorDef("E-IMG-QUOTA", "画像生成APIのレート制限・クォータ超過です。時間を置いて再実行してください。", "quota", True),
-    "E-IMG-FAIL":  ErrorDef("E-IMG-FAIL",  "画像生成に失敗しました。", "generic", False),
+    "E-IMG-BUSY":  ErrorDef("E-IMG-BUSY",  "一時的に混雑しています（提供元サーバー側の高負荷）。残高・APIキー・台本やプロンプトの問題ではありません。数分おいてから再実行してください。", "api_busy", True),
+    "E-IMG-AUTH":  ErrorDef("E-IMG-AUTH",  "認証・権限エラーです。設定画面のAPIキーが正しいか、課金・権限が有効かを確認してください。", "auth", False),
+    "E-IMG-QUOTA": ErrorDef("E-IMG-QUOTA", "利用上限に達しました（レート制限・クォータ・残高のいずれか）。提供元コンソールで利用量と課金状況を確認してください。", "quota", True),
+    "E-IMG-FAIL":  ErrorDef("E-IMG-FAIL",  "画像生成に失敗しました。エラー内容を確認してください。", "generic", False),
     # 認証情報
     "E-SECRET-MISSING": ErrorDef("E-SECRET-MISSING", "必要なAPIキー/認証情報が未登録です。設定画面から登録してください。", "config", False),
     # 台本
@@ -55,6 +55,46 @@ _IMAGE_CATEGORY_TO_CODE = {
 def image_error_code(category: str) -> str:
     """画像APIエラーのカテゴリからエラーコードを返す。"""
     return _IMAGE_CATEGORY_TO_CODE.get(category, "E-IMG-FAIL")
+
+
+# 画像生成バックエンド値 → ユーザー向け表示名（UI表記ルールに準拠）
+_BACKEND_LABELS = {
+    "nanobanana": "Gemini",
+    "gemini":     "Gemini",
+    "sd_webui":   "Stable Diffusion WebUI",
+}
+
+
+def backend_label(backend: str) -> str:
+    """画像生成バックエンド値をユーザー向け表示名に変換する。"""
+    key = (backend or "").strip().lower()
+    return _BACKEND_LABELS.get(key, backend or "画像生成")
+
+
+def format_image_error(
+    code: str,
+    *,
+    backend: str = "",
+    model: str = "",
+    status_code=None,
+    detail: str = "",
+) -> str:
+    """画像生成エラーを『[CODE] バックエンド：文言（HTTP=… / model=… / detail）』形式の表示文字列にする。
+
+    どのバックエンド（Gemini / Stable Diffusion WebUI）で、どの種別
+    （混雑 / クォータ・残高 / 認証 / その他）の失敗かを一目で判別できる形にする。
+    """
+    d = get_error(code)
+    head = f"[{d.code}] {backend_label(backend)}：{d.message}"
+    extras: list[str] = []
+    if status_code is not None:
+        extras.append(f"HTTP={status_code}")
+    if model:
+        extras.append(f"model={model}")
+    detail = (detail or "").strip()
+    if detail:
+        extras.append(detail)
+    return f"{head}（{' / '.join(extras)}）" if extras else head
 
 
 def get_error(code: str) -> ErrorDef:
