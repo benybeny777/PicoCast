@@ -48,7 +48,8 @@
         <label class="image-check-label" title="再生成対象に選択">
           <input type="checkbox" class="img-check" value="{{ img.key }}">
         </label>
-        <img src="/api/images/{{ selected_history }}/file/{{ img.key }}" alt="{{ img.filename }}" loading="lazy">
+        <img src="/api/images/{{ selected_history }}/file/{{ img.key }}" alt="{{ img.filename }}" loading="lazy"
+             onclick="openLightbox(this.src, '{{ img.filename }}'); event.preventDefault(); event.stopPropagation();">
       </div>
       <p>{{ img.filename }}</p>
       <p class="hint">{{ img.width or '?' }}x{{ img.height or '?' }}{% if img.last_replacement_at %} / 差替: {{ img.last_replacement_at[:16].replace('T',' ') }}{% endif %}</p>
