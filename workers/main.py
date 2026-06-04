@@ -212,13 +212,39 @@ def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
     """LongサムネA/Bのローカルマニフェスト管理は廃止済み。"""
     return None
 
-_VOICEVOX_CREDIT = "\n\n【使用音声合成】VOICEVOX:ずんだもん / VOICEVOX:四国めたん"
-
-
 def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
     lines = text.splitlines()
     cleaned = [l for l in lines if "VOICEVOX:" not in l and "使用音声合成" not in l]
     return "\n".join(cleaned).strip(), len(cleaned) != len(lines)
+
+
+def _character_names_for_credits(script_items=None) -> list[str]:
+    if not script_items:
+        return []
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in script_items:
+        if item.get("type") != "dialogue":
+            continue
+        name = str(item.get("character") or "").strip()
+        if name and name not in seen:
+            seen.add(name)
+            names.append(name)
+    return names
+
+
+def _build_audio_credit_block(script_items=None) -> str:
+    try:
+        from core.channel_profile import get_active_profile
+        from core.character_profile_store import build_character_credit_block
+        profile = get_active_profile()
+        return build_character_credit_block(
+            profile.profile_id if profile else None,
+            _character_names_for_credits(script_items),
+        )
+    except Exception:
+        _logger.error("音声クレジット表記の生成に失敗しました", exc_info=True)
+        raise
 
 
 def _resolution_label(width: int, height: int) -> str:
@@ -276,7 +302,7 @@ def _build_channel_footer() -> str:
 
 
 
-def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status) -> None:
+def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status, script_items=None) -> None:
     """説明文・タグをNG語置換・最適化して meta をインプレース更新する。"""
     if "description" in meta:
         _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
@@ -284,7 +310,7 @@ def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status) -> N
             update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
         _desc = re.sub(r'#\S+', '', _desc).strip()
         _desc = optimize_description(apply_ng_word_replacements(_desc), is_shorts=is_shorts, keep_hashtags=False)
-        meta["description"] = _desc + _VOICEVOX_CREDIT + _build_channel_footer()
+        meta["description"] = _desc + _build_audio_credit_block(script_items) + _build_channel_footer()
     if "tags" in meta:
         meta["tags"] = optimize_tags(
             meta["tags"],
@@ -1081,7 +1107,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
     ai_thumbnail_prompt = meta.get("thumbnail")
 
-    _normalize_meta(meta, is_shorts, topic, update_status)
+    _normalize_meta(meta, is_shorts, topic, update_status, items)
 
     update_status("📋 台本解析完了。冒頭品質チェック中...")
     opening_title = meta.get("video_title", topic)

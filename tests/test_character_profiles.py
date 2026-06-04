@@ -167,6 +167,25 @@ def test_store_rejects_unimplemented_voice_backend(tmp_char_store):
         s.resolve_character_voice("zunkami", "外部キャラ", "ノーマル")
 
 
+def test_store_builds_character_credit_block(tmp_char_store):
+    """使用キャラのクレジット表記をキャラ設定から組み立てられる。"""
+    s = tmp_char_store
+    s.create_character(profile_id="zunkami", character_key="reimu",
+                       display_name="霊夢", character_name="霊夢",
+                       voice_backend="voicevox", voice_speaker="8",
+                       credit_text="VOICEVOX:テスト霊夢",
+                       enabled=True, sort_order=40)
+    s.create_character(profile_id="zunkami", character_key="no_credit",
+                       display_name="表示しない", character_name="表示しない",
+                       voice_backend="voicevox", voice_speaker="9",
+                       credit_required=False,
+                       enabled=True, sort_order=41)
+    block = s.build_character_credit_block("zunkami", ["霊夢", "表示しない", "霊夢"])
+    assert "【使用音声合成】" in block
+    assert "VOICEVOX:テスト霊夢" in block
+    assert "表示しない" not in block
+
+
 # ── API（別 profile 改変防止） ─────────────────────────────────────────────────
 
 def test_api_update_rejects_other_profile_character(monkeypatch):

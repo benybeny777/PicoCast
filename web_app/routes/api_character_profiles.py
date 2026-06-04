@@ -31,6 +31,8 @@ def _to_dict(c) -> dict:
         "voice_speaker_id": c.voice_speaker_id,
         "voice_styles": c.voice_styles or {},
         "portrait_png_path": c.portrait_png_path,
+        "credit_required": c.credit_required,
+        "credit_text": c.credit_text,
         "enabled": c.enabled,
         "sort_order": c.sort_order,
     }
@@ -57,6 +59,8 @@ class CharacterUpdateRequest(BaseModel):
     voice_speaker_id: int | None = None
     voice_styles: dict[str, int] | None = None
     portrait_png_path: str | None = None
+    credit_required: bool | None = None
+    credit_text: str | None = None
     enabled: bool | None = None
     sort_order: int | None = None
 
@@ -75,6 +79,8 @@ class CharacterCreateRequest(BaseModel):
     voice_speaker_id: int | None = None
     voice_styles: dict[str, int] = Field(default_factory=dict)
     portrait_png_path: str = ""
+    credit_required: bool = True
+    credit_text: str = ""
     enabled: bool = True
     sort_order: int = 0
 
@@ -126,6 +132,8 @@ def create_character_profile(req: CharacterCreateRequest):
             voice_speaker_id=req.voice_speaker_id,
             voice_styles=req.voice_styles,
             portrait_png_path=req.portrait_png_path,
+            credit_required=req.credit_required,
+            credit_text=req.credit_text,
             enabled=req.enabled,
             sort_order=req.sort_order,
         )

@@ -43,6 +43,8 @@ _ZUNDAMON = {
     "voice_speaker_id": CHARACTERS["ずんだもん"]["speaker_id"],
     "voice_styles": CHARACTERS["ずんだもん"]["styles"],
     "portrait_png_path": CHARACTER_PNGS["ずんだもん"],
+    "credit_required": True,
+    "credit_text": "VOICEVOX:ずんだもん",
 }
 
 # 四国めたん（辛口相方ツッコミ・ずんだハウス風）= 食べ物雑学堂用
@@ -92,6 +94,8 @@ _METAN_FOOD_TOXIC = {
     "voice_speaker_id": CHARACTERS["めたん"]["speaker_id"],
     "voice_styles": CHARACTERS["めたん"]["styles"],
     "portrait_png_path": CHARACTER_PNGS["四国めたん"],
+    "credit_required": True,
+    "credit_text": "VOICEVOX:四国めたん",
 }
 
 # 四国めたん（お嬢様毒舌）= 都市伝説など従来チャンネル用。既存の共通ルールを温存する。
@@ -113,6 +117,8 @@ _METAN_STANDARD_TOXIC = {
     "voice_speaker_id": CHARACTERS["めたん"]["speaker_id"],
     "voice_styles": CHARACTERS["めたん"]["styles"],
     "portrait_png_path": CHARACTER_PNGS["四国めたん"],
+    "credit_required": True,
+    "credit_text": "VOICEVOX:四国めたん",
 }
 
 _REIMU = {
@@ -128,6 +134,8 @@ _REIMU = {
     "voice_speaker": str(REIMU_VOICEVOX_SPEAKER_ID),
     "voice_speaker_id": REIMU_VOICEVOX_SPEAKER_ID,
     "portrait_png_path": REIMU_CHARACTER_PNG_PATH,
+    "credit_required": True,
+    "credit_text": "VOICEVOX:霊夢",
 }
 
 _MARISA = {
@@ -143,6 +151,8 @@ _MARISA = {
     "voice_speaker": str(MARISA_VOICEVOX_SPEAKER_ID),
     "voice_speaker_id": MARISA_VOICEVOX_SPEAKER_ID,
     "portrait_png_path": MARISA_CHARACTER_PNG_PATH,
+    "credit_required": True,
+    "credit_text": "VOICEVOX:魔理沙",
 }
 
 
@@ -190,6 +200,8 @@ def seed_character_profiles_for_profile(profile_id: str, genre_profile: str) -> 
             voice_speaker_id=item.get("voice_speaker_id"),
             voice_styles=item.get("voice_styles"),
             portrait_png_path=item.get("portrait_png_path", ""),
+            credit_required=item.get("credit_required", True),
+            credit_text=item.get("credit_text", ""),
             enabled=item.get("enabled", True),
             sort_order=item.get("sort_order", 0),
         )

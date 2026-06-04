@@ -191,6 +191,8 @@
       <div class="form-group"><label>話者ID/名前</label><input class="form-input" id="char-new-voice-speaker" placeholder="VOICEVOXなら speaker ID"></div>
       <div class="form-group wide"><label>表情別話者ID(JSON)</label><textarea class="form-input" id="char-new-voice-styles" rows="2" placeholder='{"ノーマル":3,"ツンツン":7}'></textarea></div>
       <div class="form-group wide"><label>立ち絵PNGパス</label><input class="form-input" id="char-new-portrait" placeholder="assets/characters/reimu.png"></div>
+      <div class="form-group"><label>クレジット必要</label><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="char-new-credit-required" checked> 必要</label></div>
+      <div class="form-group wide"><label>クレジット表記</label><input class="form-input" id="char-new-credit-text" placeholder="VOICEVOX:ずんだもん"></div>
       <div class="form-group wide"><label>役割</label><textarea class="form-input" id="char-new-role" rows="2"></textarea></div>
       <div class="form-group wide"><label>口調</label><textarea class="form-input" id="char-new-tone" rows="2"></textarea></div>
       <div class="form-group wide"><label>話し方ルール</label><textarea class="form-input" id="char-new-speaking" rows="3"></textarea></div>
@@ -698,6 +700,8 @@ function characterCardHtml(c) {
       <div class="form-group"><label>話者ID/名前</label><input class="form-input" data-cid="${c.character_id}" data-field="voice_speaker" value="${esc(c.voice_speaker || c.voice_speaker_id || '')}"></div>
       <div class="form-group wide"><label>表情別話者ID(JSON)</label><textarea class="form-input" rows="2" data-cid="${c.character_id}" data-field="voice_styles_json">${esc(JSON.stringify(c.voice_styles || {}, null, 0))}</textarea></div>
       <div class="form-group wide"><label>立ち絵PNGパス</label><input class="form-input" data-cid="${c.character_id}" data-field="portrait_png_path" value="${esc(c.portrait_png_path || '')}"></div>
+      <div class="form-group"><label>クレジット必要</label><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-cid="${c.character_id}" data-field="credit_required" ${c.credit_required !== false ? 'checked' : ''}> 必要</label></div>
+      <div class="form-group wide"><label>クレジット表記</label><input class="form-input" data-cid="${c.character_id}" data-field="credit_text" value="${esc(c.credit_text || '')}"></div>
       ${f('役割', 'role', c.role, 2, 'wide')}
       ${f('口調', 'tone_style', c.tone_style, 2, 'wide')}
       ${f('話し方ルール', 'speaking_rules', c.speaking_rules, 3, 'wide')}
@@ -756,6 +760,8 @@ async function createCharacter() {
       voice_speaker: document.getElementById('char-new-voice-speaker').value.trim(),
       voice_styles: document.getElementById('char-new-voice-styles').value.trim() ? JSON.parse(document.getElementById('char-new-voice-styles').value) : {},
       portrait_png_path: document.getElementById('char-new-portrait').value.trim(),
+      credit_required: document.getElementById('char-new-credit-required').checked,
+      credit_text: document.getElementById('char-new-credit-text').value.trim(),
       role: document.getElementById('char-new-role').value,
       tone_style: document.getElementById('char-new-tone').value,
       speaking_rules: document.getElementById('char-new-speaking').value,
@@ -771,8 +777,9 @@ async function createCharacter() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || '追加失敗');
     out.textContent = '追加しました';
-    ['char-new-key','char-new-display','char-new-name','char-new-voice-speaker','char-new-voice-styles','char-new-portrait','char-new-role','char-new-tone','char-new-speaking','char-new-forbidden','char-new-dialogue'].forEach(id => document.getElementById(id).value = '');
+    ['char-new-key','char-new-display','char-new-name','char-new-voice-speaker','char-new-voice-styles','char-new-portrait','char-new-credit-text','char-new-role','char-new-tone','char-new-speaking','char-new-forbidden','char-new-dialogue'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('char-new-voice-backend').value = 'voicevox';
+    document.getElementById('char-new-credit-required').checked = true;
     document.getElementById('char-new-order').value = '50';
     await loadCharacters();
     showToast('キャラクター設定を追加しました');

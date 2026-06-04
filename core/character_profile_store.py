@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS character_profiles (
     voice_speaker_id  INTEGER,
     voice_styles_json TEXT NOT NULL DEFAULT '{}',
     portrait_png_path TEXT NOT NULL DEFAULT '',
+    credit_required   INTEGER NOT NULL DEFAULT 1,
+    credit_text       TEXT NOT NULL DEFAULT '',
     enabled           INTEGER NOT NULL DEFAULT 1,
     sort_order        INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT NOT NULL,
@@ -78,6 +80,8 @@ class CharacterProfile:
     voice_speaker_id: int | None = None
     voice_styles: dict[str, int] | None = None
     portrait_png_path: str = ""
+    credit_required: bool = True
+    credit_text: str = ""
 
     @staticmethod
     def from_row(row: sqlite3.Row) -> "CharacterProfile":
@@ -97,6 +101,8 @@ class CharacterProfile:
             voice_speaker_id=row["voice_speaker_id"],
             voice_styles=_parse_voice_styles(row["voice_styles_json"]),
             portrait_png_path=row["portrait_png_path"],
+            credit_required=bool(row["credit_required"]),
+            credit_text=row["credit_text"],
             enabled=bool(row["enabled"]),
             sort_order=row["sort_order"],
             created_at=row["created_at"],
@@ -127,6 +133,8 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
         "voice_speaker": "ALTER TABLE character_profiles ADD COLUMN voice_speaker TEXT NOT NULL DEFAULT ''",
         "voice_styles_json": "ALTER TABLE character_profiles ADD COLUMN voice_styles_json TEXT NOT NULL DEFAULT '{}'",
         "portrait_png_path": "ALTER TABLE character_profiles ADD COLUMN portrait_png_path TEXT NOT NULL DEFAULT ''",
+        "credit_required": "ALTER TABLE character_profiles ADD COLUMN credit_required INTEGER NOT NULL DEFAULT 1",
+        "credit_text": "ALTER TABLE character_profiles ADD COLUMN credit_text TEXT NOT NULL DEFAULT ''",
     }
     for column, sql in additions.items():
         if column not in columns:
@@ -216,6 +224,8 @@ def create_character(
     voice_speaker_id: int | None = None,
     voice_styles: dict[str, int] | str | None = None,
     portrait_png_path: str = "",
+    credit_required: bool = True,
+    credit_text: str = "",
     enabled: bool = True,
     sort_order: int = 0,
 ) -> str:
@@ -240,12 +250,14 @@ def create_character(
                     (character_id, profile_id, character_key, display_name, character_name,
                      role, tone_style, speaking_rules, forbidden_phrases, dialogue_rules,
                      voice_backend, voice_speaker, voice_speaker_id, voice_styles_json, portrait_png_path,
+                     credit_required, credit_text,
                      enabled, sort_order, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (character_id, profile_id, character_key, display_name, character_name,
                  role, tone_style, speaking_rules, forbidden_phrases, dialogue_rules,
                  voice_backend, voice_speaker, voice_speaker_id, _voice_styles_json(voice_styles), portrait_png_path,
+                 1 if credit_required else 0, credit_text,
                  1 if enabled else 0, sort_order, now, now),
             )
             conn.commit()
@@ -260,6 +272,7 @@ def _update_character_locked(conn: sqlite3.Connection, character_id: str, **fiel
         "display_name", "character_name", "role", "tone_style", "speaking_rules",
         "forbidden_phrases", "dialogue_rules", "voice_backend", "voice_speaker",
         "voice_speaker_id", "voice_styles", "voice_styles_json", "portrait_png_path",
+        "credit_required", "credit_text",
         "enabled", "sort_order",
     }
     sets = {k: v for k, v in fields.items() if k in allowed}
@@ -271,6 +284,8 @@ def _update_character_locked(conn: sqlite3.Connection, character_id: str, **fiel
         sets["voice_styles_json"] = _voice_styles_json(sets["voice_styles_json"])
     if "enabled" in sets:
         sets["enabled"] = 1 if sets["enabled"] else 0
+    if "credit_required" in sets:
+        sets["credit_required"] = 1 if sets["credit_required"] else 0
     cols = ", ".join(f"{k}=?" for k in sets)
     vals = list(sets.values()) + [_now(), character_id]
     conn.execute(f"UPDATE character_profiles SET {cols}, updated_at=? WHERE character_id=?", vals)
@@ -399,3 +414,41 @@ def resolve_character_voice(profile_id: str | None, character_name: str, emotion
         )
         raise RuntimeError("VOICEVOX speaker ID は数値で指定してください。")
     return int(settings["speaker_id"])
+
+
+def _default_credit_text(character: CharacterProfile) -> str:
+    backend = (character.voice_backend or "voicevox").strip()
+    if not backend:
+        return ""
+    return f"{backend.upper()}:{character.character_name}" if backend.lower() == "voicevox" else f"{backend}:{character.character_name}"
+
+
+def build_character_credit_block(profile_id: str | None, character_names: list[str] | set[str] | tuple[str, ...] | None) -> str:
+    """台本で使ったキャラクターに必要なクレジット表記を説明文用に組み立てる。"""
+    names = [str(name or "").strip() for name in (character_names or []) if str(name or "").strip()]
+    if not names:
+        names = ["ずんだもん", "四国めたん"]
+    lines: list[str] = []
+    seen: set[str] = set()
+    characters = list_characters(profile_id) if profile_id else []
+    for name in names:
+        matches = [c for c in characters if c.character_name == name]
+        matches.sort(key=lambda c: (not c.enabled, c.sort_order, c.character_key))
+        character = matches[0] if matches else None
+        if character:
+            if not character.credit_required:
+                continue
+            text = (character.credit_text or "").strip() or _default_credit_text(character)
+        else:
+            from config import CHARACTERS
+            config_item = next((item for item in CHARACTERS.values() if item.get("name") == name), None)
+            if not config_item:
+                _logger.error("クレジット設定の無いキャラクターです: profile_id=%s character=%s", profile_id, name)
+                raise RuntimeError(f"クレジット設定の無いキャラクターです: {name}")
+            text = f"VOICEVOX:{name}"
+        if text and text not in seen:
+            seen.add(text)
+            lines.append(text)
+    if not lines:
+        return ""
+    return "\n\n【使用音声合成】" + " / ".join(lines)
