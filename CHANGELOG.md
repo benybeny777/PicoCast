@@ -6,6 +6,11 @@
 
 ## 2026-06-04
 
+### 表記を「Stable Diffusion WebUI」に統一・必須構成早見表をREADMEにも記載
+
+- UI・コメント・ログ・ドキュメントの「SD WebUI」「Forge（単独）」「SD（略語）」表記を「Stable Diffusion WebUI」に統一した（命名ルール準拠）。識別子 `SD_WEBUI_*` は対象外。
+- 必須構成 早見表（使い方別の必要ソフト・APIキー）を README の前提条件にも追加した（`/setup` 冒頭と同内容）。
+
 ### Stable Diffusion WebUI 使用時は Ollama を必須化（プロンプト英訳）
 
 - Stable Diffusion WebUI 画像生成は日本語プロンプトの英訳に Ollama を使うため、Ollama 未起動・接続不可時は生のエラーではなく `E-OLLAMA-DOWN`（対処手順つき）で明確に停止するようにした（`core/image_generator.py:_translate_to_english_for_sd`）。背景生成エラー表示でも `AppError.user_message()` で対処手順を出す。

@@ -48,7 +48,7 @@ _INSTALL_GUIDE: dict[str, dict] = {
     "ollama": {
         "label": "Ollama",
         "required": False,
-        "purpose": "台本の冒頭品質レビュー（任意）／Stable Diffusion WebUI 画像の英語プロンプト変換（SD WebUI 使用時は必須）",
+        "purpose": "台本の冒頭品質レビュー（任意）／Stable Diffusion WebUI 画像の英語プロンプト変換（Stable Diffusion WebUI 使用時は必須）",
         "download_url": config.OLLAMA_DOWNLOAD_URL,
         "install_hint": "台本の品質レビューに使います。Stable Diffusion WebUI で画像生成する場合は英訳に必須です。インストール後 `ollama pull qwen3:8b` でモデルを取得し、起動した状態で再診断してください。",
         "steps": [

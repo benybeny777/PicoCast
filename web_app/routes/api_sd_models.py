@@ -1,15 +1,15 @@
 """
-SD WebUI Forge モデル管理 API ルート。
+Stable Diffusion WebUI モデル管理 API ルート。
 
 GET  /api/sd-models            — マニフェスト内全モデルのステータス
-GET  /api/sd-models/webui      — SD WebUI API からインストール済みモデル一覧
-GET  /api/sd-models/current    — SD WebUI の現在ロード済みモデル名
+GET  /api/sd-models/webui      — Stable Diffusion WebUI API からインストール済みモデル一覧
+GET  /api/sd-models/current    — Stable Diffusion WebUI の現在ロード済みモデル名
 GET  /api/sd-models/progress   — ダウンロード進捗確認（ポーリング用）
 POST /api/sd-models/download        — マニフェスト内モデルをダウンロード（バックグラウンド）
 POST /api/sd-models/delete          — モデルファイルを削除（confirmed=true 必須）
 POST /api/sd-models/delete-redownload — 削除して再ダウンロード（confirmed=true 必須）
-POST /api/sd-models/use        — SD WebUI のアクティブモデルを切り替える
-POST /api/sd-models/rescan     — SD WebUI に再スキャンを依頼する
+POST /api/sd-models/use        — Stable Diffusion WebUI のアクティブモデルを切り替える
+POST /api/sd-models/rescan     — Stable Diffusion WebUI に再スキャンを依頼する
 """
 import logging
 import threading
@@ -66,7 +66,7 @@ def _run_download(model_id: str) -> None:
         _progress[model_id] = _make_progress("downloading")
         sd_model_service.download_model(model_id, progress_callback=cb)
 
-        # ダウンロード成功後に SD WebUI に再スキャンを依頼（API が起動していれば）
+        # ダウンロード成功後に Stable Diffusion WebUI に再スキャンを依頼（API が起動していれば）
         try:
             sd_model_service.rescan_models()
         except Exception:
@@ -117,7 +117,7 @@ def list_models():
 
 @router.get("/webui")
 def list_webui_models():
-    """SD WebUI API からインストール済みモデル一覧を返す。"""
+    """Stable Diffusion WebUI API からインストール済みモデル一覧を返す。"""
     try:
         models = sd_model_service.get_installed_models_from_webui()
         return {"status": "ok", "models": models}
@@ -127,7 +127,7 @@ def list_webui_models():
 
 @router.get("/current")
 def get_current_model():
-    """SD WebUI の現在ロード済みモデル名を返す。"""
+    """Stable Diffusion WebUI の現在ロード済みモデル名を返す。"""
     try:
         model = sd_model_service.get_current_model_from_webui()
         return {"status": "ok", "model": model}
@@ -183,7 +183,7 @@ def delete_and_redownload(req: ModelIdConfirmedRequest):
 
 @router.post("/use")
 def use_model(req: ModelNameRequest):
-    """SD WebUI のアクティブモデルを切り替え、SD_WEBUI_MODEL 設定にも保存する。"""
+    """Stable Diffusion WebUI のアクティブモデルを切り替え、SD_WEBUI_MODEL 設定にも保存する。"""
     try:
         sd_model_service.set_active_model(req.model_name)
         # SD_WEBUI_MODEL を設定DBに保存して次回生成から確実に使われるようにする
@@ -196,7 +196,7 @@ def use_model(req: ModelNameRequest):
 
 @router.post("/rescan")
 def rescan():
-    """SD WebUI に再スキャンを依頼する。"""
+    """Stable Diffusion WebUI に再スキャンを依頼する。"""
     try:
         sd_model_service.rescan_models()
         return {"status": "ok"}

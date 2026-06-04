@@ -1,5 +1,5 @@
 """
-SD WebUI Forge モデル管理サービス。
+Stable Diffusion WebUI モデル管理サービス。
 Web UI ルートからの要求を受けてモデルマネージャーへ委譲する。
 """
 import logging
@@ -22,7 +22,7 @@ def get_model_list() -> list[dict[str, Any]]:
 
 
 def get_installed_models_from_webui() -> list[dict]:
-    """SD WebUI API からインストール済みモデル一覧を取得する。
+    """Stable Diffusion WebUI API からインストール済みモデル一覧を取得する。
 
     Raises:
         RuntimeError: API 未起動・HTTPエラー。
@@ -33,7 +33,7 @@ def get_installed_models_from_webui() -> list[dict]:
 
 
 def get_current_model_from_webui() -> str:
-    """SD WebUI API から現在ロード中のモデル名を取得する。
+    """Stable Diffusion WebUI API から現在ロード中のモデル名を取得する。
 
     Raises:
         RuntimeError: API 未起動・HTTPエラー。
@@ -44,7 +44,7 @@ def get_current_model_from_webui() -> str:
 
 
 def set_active_model(model_name: str) -> None:
-    """SD WebUI API でアクティブモデルを切り替える。
+    """Stable Diffusion WebUI API でアクティブモデルを切り替える。
 
     Raises:
         RuntimeError: モデルが見つからない・API 未起動・HTTPエラー。
@@ -55,7 +55,7 @@ def set_active_model(model_name: str) -> None:
 
 
 def rescan_models() -> None:
-    """SD WebUI API に再スキャンを依頼する。
+    """Stable Diffusion WebUI API に再スキャンを依頼する。
 
     Raises:
         RuntimeError: API 未起動・HTTPエラー。

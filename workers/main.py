@@ -499,7 +499,7 @@ def _report_thumbnail_failure(err, topic, theme_dir, update_status):
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
                        script_content=None, debug_mode=False, long_thumbnail_ab_test=None):
-    """台本内容をもとにサムネイル画像を生成する（IMAGE_BACKEND に従い Nano Banana または Stable Diffusion WebUI Forge を使用）。"""
+    """台本内容をもとにサムネイル画像を生成する（IMAGE_BACKEND に従い Nano Banana または Stable Diffusion WebUI を使用）。"""
     def _log(msg):
         if update_status: update_status(msg)
         else: print(msg, flush=True)
@@ -527,7 +527,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     except Exception:
         raise
 
-    # サムネイルは IMAGE_BACKEND に従う（sd_webui の場合は SD WebUI で生成）
+    # サムネイルは IMAGE_BACKEND に従う（sd_webui の場合は Stable Diffusion WebUI で生成）
     # background_engine を明示的に渡すことでバックエンドを固定する
     thumb_engine = img_gen.background_engine
     thumb_img_gen = ImageGenerator(
@@ -1564,7 +1564,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if img_gen.background_engine == "nanobanana":
         update_status(f"🖼  {img_gen.nanobanana_request_summary()}")
     elif img_gen.background_engine == "sd_webui":
-        update_status(f"🖼  SD WebUI 生成: 解像度: {_resolution_label(width, height)}")
+        update_status(f"🖼  Stable Diffusion WebUI 生成: 解像度: {_resolution_label(width, height)}")
     update_status(f"🎬 アセット生成を開始します...")
 
     voice_num = 0
@@ -1780,7 +1780,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     # ロングの場合は theme_dir に保存済み
 
     # ══════════════════════════════════════════════════════════════════════════
-    # パス2: 全背景生成（Gemini / SD WebUI）
+    # パス2: 全背景生成（Gemini / Stable Diffusion WebUI）
     # ══════════════════════════════════════════════════════════════════════════
     update_status(f"🖼  背景生成フェーズ（{total_bgs}件）...")
 

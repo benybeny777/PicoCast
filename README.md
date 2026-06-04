@@ -66,7 +66,7 @@ graph TD
     A[台本入力] --> B[LLMによる品質レビュー]
     B -->|品質クリア| C[よみがな正規化]
     C --> D[音声生成 VOICEVOX]
-    C --> E[画像生成 Nano Banana/SD WebUI]
+    C --> E[画像生成 Nano Banana/Stable Diffusion WebUI]
     D --> F[ネイティブレンダリング ffmpeg]
     E --> F
     F --> G[YouTube予約アップロード]
@@ -98,6 +98,24 @@ graph TD
 | **ffmpeg** | 動画レンダリング | `h264_nvenc`（GPU）または `libx264`（CPU）|
 | **Ollama** | 品質レビュー等 | デフォルトモデル: `qwen3:8b` |
 | **Google AI Studio** | 台本・Gemini画像生成 | APIキーは設定画面で登録 |
+
+### 必須構成 早見表
+
+使い方によって必要なソフト・APIキーが変わります。**VOICEVOX と ffmpeg は常に必須**です（✅必須 ／ △任意 ／ —不要）。
+
+| 使い方 | VOICEVOX | ffmpeg | Google APIキー | Stable Diffusion WebUI | Ollama |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| 手書き台本 ＋ Stable Diffusion WebUI 画像（**最小構成**） | ✅ | ✅ | — | ✅ | ✅ |
+| 手書き台本 ＋ Gemini 画像 | ✅ | ✅ | ✅ | — | △ |
+| AI台本生成 ＋ Gemini 画像 | ✅ | ✅ | ✅ | — | △ |
+| AI台本生成 ＋ Stable Diffusion WebUI 画像 | ✅ | ✅ | ✅（台本用） | ✅ | ✅ |
+
+- **YouTube 認証**：YouTube へアップロードする場合のみ必須（生成だけなら不要）。
+- **Ollama**：Stable Diffusion WebUI 画像のプロンプト英訳に必須。台本の品質レビューは任意。
+- **OpenAI APIキー**＝台本の最終レビュー用（任意）、**HF Token**＝Stable Diffusion WebUI のモデルDL用（任意）。
+
+> [!NOTE]
+> Google APIキーは「AI台本生成」または「Gemini画像生成」を使うときだけ必要です。**台本を手書きし、画像を Stable Diffusion WebUI で作るなら不要**です。同じ早見表は初回セットアップ（`/setup`）の冒頭にも表示されます。
 
 ---
 
@@ -131,7 +149,7 @@ pip install --upgrade -r config/requirements.txt
 |:---|:---|
 | **Google API Key** | Gemini API（台本・背景・サムネイル生成） |
 | **OpenAI API Key** | ChatGPT（台本の最終レビュー） |
-| **HF Token** | Hugging Face（SD WebUI モデルDL用・任意） |
+| **HF Token** | Hugging Face（Stable Diffusion WebUI モデルDL用・任意） |
 | **YouTube Client Secrets** | OAuth クライアント情報（JSON文字列） |
 
 > [!IMPORTANT]

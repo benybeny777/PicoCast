@@ -56,7 +56,7 @@ def classify_image_api_error(exc: Exception) -> tuple[str, int | None]:
 
 
 def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
-    """Ollama を使って日本語の背景描写を SD 向け英語プロンプトに翻訳する。
+    """Ollama を使って日本語の背景描写を Stable Diffusion WebUI 向け英語プロンプトに翻訳する。
 
     Stable Diffusion WebUI バックエンドでは Ollama を必須とする。接続不可・
     タイムアウト時は対処手順つきの E-OLLAMA-DOWN を送出する（サイレントフォールバック禁止）。
@@ -101,7 +101,7 @@ def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
         raise RuntimeError("Ollama からの翻訳結果が空でした")
 
     if debug:
-        print(f"  [SD翻訳] {description[:40]!r} → {translated[:80]!r}")
+        print(f"  [プロンプト英訳] {description[:40]!r} → {translated[:80]!r}")
 
     return translated
 
@@ -240,7 +240,7 @@ class ImageGenerator:
     def _prepare_sd_webui_model(self) -> None:
         """SD_WEBUI_MODEL が設定されている場合、インストール確認・ダウンロード・モデル切り替えを行う。
 
-        SD_WEBUI_MODEL が空文字のときは何もしない（Forge の現在ロード済みモデルをそのまま使う）。
+        SD_WEBUI_MODEL が空文字のときは何もしない（Stable Diffusion WebUI の現在ロード済みモデルをそのまま使う）。
         モデルが未インストールかつ AUTO_DOWNLOAD_SD_MODELS=False のときは RuntimeError を送出する。
         フォールバック禁止: 指定モデルが使用不可な場合は中止する。
         """
@@ -302,12 +302,12 @@ class ImageGenerator:
                     f"または AUTO_DOWNLOAD_SD_MODELS=1 を設定すると生成前に自動ダウンロードします。"
                 )
 
-        # モデル切り替え（SD WebUI API 経由）
+        # モデル切り替え（Stable Diffusion WebUI API 経由）
         with StableDiffusionWebUIGenerator() as gen:
             gen.set_active_model(model_name)
 
     def _generate_background_sd_webui(self, description, save_dir, fname, *, is_thumbnail=False):
-        """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API で背景画像を生成する。"""
+        """Stable Diffusion WebUI / AUTOMATIC1111互換API で背景画像を生成する。"""
         from core.sd_webui_generator import (
             StableDiffusionWebUIGenerator,
             _BG_PROMPT_SUFFIX,
@@ -343,12 +343,12 @@ class ImageGenerator:
 
         prompt_suffix = _THUMB_PROMPT_SUFFIX if is_thumbnail else _BG_PROMPT_SUFFIX
 
-        # 日本語プロンプトを Ollama で英語に翻訳してから SD WebUI に渡す
+        # 日本語プロンプトを Ollama で英語に翻訳してから Stable Diffusion WebUI に渡す
         en_prompt = _translate_to_english_for_sd(description, debug=self.debug)
 
         if self.debug:
             print(
-                f"  [AI] SD WebUI ({config.SD_WEBUI_BASE_URL}) "
+                f"  [AI] Stable Diffusion WebUI ({config.SD_WEBUI_BASE_URL}) "
                 f"{gen_width}x{gen_height} で生成開始: {en_prompt[:60]}..."
             )
 
@@ -360,7 +360,7 @@ class ImageGenerator:
             except Exception as e:
                 # 自動フォールバック禁止。HTTPステータスで分類してコード付き例外にする。
                 category, status = classify_image_api_error(e)
-                print(f"❌ SD WebUI 背景生成に失敗しました（category={category} / status={status}）。自動フォールバックは行いません。")
+                print(f"❌ Stable Diffusion WebUI 背景生成に失敗しました（category={category} / status={status}）。自動フォールバックは行いません。")
                 print(f"❌ エラー詳細: {e}")
                 raise ImageGenerationError(
                     f"Stable Diffusion WebUI が失敗しました: {e}",
@@ -368,7 +368,7 @@ class ImageGenerator:
                 ) from e
 
         if self.debug:
-            print(f"  [AI] SD WebUI 完了: {fname}")
+            print(f"  [AI] Stable Diffusion WebUI 完了: {fname}")
         return fname
 
     def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None, is_thumbnail=False):

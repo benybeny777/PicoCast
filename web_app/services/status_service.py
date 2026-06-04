@@ -39,7 +39,7 @@ def check_ollama() -> dict[str, Any]:
 
 
 def check_sd_webui() -> dict[str, Any]:
-    """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API の疎通確認とモデル情報を返す。"""
+    """Stable Diffusion WebUI / AUTOMATIC1111互換API の疎通確認とモデル情報を返す。"""
     try:
         from core.sd_webui_generator import StableDiffusionWebUIGenerator
         gen = StableDiffusionWebUIGenerator()

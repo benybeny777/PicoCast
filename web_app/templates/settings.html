@@ -999,7 +999,7 @@ function esc(str) {
 loadConfig();
 
 /* ══════════════════════════════════════════════
-   SD モデル管理タブ
+   Stable Diffusion WebUI モデル管理タブ
 ══════════════════════════════════════════════ */
 let _sdLoaded = false;
 let _sdModels = [];
@@ -1054,7 +1054,7 @@ async function sdInitTab() {
     if (hfEl)   hfEl.innerHTML = _sdHfTokenSet
       ? '<span class="badge badge-ok">設定済み</span>'
       : '<span class="badge badge-warn">未設定</span> <small style="color:var(--text-muted)">認証付きモデルのDLに必要</small>';
-  } catch(e) { console.warn('SD tab init error:', e); }
+  } catch(e) { console.warn('Stable Diffusion WebUI tab init error:', e); }
 
   await Promise.all([sdLoadModels(), sdLoadCurrentModel(), sdLoadWebuiModels()]);
 }

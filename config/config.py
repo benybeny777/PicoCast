@@ -142,28 +142,28 @@ OPENING_REVIEW_MAX_LLM_RETRIES     = int(os.environ.get("OPENING_REVIEW_MAX_LLM_
 OLLAMA_BASE_URL              = os.environ.get("OLLAMA_BASE_URL",              "http://localhost:11434")  # Ollama API エンドポイント
 OLLAMA_REVIEW_MODEL          = os.environ.get("OLLAMA_REVIEW_MODEL",          "qwen3:8b")               # 冒頭レビューモデル
 OLLAMA_REWRITE_MODEL         = os.environ.get("OLLAMA_REWRITE_MODEL",         "qwen3:8b")               # 冒頭リライトモデル
-OLLAMA_TRANSLATE_MODEL       = os.environ.get("OLLAMA_TRANSLATE_MODEL",       "qwen3:8b")               # SD プロンプト日→英翻訳モデル
+OLLAMA_TRANSLATE_MODEL       = os.environ.get("OLLAMA_TRANSLATE_MODEL",       "qwen3:8b")               # Stable Diffusion WebUI プロンプト日→英翻訳モデル
 
 # ───────────────────────────────────────────────
 # 画像生成バックエンド統合設定
 # ───────────────────────────────────────────────
 IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "gemini").strip().lower()  # 画像生成バックエンド（gemini / sd_webui）
-SD_WEBUI_BASE_URL = os.environ.get("SD_WEBUI_BASE_URL", "http://127.0.0.1:7860")  # Stable Diffusion WebUI Forge / A1111 API URL
-SD_WEBUI_TIMEOUT_SEC = int(os.environ.get("SD_WEBUI_TIMEOUT_SEC", "180"))          # SD WebUI API タイムアウト(秒)
-SD_WEBUI_MODEL = os.environ.get("SD_WEBUI_MODEL", "")                              # SD WebUI で使用するモデル名（空=起動中モデルをそのまま使用）
-SD_WEBUI_SAMPLER = os.environ.get("SD_WEBUI_SAMPLER", "DPM++ 2M Karras")           # SD WebUI サンプラー名
-SD_WEBUI_STEPS = int(os.environ.get("SD_WEBUI_STEPS", "24"))                       # SD WebUI 生成ステップ数
-SD_WEBUI_CFG_SCALE = float(os.environ.get("SD_WEBUI_CFG_SCALE", "7"))              # SD WebUI CFGスケール
-SD_WEBUI_WIDTH = int(os.environ.get("SD_WEBUI_WIDTH", "1024"))                     # SD WebUI 出力幅(px) — 背景デフォルト
-SD_WEBUI_HEIGHT = int(os.environ.get("SD_WEBUI_HEIGHT", "576"))                    # SD WebUI 出力高さ(px) — 背景デフォルト
-SD_WEBUI_NEGATIVE_PROMPT = os.environ.get(                                         # SD WebUI ネガティブプロンプト（人物・低品質抑制）
+SD_WEBUI_BASE_URL = os.environ.get("SD_WEBUI_BASE_URL", "http://127.0.0.1:7860")  # Stable Diffusion WebUI / A1111 API URL
+SD_WEBUI_TIMEOUT_SEC = int(os.environ.get("SD_WEBUI_TIMEOUT_SEC", "180"))          # Stable Diffusion WebUI API タイムアウト(秒)
+SD_WEBUI_MODEL = os.environ.get("SD_WEBUI_MODEL", "")                              # Stable Diffusion WebUI で使用するモデル名（空=起動中モデルをそのまま使用）
+SD_WEBUI_SAMPLER = os.environ.get("SD_WEBUI_SAMPLER", "DPM++ 2M Karras")           # Stable Diffusion WebUI サンプラー名
+SD_WEBUI_STEPS = int(os.environ.get("SD_WEBUI_STEPS", "24"))                       # Stable Diffusion WebUI 生成ステップ数
+SD_WEBUI_CFG_SCALE = float(os.environ.get("SD_WEBUI_CFG_SCALE", "7"))              # Stable Diffusion WebUI CFGスケール
+SD_WEBUI_WIDTH = int(os.environ.get("SD_WEBUI_WIDTH", "1024"))                     # Stable Diffusion WebUI 出力幅(px) — 背景デフォルト
+SD_WEBUI_HEIGHT = int(os.environ.get("SD_WEBUI_HEIGHT", "576"))                    # Stable Diffusion WebUI 出力高さ(px) — 背景デフォルト
+SD_WEBUI_NEGATIVE_PROMPT = os.environ.get(                                         # Stable Diffusion WebUI ネガティブプロンプト（人物・低品質抑制）
     "SD_WEBUI_NEGATIVE_PROMPT",
     "people, human, person, face, hands, photorealistic, realistic photo, "
     "bad anatomy, blurry, low quality, watermark, signature, logo, "
     "unreadable text, garbled text",
 )
-SD_WEBUI_ROOT = os.environ.get("SD_WEBUI_ROOT", "")                                # SD WebUI / Forge 本体ルートディレクトリ（例: C:\sd.webui\webui）
-SD_MODEL_MANIFEST_PATH = os.environ.get(                                            # SD WebUI モデルマニフェストパス（空=同梱既定値を使用）
+SD_WEBUI_ROOT = os.environ.get("SD_WEBUI_ROOT", "")                                # Stable Diffusion WebUI 本体ルートディレクトリ（例: C:\sd.webui\webui）
+SD_MODEL_MANIFEST_PATH = os.environ.get(                                            # Stable Diffusion WebUI モデルマニフェストパス（空=同梱既定値を使用）
     "SD_MODEL_MANIFEST_PATH",
     os.path.join(os.path.dirname(__file__), "assets", "sd_webui", "model_manifest.json"),
 )

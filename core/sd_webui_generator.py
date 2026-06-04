@@ -1,5 +1,5 @@
 """
-Stable Diffusion WebUI Forge / AUTOMATIC1111互換API クライアント。
+Stable Diffusion WebUI / AUTOMATIC1111互換API クライアント。
 
 画像生成失敗時は自動フォールバックせず、例外を上位に伝播させる。
 API未起動・HTTPエラー・レスポンス異常はすべて RuntimeError として明示する。
@@ -31,7 +31,7 @@ _THUMB_PROMPT_SUFFIX = (
 
 
 class StableDiffusionWebUIGenerator:
-    """Stable Diffusion WebUI Forge / AUTOMATIC1111互換API経由で画像を生成する。"""
+    """Stable Diffusion WebUI / AUTOMATIC1111互換API経由で画像を生成する。"""
 
     def __init__(
         self,
@@ -81,7 +81,7 @@ class StableDiffusionWebUIGenerator:
             return False
 
     def check_health(self) -> dict:
-        """SD WebUI APIの疎通確認と現在ロード中のモデル名を返す。
+        """Stable Diffusion WebUI APIの疎通確認と現在ロード中のモデル名を返す。
 
         Returns:
             {"ok": True, "url": str, "model": str}
@@ -94,13 +94,13 @@ class StableDiffusionWebUIGenerator:
             r = self._client.get(url, timeout=10)
         except httpx.ConnectError as e:
             raise RuntimeError(
-                f"SD WebUI API に接続できません ({self.base_url})。"
-                f"Forge/AUTOMATIC1111 が --api オプション付きで起動していることを確認してください。"
+                f"Stable Diffusion WebUI API に接続できません ({self.base_url})。"
+                f"Stable Diffusion WebUI / AUTOMATIC1111 が --api オプション付きで起動していることを確認してください。"
                 f"詳細: {e}"
             ) from e
         if r.status_code != 200:
             raise RuntimeError(
-                f"SD WebUI API エラー (GET /sdapi/v1/options): "
+                f"Stable Diffusion WebUI API エラー (GET /sdapi/v1/options): "
                 f"status={r.status_code}, body={r.text[:300]}"
             )
         data = r.json()
@@ -169,7 +169,7 @@ class StableDiffusionWebUIGenerator:
 
         url = f"{self.base_url}/sdapi/v1/txt2img"
         logger.debug(
-            "SD WebUI txt2img: prompt=%s... (size=%dx%d, steps=%d, cfg=%.1f)",
+            "Stable Diffusion WebUI txt2img: prompt=%s... (size=%dx%d, steps=%d, cfg=%.1f)",
             effective_prompt[:60],
             effective_width,
             effective_height,
@@ -181,26 +181,26 @@ class StableDiffusionWebUIGenerator:
             r = self._client.post(url, json=payload, timeout=self.timeout)
         except httpx.ConnectError as e:
             raise RuntimeError(
-                f"SD WebUI API に接続できません ({self.base_url})。"
-                f"Forge/AUTOMATIC1111 が --api オプション付きで起動していることを確認してください。"
+                f"Stable Diffusion WebUI API に接続できません ({self.base_url})。"
+                f"Stable Diffusion WebUI / AUTOMATIC1111 が --api オプション付きで起動していることを確認してください。"
                 f"詳細: {e}"
             ) from e
         except httpx.TimeoutException as e:
             raise RuntimeError(
-                f"SD WebUI API がタイムアウトしました ({self.timeout}秒)。"
+                f"Stable Diffusion WebUI API がタイムアウトしました ({self.timeout}秒)。"
                 f"SD_WEBUI_TIMEOUT_SEC を増やすか、生成ステップ数を減らしてください。詳細: {e}"
             ) from e
 
         if r.status_code != 200:
             raise RuntimeError(
-                f"SD WebUI txt2img エラー: status={r.status_code}, body={r.text[:400]}"
+                f"Stable Diffusion WebUI txt2img エラー: status={r.status_code}, body={r.text[:400]}"
             )
 
         data = r.json()
         images = data.get("images")
         if not images:
             raise RuntimeError(
-                "SD WebUI txt2img レスポンスに画像データがありません。"
+                "Stable Diffusion WebUI txt2img レスポンスに画像データがありません。"
                 "APIのレスポンス構造を確認してください。"
             )
 
@@ -224,7 +224,7 @@ class StableDiffusionWebUIGenerator:
                     pass
             raise
 
-        logger.debug("SD WebUI 保存完了: %s", output_path)
+        logger.debug("Stable Diffusion WebUI 保存完了: %s", output_path)
         return output_path
 
     # ─────────────────────────────────────────
@@ -232,10 +232,10 @@ class StableDiffusionWebUIGenerator:
     # ─────────────────────────────────────────
 
     def get_options(self) -> dict:
-        """SD WebUI の現在の全オプション設定を返す。
+        """Stable Diffusion WebUI の現在の全オプション設定を返す。
 
         Returns:
-            SD WebUI /sdapi/v1/options のレスポンスそのまま。
+            Stable Diffusion WebUI /sdapi/v1/options のレスポンスそのまま。
 
         Raises:
             RuntimeError: API未接続・HTTPエラー。
@@ -245,11 +245,11 @@ class StableDiffusionWebUIGenerator:
             r = self._client.get(url, timeout=10)
         except httpx.ConnectError as e:
             raise RuntimeError(
-                f"SD WebUI API に接続できません ({self.base_url}): {e}"
+                f"Stable Diffusion WebUI API に接続できません ({self.base_url}): {e}"
             ) from e
         if r.status_code != 200:
             raise RuntimeError(
-                f"SD WebUI API エラー (GET /sdapi/v1/options): "
+                f"Stable Diffusion WebUI API エラー (GET /sdapi/v1/options): "
                 f"status={r.status_code}, body={r.text[:300]}"
             )
         return r.json()
@@ -267,7 +267,7 @@ class StableDiffusionWebUIGenerator:
         return opts.get("sd_model_checkpoint", "")
 
     def get_models(self) -> list[dict]:
-        """SD WebUI にインストールされているモデルの一覧を返す。
+        """Stable Diffusion WebUI にインストールされているモデルの一覧を返す。
 
         Returns:
             /sdapi/v1/sd-models のリスト（各要素は title, model_name, hash, sha256, filename など）
@@ -280,17 +280,17 @@ class StableDiffusionWebUIGenerator:
             r = self._client.get(url, timeout=30)
         except httpx.ConnectError as e:
             raise RuntimeError(
-                f"SD WebUI API に接続できません ({self.base_url}): {e}"
+                f"Stable Diffusion WebUI API に接続できません ({self.base_url}): {e}"
             ) from e
         if r.status_code != 200:
             raise RuntimeError(
-                f"SD WebUI API エラー (GET /sdapi/v1/sd-models): "
+                f"Stable Diffusion WebUI API エラー (GET /sdapi/v1/sd-models): "
                 f"status={r.status_code}, body={r.text[:300]}"
             )
         return r.json()
 
     def set_active_model(self, model_name: str) -> None:
-        """SD WebUI のアクティブモデルを切り替える。
+        """Stable Diffusion WebUI のアクティブモデルを切り替える。
 
         Args:
             model_name: タイトル文字列またはファイル名で指定（部分一致で解決する）。
@@ -304,7 +304,7 @@ class StableDiffusionWebUIGenerator:
         if matched_title is None:
             available = [m.get("title", m.get("model_name", "?")) for m in models]
             raise RuntimeError(
-                f"SD WebUI に '{model_name}' が見つかりません。"
+                f"Stable Diffusion WebUI に '{model_name}' が見つかりません。"
                 f"rescan を実行してモデルを再検出してください。"
                 f"利用可能: {available}"
             )
@@ -315,17 +315,17 @@ class StableDiffusionWebUIGenerator:
             r = self._client.post(url, json=payload, timeout=60)
         except httpx.ConnectError as e:
             raise RuntimeError(
-                f"SD WebUI API に接続できません ({self.base_url}): {e}"
+                f"Stable Diffusion WebUI API に接続できません ({self.base_url}): {e}"
             ) from e
         if r.status_code != 200:
             raise RuntimeError(
-                f"SD WebUI モデル切替エラー (POST /sdapi/v1/options): "
+                f"Stable Diffusion WebUI モデル切替エラー (POST /sdapi/v1/options): "
                 f"status={r.status_code}, body={r.text[:300]}"
             )
-        logger.info("SD WebUI アクティブモデル切替完了: %s", matched_title)
+        logger.info("Stable Diffusion WebUI アクティブモデル切替完了: %s", matched_title)
 
     def rescan_models(self) -> None:
-        """SD WebUI にモデル一覧の再スキャンを依頼する。
+        """Stable Diffusion WebUI にモデル一覧の再スキャンを依頼する。
 
         Raises:
             RuntimeError: API未接続・HTTPエラー。
@@ -335,14 +335,14 @@ class StableDiffusionWebUIGenerator:
             r = self._client.post(url, timeout=60)
         except httpx.ConnectError as e:
             raise RuntimeError(
-                f"SD WebUI API に接続できません ({self.base_url}): {e}"
+                f"Stable Diffusion WebUI API に接続できません ({self.base_url}): {e}"
             ) from e
         if r.status_code != 200:
             raise RuntimeError(
-                f"SD WebUI rescan エラー (POST /sdapi/v1/refresh-checkpoints): "
+                f"Stable Diffusion WebUI rescan エラー (POST /sdapi/v1/refresh-checkpoints): "
                 f"status={r.status_code}, body={r.text[:300]}"
             )
-        logger.info("SD WebUI モデル再スキャン完了")
+        logger.info("Stable Diffusion WebUI モデル再スキャン完了")
 
 
 # ─────────────────────────────────────────────

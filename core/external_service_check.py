@@ -1,5 +1,5 @@
 """
-外部サービス（ffmpeg / VOICEVOX / SD WebUI / Ollama）の起動状態と
+外部サービス（ffmpeg / VOICEVOX / Stable Diffusion WebUI / Ollama）の起動状態と
 使用デバイス（GPU / CPU）を確認するユーティリティ。
 
 - log_external_services(): アプリ起動時にコンソール+デバッグログへ出力

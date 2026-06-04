@@ -1,5 +1,5 @@
 """
-SD WebUI Forge / AUTOMATIC1111 モデル管理クラス。
+Stable Diffusion WebUI / AUTOMATIC1111 モデル管理クラス。
 
 モデルマニフェスト (model_manifest.json) に基づき、
 チェックポイントモデルのインストール確認・ダウンロード・SHA256検証を行う。
@@ -39,7 +39,7 @@ _REQUIRED_MODEL_KEYS = {
 
 
 class SDWebUIModelManager:
-    """SD WebUI Forge モデルマニフェストを元にモデルの管理を行う。"""
+    """Stable Diffusion WebUI モデルマニフェストを元にモデルの管理を行う。"""
 
     def __init__(
         self,
@@ -95,7 +95,7 @@ class SDWebUIModelManager:
         if not self.sd_root:
             raise RuntimeError(
                 "SD_WEBUI_ROOT が設定されていません。"
-                "SD WebUI のインストールディレクトリを SD_WEBUI_ROOT に設定してください。"
+                "Stable Diffusion WebUI のインストールディレクトリを SD_WEBUI_ROOT に設定してください。"
             )
         return os.path.join(
             self.sd_root,
@@ -172,7 +172,7 @@ class SDWebUIModelManager:
         missing = [s["filename"] for s in statuses if not s["installed"]]
         if missing:
             raise RuntimeError(
-                f"SD WebUI必要モデルが不足しています。不足: {', '.join(missing)}\n"
+                f"Stable Diffusion WebUI必要モデルが不足しています。不足: {', '.join(missing)}\n"
                 f"SDモデル管理画面からダウンロードしてください。"
             )
         return True
