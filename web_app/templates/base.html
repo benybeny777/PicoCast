@@ -183,6 +183,8 @@ async function navShutdown() {
   {% block content %}{% endblock %}
 </main>
 
+<div class="app-version-badge" title="アプリバージョン">v{{ app_version }}</div>
+
 <script>
 window.WEB_JOB_POLL_INTERVAL_MS = {{ web_job_poll_interval_ms }};
 window.WEB_SUCCESS_RELOAD_DELAY_MS = {{ web_success_reload_delay_ms }};

@@ -9,41 +9,53 @@ import requests
 from config import FFMPEG_BIN, NATIVE_FFMPEG_ENCODER, NATIVE_FFMPEG_PRESET
 
 
-APP_VERSION_BASE = "2026.05.19"
+# git も焼き込みバージョンも取得できないときの最終フォールバックのみに使う。
+# 通常の表示バージョンの日付部分は HEAD コミット日付から動的に算出する（固定値で化石化させない）。
+APP_VERSION_BASE = "0.0.0"
+
+
+def _baked_version() -> str | None:
+    """ビルド時に焼き込んだバージョン（exe 用）。無ければ None。"""
+    try:
+        from core._build_version import BUILD_VERSION  # ビルド時生成・gitignore
+        return BUILD_VERSION or None
+    except Exception:
+        return None
 
 
 def build_app_version() -> str:
-    # ビルド時に焼き込んだバージョンを最優先（exe では git が使えないため）
-    try:
-        from core._build_version import BUILD_VERSION  # ビルド時生成・gitignore
-        if BUILD_VERSION:
-            return BUILD_VERSION
-    except Exception:
-        pass  # フォールバック許可: 焼き込みが無ければ git / 既定へ
+    from core.runtime_env import is_frozen
+
+    # exe(frozen)では git が使えないので焼き込みバージョンを最優先する。
+    if is_frozen():
+        baked = _baked_version()
+        if baked:
+            return baked
+
+    # 開発時は git から動的に算出する（ハードコード値・古い焼き込みで化石化しないように）。
     try:
         repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        count = subprocess.check_output(
-            ["git", "rev-list", "--count", "HEAD"],
-            cwd=repo_dir,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
-        short_hash = subprocess.check_output(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=repo_dir,
-            stderr=subprocess.DEVNULL,
-            text=True,
-        ).strip()
+
+        def _git(*args: str) -> str:
+            return subprocess.check_output(
+                ["git", *args], cwd=repo_dir, stderr=subprocess.DEVNULL, text=True,
+            ).strip()
+
+        # 日付部分は HEAD コミット日付から取る
+        date_str = _git("show", "-s", "--format=%cd", "--date=format:%Y.%m.%d", "HEAD")
+        count = _git("rev-list", "--count", "HEAD")
+        short_hash = _git("rev-parse", "--short", "HEAD")
         dirty = subprocess.run(
             ["git", "diff", "--quiet"],
             cwd=repo_dir,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         ).returncode != 0
-        version = f"{APP_VERSION_BASE}.{count}-{short_hash}"
+        version = f"{date_str}.{count}-{short_hash}"
         return version + ("-dirty" if dirty else "")
     except Exception:
-        return APP_VERSION_BASE
+        # git も使えない最終手段: 焼き込みがあれば使い、無ければ既定値
+        return _baked_version() or APP_VERSION_BASE
 
 
 def split_input_scripts(raw_scripts: str) -> list[str]:

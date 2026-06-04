@@ -30,17 +30,17 @@ Write-Host "Nuitka を確認/導入します..."
 if ($LASTEXITCODE -ne 0) { throw "Nuitka のインストールに失敗しました。" }
 
 # 2. ビルドバージョンを焼き込む（exe では git が使えないため）
-#    python -c に複雑な文字列を渡すと PowerShell の引用符解釈で壊れるため、
-#    バージョン生成は PowerShell 側で行い、ファイル書き出しもここで行う。
+#    日付は HEAD コミット日付から取る（固定値で化石化しないように）。
+#    build_app_version() と同じ規則: {コミット日付}.{コミット数}-{hash}
 Write-Host "ビルドバージョンを生成します..."
-$verBase = (& $py -c "from core.gui_support import APP_VERSION_BASE; print(APP_VERSION_BASE)").Trim()
-if ($LASTEXITCODE -ne 0 -or -not $verBase) { throw "APP_VERSION_BASE の取得に失敗しました。" }
+$verBase     = (& git show -s '--format=%cd' '--date=format:%Y.%m.%d' HEAD).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $verBase) { throw "コミット日付の取得に失敗しました。" }
 $commitCount = (& git rev-list --count HEAD).Trim()
 $commitHash  = (& git rev-parse --short HEAD).Trim()
 $buildVersion = "$verBase.$commitCount-$commitHash"
 Set-Content -Path "core/_build_version.py" -Value "BUILD_VERSION = `"$buildVersion`"" -Encoding ascii
 Write-Host "BUILD_VERSION = $buildVersion"
-# Windows のバージョンリソース用に数値のみへ整形（例: 2026.05.19 -> 2026.5.19）
+# Windows のバージョンリソース用に数値のみへ整形（例: 2026.06.04 -> 2026.6.4）
 $numVer = (($verBase -split '\.') | ForEach-Object { [int]$_ }) -join '.'
 
 # 3. Nuitka ビルド（onefile standalone）

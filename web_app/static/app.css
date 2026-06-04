@@ -730,3 +730,7 @@ a:hover { text-decoration: underline; }
 .tab-btn.active, .tab-btn.tab-active { background: var(--surface); color: var(--accent); border: 2px solid var(--border); border-bottom: 2px solid var(--surface); font-weight: bold; }
 .tab-panel { display: none; }
 .tab-panel.active, .tab-panel.tab-active { display: block; }
+
+/* アプリバージョン（右下の片隅に常時表示・操作の邪魔をしない） */
+.app-version-badge { position: fixed; right: 8px; bottom: 6px; z-index: 50; font-family: monospace; font-size: 11px; color: var(--text-dim); opacity: 0.6; pointer-events: none; user-select: none; }
+.app-version-badge:hover { opacity: 0.9; }

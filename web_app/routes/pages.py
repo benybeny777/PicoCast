@@ -43,11 +43,16 @@ templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 router = APIRouter(tags=["pages"])
 
+# 表示用アプリバージョン（起動時に一度だけ算出。実行中は変わらない）
+from core.gui_support import build_app_version as _build_app_version
+_APP_VERSION = _build_app_version()
+
 
 def _render(request: Request, name: str, ctx: dict):
     """Starlette 1.x の TemplateResponse API を吸収するラッパー。"""
     ctx["request"] = request
     ctx["web_app_name"] = WEB_APP_NAME
+    ctx["app_version"] = _APP_VERSION
     ctx["web_job_poll_interval_ms"] = WEB_JOB_POLL_INTERVAL_MS
     ctx["web_log_poll_interval_ms"] = WEB_LOG_POLL_INTERVAL_MS
     ctx["web_success_reload_delay_ms"] = WEB_SUCCESS_RELOAD_DELAY_MS
