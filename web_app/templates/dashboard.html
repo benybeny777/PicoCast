@@ -90,6 +90,9 @@
         </td>
       </tr>
     </table>
+    <p id="app-status-setup-hint" class="hint mt"{% if status.voicevox.ok and status.ffmpeg.ok %} style="display:none"{% endif %}>
+      ⚠ 必須サービス（VOICEVOX / ffmpeg）が未接続です。<a href="/setup">初回セットアップ</a>でダウンロード先・自動検出を確認してください。
+    </p>
   </div>
 
   <!-- 統計 -->
@@ -226,6 +229,10 @@ async function refreshAppStatus() {
     document.getElementById('st-ffmpeg').innerHTML = ff.ok
       ? _badge('badge-ok', `利用可${ff.version ? ' v' + ff.version : ''}`)
       : _badge('badge-ng', '見つからない');
+
+    // 必須サービス未接続のセットアップ誘導の表示/非表示を更新する
+    const setupHint = document.getElementById('app-status-setup-hint');
+    if (setupHint) setupHint.style.display = (vv.ok && ff.ok) ? 'none' : '';
 
     msg.textContent = '更新しました';
     setTimeout(() => { msg.textContent = ''; }, 3000);
