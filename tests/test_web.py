@@ -1073,6 +1073,7 @@ def test_fixed_comment_candidates_treat_pinned_as_posted(tmp_path, monkeypatch):
 
 
 def test_auto_fixed_comment_scope_all_profiles(monkeypatch):
+    # 自動投稿は OS タスク経由の post_all_pending（直接投稿）で行う。scope=all を検証。
     import web_app.services.auto_fixed_comment_service as afc
     import web_app.services.fixed_comment_service as fcs
 
@@ -1090,16 +1091,18 @@ def test_auto_fixed_comment_scope_all_profiles(monkeypatch):
     )
     monkeypatch.setattr(
         fcs,
-        "submit_fixed_comment_job",
-        lambda history_name, auto_posted=False, profile_id=None: calls.append((history_name, auto_posted, profile_id)) or "job",
+        "post_fixed_comment_now",
+        lambda history_name, profile_id=None, auto_posted=False, log=None, is_cancelled=None:
+            (calls.append((history_name, auto_posted, profile_id)) or {"comment_thread_id": "ct"}),
     )
 
-    afc._run_once()
+    result = afc.post_all_pending()
 
     assert calls == [
         ("ch_a_video", True, "ch_a"),
         ("ch_b_video", True, "ch_b"),
     ]
+    assert result["posted"] == 2
 
 
 def test_auto_fixed_comment_scope_active_only(monkeypatch):
@@ -1115,11 +1118,12 @@ def test_auto_fixed_comment_scope_active_only(monkeypatch):
     )
     monkeypatch.setattr(
         fcs,
-        "submit_fixed_comment_job",
-        lambda history_name, auto_posted=False, profile_id=None: calls.append((history_name, auto_posted, profile_id)) or "job",
+        "post_fixed_comment_now",
+        lambda history_name, profile_id=None, auto_posted=False, log=None, is_cancelled=None:
+            (calls.append((history_name, auto_posted, profile_id)) or {"comment_thread_id": "ct"}),
     )
 
-    afc._run_once()
+    afc.post_all_pending()
 
     assert calls == [("active_video", True, None)]
 

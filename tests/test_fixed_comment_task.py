@@ -93,6 +93,52 @@ def test_register_unsupported_raises(monkeypatch):
         t.register()
 
 
+# ── inspect / repair（exe移動などの不整合検出・修正） ─────────────────────────
+
+def test_inspect_detects_stale_and_orphans(monkeypatch, tmp_path):
+    import core.fixed_comment_task as t
+    monkeypatch.setattr(t.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(t, "app_base_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(t, "_windows_exists", lambda: True)  # 現在タスクは登録済み
+    monkeypatch.setattr(t, "_command", lambda: (str(tmp_path / "cur.exe"), ["--post-fixed-comments"], str(tmp_path)))
+
+    cur_name = t.task_name()
+    existing = tmp_path / "real.exe"
+    existing.write_text("x", encoding="utf-8")
+    monkeypatch.setattr(t, "_windows_list_prefix", lambda: [
+        # 現在タスクだが記録パスが食い違う → stale
+        {"name": cur_name, "execute": r"C:\OLD\cur.exe", "arguments": "--post-fixed-comments", "workdir": str(tmp_path)},
+        # 別名・実行ファイルが存在しない → 迷子
+        {"name": "NativeVideoFactory-FixedComment-old-deadbeef", "execute": r"C:\gone\missing.exe", "arguments": "", "workdir": ""},
+        # 別名だが実行ファイルが在る（別インストール）→ 触らない
+        {"name": "NativeVideoFactory-FixedComment-keep-cafebabe", "execute": str(existing), "arguments": "", "workdir": ""},
+    ])
+
+    info = t.inspect()
+    assert info["stale"] is True
+    orphan_names = [o["name"] for o in info["orphans"]]
+    assert "NativeVideoFactory-FixedComment-old-deadbeef" in orphan_names
+    assert "NativeVideoFactory-FixedComment-keep-cafebabe" not in orphan_names
+
+
+def test_repair_reregisters_and_removes_orphans(monkeypatch):
+    import core.fixed_comment_task as t
+    monkeypatch.setattr(t.platform, "system", lambda: "Windows")
+    calls = {"register": 0, "deleted": []}
+    monkeypatch.setattr(t, "register", lambda: calls.__setitem__("register", calls["register"] + 1) or {"task_name": "x"})
+    monkeypatch.setattr(t, "_windows_delete", lambda name: calls["deleted"].append(name))
+    monkeypatch.setattr(t, "inspect", lambda: {
+        "supported": True, "os": "Windows", "registered": True, "stale": True,
+        "task_name": "cur", "orphans": [{"name": "orph", "path": "", "exe": r"C:\gone"}],
+    })
+
+    res = t.repair()
+    assert res["repaired_current"] is True
+    assert "orph" in res["removed_orphans"]
+    assert calls["register"] >= 1
+    assert "orph" in calls["deleted"]
+
+
 # ── post_all_pending（直接投稿の一括パス） ───────────────────────────────────
 
 def test_post_all_pending_counts(monkeypatch):
@@ -150,9 +196,15 @@ def test_api_fixed_comment_task_status_and_toggle(monkeypatch):
 
     client = TestClient(app)
 
+    # GET は inspect() を返す。実 schtasks を叩かないようモックする。
+    monkeypatch.setattr(t, "inspect", lambda: {
+        "supported": True, "os": "Windows", "registered": False, "stale": False,
+        "orphans": [], "task_name": "X", "target_dir": "d", "times": ["07:05"],
+    })
     r = client.get("/api/settings/fixed-comment-task")
     assert r.status_code == 200
     assert "registered" in r.json()
+    assert "orphans" in r.json()
 
     monkeypatch.setattr(t, "register", lambda: {"registered": True, "task_name": "X", "times": [], "supported": True, "os": "Windows", "target_dir": "d"})
     monkeypatch.setattr(t, "unregister", lambda: {"registered": False, "task_name": "X", "times": [], "supported": True, "os": "Windows", "target_dir": "d"})

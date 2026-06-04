@@ -491,11 +491,9 @@ NATIVE_TELOP_POP_START_SEC = float(os.environ.get("NATIVE_TELOP_POP_START_SEC", 
 NATIVE_TELOP_POP_MAX_SEC = float(os.environ.get("NATIVE_TELOP_POP_MAX_SEC", "1.5"))                  # ポップテロップの最大表示持続時間(秒)
 
 # ───────────────────────────────────────────────
-# 固定コメント自動投稿
+# 固定コメント自動投稿（自動投稿は OS タスク経由のみ。Web UI 内では手動投稿のみ）
 # ───────────────────────────────────────────────
-AUTO_FIXED_COMMENT_ENABLED       = os.environ.get("AUTO_FIXED_COMMENT_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")  # 固定コメント自動投稿を有効化
-AUTO_FIXED_COMMENT_PROFILE_SCOPE = os.environ.get("AUTO_FIXED_COMMENT_PROFILE_SCOPE", "all").strip().lower()  # 固定コメント自動投稿対象（active / all）
-AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC = int(os.environ.get("AUTO_FIXED_COMMENT_CHECK_INTERVAL_SEC", "600"))  # 確認間隔（秒）既定10分
+AUTO_FIXED_COMMENT_PROFILE_SCOPE = os.environ.get("AUTO_FIXED_COMMENT_PROFILE_SCOPE", "all").strip().lower()  # OSタスク自動投稿の対象（active / all）
 
 # ───────────────────────────────────────────────
 # ジョブログ永続化

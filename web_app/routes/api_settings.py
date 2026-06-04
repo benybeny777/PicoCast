@@ -121,9 +121,19 @@ def api_change_output_base(req: OutputBaseRequest):
 
 @router.get("/fixed-comment-task")
 def api_fixed_comment_task_status():
-    """固定コメント自動投稿タスク（OSスケジューラ）の登録状態を返す。"""
-    from core.fixed_comment_task import status
-    return status()
+    """固定コメント自動投稿タスク（OSスケジューラ）の登録状態と不整合(stale/orphans)を返す。"""
+    from core.fixed_comment_task import inspect
+    return inspect()
+
+
+@router.post("/fixed-comment-task/repair")
+def api_fixed_comment_task_repair():
+    """exe 移動などで生じたタスクのズレ・迷子を修正する（再登録＋迷子削除）。"""
+    from core.fixed_comment_task import repair
+    try:
+        return repair()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 class FixedCommentTaskRequest(BaseModel):

@@ -131,13 +131,89 @@ def unregister() -> dict:
     """登録済みタスクを削除する（未登録でもエラーにしない）。"""
     system = platform.system()
     if system == "Windows":
-        _unregister_windows()
+        _windows_delete(task_name())
     elif system == "Darwin":
-        _unregister_mac()
+        _mac_delete(_mac_plist_path())
     else:
         raise RuntimeError(f"このOSは未対応です（Windows / macOS のみ）: {system}")
     _logger.info("固定コメント投稿タスクを削除: %s", status()["task_name"])
     return status()
+
+
+def _norm(path: str) -> str:
+    return os.path.normcase(os.path.normpath(path)) if path else ""
+
+
+def inspect() -> dict:
+    """登録状態に加え、移動などで生じた不整合を検出して返す。
+
+    - stale:   現在のディレクトリのタスクは在るが、記録された実行コマンドが
+               今の exe/引数/作業ディレクトリと食い違う（exe差し替え・onefile↔standalone等）。
+    - orphans: prefix が一致する別名タスクのうち、実行ファイルが既に存在しない迷子
+               （インストールごと移動・削除した跡）。再登録または掃除の対象。
+    """
+    info = status()
+    info["stale"] = False
+    info["orphans"] = []
+    if not info["supported"]:
+        return info
+
+    exe, args, workdir = _command()
+    expected_arg = " ".join(args).strip()
+    cur_name = info["task_name"]
+    try:
+        tasks = _windows_list_prefix() if info["os"] == "Windows" else _mac_list_prefix()
+    except Exception:
+        _logger.warning("タスク一覧の取得に失敗", exc_info=True)
+        return info
+
+    for t in tasks:
+        if t["name"] == cur_name:
+            same = (
+                _norm(t.get("execute", "")) == _norm(exe)
+                and t.get("arguments", "").strip() == expected_arg
+                and _norm(t.get("workdir", "")) == _norm(workdir)
+            )
+            if not same:
+                info["stale"] = True
+        else:
+            ex = t.get("execute", "")
+            if ex and not os.path.exists(ex):
+                info["orphans"].append({"name": t["name"], "path": t.get("plist", ""), "exe": ex})
+    return info
+
+
+def repair() -> dict:
+    """検出した不整合を修正する。
+
+    - 現在のタスクが登録済みでパスがズレていれば、今の場所で再登録する。
+    - 実行ファイルが存在しない迷子タスクを削除する。
+    """
+    system = platform.system()
+    if system not in ("Windows", "Darwin"):
+        raise RuntimeError(f"このOSは未対応です（Windows / macOS のみ）: {system}")
+
+    info = inspect()
+    summary = {"repaired_current": False, "removed_orphans": []}
+
+    if info["registered"] and info["stale"]:
+        register()
+        summary["repaired_current"] = True
+        _logger.info("固定コメント投稿タスクを現在のパスで再登録: %s", info["task_name"])
+
+    for orphan in info["orphans"]:
+        try:
+            if system == "Windows":
+                _windows_delete(orphan["name"])
+            else:
+                _mac_delete(orphan.get("path") or "")
+            summary["removed_orphans"].append(orphan["name"])
+            _logger.info("迷子の固定コメントタスクを削除: %s (exe=%s)", orphan["name"], orphan.get("exe"))
+        except Exception:
+            _logger.warning("迷子タスクの削除に失敗: %s", orphan["name"], exc_info=True)
+
+    summary["status"] = inspect()
+    return summary
 
 
 # ── Windows（タスクスケジューラ） ─────────────────────────────────────────────
@@ -178,18 +254,45 @@ def _register_windows(times: list[str]) -> None:
     _run_powershell(script)
 
 
-def _unregister_windows() -> None:
+def _windows_delete(name: str) -> None:
     proc = subprocess.run(
-        ["schtasks", "/delete", "/tn", task_name(), "/f"],
+        ["schtasks", "/delete", "/tn", name, "/f"],
         capture_output=True, text=True,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
-    # 未登録（存在しない）はエラー扱いにしない
-    if proc.returncode != 0 and "ERROR: The system cannot find" not in (proc.stderr or "") \
-            and "見つかりません" not in (proc.stderr or ""):
-        # 既に無い場合のメッセージは握りつぶし、それ以外のみ記録
-        if _windows_exists():
+    # 既に存在しない場合はエラー扱いにしない（冪等）
+    if proc.returncode != 0:
+        check = subprocess.run(
+            ["schtasks", "/query", "/tn", name],
+            capture_output=True, text=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        if check.returncode == 0:  # まだ存在する＝本当に削除失敗
             raise RuntimeError(f"タスク削除に失敗しました: {(proc.stderr or proc.stdout or '').strip()}")
+
+
+def _windows_list_prefix() -> list[dict]:
+    """prefix が一致するタスクの (name, execute, arguments, workdir) を返す。"""
+    tab = "[char]9"
+    script = (
+        "$ErrorActionPreference='SilentlyContinue';"
+        "Get-ScheduledTask | Where-Object { $_.TaskName -like '" + _TASK_PREFIX + "-*' } | "
+        "ForEach-Object { $a = $_.Actions[0]; "
+        f"[Console]::WriteLine($_.TaskName + {tab} + $a.Execute + {tab} + $a.Arguments + {tab} + $a.WorkingDirectory) }}"
+    )
+    proc = subprocess.run(
+        ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+        capture_output=True, text=True,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    tasks = []
+    for line in (proc.stdout or "").splitlines():
+        if not line.strip():
+            continue
+        parts = line.split("\t")
+        parts += [""] * (4 - len(parts))
+        tasks.append({"name": parts[0], "execute": parts[1], "arguments": parts[2], "workdir": parts[3]})
+    return tasks
 
 
 # ── macOS（launchd LaunchAgent） ─────────────────────────────────────────────
@@ -218,8 +321,30 @@ def _register_mac(times: list[str]) -> None:
         raise RuntimeError(f"launchctl load に失敗しました: {(proc.stderr or proc.stdout or '').strip()}")
 
 
-def _unregister_mac() -> None:
-    path = _mac_plist_path()
-    if os.path.isfile(path):
+def _mac_delete(path: str) -> None:
+    if path and os.path.isfile(path):
         subprocess.run(["launchctl", "unload", path], capture_output=True, text=True)
         os.remove(path)
+
+
+def _mac_list_prefix() -> list[dict]:
+    """prefix が一致する LaunchAgent の (name, execute, plist) を返す。"""
+    import glob
+    import plistlib
+    agents_dir = os.path.expanduser("~/Library/LaunchAgents")
+    tasks = []
+    for path in glob.glob(os.path.join(agents_dir, f"{_MAC_LABEL_PREFIX}.*.plist")):
+        try:
+            with open(path, "rb") as f:
+                data = plistlib.load(f)
+        except Exception:
+            continue
+        program_args = data.get("ProgramArguments") or [""]
+        tasks.append({
+            "name": data.get("Label", os.path.basename(path)),
+            "execute": program_args[0] if program_args else "",
+            "arguments": " ".join(program_args[1:]) if len(program_args) > 1 else "",
+            "workdir": data.get("WorkingDirectory", ""),
+            "plist": path,
+        })
+    return tasks

@@ -177,6 +177,11 @@
       </label>
     </div>
     <p class="hint" id="fc-task-detail"></p>
+    <div id="fc-task-warn" class="mt" style="display:none">
+      <span class="badge badge-warn">要修正</span>
+      <span id="fc-task-warn-text"></span>
+      <button class="btn btn-secondary btn-xs" onclick="repairFixedCommentTask()">見つけて修正</button>
+    </div>
     <div id="fc-task-result" class="hint mt"></div>
   </div>
   <div class="card">
@@ -1100,9 +1105,35 @@ async function loadFixedCommentTask() {
     cb.checked = !!d.registered;
     statusEl.textContent = d.registered ? '✅ 登録済み（アプリ非起動でも投稿）' : '未登録（アプリ起動中のみ投稿）';
     detail.textContent = `タスク名: ${d.task_name} ／ 実行時刻: ${(d.times||[]).join(', ')} ／ 対象: ${d.target_dir}`;
+
+    // exe移動などで生じたズレ(stale)・迷子タスク(orphans)を検出したら修正を促す
+    const warn = document.getElementById('fc-task-warn');
+    const warnText = document.getElementById('fc-task-warn-text');
+    const orphans = d.orphans || [];
+    if (d.stale || orphans.length > 0) {
+      const parts = [];
+      if (d.stale) parts.push('登録パスが現在の場所とズレています');
+      if (orphans.length > 0) parts.push(`実行ファイルが見つからない迷子タスク ${orphans.length} 件`);
+      warnText.textContent = parts.join(' / ') + '（起動時に自動修正されますが、今すぐ直せます）';
+      warn.style.display = '';
+    } else {
+      warn.style.display = 'none';
+    }
   } catch (e) {
     statusEl.textContent = '取得失敗';
   }
+}
+
+async function repairFixedCommentTask() {
+  const result = document.getElementById('fc-task-result');
+  result.textContent = '修正しています...';
+  const res = await fetch('/api/settings/fixed-comment-task/repair', {method: 'POST'});
+  const d = await res.json();
+  if (!res.ok) { result.textContent = d.detail || '修正に失敗しました'; return; }
+  const removed = (d.removed_orphans || []).length;
+  showToast('タスクを修正しました');
+  result.textContent = `修正完了: 再登録=${d.repaired_current ? 'あり' : 'なし'} ／ 迷子削除=${removed}件`;
+  await loadFixedCommentTask();
 }
 
 async function saveFixedCommentTask() {

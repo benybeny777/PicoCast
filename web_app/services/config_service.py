@@ -51,8 +51,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     # ── YouTube ──
     {"key": "LONG_UPLOAD_PLAYLIST_NAME",       "type": "str",  "label": "Long追加先再生リスト名",      "default": str(cfg.LONG_UPLOAD_PLAYLIST_NAME), "allow_empty": True,           "group": "YouTube"},
     {"key": "TOPIC_REQUEST_CTA_EVERY_N",       "type": "int",  "label": "ネタ募集CTA間隔 (0=OFF)",     "default": str(cfg.TOPIC_REQUEST_CTA_EVERY_N), "min": 0, "max": 100,         "group": "YouTube"},
-    {"key": "AUTO_FIXED_COMMENT_ENABLED",      "type": "bool", "label": "固定コメント 自動投稿",        "default": "1" if cfg.AUTO_FIXED_COMMENT_ENABLED else "0",                  "group": "YouTube"},
-    {"key": "AUTO_FIXED_COMMENT_PROFILE_SCOPE","type": "select","label": "固定コメント 自動投稿対象",    "default": str(cfg.AUTO_FIXED_COMMENT_PROFILE_SCOPE), "choices": [("all", "全チャンネル"), ("active", "アクティブのみ")], "group": "YouTube"},
+    {"key": "AUTO_FIXED_COMMENT_PROFILE_SCOPE","type": "select","label": "固定コメント 自動投稿対象（OSタスク）",    "default": str(cfg.AUTO_FIXED_COMMENT_PROFILE_SCOPE), "choices": [("all", "全チャンネル"), ("active", "アクティブのみ")], "group": "YouTube"},
     # ── AI / 画像生成 ──
     {"key": "GEMINI_MODEL",                    "type": "str",          "label": "Gemini 台本生成モデル",            "default": str(cfg.GEMINI_MODEL),                                                                                                                     "group": "AI / 画像生成"},
     {"key": "NANOBANANA_PRO_MODEL",            "type": "str",          "label": "画像生成モデル(高品質)",           "default": str(cfg.NANOBANANA_PRO_MODEL),                                                                                                             "group": "AI / 画像生成"},

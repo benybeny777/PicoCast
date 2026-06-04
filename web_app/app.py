@@ -36,10 +36,25 @@ _runner_stop_event = None
 # ── アプリ生成 ────────────────────────────────────────────────────────────
 from contextlib import asynccontextmanager
 
+def _self_heal_fixed_comment_task() -> None:
+    """固定コメント投稿タスクが exe 移動などでズレ/迷子になっていれば起動時に修正する。"""
+    import logging
+    try:
+        from core.fixed_comment_task import inspect as fc_inspect, repair as fc_repair
+        info = fc_inspect()
+        if info.get("supported") and (info.get("stale") or info.get("orphans")):
+            result = fc_repair()
+            logging.getLogger(__name__).warning(
+                "固定コメント投稿タスクの不整合を起動時に修正: repaired_current=%s removed_orphans=%s",
+                result.get("repaired_current"), result.get("removed_orphans"),
+            )
+    except Exception:
+        logging.getLogger(__name__).warning("固定コメント投稿タスクの起動時チェックに失敗", exc_info=True)
+
+
 @asynccontextmanager
 async def _lifespan(app):
     import threading
-    from web_app.services.auto_fixed_comment_service import start_auto_watcher
     from web_app.services.status_service import refresh_settings_status
     from web_app.services.settings_preload_service import preload_settings_screen_cache
     from core.external_service_check import log_external_services
@@ -73,7 +88,8 @@ async def _lifespan(app):
         import logging
         logging.getLogger(__name__).error("[CharacterSeed] 起動時キャラ設定の移行でエラー: %s", _e, exc_info=True)
 
-    start_auto_watcher()
+    # 固定コメントの自動投稿は Web UI 内では行わない（手動投稿のみ）。
+    # 自動投稿は OS タスク（core.fixed_comment_task が登録）からの --post-fixed-comments で行う。
     threading.Thread(target=refresh_settings_status, daemon=True).start()
     threading.Thread(target=preload_settings_screen_cache, daemon=True, name="settings-screen-preload").start()
     # 初回起動（セットアップ未完了）では VOICEVOX 未起動などの外部サービス警告が
@@ -81,6 +97,9 @@ async def _lifespan(app):
     from core.setup_state import is_setup_completed
     if is_setup_completed():
         threading.Thread(target=log_external_services, daemon=True).start()
+
+    # 固定コメント投稿タスクが exe 移動などでズレていれば起動時に自動修正する
+    threading.Thread(target=_self_heal_fixed_comment_task, daemon=True, name="fixed-comment-task-heal").start()
     yield
     # ── shutdown フェーズ（Ctrl+C / SIGTERM / /api/shutdown すべてここを通る） ──
     run_lifespan_shutdown()
@@ -376,6 +395,8 @@ def main():
     # 固定コメント一括投稿エントリ: Web/runner 非起動でも単発で未投稿の固定コメントを投稿する。
     # OS のタスクスケジューラ / launchd から定期実行する（core.fixed_comment_task が登録）。
     if "--post-fixed-comments" in sys.argv:
+        # Web は手動投稿のみ・自動投稿はこのタスク経由。アプリ起動中でも投稿する
+        # （二重投稿は post_fixed_comment_now の DB 原子クレームで防ぐ）。
         from core.debug_logging import setup_debug_logging
         setup_debug_logging(role="fixed_comment")
         from web_app.services.auto_fixed_comment_service import post_all_pending
