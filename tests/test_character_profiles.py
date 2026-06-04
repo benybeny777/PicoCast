@@ -21,6 +21,8 @@ def test_food_genre_enables_toxic_metan():
     assert "zundamon" in by_key
     assert by_key["metan_food_toxic"]["enabled"] is True
     assert by_key["metan_standard_toxic"]["enabled"] is False
+    assert by_key["reimu"]["enabled"] is False
+    assert by_key["marisa"]["enabled"] is False
 
 
 def test_urban_genre_enables_standard_metan():
@@ -141,6 +143,28 @@ def test_store_update_enabled_true_is_exclusive(tmp_char_store):
 
     enabled = s.list_characters("zunkami", enabled_only=True)
     assert [c.character_key for c in enabled] == ["metan_standard_toxic"]
+
+
+def test_store_resolves_profile_voice_settings(tmp_char_store):
+    """キャラ設定に保存した音声バックエンド・話者IDを生成側で解決できる。"""
+    s = tmp_char_store
+    s.create_character(profile_id="zunkami", character_key="reimu",
+                       display_name="霊夢", character_name="霊夢",
+                       voice_backend="voicevox", voice_speaker="8",
+                       voice_styles={"怒り": 9}, enabled=True, sort_order=40)
+    assert s.resolve_character_voice("zunkami", "霊夢", "ノーマル") == 8
+    assert s.resolve_character_voice("zunkami", "霊夢", "怒り") == 9
+
+
+def test_store_rejects_unimplemented_voice_backend(tmp_char_store):
+    """VOICEVOX以外のバックエンド設定は保存できるが、生成は未実装として止める。"""
+    s = tmp_char_store
+    s.create_character(profile_id="zunkami", character_key="external",
+                       display_name="外部キャラ", character_name="外部キャラ",
+                       voice_backend="external_tts", voice_speaker="speaker-a",
+                       enabled=True, sort_order=40)
+    with pytest.raises(RuntimeError, match="未対応"):
+        s.resolve_character_voice("zunkami", "外部キャラ", "ノーマル")
 
 
 # ── API（別 profile 改変防止） ─────────────────────────────────────────────────

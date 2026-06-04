@@ -14,6 +14,14 @@ from core.character_profile_store import (
     create_character,
     list_characters,
 )
+from config import (
+    CHARACTERS,
+    CHARACTER_PNGS,
+    MARISA_CHARACTER_PNG_PATH,
+    MARISA_VOICEVOX_SPEAKER_ID,
+    REIMU_CHARACTER_PNG_PATH,
+    REIMU_VOICEVOX_SPEAKER_ID,
+)
 from core.script_prompts import FOOD_GENRE_PROFILES, METAN_TSUNDERE_RULES
 
 
@@ -30,6 +38,11 @@ _ZUNDAMON = {
     "speaking_rules": "1セリフは原則11〜15文字。説明口調・ナレーション調にしない。掛け合いで情報を届ける。",
     "forbidden_phrases": "",
     "dialogue_rules": "めたんの辛口ツッコミに落ち込みすぎず、強い事実で返す（例:「ここからが本題なのだ」「でも理由を聞くと変わるのだ」）。情報の主導権はずんだもんが持つ。",
+    "voice_backend": "voicevox",
+    "voice_speaker": str(CHARACTERS["ずんだもん"]["speaker_id"]),
+    "voice_speaker_id": CHARACTERS["ずんだもん"]["speaker_id"],
+    "voice_styles": CHARACTERS["ずんだもん"]["styles"],
+    "portrait_png_path": CHARACTER_PNGS["ずんだもん"],
 }
 
 # 四国めたん（辛口相方ツッコミ・ずんだハウス風）= 食べ物雑学堂用
@@ -74,6 +87,11 @@ _METAN_FOOD_TOXIC = {
         "「ですわ」連発・お嬢様口調になっていないか / ツッコミが長すぎないか / ずんだもんが情報・理由・答えを出しているか / "
         "掛け合いが情報を前に進めているか / ただの毒舌で尺を使っていないか。"
     ),
+    "voice_backend": "voicevox",
+    "voice_speaker": str(CHARACTERS["めたん"]["speaker_id"]),
+    "voice_speaker_id": CHARACTERS["めたん"]["speaker_id"],
+    "voice_styles": CHARACTERS["めたん"]["styles"],
+    "portrait_png_path": CHARACTER_PNGS["四国めたん"],
 }
 
 # 四国めたん（お嬢様毒舌）= 都市伝説など従来チャンネル用。既存の共通ルールを温存する。
@@ -90,6 +108,41 @@ _METAN_STANDARD_TOXIC = {
     ),
     # 既存の毒舌ルール本文をそのまま温存（都市伝説チャンネルの挙動を変えない）
     "dialogue_rules": METAN_TSUNDERE_RULES.strip(),
+    "voice_backend": "voicevox",
+    "voice_speaker": str(CHARACTERS["めたん"]["speaker_id"]),
+    "voice_speaker_id": CHARACTERS["めたん"]["speaker_id"],
+    "voice_styles": CHARACTERS["めたん"]["styles"],
+    "portrait_png_path": CHARACTER_PNGS["四国めたん"],
+}
+
+_REIMU = {
+    "character_key": "reimu",
+    "display_name": "霊夢（ゆっくり司会）",
+    "character_name": "霊夢",
+    "role": "落ち着いた司会・進行役。視聴者目線で話題を整理し、必要な疑問を短く挟む。情報を出しすぎず、会話の入口と締めを担当する。",
+    "tone_style": "冷静で少しドライ。語尾は自然な口語。「〜ね」「〜よ」「どういうこと？」を使う。過剰に可愛くしない。",
+    "speaking_rules": "1セリフは短く、進行・疑問・要約を中心にする。説明が長くなったら他キャラへ渡す。",
+    "forbidden_phrases": "なのだ / ですわ / だぜ / 長い解説の独占",
+    "dialogue_rules": "霊夢は会話の交通整理役。導入でテーマを提示し、途中で視聴者の疑問を代弁し、最後に短くまとめる。",
+    "voice_backend": "voicevox",
+    "voice_speaker": str(REIMU_VOICEVOX_SPEAKER_ID),
+    "voice_speaker_id": REIMU_VOICEVOX_SPEAKER_ID,
+    "portrait_png_path": REIMU_CHARACTER_PNG_PATH,
+}
+
+_MARISA = {
+    "character_key": "marisa",
+    "display_name": "魔理沙（ゆっくり相方）",
+    "character_name": "魔理沙",
+    "role": "勢いのある相方・ツッコミ役。疑問、驚き、軽い茶化しでテンポを作り、話を前に進める。",
+    "tone_style": "明るく少し雑。語尾は「〜だぜ」「〜じゃないか」「マジか」を使う。強すぎる罵倒は避ける。",
+    "speaking_rules": "1セリフは短くテンポ重視。驚きだけで終わらず、次の情報を引き出す問いにする。",
+    "forbidden_phrases": "なのだ / ですわ / ただの相槌 / 視聴者を馬鹿にする表現",
+    "dialogue_rules": "魔理沙は霊夢や他キャラの説明に対し、驚きと疑問で次の説明を引き出す。情報そのものを長く説明しない。",
+    "voice_backend": "voicevox",
+    "voice_speaker": str(MARISA_VOICEVOX_SPEAKER_ID),
+    "voice_speaker_id": MARISA_VOICEVOX_SPEAKER_ID,
+    "portrait_png_path": MARISA_CHARACTER_PNG_PATH,
 }
 
 
@@ -105,6 +158,8 @@ def _seed_set_for_genre(genre_profile: str) -> list[dict]:
         {**_ZUNDAMON, "sort_order": 10, "enabled": True},
         {**_METAN_FOOD_TOXIC, "sort_order": 20, "enabled": is_food},
         {**_METAN_STANDARD_TOXIC, "sort_order": 21, "enabled": not is_food},
+        {**_REIMU, "sort_order": 30, "enabled": False},
+        {**_MARISA, "sort_order": 31, "enabled": False},
     ]
 
 
@@ -130,6 +185,11 @@ def seed_character_profiles_for_profile(profile_id: str, genre_profile: str) -> 
             speaking_rules=item.get("speaking_rules", ""),
             forbidden_phrases=item.get("forbidden_phrases", ""),
             dialogue_rules=item.get("dialogue_rules", ""),
+            voice_backend=item.get("voice_backend", "voicevox"),
+            voice_speaker=item.get("voice_speaker", ""),
+            voice_speaker_id=item.get("voice_speaker_id"),
+            voice_styles=item.get("voice_styles"),
+            portrait_png_path=item.get("portrait_png_path", ""),
             enabled=item.get("enabled", True),
             sort_order=item.get("sort_order", 0),
         )

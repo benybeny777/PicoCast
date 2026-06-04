@@ -4,7 +4,7 @@ active profile のキャラクター設定を一覧・編集・有効/無効切�
 別 profile のキャラ設定は触れない（profile_id を active に固定）。
 """
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 router = APIRouter(prefix="/api/character-profiles", tags=["character-profiles"])
 
@@ -26,6 +26,11 @@ def _to_dict(c) -> dict:
         "speaking_rules": c.speaking_rules,
         "forbidden_phrases": c.forbidden_phrases,
         "dialogue_rules": c.dialogue_rules,
+        "voice_backend": c.voice_backend,
+        "voice_speaker": c.voice_speaker,
+        "voice_speaker_id": c.voice_speaker_id,
+        "voice_styles": c.voice_styles or {},
+        "portrait_png_path": c.portrait_png_path,
         "enabled": c.enabled,
         "sort_order": c.sort_order,
     }
@@ -47,6 +52,11 @@ class CharacterUpdateRequest(BaseModel):
     speaking_rules: str | None = None
     forbidden_phrases: str | None = None
     dialogue_rules: str | None = None
+    voice_backend: str | None = None
+    voice_speaker: str | None = None
+    voice_speaker_id: int | None = None
+    voice_styles: dict[str, int] | None = None
+    portrait_png_path: str | None = None
     enabled: bool | None = None
     sort_order: int | None = None
 
@@ -60,6 +70,11 @@ class CharacterCreateRequest(BaseModel):
     speaking_rules: str = ""
     forbidden_phrases: str = ""
     dialogue_rules: str = ""
+    voice_backend: str = "voicevox"
+    voice_speaker: str = ""
+    voice_speaker_id: int | None = None
+    voice_styles: dict[str, int] = Field(default_factory=dict)
+    portrait_png_path: str = ""
     enabled: bool = True
     sort_order: int = 0
 
@@ -106,6 +121,11 @@ def create_character_profile(req: CharacterCreateRequest):
             speaking_rules=req.speaking_rules,
             forbidden_phrases=req.forbidden_phrases,
             dialogue_rules=req.dialogue_rules,
+            voice_backend=req.voice_backend,
+            voice_speaker=req.voice_speaker,
+            voice_speaker_id=req.voice_speaker_id,
+            voice_styles=req.voice_styles,
+            portrait_png_path=req.portrait_png_path,
             enabled=req.enabled,
             sort_order=req.sort_order,
         )

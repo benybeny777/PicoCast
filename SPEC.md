@@ -149,11 +149,13 @@ yukkurijidou/
 キャラクター設定（役割・口調・禁止台詞・掛け合い構造）は台本テンプレートから分離し、`data/settings.db` の `character_profiles` テーブルで channel 別に管理する（`core/character_profile_store.py`）。
 
 - **責務分離**: 台本テンプレート（`prompt_templates.script_rules`）には動画構成・尺・シーン構造・分量・出力形式だけを書く。キャラの役割・口調・禁止表現・掛け合いは `character_profiles` に書く。テンプレートにキャラ設定を直書きしない／キャラ設定に尺・行数・シーン構造を書かない。
-- **テーブル列**: `character_id` / `profile_id`（channel）/ `character_key` / `display_name` / `character_name` / `role` / `tone_style` / `speaking_rules` / `forbidden_phrases` / `dialogue_rules` / `enabled` / `sort_order` / `created_at` / `updated_at`。
+- **テーブル列**: `character_id` / `profile_id`（channel）/ `character_key` / `display_name` / `character_name` / `role` / `tone_style` / `speaking_rules` / `forbidden_phrases` / `dialogue_rules` / `voice_backend` / `voice_speaker` / `voice_speaker_id` / `voice_styles_json` / `portrait_png_path` / `enabled` / `sort_order` / `created_at` / `updated_at`。
 - **合成順**: 生成時に `compose_character_section(profile_id)` が enabled のキャラを `sort_order` 順に合成し、台本プロンプトへ「キャラクター設定（最優先・厳守）」セクションとして注入する（`build_gemini_system_prompt` / `build_script_generation_prompt`）。合成は **script のみ**。ネタ会議（meeting）には注入しない。
 - **チャンネル別の既定**: 食べ物雑学堂（genre `zunkami` / `food_trivia`）は四国めたんを「辛口相方ツッコミ（ずんだハウス風）」（`metan_food_toxic`）にする。都市伝説（`zundamon_kowai`）は従来の「お嬢様毒舌めたん」（`metan_standard_toxic`）。別チャンネルのキャラ設定を流用しない（`profile_id` で厳密分離）。
 - **同名キャラの排他有効化**: `enabled=true` にする時は、同一 `profile_id` かつ同一 `character_name` の他キャラ設定を自動で `enabled=false` にする。四国めたんの辛口相方版とお嬢様毒舌版が同時にプロンプトへ混ざる事故を防ぐ。
-- **管理画面**: 設定画面「キャラクター設定」タブで active channel のキャラ設定を一覧・追加・編集・削除できる。削除は確認ダイアログと `confirmed=true` 必須。画面上の有効トグルは保存後に一覧を再読み込みし、同名キャラの排他状態を即時反映する。
+- **管理画面**: 設定画面「キャラクター設定」タブで active channel のキャラ設定を一覧・追加・編集・削除できる。役割・口調に加えて、音声バックエンド、話者ID/名前、表情別話者ID（JSON）、立ち絵PNGパスも編集できる。削除は確認ダイアログと `confirmed=true` 必須。画面上の有効トグルは保存後に一覧を再読み込みし、同名キャラの排他状態を即時反映する。
+- **追加キャラ**: seed は `ずんだもん` / `四国めたん` に加え、無効状態の `霊夢` / `魔理沙` を追補する。新規キャラは `character_name` を台本の話者名と一致させ、`voice_backend` と `portrait_png_path` を登録すれば台本生成プロンプトと native 立ち絵解決の対象になる。
+- **音声バックエンド**: `voice_backend=voicevox` の場合は `voice_speaker` または `voice_speaker_id` を VOICEVOX speaker ID として使い、`voice_styles_json` に `{"怒り": 9}` のような表情/スタイル別IDを持てる。VOICEVOX 以外のバックエンド名も設定として保存できるが、現時点の生成パイプラインは未対応のため、該当キャラを生成に使うと明示エラーで停止する。外部音声アプリ対応は、この列を入口に音声生成アダプタを追加する。
 - **自動フォールバック禁止**: 有効なキャラ設定が無いチャンネルは `compose_character_section()` が例外を送出する（標準めたんへ勝手に戻さない）。
 - **移行**: 起動時 `ensure_character_profiles_all()` が既存チャンネルにキャラ設定を保証し、`migrate_strip_character_rules_from_templates()` が旧テンプレートに直書きされたキャラ設定の長文（旧 `METAN_TSUNDERE_RULES`）を除去する（マーカー検出・冪等）。
 - 共通定数 `METAN_TSUNDERE_RULES`（`core/script_prompts.py`）は **ネタ会議プロンプトのみ**で使用する（script 側はキャラ設定へ移行済み）。
@@ -870,7 +872,8 @@ VOICE_READING_MODE = "safe_auto"
 - API: `/audio_query` → `/synthesis` を1行ずつ個別呼び出し
 - `postPhonemeLength`: `VOICE_POST_PHONEME_LENGTH`（デフォルト0.0）を VOICEVOX API に渡す
 - 末尾無音: 生成後のWAVへ `max(0.1, 0.1 × speed_scale)` 秒の無音を直接追加
-- キャラクター・スピーカーID:
+- キャラクター・スピーカーIDは active profile の `character_profiles.voice_backend` / `voice_speaker` / `voice_speaker_id` / `voice_styles_json` を優先して解決する。DBに未設定の既定キャラは `config.CHARACTERS` を使う。`voice_backend` が `voicevox` 以外の場合、設定は保存できるが現在の生成処理は未対応として停止する。
+- 既定の VOICEVOX スピーカーID:
 
 | キャラ | スタイル | ID |
 |---|---|---|
@@ -884,6 +887,8 @@ VOICE_READING_MODE = "safe_auto"
 | 四国めたん | ツンツン | 6 |
 | 四国めたん | セクシー | 4 |
 | 四国めたん | ささやき | 36 |
+| 霊夢 | ノーマル | `REIMU_VOICEVOX_SPEAKER_ID`（既定 2） |
+| 魔理沙 | ノーマル | `MARISA_VOICEVOX_SPEAKER_ID`（既定 3） |
 
 ### 音声タイミング
 

@@ -76,7 +76,7 @@ from config import (
     NATIVE_TELOP_POP_MAX_SEC,
 )
 from core.bgm_store import resolve_bgm_selection
-from core.native_character_assets import CharacterVariantSet, load_character_variants
+from core.native_character_assets import CharacterVariantSet, character_variant_key, load_character_variants
 from core.parser import ScriptParser
 
 
@@ -434,6 +434,10 @@ def _caption_style(character: str) -> str:
         return "Metan"
     if "ずんだ" in text or "zunda" in text:
         return "Zundamon"
+    if "霊夢" in text or "reimu" in text:
+        return "Reimu"
+    if "魔理沙" in text or "marisa" in text:
+        return "Marisa"
     return "Default"
 
 
@@ -682,22 +686,55 @@ def _encode_thumbnail_frame_segment(
         raise last_error
 
 
-def _character_inputs(width: int, height: int) -> list[CharacterVariantSet]:
+def _script_character_names(script_text: str) -> set[str]:
+    try:
+        items = ScriptParser.parse_string(script_text or "")
+    except Exception:
+        _logger.error("native立ち絵用の台本パースに失敗しました", exc_info=True)
+        raise
+    return {str(item.get("character") or "").strip() for item in items if item.get("type") == "dialogue"}
+
+
+def _character_inputs(width: int, height: int, script_text: str = "") -> list[CharacterVariantSet]:
     if not NATIVE_RENDER_CHARACTERS:
         return []
-    return [item for item in load_character_variants() if item.base and os.path.exists(item.base)]
+    used_names = _script_character_names(script_text)
+    variants = [item for item in load_character_variants() if item.base and os.path.exists(item.base)]
+    try:
+        from core.channel_profile import get_active_profile
+        from core.character_profile_store import list_characters
+        profile = get_active_profile()
+        if profile:
+            known = {item.jp_name or item.name for item in variants}
+            for character in list_characters(profile.profile_id):
+                path = str(character.portrait_png_path or "").strip()
+                if not path or not os.path.exists(path) or character.character_name in known:
+                    continue
+                key = character_variant_key(character.character_name)
+                variants.append(CharacterVariantSet(key, path, path, path, path, path, path, {}, character.character_name))
+                known.add(character.character_name)
+    except Exception:
+        _logger.error("キャラクター立ち絵設定の読み込みに失敗しました", exc_info=True)
+        raise
+    if not used_names:
+        return variants
+    return [item for item in variants if (item.jp_name or item.name) in used_names]
 
 
-def _character_position(name: str, portrait: bool = False) -> str:
+def _character_position(name: str, portrait: bool = False, index: int = 0, total: int = 2) -> str:
     side = NATIVE_CHARACTER_SIDE_MARGIN_SHORTS if portrait else NATIVE_CHARACTER_SIDE_MARGIN_LONG
     bottom = NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS if portrait else NATIVE_CHARACTER_BOTTOM_MARGIN_LONG
     if CHARACTER_UPPER_BODY_MODE:
         y_offset = CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET if portrait else CHARACTER_UPPER_BODY_LONG_Y_OFFSET
         bottom = bottom - y_offset
     y = f"H-h+{-bottom}" if bottom < 0 else f"H-h-{bottom}"
+    if total <= 1:
+        return f"(W-w)/2:{y}"
+    if total > 2:
+        return f"{side}+{index}*(W-w-{side * 2})/{max(1, total - 1)}:{y}"
     x_zunda = str(side)
     x_metan = f"W-w+{-side}" if side < 0 else f"W-w-{side}"
-    return f"{x_zunda}:{y}" if name == "zundamon" else f"{x_metan}:{y}"
+    return f"{x_zunda}:{y}" if index == 0 or name == "zundamon" else f"{x_metan}:{y}"
 
 
 def _speaker_name(style: str) -> str | None:
@@ -705,6 +742,10 @@ def _speaker_name(style: str) -> str | None:
         return "zundamon"
     if style == "Metan":
         return "metan"
+    if style == "Reimu":
+        return character_variant_key("霊夢")
+    if style == "Marisa":
+        return character_variant_key("魔理沙")
     return None
 
 
@@ -713,6 +754,10 @@ def _speaker_jp_name(speaking: str | None) -> str | None:
         return "ずんだもん"
     if speaking == "metan":
         return "四国めたん"
+    if speaking == character_variant_key("霊夢"):
+        return "霊夢"
+    if speaking == character_variant_key("魔理沙"):
+        return "魔理沙"
     return None
 
 
@@ -865,8 +910,9 @@ def _segment_filter(
     else:
         char_scale = 1.0
     scaled_char_h = int(round(char_h * char_scale))
+    total_characters = len(characters)
     for char_idx, character in enumerate(characters):
-        position = _character_position(character.name, portrait=portrait)
+        position = _character_position(character.name, portrait=portrait, index=char_idx, total=total_characters)
         char_bounce = bool(bounce_on and speaking == character.name)
         overlay_suffix = ":eval=frame" if char_bounce else ""
         chains.append(_character_scale_filter(input_index, f"[{character.name}_base]", scaled_char_h, char_bounce))
@@ -1143,7 +1189,7 @@ def render_native(
         progress_callback(f"   🎬 エンコーダ: {_encoder_name}")
 
     width, height = _video_size(output_dir, script_text)
-    characters = _character_inputs(width, height)
+    characters = _character_inputs(width, height, script_text)
     script_captions_raw = _dialogue_captions(script_text)
     script_caption_count = len(script_captions_raw)
     script_char_count = sum(len(text) for text, _style, _expression in script_captions_raw)

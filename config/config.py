@@ -203,6 +203,8 @@ NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-fl
 # ───────────────────────────────────────────────
 # キャラクター定義（VOICEVOX スピーカー ID）
 # ───────────────────────────────────────────────
+REIMU_VOICEVOX_SPEAKER_ID = int(os.environ.get("REIMU_VOICEVOX_SPEAKER_ID", "2"))  # 霊夢に割り当てるVOICEVOX speaker ID
+MARISA_VOICEVOX_SPEAKER_ID = int(os.environ.get("MARISA_VOICEVOX_SPEAKER_ID", "3"))  # 魔理沙に割り当てるVOICEVOX speaker ID
 CHARACTERS = {
     "ずんだもん": {
         "speaker_id": 3,
@@ -216,6 +218,20 @@ CHARACTERS = {
         "name": "四国めたん",
         "styles": {
             "ノーマル": 2, "あまあま": 0, "ツンツン": 6, "セクシー": 4, "ささやき": 36, "ヒソヒソ": 37
+        }
+    },
+    "霊夢": {
+        "speaker_id": REIMU_VOICEVOX_SPEAKER_ID,
+        "name": "霊夢",
+        "styles": {
+            "ノーマル": REIMU_VOICEVOX_SPEAKER_ID
+        }
+    },
+    "魔理沙": {
+        "speaker_id": MARISA_VOICEVOX_SPEAKER_ID,
+        "name": "魔理沙",
+        "styles": {
+            "ノーマル": MARISA_VOICEVOX_SPEAKER_ID
         }
     },
 }
@@ -239,11 +255,15 @@ THUMBNAIL_HOLD_FRAMES_SHORTS: int = max(1, min(5, _thumbnail_hold_raw))  # Short
 ASSETS_DIR        = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")  # プロジェクトルート/assets
 CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")      # キャラ PNG 格納ディレクトリ
 CHARACTER_PSD_DIR = os.path.join(CHARACTER_PNG_DIR, "psd")      # キャラ PSD 格納ディレクトリ
-ZUNDAMON_PSD_PATH = os.environ.get("ZUNDAMON_PSD_PATH", os.path.join(CHARACTER_PSD_DIR, "zundamon.psd"))
-METAN_PSD_PATH    = os.environ.get("METAN_PSD_PATH",    os.path.join(CHARACTER_PSD_DIR, "metan.psd"))
+ZUNDAMON_PSD_PATH = os.environ.get("ZUNDAMON_PSD_PATH", os.path.join(CHARACTER_PSD_DIR, "zundamon.psd"))  # ずんだもんPSD立ち絵
+METAN_PSD_PATH    = os.environ.get("METAN_PSD_PATH",    os.path.join(CHARACTER_PSD_DIR, "metan.psd"))  # 四国めたんPSD立ち絵
+REIMU_CHARACTER_PNG_PATH = os.environ.get("REIMU_CHARACTER_PNG_PATH", os.path.join(CHARACTER_PNG_DIR, "reimu.png"))  # 霊夢の立ち絵PNG
+MARISA_CHARACTER_PNG_PATH = os.environ.get("MARISA_CHARACTER_PNG_PATH", os.path.join(CHARACTER_PNG_DIR, "marisa.png"))  # 魔理沙の立ち絵PNG
 CHARACTER_PNGS = {
     "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
     "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
+    "霊夢": REIMU_CHARACTER_PNG_PATH,
+    "魔理沙": MARISA_CHARACTER_PNG_PATH,
 }
 CHARACTER_EXPRESSION_PNGS = {
     "ずんだもん": {
@@ -264,6 +284,8 @@ CHARACTER_EXPRESSION_PNGS = {
 THUMBNAIL_CHARACTER_PNGS = {                                     # サムネイル生成時に使うキャラ画像
     "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
     "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
+    "霊夢": REIMU_CHARACTER_PNG_PATH,
+    "魔理沙": MARISA_CHARACTER_PNG_PATH,
 }
 
 # ───────────────────────────────────────────────

@@ -187,6 +187,10 @@
       <div class="form-group"><label>表示名</label><input class="form-input" id="char-new-display" placeholder="例: 辛口相方めたん"></div>
       <div class="form-group"><label>キャラ名</label><input class="form-input" id="char-new-name" placeholder="例: 四国めたん"></div>
       <div class="form-group"><label>並び順</label><input class="form-input" id="char-new-order" type="number" value="50"></div>
+      <div class="form-group"><label>音声バックエンド</label><input class="form-input" id="char-new-voice-backend" value="voicevox" placeholder="voicevox / 外部アプリ名"></div>
+      <div class="form-group"><label>話者ID/名前</label><input class="form-input" id="char-new-voice-speaker" placeholder="VOICEVOXなら speaker ID"></div>
+      <div class="form-group wide"><label>表情別話者ID(JSON)</label><textarea class="form-input" id="char-new-voice-styles" rows="2" placeholder='{"ノーマル":3,"ツンツン":7}'></textarea></div>
+      <div class="form-group wide"><label>立ち絵PNGパス</label><input class="form-input" id="char-new-portrait" placeholder="assets/characters/reimu.png"></div>
       <div class="form-group wide"><label>役割</label><textarea class="form-input" id="char-new-role" rows="2"></textarea></div>
       <div class="form-group wide"><label>口調</label><textarea class="form-input" id="char-new-tone" rows="2"></textarea></div>
       <div class="form-group wide"><label>話し方ルール</label><textarea class="form-input" id="char-new-speaking" rows="3"></textarea></div>
@@ -690,6 +694,10 @@ function characterCardHtml(c) {
       <div class="form-group"><label>表示名</label><input class="form-input" data-cid="${c.character_id}" data-field="display_name" value="${esc(c.display_name || '')}"></div>
       <div class="form-group"><label>キャラ名</label><input class="form-input" data-cid="${c.character_id}" data-field="character_name" value="${esc(c.character_name || '')}"></div>
       <div class="form-group"><label>並び順</label><input class="form-input" type="number" data-cid="${c.character_id}" data-field="sort_order" value="${Number(c.sort_order || 0)}"></div>
+      <div class="form-group"><label>音声バックエンド</label><input class="form-input" data-cid="${c.character_id}" data-field="voice_backend" value="${esc(c.voice_backend || 'voicevox')}"></div>
+      <div class="form-group"><label>話者ID/名前</label><input class="form-input" data-cid="${c.character_id}" data-field="voice_speaker" value="${esc(c.voice_speaker || c.voice_speaker_id || '')}"></div>
+      <div class="form-group wide"><label>表情別話者ID(JSON)</label><textarea class="form-input" rows="2" data-cid="${c.character_id}" data-field="voice_styles_json">${esc(JSON.stringify(c.voice_styles || {}, null, 0))}</textarea></div>
+      <div class="form-group wide"><label>立ち絵PNGパス</label><input class="form-input" data-cid="${c.character_id}" data-field="portrait_png_path" value="${esc(c.portrait_png_path || '')}"></div>
       ${f('役割', 'role', c.role, 2, 'wide')}
       ${f('口調', 'tone_style', c.tone_style, 2, 'wide')}
       ${f('話し方ルール', 'speaking_rules', c.speaking_rules, 3, 'wide')}
@@ -710,6 +718,9 @@ function characterPayload(cid) {
     const k = el.getAttribute('data-field');
     if (el.type === 'checkbox') body[k] = el.checked;
     else if (el.type === 'number') body[k] = Number(el.value || 0);
+    else if (k === 'voice_styles_json') {
+      body.voice_styles = el.value.trim() ? JSON.parse(el.value) : {};
+    }
     else body[k] = el.value;
   });
   return body;
@@ -735,28 +746,33 @@ async function saveCharacter(cid) {
 async function createCharacter() {
   const out = document.getElementById('char-create-result');
   out.textContent = '追加中...';
-  const body = {
-    character_key: document.getElementById('char-new-key').value.trim(),
-    display_name: document.getElementById('char-new-display').value.trim(),
-    character_name: document.getElementById('char-new-name').value.trim(),
-    sort_order: Number(document.getElementById('char-new-order').value || 0),
-    role: document.getElementById('char-new-role').value,
-    tone_style: document.getElementById('char-new-tone').value,
-    speaking_rules: document.getElementById('char-new-speaking').value,
-    forbidden_phrases: document.getElementById('char-new-forbidden').value,
-    dialogue_rules: document.getElementById('char-new-dialogue').value,
-    enabled: document.getElementById('char-new-enabled').checked,
-  };
-  if (!body.character_key || !body.display_name || !body.character_name) {
-    out.textContent = 'キー・表示名・キャラ名は必須です';
-    return;
-  }
   try {
+    const body = {
+      character_key: document.getElementById('char-new-key').value.trim(),
+      display_name: document.getElementById('char-new-display').value.trim(),
+      character_name: document.getElementById('char-new-name').value.trim(),
+      sort_order: Number(document.getElementById('char-new-order').value || 0),
+      voice_backend: document.getElementById('char-new-voice-backend').value.trim() || 'voicevox',
+      voice_speaker: document.getElementById('char-new-voice-speaker').value.trim(),
+      voice_styles: document.getElementById('char-new-voice-styles').value.trim() ? JSON.parse(document.getElementById('char-new-voice-styles').value) : {},
+      portrait_png_path: document.getElementById('char-new-portrait').value.trim(),
+      role: document.getElementById('char-new-role').value,
+      tone_style: document.getElementById('char-new-tone').value,
+      speaking_rules: document.getElementById('char-new-speaking').value,
+      forbidden_phrases: document.getElementById('char-new-forbidden').value,
+      dialogue_rules: document.getElementById('char-new-dialogue').value,
+      enabled: document.getElementById('char-new-enabled').checked,
+    };
+    if (!body.character_key || !body.display_name || !body.character_name) {
+      out.textContent = 'キー・表示名・キャラ名は必須です';
+      return;
+    }
     const res = await fetch('/api/character-profiles', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || '追加失敗');
     out.textContent = '追加しました';
-    ['char-new-key','char-new-display','char-new-name','char-new-role','char-new-tone','char-new-speaking','char-new-forbidden','char-new-dialogue'].forEach(id => document.getElementById(id).value = '');
+    ['char-new-key','char-new-display','char-new-name','char-new-voice-speaker','char-new-voice-styles','char-new-portrait','char-new-role','char-new-tone','char-new-speaking','char-new-forbidden','char-new-dialogue'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('char-new-voice-backend').value = 'voicevox';
     document.getElementById('char-new-order').value = '50';
     await loadCharacters();
     showToast('キャラクター設定を追加しました');

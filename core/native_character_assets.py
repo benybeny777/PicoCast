@@ -20,6 +20,7 @@ class CharacterVariantSet:
     mouth_open: str | None
     eye_closed: str | None
     expressions: dict[str, str]
+    jp_name: str | None = None
 
     def base_for_expression(self, expression: str | None) -> str | None:
         if expression:
@@ -256,7 +257,7 @@ def _ensure_variants(name: str, jp_name: str, psd_path: str | None, static_path:
     os.makedirs(char_dir, exist_ok=True)
     expressions = _expression_paths(jp_name)
     if not psd_path or not os.path.exists(psd_path):
-        return CharacterVariantSet(name, static_path, static_path, static_path, static_path, static_path, static_path, expressions)
+        return CharacterVariantSet(name, static_path, static_path, static_path, static_path, static_path, static_path, expressions, jp_name)
 
     if name == "zundamon":
         mouth_closed = ["んー", "むー"]
@@ -313,11 +314,26 @@ def _ensure_variants(name: str, jp_name: str, psd_path: str | None, static_path:
         mouth_open=exists("mouth_open_overlay", fallback_static=False),
         eye_closed=exists("eye_closed_overlay", fallback_static=False) or exists("eye_closed_manual", fallback_static=False),
         expressions=expressions,
+        jp_name=jp_name,
     )
 
 
+def character_variant_key(jp_name: str) -> str:
+    """ffmpeg filter label に使えるキャラクターキーへ変換する。"""
+    aliases = {"ずんだもん": "zundamon", "四国めたん": "metan"}
+    if jp_name in aliases:
+        return aliases[jp_name]
+    return str(jp_name).encode("unicode_escape").decode("ascii").replace("\\u", "u").replace("\\U", "U")
+
+
 def load_character_variants() -> list[CharacterVariantSet]:
-    return [
+    variants = [
         _ensure_variants("zundamon", "ずんだもん", _find_psd("zundamon"), CHARACTER_PNGS.get("ずんだもん")),
         _ensure_variants("metan", "四国めたん", _find_psd("metan"), CHARACTER_PNGS.get("四国めたん")),
     ]
+    for jp_name, path in CHARACTER_PNGS.items():
+        if jp_name in {"ずんだもん", "四国めたん"}:
+            continue
+        key = character_variant_key(jp_name)
+        variants.append(_ensure_variants(key, jp_name, None, path))
+    return variants

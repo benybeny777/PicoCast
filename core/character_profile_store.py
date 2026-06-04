@@ -15,6 +15,7 @@ data/settings.db の character_profiles テーブルで、channel profile 別の
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import sqlite3
@@ -41,6 +42,11 @@ CREATE TABLE IF NOT EXISTS character_profiles (
     speaking_rules    TEXT NOT NULL DEFAULT '',
     forbidden_phrases TEXT NOT NULL DEFAULT '',
     dialogue_rules    TEXT NOT NULL DEFAULT '',
+    voice_backend     TEXT NOT NULL DEFAULT 'voicevox',
+    voice_speaker     TEXT NOT NULL DEFAULT '',
+    voice_speaker_id  INTEGER,
+    voice_styles_json TEXT NOT NULL DEFAULT '{}',
+    portrait_png_path TEXT NOT NULL DEFAULT '',
     enabled           INTEGER NOT NULL DEFAULT 1,
     sort_order        INTEGER NOT NULL DEFAULT 0,
     created_at        TEXT NOT NULL,
@@ -67,6 +73,11 @@ class CharacterProfile:
     sort_order: int
     created_at: str
     updated_at: str
+    voice_backend: str = "voicevox"
+    voice_speaker: str = ""
+    voice_speaker_id: int | None = None
+    voice_styles: dict[str, int] | None = None
+    portrait_png_path: str = ""
 
     @staticmethod
     def from_row(row: sqlite3.Row) -> "CharacterProfile":
@@ -81,6 +92,11 @@ class CharacterProfile:
             speaking_rules=row["speaking_rules"],
             forbidden_phrases=row["forbidden_phrases"],
             dialogue_rules=row["dialogue_rules"],
+            voice_backend=row["voice_backend"],
+            voice_speaker=row["voice_speaker"],
+            voice_speaker_id=row["voice_speaker_id"],
+            voice_styles=_parse_voice_styles(row["voice_styles_json"]),
+            portrait_png_path=row["portrait_png_path"],
             enabled=bool(row["enabled"]),
             sort_order=row["sort_order"],
             created_at=row["created_at"],
@@ -98,8 +114,60 @@ def _open_db() -> sqlite3.Connection:
         stmt = stmt.strip()
         if stmt:
             conn.execute(stmt)
+    _ensure_columns(conn)
     conn.commit()
     return conn
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(character_profiles)").fetchall()}
+    additions = {
+        "voice_speaker_id": "ALTER TABLE character_profiles ADD COLUMN voice_speaker_id INTEGER",
+        "voice_backend": "ALTER TABLE character_profiles ADD COLUMN voice_backend TEXT NOT NULL DEFAULT 'voicevox'",
+        "voice_speaker": "ALTER TABLE character_profiles ADD COLUMN voice_speaker TEXT NOT NULL DEFAULT ''",
+        "voice_styles_json": "ALTER TABLE character_profiles ADD COLUMN voice_styles_json TEXT NOT NULL DEFAULT '{}'",
+        "portrait_png_path": "ALTER TABLE character_profiles ADD COLUMN portrait_png_path TEXT NOT NULL DEFAULT ''",
+    }
+    for column, sql in additions.items():
+        if column not in columns:
+            conn.execute(sql)
+
+
+def _parse_voice_styles(raw: str | None) -> dict[str, int]:
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        _logger.error("voice_styles_json のJSON解析に失敗しました", exc_info=True)
+        raise RuntimeError("voice_styles_json が不正です") from exc
+    if not isinstance(data, dict):
+        _logger.error("voice_styles_json がオブジェクトではありません: type=%s", type(data).__name__)
+        raise RuntimeError("voice_styles_json はオブジェクトである必要があります")
+    result: dict[str, int] = {}
+    for key, value in data.items():
+        try:
+            result[str(key)] = int(value)
+        except (TypeError, ValueError) as exc:
+            _logger.error("voice_styles_json の話者IDが数値ではありません: emotion=%s", key, exc_info=True)
+            raise RuntimeError("voice_styles_json の話者IDは数値で指定してください") from exc
+    return result
+
+
+def _voice_styles_json(value: dict[str, int] | str | None) -> str:
+    if value is None:
+        return "{}"
+    if isinstance(value, str):
+        _parse_voice_styles(value)
+        return value
+    result: dict[str, int] = {}
+    for key, speaker_id in value.items():
+        try:
+            result[str(key)] = int(speaker_id)
+        except (TypeError, ValueError) as exc:
+            _logger.error("voice_styles の話者IDが数値ではありません: emotion=%s", key, exc_info=True)
+            raise RuntimeError("voice_styles の話者IDは数値で指定してください") from exc
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
 def _now() -> str:
@@ -143,6 +211,11 @@ def create_character(
     speaking_rules: str = "",
     forbidden_phrases: str = "",
     dialogue_rules: str = "",
+    voice_backend: str = "voicevox",
+    voice_speaker: str = "",
+    voice_speaker_id: int | None = None,
+    voice_styles: dict[str, int] | str | None = None,
+    portrait_png_path: str = "",
     enabled: bool = True,
     sort_order: int = 0,
 ) -> str:
@@ -166,11 +239,13 @@ def create_character(
                 INSERT INTO character_profiles
                     (character_id, profile_id, character_key, display_name, character_name,
                      role, tone_style, speaking_rules, forbidden_phrases, dialogue_rules,
+                     voice_backend, voice_speaker, voice_speaker_id, voice_styles_json, portrait_png_path,
                      enabled, sort_order, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (character_id, profile_id, character_key, display_name, character_name,
                  role, tone_style, speaking_rules, forbidden_phrases, dialogue_rules,
+                 voice_backend, voice_speaker, voice_speaker_id, _voice_styles_json(voice_styles), portrait_png_path,
                  1 if enabled else 0, sort_order, now, now),
             )
             conn.commit()
@@ -183,11 +258,17 @@ def _update_character_locked(conn: sqlite3.Connection, character_id: str, **fiel
     """conn と _lock を保持した状態でキャラクター設定を更新する。"""
     allowed = {
         "display_name", "character_name", "role", "tone_style", "speaking_rules",
-        "forbidden_phrases", "dialogue_rules", "enabled", "sort_order",
+        "forbidden_phrases", "dialogue_rules", "voice_backend", "voice_speaker",
+        "voice_speaker_id", "voice_styles", "voice_styles_json", "portrait_png_path",
+        "enabled", "sort_order",
     }
     sets = {k: v for k, v in fields.items() if k in allowed}
     if not sets:
         return
+    if "voice_styles" in sets:
+        sets["voice_styles_json"] = _voice_styles_json(sets.pop("voice_styles"))
+    if "voice_styles_json" in sets:
+        sets["voice_styles_json"] = _voice_styles_json(sets["voice_styles_json"])
     if "enabled" in sets:
         sets["enabled"] = 1 if sets["enabled"] else 0
     cols = ", ".join(f"{k}=?" for k in sets)
@@ -264,3 +345,57 @@ def delete_character(character_id: str) -> None:
             conn.commit()
         finally:
             conn.close()
+
+
+def resolve_character_voice_settings(profile_id: str | None, character_name: str, emotion: str = "ノーマル") -> dict:
+    """profile のキャラ設定と config.CHARACTERS から音声バックエンド設定を解決する。"""
+    name = str(character_name or "").strip()
+    emotion = str(emotion or "ノーマル").strip() or "ノーマル"
+    if profile_id:
+        matches = [c for c in list_characters(profile_id) if c.character_name == name]
+        matches.sort(key=lambda c: (not c.enabled, c.sort_order, c.character_key))
+        for character in matches:
+            backend = (character.voice_backend or "voicevox").strip().lower()
+            speaker = str(character.voice_speaker or "").strip()
+            if character.voice_styles and emotion in character.voice_styles:
+                speaker = str(character.voice_styles[emotion])
+            if not speaker and character.voice_speaker_id is not None:
+                speaker = str(character.voice_speaker_id)
+            if speaker:
+                return {
+                    "backend": backend,
+                    "speaker": speaker,
+                    "speaker_id": int(speaker) if backend == "voicevox" and speaker.isdigit() else None,
+                }
+            if character.voice_speaker_id is not None:
+                return {"backend": backend, "speaker": str(character.voice_speaker_id), "speaker_id": int(character.voice_speaker_id)}
+
+    from config import CHARACTERS
+    for config_item in CHARACTERS.values():
+        if config_item.get("name") == name:
+            styles = config_item.get("styles") or {}
+            speaker_id = int(styles.get(emotion, config_item["speaker_id"]))
+            return {"backend": "voicevox", "speaker": str(speaker_id), "speaker_id": speaker_id}
+    _logger.error("未対応の話者です: profile_id=%s character=%s emotion=%s", profile_id, name, emotion)
+    raise RuntimeError(f"未対応の話者です: {name}。キャラクター設定で音声バックエンドと話者IDを登録してください。")
+
+
+def resolve_character_voice(profile_id: str | None, character_name: str, emotion: str = "ノーマル") -> int:
+    """VOICEVOX 用 speaker ID を返す。VOICEVOX 以外は生成器未対応として停止する。"""
+    settings = resolve_character_voice_settings(profile_id, character_name, emotion)
+    if settings["backend"] != "voicevox":
+        _logger.error(
+            "未対応の音声バックエンドです: profile_id=%s character=%s emotion=%s backend=%s",
+            profile_id, character_name, emotion, settings["backend"],
+        )
+        raise RuntimeError(
+            f"音声バックエンド '{settings['backend']}' はまだ生成処理に未対応です。"
+            "キャラクター設定は保存済みですが、音声生成アダプタの実装が必要です。"
+        )
+    if settings["speaker_id"] is None:
+        _logger.error(
+            "VOICEVOX speaker ID が数値ではありません: profile_id=%s character=%s emotion=%s speaker=%s",
+            profile_id, character_name, emotion, settings["speaker"],
+        )
+        raise RuntimeError("VOICEVOX speaker ID は数値で指定してください。")
+    return int(settings["speaker_id"])

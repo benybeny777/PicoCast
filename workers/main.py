@@ -35,7 +35,6 @@ from core.opening_quality import (
     should_auto_rewrite_opening,
 )
 from config import (
-    CHARACTERS,
     MAX_BACKGROUNDS_LONG,
     MAX_BACKGROUNDS_LONG_BUDGET,
     MAX_BACKGROUNDS_SHORTS,
@@ -1606,11 +1605,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         text = item["text"]
         emotion = item.get("emotion", "ノーマル")
         _v += 1
-        speaker_id = 3
-        for k, v in CHARACTERS.items():
-            if v["name"] == char_key:
-                speaker_id = v.get("styles", {}).get(emotion, v["speaker_id"])
-                break
+        try:
+            from core.channel_profile import get_active_profile
+            from core.character_profile_store import resolve_character_voice
+            profile = get_active_profile()
+            speaker_id = resolve_character_voice(profile.profile_id if profile else None, char_key, emotion)
+        except Exception:
+            _logger.error("話者の音声設定解決に失敗しました: character=%s emotion=%s", char_key, emotion, exc_info=True)
+            raise
         speed_scale = intro_voice_speed if _v <= VOICE_INTRO_FAST_LINES else body_voice_speed
         for chunk_text in _split_at_punctuation(text):
             _a += 1
