@@ -6,6 +6,13 @@
 
 ## 2026-06-04
 
+### 初回セットアップの最初に法務同意（利用規約・EULA・プライバシーポリシー）を必須化
+
+- `/setup` の冒頭に同意カードを追加。利用規約 / 使用許諾（EULA）/ プライバシーポリシー / 特定商取引法に基づく表記へのリンクと同意チェックを表示する。
+- 文書は `GET /legal/{doc}`（`core/legal_consent.py:LEGAL_DOCUMENTS` のホワイトリストに限定、任意パス読み取り不可）で閲覧。`web_app/templates/legal.html` で表示。
+- 同意は `data/settings.db:settings`（`LEGAL_CONSENT_ACCEPTED` / `LEGAL_CONSENT_AT`）に記録。**未同意ではセットアップ完了（`POST /api/settings/setup`）を 422 でブロック**する＝生成・アップロードも解禁されない。
+- `/legal` は setup リダイレクトミドルウェアの除外に追加（active profile 未設定でも閲覧可）。
+
 ### 表記を「Stable Diffusion WebUI」に統一・必須構成早見表をREADMEにも記載
 
 - UI・コメント・ログ・ドキュメントの「SD WebUI」「Forge（単独）」「SD（略語）」表記を「Stable Diffusion WebUI」に統一した（命名ルール準拠）。識別子 `SD_WEBUI_*` は対象外。

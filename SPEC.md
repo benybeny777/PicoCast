@@ -529,6 +529,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 
 ### 初回セットアップ
 
+- `/setup` の最初に**法務同意**（利用規約・使用許諾EULA・プライバシーポリシー・特商法表記）を求める。文書は `GET /legal/{doc}`（`core/legal_consent.py:LEGAL_DOCUMENTS` のホワイトリスト限定）で閲覧、同意は `data/settings.db:settings`（`LEGAL_CONSENT_ACCEPTED` / `LEGAL_CONSENT_AT`）に記録する。**未同意ではセットアップ完了 API（`POST /api/settings/setup`）を 422 でブロック**する（=生成・アップロードも解禁されない）。`/legal` は setup リダイレクトミドルウェアの除外に含める。
 - active channel profile が存在しない初回起動時のみ、通常画面への GET を `/setup` へ誘導する（`web_app/app.py:setup_redirect_middleware`）。
 - active channel が登録済みであれば、`PRODUCT_SETUP_COMPLETED` が未完了でも通常画面・設定画面には入れる。未完了状態では生成・アップロード API を分かりやすい 403 でブロックする（`core/setup_state.py` の gate と `core/license_manager.py`）。完了状態は `data/settings.db:settings.PRODUCT_SETUP_COMPLETED` に保存する。
 - `/setup` ではチャンネル名・ハンドル・製品版 seed profile、APIキー登録導線（各キーの必要条件を明記）、ソフトウェアのインストール案内、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録導線、サンプル台本のテスト生成、完了保存を扱う。

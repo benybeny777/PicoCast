@@ -238,6 +238,20 @@ class RestoreBackupRequest(BaseModel):
     passphrase: str = ""
 
 
+@router.get("/legal-consent")
+def api_legal_consent_status():
+    """法務文書（利用規約・EULA・プライバシーポリシー）への同意状態を返す。"""
+    from core.legal_consent import consent_status
+    return consent_status()
+
+
+@router.post("/legal-consent")
+def api_accept_legal_consent():
+    """法務文書への同意を記録する。"""
+    from core.legal_consent import accept_consent
+    return accept_consent()
+
+
 @router.get("/setup")
 def api_setup_status():
     """初回セットアップ状態を返す。"""
@@ -247,8 +261,12 @@ def api_setup_status():
 
 @router.post("/setup")
 def api_setup_complete(req: SetupCompleteRequest):
-    """初回セットアップ完了状態を保存する。"""
+    """初回セットアップ完了状態を保存する。完了には法務文書への同意が必須。"""
     from core.setup_state import set_setup_completed, setup_gate_status
+    if req.completed:
+        from core.legal_consent import is_consent_accepted
+        if not is_consent_accepted():
+            raise HTTPException(status_code=422, detail="先に利用規約・使用許諾（EULA）・プライバシーポリシーへの同意が必要です。")
     set_setup_completed(req.completed)
     return setup_gate_status()
 

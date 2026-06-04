@@ -205,10 +205,33 @@ def page_setup(request: Request):
     from core.setup_state import setup_gate_status
     from web_app.services.status_service import get_cached_settings_status
     from core.service_detector import get_installation_guides
+    from core.legal_consent import consent_status
     return _render(request, "setup.html", {
         "setup": setup_gate_status(),
         "status": get_cached_settings_status(),
         "install_guides": get_installation_guides(),
+        "legal": consent_status(),
+    })
+
+
+@router.get("/legal/{doc}", response_class=HTMLResponse)
+def page_legal(request: Request, doc: str):
+    """法務文書（利用規約・EULA・プライバシーポリシー等）を表示する。
+
+    表示対象は LEGAL_DOCUMENTS のホワイトリストに限定し、任意パス読み取りを防ぐ。
+    """
+    from core.legal_consent import LEGAL_DOCUMENTS
+    if doc not in LEGAL_DOCUMENTS:
+        raise HTTPException(status_code=404, detail="文書が見つかりません")
+    legal_path = os.path.join(os.path.dirname(__file__), "..", "..", "legal", doc)
+    legal_path = os.path.abspath(legal_path)
+    if not os.path.isfile(legal_path):
+        raise HTTPException(status_code=404, detail="文書ファイルが見つかりません")
+    with open(legal_path, "r", encoding="utf-8") as f:
+        content = f.read()
+    return _render(request, "legal.html", {
+        "doc_label": LEGAL_DOCUMENTS[doc],
+        "doc_content": content,
     })
 
 

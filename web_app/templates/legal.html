@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ doc_label }}{% endblock %}
+{% block content %}
+<h1>{{ doc_label }}</h1>
+<div class="card">
+  <pre style="white-space:pre-wrap; word-break:break-word; font-family:inherit; line-height:1.7; margin:0">{{ doc_content }}</pre>
+</div>
+<p class="hint mt">この文書は <code>legal/</code> 配下のテンプレートです。販売前に内容を確定してください。</p>
+{% endblock %}

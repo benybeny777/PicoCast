@@ -176,6 +176,7 @@ async def setup_redirect_middleware(request: Request, call_next):
         path == "/setup"
         or path.startswith("/static")
         or path.startswith("/api")
+        or path.startswith("/legal")
         or path in ("/favicon.ico", "/health", "/settings")
     ):
         from core.channel_profile import get_active_profile

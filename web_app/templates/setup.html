@@ -3,6 +3,27 @@
 {% block content %}
 <h1>初回セットアップ</h1>
 
+<div class="card" id="legal-consent-card" style="border-left:4px solid var(--accent2, #e07a5f)">
+  <h2>利用にあたっての同意</h2>
+  <p class="hint">本ソフトウェアの利用には、以下の文書への同意が必要です。内容をご確認のうえ同意してください。</p>
+  <ul style="margin:8px 0 8px 18px; padding:0">
+    {% for d in legal.documents %}
+    <li><a href="/legal/{{ d.file }}" target="_blank" rel="noopener">{{ d.label }}</a></li>
+    {% endfor %}
+  </ul>
+  <div id="legal-consent-done" class="hint" {% if not legal.accepted %}style="display:none"{% endif %}>
+    ✅ 同意済み{% if legal.accepted_at %}（{{ legal.accepted_at }}）{% endif %}
+  </div>
+  <div id="legal-consent-form" {% if legal.accepted %}style="display:none"{% endif %}>
+    <label style="display:flex; align-items:center; gap:8px; margin:8px 0">
+      <input type="checkbox" id="legal-consent-checkbox">
+      <span>上記の利用規約・使用許諾（EULA）・プライバシーポリシーに同意します</span>
+    </label>
+    <button class="btn btn-primary" id="legal-consent-btn" onclick="acceptLegalConsent()" disabled>同意する</button>
+    <div id="legal-consent-result" class="hint mt"></div>
+  </div>
+</div>
+
 <div class="card">
   <h2>必須構成 早見表</h2>
   <p class="hint">使い方によって必要なソフト・APIキーが変わります。<strong>VOICEVOX と ffmpeg は常に必須</strong>です。凡例：✅必須 ／ △任意 ／ —不要</p>
@@ -159,6 +180,24 @@
 </div>
 
 <script>
+// ── 法務同意 ──
+(function initLegalConsent() {
+  const cb = document.getElementById('legal-consent-checkbox');
+  const btn = document.getElementById('legal-consent-btn');
+  if (cb && btn) cb.addEventListener('change', () => { btn.disabled = !cb.checked; });
+})();
+async function acceptLegalConsent() {
+  const out = document.getElementById('legal-consent-result');
+  out.textContent = '送信中...';
+  const res = await fetch('/api/settings/legal-consent', {method:'POST'});
+  const data = await res.json();
+  if (!res.ok) { out.textContent = data.detail || '同意の記録に失敗しました'; return; }
+  document.getElementById('legal-consent-form').style.display = 'none';
+  const done = document.getElementById('legal-consent-done');
+  done.style.display = '';
+  done.textContent = '✅ 同意済み' + (data.accepted_at ? `（${data.accepted_at}）` : '');
+}
+
 async function setupLoadGenres() {
   const res = await fetch('/api/channels/product-seed-profiles');
   const data = await res.json();
@@ -234,9 +273,11 @@ async function setupTestGenerate() {
   document.getElementById('setup-generate-result').textContent = res.ok ? `ジョブ登録: ${(data.job_ids || []).join(', ')}` : (data.detail || '登録失敗');
 }
 async function setupComplete() {
+  const out = document.getElementById('setup-complete-result');
   const res = await fetch('/api/settings/setup', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({completed:true})});
   const data = await res.json();
-  document.getElementById('setup-complete-result').textContent = data.completed ? 'セットアップ完了。通常画面へ移動できます。' : '未完了です';
+  if (!res.ok) { out.textContent = data.detail || '完了に失敗しました'; return; }
+  out.textContent = data.completed ? 'セットアップ完了。通常画面へ移動できます。' : '未完了です';
   if (data.completed) setTimeout(() => location.href='/', 600);
 }
 setupLoadGenres();
