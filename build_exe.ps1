@@ -78,3 +78,23 @@ Write-Host "Nuitka ビルドを開始します（長時間かかります）..."
 
 if ($LASTEXITCODE -ne 0) { throw "Nuitka ビルドに失敗しました。BUILD.md の残課題を参照してください。" }
 Write-Host "完了: dist\NativeVideoFactory.exe"
+
+# 4. コード署名（自己署名の証明書が CurrentUser\My にあれば exe に署名する）
+#    注意: onefile の外側 exe のみ署名される。展開される app.dll は署名されないため
+#          Defender のML誤検知対策にはならない（発行元識別のための署名）。
+$exePath = Join-Path $root "dist\NativeVideoFactory.exe"
+$signCert = Get-ChildItem Cert:\CurrentUser\My |
+    Where-Object { $_.Subject -eq "CN=Native Video Factory Self-Signed" -and $_.HasPrivateKey } |
+    Select-Object -First 1
+if ($signCert) {
+    Write-Host "コード署名します（自己署名）..."
+    $sig = Set-AuthenticodeSignature -FilePath $exePath -Certificate $signCert `
+        -HashAlgorithm SHA256 -TimestampServer "http://timestamp.digicert.com"
+    if ($sig.Status -ne 'Valid') {
+        # タイムスタンプ不通などのときはタイムスタンプ無しで署名し直す
+        $sig = Set-AuthenticodeSignature -FilePath $exePath -Certificate $signCert -HashAlgorithm SHA256
+    }
+    Write-Host ("署名ステータス: " + $sig.Status)
+} else {
+    Write-Host "（署名スキップ: 証明書が未作成。署名するには先に .\make_codesign_cert.ps1 を実行してください）"
+}

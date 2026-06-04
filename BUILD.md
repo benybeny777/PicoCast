@@ -37,6 +37,7 @@
 5. **コード署名 / ウイルス誤検知**: 未署名だと SmartScreen 警告に加え、Windows Defender が onefile 展開後の `app.dll` を `Program:Win32/Contebrew.A!ml` 等のML ヒューリスティックで**誤検知・隔離**し `Error 225 (load DLL)` で起動失敗することがある（Nuitka/PyInstaller共通の既知の誤検知）。
    - 展開先は `--onefile-tempdir-spec="{CACHE_DIR}\NativeVideoFactory\{VERSION}"` で固定済み（ランダム temp ではなく `%LOCALAPPDATA%\NativeVideoFactory\<version>`）。開発機ではこのフォルダを Defender 除外に追加すれば再ビルドのたびに引っかからない: `Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\NativeVideoFactory"`（管理者）。
    - 配布時の根本解決は**コード署名（Authenticode）**。署名すると ML 誤検知も SmartScreen も大幅に減る。`--standalone`（フォルダ配布）にすると temp 展開がなくなり誤検知されにくい。必要なら Microsoft へ誤検知申告（https://www.microsoft.com/wdsi/filesubmission ）。
+   - **自己署名（開発・既知PC向け）**: `.\make_codesign_cert.ps1` を1回実行すると `CurrentUser\My` に自己署名コード署名証明書を作成し、このPCの信頼ストア（Root / TrustedPublisher）へ登録する。以降 `build_exe.ps1` がビルド後に exe を自動署名する。**ただし公的CAではないため不特定多数配布では無効**。さらに **onefile では外側 exe のみ署名され、展開される app.dll は未署名のまま**なので Defender のML誤検知対策にはならない（その用途は上記の除外/standalone/公的署名）。他PCで「不明な発行元」を消すには `dev/codesign/NativeVideoFactory-public.cer` を相手PCの Root / TrustedPublisher にインポートする（秘密鍵は配らない）。
 6. **動作確認**: ビルド後、別フォルダ（Python無し相当）で exe を起動し、(a) /setup 表示、(b) settings.db が exe_dir/data に作られる、(c) job-runner が起動する（生成ジョブが進む）、(d) VOICEVOX/ffmpeg 検出、を確認。
 
 ## 注意
