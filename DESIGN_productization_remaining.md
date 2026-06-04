@@ -7,7 +7,7 @@
 
 ## 再開手順（クレジット切れ時 / Codex 継続用）
 1. `git log --oneline -15` で直近コミットを確認（最新の機能は下記「タスク一覧」参照）。
-2. テスト基準: `./.venv/Scripts/python.exe -m pytest -q` が `384 passed, 1 skipped` 付近で緑。
+2. テスト基準: `./.venv/Scripts/python.exe -m pytest -q` が `385 passed, 1 skipped` 付近で緑。
 3. 稼働中アプリへ反映するには Web UI の再起動が必要（起動時 lifespan で seed/移行が走る）。
 4. 未完了の主タスク = 「タスク8の残: キャラクター設定UI」。下に実装メモあり。
 5. ローカル `data/settings.db` は移行適用済み（character_profiles seed＋旧テンプレ strip 実行済み）。別環境では起動時に自動移行。
@@ -16,7 +16,7 @@
 - ユーザーは本ツールを実利用中。**現状の操作を壊さない**こと（成功パス・既存APIは不変、失敗時メッセージ・新規任意機能の追加が中心）。
 - 後回し（着手不要）: ライセンス実キー署名検証 / 配布パッケージ(Nuitka) / 同梱ソフトのライセンス整理（個別DL方針）。
 - 表記ルール: 「Stable Diffusion WebUI」のみ。「SD」略語・「Forge」単独禁止（`rg "SD WebUI|\bSD\b|Forge"` で確認）。
-- テスト: `./.venv/Scripts/python.exe -m pytest -q`（基準: 366 passed, 1 skipped）。
+- テスト: `./.venv/Scripts/python.exe -m pytest -q`（基準: 385 passed, 1 skipped）。
 - コミット規約: 日本語、末尾に `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`。直接コミット可（PR不要）。ドキュメント(README/SPEC/CHANGELOG)も同時更新。
 
 ## タスク一覧と状態
