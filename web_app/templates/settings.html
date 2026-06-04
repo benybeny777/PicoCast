@@ -37,6 +37,7 @@
   <button class="tab-btn" id="tab-btn-product" data-mode="normal" onclick="switchTab('product', this)">製品管理</button>
   <button class="tab-btn" id="tab-btn-channels" data-mode="normal" onclick="switchTab('channels', this)">チャンネル</button>
   <button class="tab-btn" id="tab-btn-templates" data-mode="normal" onclick="switchTab('templates', this)">テンプレート</button>
+  <button class="tab-btn" id="tab-btn-characters" data-mode="normal" onclick="switchTab('characters', this)">キャラクター設定</button>
 </div>
 
 <!-- ── タブ: 製品管理 ── -->
@@ -100,6 +101,15 @@
     <button class="btn btn-secondary" onclick="location.href='/setup'">/setup を開く</button>
     <button class="btn btn-primary" onclick="markSetupComplete()">セットアップ完了にする</button>
     <div id="setup-admin-result" class="hint mt"></div>
+  </div>
+</div>
+
+<!-- ── タブ: キャラクター設定 ── -->
+<div id="tab-characters" class="tab-panel">
+  <div class="card">
+    <h2>キャラクター設定</h2>
+    <p class="hint">このチャンネルの登場キャラクターの役割・口調・禁止表現・掛け合いを管理します。台本テンプレートとは分離され、生成時に有効なキャラ設定が合成されます（有効なキャラが無いと生成はエラーになります）。</p>
+    <div id="characters-list"><p class="hint">読み込み中...</p></div>
   </div>
 </div>
 
@@ -543,6 +553,52 @@ function switchTab(name, btn) {
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
   if (name === 'product') { loadProductStatus(); loadProductInfo(); }
   if (name === 'admin') devLoadEdition();
+  if (name === 'characters') loadCharacters();
+}
+
+// ── キャラクター設定 ──
+async function loadCharacters() {
+  const box = document.getElementById('characters-list');
+  box.innerHTML = '<p class="hint">読み込み中...</p>';
+  try {
+    const res = await fetch('/api/character-profiles');
+    const data = await res.json();
+    if (!res.ok) { box.textContent = data.detail || '取得に失敗しました'; return; }
+    const chars = data.characters || [];
+    if (!chars.length) { box.innerHTML = '<p class="hint">このチャンネルにキャラクター設定がありません。</p>'; return; }
+    box.innerHTML = chars.map(c => {
+      const f = (label, key, val, rows) =>
+        `<div class="form-group" style="margin-top:6px"><label>${label}</label>`
+        + `<textarea class="form-input" rows="${rows}" data-cid="${c.character_id}" data-field="${key}">${esc(val || '')}</textarea></div>`;
+      return `<div class="card" style="border-left:4px solid var(--accent2,#e07a5f)">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <h3 style="margin:0">${esc(c.character_name)}（${esc(c.display_name)}）</h3>
+          <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-cid="${c.character_id}" data-field="enabled" ${c.enabled?'checked':''}> 有効</label>
+          <span class="hint">key=${esc(c.character_key)}</span>
+        </div>
+        ${f('役割', 'role', c.role, 2)}
+        ${f('口調', 'tone_style', c.tone_style, 2)}
+        ${f('話し方ルール', 'speaking_rules', c.speaking_rules, 3)}
+        ${f('禁止表現', 'forbidden_phrases', c.forbidden_phrases, 2)}
+        ${f('掛け合いルール', 'dialogue_rules', c.dialogue_rules, 4)}
+        <div class="action-row mt"><button class="btn btn-primary" onclick="saveCharacter('${c.character_id}')">保存</button>
+          <span id="char-result-${c.character_id}" class="hint"></span></div>
+      </div>`;
+    }).join('');
+  } catch(e) { box.textContent = '通信エラー: ' + e; }
+}
+
+async function saveCharacter(cid) {
+  const out = document.getElementById('char-result-' + cid);
+  out.textContent = '保存中...';
+  const body = {};
+  document.querySelectorAll(`[data-cid="${cid}"]`).forEach(el => {
+    const k = el.getAttribute('data-field');
+    body[k] = (el.type === 'checkbox') ? el.checked : el.value;
+  });
+  const res = await fetch('/api/character-profiles/' + cid, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const data = await res.json();
+  out.textContent = res.ok ? '保存しました' : (data.detail || '保存失敗');
 }
 
 // 一時的なデバッグ用: ライセンス edition 切替（後で削除する）

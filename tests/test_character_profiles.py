@@ -99,3 +99,22 @@ def test_store_create_list_enabled(tmp_char_store):
     assert s.has_characters("zunkami")
     enabled = s.list_characters("zunkami", enabled_only=True)
     assert [c.character_key for c in enabled] == ["metan_food_toxic"]
+
+
+# ── API（別 profile 改変防止） ─────────────────────────────────────────────────
+
+def test_api_update_rejects_other_profile_character(monkeypatch):
+    import core.channel_profile as cp
+    import core.character_profile_store as store
+    from web_app.routes.api_character_profiles import update_character_profile, CharacterUpdateRequest
+    from fastapi import HTTPException
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(cp, "require_active_profile", lambda: SimpleNamespace(profile_id="zunkami"))
+    # active profile には character_id 'mine' しか無い
+    monkeypatch.setattr(store, "list_characters", lambda pid, enabled_only=False: [
+        store.CharacterProfile("mine", "zunkami", "k", "d", "四国めたん", "", "", "", "", "", True, 0, "t", "t")
+    ])
+    with pytest.raises(HTTPException) as exc:
+        update_character_profile("other", CharacterUpdateRequest(enabled=False))
+    assert exc.value.status_code == 404

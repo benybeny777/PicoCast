@@ -6,6 +6,10 @@
 
 ## 2026-06-04
 
+### キャラクター設定の管理UIを追加
+
+- 設定画面に「キャラクター設定」タブを追加。active channel のキャラ設定（役割・口調・話し方・禁止表現・掛け合い）の編集と有効/無効切替ができる。`GET/PATCH/POST/DELETE /api/character-profiles`（`web_app/routes/api_character_profiles.py`）。別 profile のキャラ設定は変更できない（404）。
+
 ### キャラクター設定を台本テンプレートから分離・食べ物雑学堂のめたんを辛口相方ツッコミ化
 
 - **キャラクター設定を台本テンプレートから分離**した。役割・口調・禁止台詞・掛け合い構造を `data/settings.db` の `character_profiles` テーブル（`core/character_profile_store.py`）で channel 別に管理し、生成時に `compose_character_section()` で台本プロンプトへ合成する。台本テンプレート（`script_rules`）は動画構成・尺・分量・出力形式だけを持つ。
