@@ -12,12 +12,15 @@
 ```powershell
 .\build_exe.ps1
 ```
-成果物: `dist\NativeVideoFactory.exe`
+成果物: `dist\NativeVideoFactory\NativeVideoFactory.exe`（standalone フォルダ一式）。配布はこのフォルダごと（zip / インストーラ）。
 
 `build_exe.ps1` がやること:
-1. Nuitka 未導入なら導入
-2. `core/_build_version.py` にバージョンを焼き込む（exe では git が使えないため。`.gitignore` 済み）
-3. onefile standalone でコンパイル（テンプレート/static/legal/SEED/prompt_profiles/samples/assets を同梱）
+1. Nuitka / zstandard 未導入なら導入
+2. `core/_build_version.py` にバージョンを焼き込む（HEAD コミット日付ベース）
+3. standalone（フォルダ配布）でコンパイル（テンプレート/static/legal/SEED/prompt_profiles/samples/assets を同梱）。`dist\app.dist` を `dist\NativeVideoFactory` にリネーム
+4. 自己署名証明書が `CurrentUser\My` にあれば、フォルダ内の未署名バイナリ（Nuitka 生成の exe/dll/pyd）へ署名する（MS 署名済み DLL は上書きしない）
+
+> 署名で Defender のML誤検知を確実に避けるには、先に `.\make_codesign_cert.ps1` を1回実行して証明書を作成・信頼登録しておく。これでこのPC（証明書を信頼登録したPC）では署名済みバイナリが信頼され誤検知されない。
 
 ## frozen(exe) 対応として実装済み
 - `core/runtime_env.py`: `is_frozen()` / `app_base_dir()`（永続データの基準）/ `resource_base_dir()`（同梱リソースの基準）。
@@ -33,12 +36,13 @@
 1. **出力先パス**: 対応済み。`output/`・チャンネル `settings.db`・`metadata.db`・`DEBUG_LOG_DIR` は `app_base_dir()`（frozen=exeフォルダ）基準に統一済みで、cwd に依存しない。`config.py` の `OUTPUT_DIR` も `app_base_dir()` 基準の絶対パスへ解決される。別ドライブへ置きたい場合は `/setup`「出力先フォルダ」で `OUTPUT_BASE_DIR` を絶対指定する。
 2. **隠れ import**: `uvicorn` のプロトコル実装、`google.genai`、`cryptography`(cffi/openssl)、`pillow`、`keyring`(任意) などが取り込み漏れする場合がある。起動時 ImportError が出たら `--include-module=...` を追記。
 3. **uvicorn の import 文字列**: `uvicorn.Config("web_app.app:app")` は文字列参照。エントリが `web_app/app.py` なので通常は同梱されるが、起動失敗時は `--include-module=web_app.app` を明示。
-4. **起動時間/サイズ**: onefile は初回展開で起動が遅め・サイズ大。`build_exe.ps1` は `zstandard` を導入して onefile を圧縮する（未導入だと圧縮スキップ警告＋サイズ増）。さらに小さくしたい/起動を速くしたい場合は `--standalone`（フォルダ配布）も検討。`--include-windows-runtime-dlls=yes` で VC++ ランタイムを同梱している（配布先にランタイムが無くても起動可能）。
-5. **コード署名 / ウイルス誤検知**: 未署名だと SmartScreen 警告に加え、Windows Defender が onefile 展開後の `app.dll` を `Program:Win32/Contebrew.A!ml` 等のML ヒューリスティックで**誤検知・隔離**し `Error 225 (load DLL)` で起動失敗することがある（Nuitka/PyInstaller共通の既知の誤検知）。
-   - 展開先は `--onefile-tempdir-spec="{CACHE_DIR}\NativeVideoFactory\{VERSION}"` で固定済み（ランダム temp ではなく `%LOCALAPPDATA%\NativeVideoFactory\<version>`）。開発機ではこのフォルダを Defender 除外に追加すれば再ビルドのたびに引っかからない: `Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\NativeVideoFactory"`（管理者）。
-   - 配布時の根本解決は**コード署名（Authenticode）**。署名すると ML 誤検知も SmartScreen も大幅に減る。`--standalone`（フォルダ配布）にすると temp 展開がなくなり誤検知されにくい。必要なら Microsoft へ誤検知申告（https://www.microsoft.com/wdsi/filesubmission ）。
-   - **自己署名（開発・既知PC向け）**: `.\make_codesign_cert.ps1` を1回実行すると `CurrentUser\My` に自己署名コード署名証明書を作成し、このPCの信頼ストア（Root / TrustedPublisher）へ登録する。以降 `build_exe.ps1` がビルド後に exe を自動署名する。**ただし公的CAではないため不特定多数配布では無効**。さらに **onefile では外側 exe のみ署名され、展開される app.dll は未署名のまま**なので Defender のML誤検知対策にはならない（その用途は上記の除外/standalone/公的署名）。他PCで「不明な発行元」を消すには `dev/codesign/NativeVideoFactory-public.cer` を相手PCの Root / TrustedPublisher にインポートする（秘密鍵は配らない）。
-6. **動作確認**: ビルド後、別フォルダ（Python無し相当）で exe を起動し、(a) /setup 表示、(b) settings.db が exe_dir/data に作られる、(c) job-runner が起動する（生成ジョブが進む）、(d) VOICEVOX/ffmpeg 検出、を確認。
+4. **配布形態/サイズ**: standalone はフォルダ配布（`dist\NativeVideoFactory\` ごと zip / インストーラで配る）。onefile より起動が速く（temp 展開なし）、Defender 誤検知も避けやすい。`--include-windows-runtime-dlls=yes` で VC++ ランタイムを同梱（配布先にランタイムが無くても起動可能）。
+5. **コード署名 / ウイルス誤検知**: 未署名だと SmartScreen 警告に加え、Windows Defender が Nuitka 生成バイナリ（`app.dll` 等）を `Program:Win32/Contebrew.A!ml` 等のML ヒューリスティックで**誤検知・隔離**することがある（Nuitka/PyInstaller共通）。onefile では展開後の `app.dll` で `Error 225 (load DLL)` 起動失敗になっていた。
+   - **standalone＋自己署名で対処（現行）**: `.\make_codesign_cert.ps1` を1回実行 → `CurrentUser\My` に自己署名証明書を作り、このPCの信頼ストア（Root / TrustedPublisher）へ登録。以降 `build_exe.ps1` が `dist\NativeVideoFactory\` 内の未署名バイナリ（exe/dll/pyd）へ署名する。**証明書を信頼登録したPCでは署名済みバイナリが信頼され誤検知されない**（MS 署名済み DLL は上書きしない）。
+   - 念のための保険として Defender 除外も可: `Add-MpPreference -ExclusionPath "<dist\NativeVideoFactory のフルパス>"`（管理者）。
+   - **不特定多数への配布**: 自己署名は無効。**公的CA（できればEV）のコード署名証明書**が必要。署名すると ML 誤検知も SmartScreen も大幅に減る。必要なら Microsoft へ誤検知申告（https://www.microsoft.com/wdsi/filesubmission ）。
+   - 他PCで「不明な発行元」を消すには `dev/codesign/NativeVideoFactory-public.cer` を相手PCの Root / TrustedPublisher にインポート（秘密鍵は配らない）。
+6. **動作確認**: ビルド後、`dist\NativeVideoFactory\NativeVideoFactory.exe` を起動し、(a) /setup 表示、(b) settings.db がフォルダ内 `data\` に作られる、(c) job-runner が起動する（生成ジョブが進む）、(d) VOICEVOX/ffmpeg 検出、を確認。
 
 ## 注意
 - 実ビルドは長時間かつ数回の調整が必要なことがある。エラーは上記2〜3の同梱漏れが大半。

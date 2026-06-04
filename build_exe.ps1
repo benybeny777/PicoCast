@@ -1,7 +1,9 @@
 ﻿# Native Video Factory — Nuitka exe ビルドスクリプト（Windows）
 #
-# 配布用 onefile exe を作る。実行にはビルド用PCに Python + Nuitka + Cコンパイラが必要。
-# 配布先PCには Python は不要（exe に同梱）。VOICEVOX / ffmpeg は別途インストール。
+# 配布用 standalone フォルダ（exe＋DLL一式）を dist\NativeVideoFactory\ に作る。
+# 起動時の temp 展開がなく、フォルダ内バイナリへ署名できるため Defender 誤検知を避けやすい。
+# 実行にはビルド用PCに Python + Nuitka + Cコンパイラが必要。
+# 配布先PCには Python は不要（同梱）。VOICEVOX / ffmpeg は別途インストール。
 #
 # 使い方:
 #   .\build_exe.ps1
@@ -43,14 +45,15 @@ Write-Host "BUILD_VERSION = $buildVersion"
 # Windows のバージョンリソース用に数値のみへ整形（例: 2026.06.04 -> 2026.6.4）
 $numVer = (($verBase -split '\.') | ForEach-Object { [int]$_ }) -join '.'
 
-# 3. Nuitka ビルド（onefile standalone）
+# 3. Nuitka ビルド（standalone＝フォルダ配布）
+#    onefile は起動時に app.dll を temp 展開し Defender のML誤検知を受けやすいため、
+#    展開のない standalone にして、後段でフォルダ内バイナリへ署名する。
 #    --include-data-dir で同梱リソースを含める。VOICEVOX/ffmpeg は同梱しない。
 Write-Host "Nuitka ビルドを開始します（長時間かかります）..."
 & $py -m nuitka `
-    --standalone --onefile `
+    --standalone `
     --assume-yes-for-downloads `
     --include-windows-runtime-dlls=yes `
-    --onefile-tempdir-spec="{CACHE_DIR}\NativeVideoFactory\{VERSION}" `
     --nofollow-import-to=PIL.ImageQt `
     --nofollow-import-to=PIL.ImageTk `
     --output-dir=dist `
@@ -77,24 +80,41 @@ Write-Host "Nuitka ビルドを開始します（長時間かかります）..."
     web_app/app.py
 
 if ($LASTEXITCODE -ne 0) { throw "Nuitka ビルドに失敗しました。BUILD.md の残課題を参照してください。" }
-Write-Host "完了: dist\NativeVideoFactory.exe"
 
-# 4. コード署名（自己署名の証明書が CurrentUser\My にあれば exe に署名する）
-#    注意: onefile の外側 exe のみ署名される。展開される app.dll は署名されないため
-#          Defender のML誤検知対策にはならない（発行元識別のための署名）。
-$exePath = Join-Path $root "dist\NativeVideoFactory.exe"
+# 3.5 配布フォルダ名を整える（app.dist -> NativeVideoFactory）
+$distSrc = Join-Path $root "dist\app.dist"
+$distDir = Join-Path $root "dist\NativeVideoFactory"
+if (Test-Path $distSrc) {
+    if (Test-Path $distDir) { Remove-Item -Recurse -Force $distDir }
+    Rename-Item -Path $distSrc -NewName "NativeVideoFactory"
+}
+$exePath = Join-Path $distDir "NativeVideoFactory.exe"
+Write-Host "完了: $exePath"
+
+# 4. コード署名（自己署名の証明書があれば、未署名バイナリすべてに署名する）
+#    standalone はフォルダ内に実体の exe/dll/pyd が並ぶ。未署名の Nuitka 生成物に署名すると、
+#    証明書を信頼登録したPCでは Defender のML誤検知を回避できる。
+#    既に有効署名のある MS 製 DLL は上書きしない（NotSigned のものだけ署名）。
 $signCert = Get-ChildItem Cert:\CurrentUser\My |
     Where-Object { $_.Subject -eq "CN=Native Video Factory Self-Signed" -and $_.HasPrivateKey } |
     Select-Object -First 1
-if ($signCert) {
-    Write-Host "コード署名します（自己署名）..."
-    $sig = Set-AuthenticodeSignature -FilePath $exePath -Certificate $signCert `
-        -HashAlgorithm SHA256 -TimestampServer "http://timestamp.digicert.com"
-    if ($sig.Status -ne 'Valid') {
-        # タイムスタンプ不通などのときはタイムスタンプ無しで署名し直す
-        $sig = Set-AuthenticodeSignature -FilePath $exePath -Certificate $signCert -HashAlgorithm SHA256
+if ($signCert -and (Test-Path $distDir)) {
+    Write-Host "コード署名します（自己署名・未署名バイナリのみ）..."
+    $targets = Get-ChildItem -Path $distDir -Recurse -Include *.exe, *.dll, *.pyd
+    $signed = 0; $skipped = 0; $failed = 0
+    foreach ($f in $targets) {
+        $cur = Get-AuthenticodeSignature -FilePath $f.FullName
+        if ($cur.Status -eq 'NotSigned') {
+            $r = Set-AuthenticodeSignature -FilePath $f.FullName -Certificate $signCert -HashAlgorithm SHA256
+            if ($r.Status -eq 'Valid') { $signed++ } else { $failed++ }
+        } else { $skipped++ }
     }
-    Write-Host ("署名ステータス: " + $sig.Status)
+    # メイン exe はタイムスタンプ付きで署名し直す（証明書失効後の検証対策）
+    if (Test-Path $exePath) {
+        Set-AuthenticodeSignature -FilePath $exePath -Certificate $signCert `
+            -HashAlgorithm SHA256 -TimestampServer "http://timestamp.digicert.com" | Out-Null
+    }
+    Write-Host ("署名完了: 新規署名 $signed 件 / 既署名スキップ $skipped 件 / 失敗 $failed 件")
 } else {
     Write-Host "（署名スキップ: 証明書が未作成。署名するには先に .\make_codesign_cert.ps1 を実行してください）"
 }
