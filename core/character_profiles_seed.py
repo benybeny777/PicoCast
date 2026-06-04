@@ -12,7 +12,6 @@ from __future__ import annotations
 from core.character_profile_store import (
     CharacterProfile,
     create_character,
-    has_characters,
     list_characters,
 )
 from core.script_prompts import FOOD_GENRE_PROFILES, METAN_TSUNDERE_RULES
@@ -95,21 +94,32 @@ _METAN_STANDARD_TOXIC = {
 
 
 def _seed_set_for_genre(genre_profile: str) -> list[dict]:
-    """ジャンルに応じた seed セット（ずんだもん＋めたん）を返す。"""
+    """ジャンルに応じた seed セット（ずんだもん＋めたん両バリアント）を返す。
+
+    めたんは「辛口相方」「お嬢様毒舌」の両方を投入し、UIでトグル切替できるようにする。
+    ジャンル既定のめたんだけ enabled=True、もう一方は enabled=False。
+    （compose は enabled のみ合成するため、同名キャラは原則1つだけ有効にする）
+    """
     is_food = (genre_profile or "") in FOOD_GENRE_PROFILES
-    metan = _METAN_FOOD_TOXIC if is_food else _METAN_STANDARD_TOXIC
     return [
-        {**_ZUNDAMON, "sort_order": 10},
-        {**metan, "sort_order": 20},
+        {**_ZUNDAMON, "sort_order": 10, "enabled": True},
+        {**_METAN_FOOD_TOXIC, "sort_order": 20, "enabled": is_food},
+        {**_METAN_STANDARD_TOXIC, "sort_order": 21, "enabled": not is_food},
     ]
 
 
 def seed_character_profiles_for_profile(profile_id: str, genre_profile: str) -> int:
-    """指定チャンネルにキャラクター設定を投入する（冪等: 既存があればスキップ）。"""
-    if has_characters(profile_id):
-        return 0
+    """指定チャンネルにキャラクター設定を投入する。
+
+    冪等・追補式: 既存の character_key はそのまま、未投入の key だけ追加する。
+    （新規チャンネルのseed と、既存チャンネルへのバリアント追補の両方に使える）
+    戻り値: 新規作成した件数。
+    """
+    existing_keys = {c.character_key for c in list_characters(profile_id)}
     created = 0
     for item in _seed_set_for_genre(genre_profile):
+        if item["character_key"] in existing_keys:
+            continue
         create_character(
             profile_id=profile_id,
             character_key=item["character_key"],
@@ -120,7 +130,7 @@ def seed_character_profiles_for_profile(profile_id: str, genre_profile: str) -> 
             speaking_rules=item.get("speaking_rules", ""),
             forbidden_phrases=item.get("forbidden_phrases", ""),
             dialogue_rules=item.get("dialogue_rules", ""),
-            enabled=True,
+            enabled=item.get("enabled", True),
             sort_order=item.get("sort_order", 0),
         )
         created += 1

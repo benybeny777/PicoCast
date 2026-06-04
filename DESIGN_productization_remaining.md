@@ -70,9 +70,10 @@
 - `core/runtime_env.py`（is_frozen / app_base_dir）、secret_store/settings_store を exe フォルダ基準に anchor、app.py の runner を frozen 対応（`--run-runner`）、version 焼き込み、`build_exe.ps1`＋`BUILD.md`。
 - 実ビルドは未実施（ユーザー選択: 準備のみ）。残課題は BUILD.md「既知の残課題」（出力先パス・隠れimport・コード署名・動作確認）。実行は `.\build_exe.ps1`。
 
-### 8. キャラクター設定の分離（character_profiles）  状態: ✅ 完了（管理UIも実装済み）
+### 8. キャラクター設定の分離（character_profiles）  状態: ✅ 完了（UI・切替まで実装）
 - 管理UI: 設定画面「キャラクター設定」タブ＋`/api/character-profiles`（GET/PATCH/POST/DELETE）。有効/無効・各フィールド編集可。
-- 残（さらに任意）: 「台本テンプレートごとにキャラセット選択」（prompt_templates に character_set 参照列を追加して compose で絞る）。現状は channel 単位の enabled。
+- 切替: 各チャンネルに四国めたんの両バリアント（辛口相方/お嬢様毒舌）を投入し、トグルで切替（同名は1つだけ有効）。既存チャンネルは起動時に追補。
+- 残（さらに任意・低優先）: 「台本テンプレートごとにキャラセット選択」を厳密にやるなら prompt_templates に character_set 参照列を追加し compose で絞る。現状は channel 単位の enabled で実用上十分。
 - `core/character_profile_store.py`（table）/`core/character_profiles_seed.py`（seed＋compose＋移行）。台本テンプレからキャラ設定分離。
 - 食べ物雑学堂(zunkami)=辛口相方めたん、都市伝説(zundamon_kowai)=お嬢様毒舌めたん。meetingは対象外。自動フォールバック禁止。
 - 起動時に ensure＋strip 移行。ローカルDBは適用済み（seed＋strip 実行済み）。tests/test_character_profiles.py。

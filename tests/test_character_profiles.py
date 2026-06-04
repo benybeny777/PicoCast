@@ -14,19 +14,21 @@ if _ROOT not in sys.path:
 
 # ── seed セットのジャンル分岐 ──────────────────────────────────────────────────
 
-def test_food_genre_gets_toxic_metan():
+def test_food_genre_enables_toxic_metan():
+    """食べ物雑学堂: 両めたんを投入するが、enabled は辛口相方のみ。"""
     from core.character_profiles_seed import _seed_set_for_genre
-    keys = {c["character_key"] for c in _seed_set_for_genre("zunkami")}
-    assert "metan_food_toxic" in keys
-    assert "metan_standard_toxic" not in keys
-    assert "zundamon" in keys
+    by_key = {c["character_key"]: c for c in _seed_set_for_genre("zunkami")}
+    assert "zundamon" in by_key
+    assert by_key["metan_food_toxic"]["enabled"] is True
+    assert by_key["metan_standard_toxic"]["enabled"] is False
 
 
-def test_urban_genre_keeps_standard_metan():
+def test_urban_genre_enables_standard_metan():
+    """都市伝説: 両めたんを投入するが、enabled はお嬢様毒舌のみ。"""
     from core.character_profiles_seed import _seed_set_for_genre
-    keys = {c["character_key"] for c in _seed_set_for_genre("zundamon_kowai")}
-    assert "metan_standard_toxic" in keys
-    assert "metan_food_toxic" not in keys
+    by_key = {c["character_key"]: c for c in _seed_set_for_genre("zundamon_kowai")}
+    assert by_key["metan_standard_toxic"]["enabled"] is True
+    assert by_key["metan_food_toxic"]["enabled"] is False
 
 
 # ── 合成（compose） ────────────────────────────────────────────────────────────
