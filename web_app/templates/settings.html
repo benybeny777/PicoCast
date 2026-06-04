@@ -71,6 +71,15 @@
     <p class="hint">秘密情報・台本本文・生成物を含まないZIPを作成します。</p>
     <button class="btn btn-secondary" onclick="createDiagnostics()">診断パッケージ作成</button>
     <div id="diagnostics-result" class="hint mt"></div>
+    <div id="support-info" class="hint mt"></div>
+  </div>
+  <div class="card">
+    <h2>更新確認</h2>
+    <div id="update-current" class="hint">読み込み中...</div>
+    <div class="action-row mt">
+      <button class="btn btn-secondary" id="update-check-btn" onclick="checkUpdate()">更新を確認</button>
+    </div>
+    <div id="update-result" class="hint mt"></div>
   </div>
   <div class="card">
     <h2>バックアップ / 復元</h2>
@@ -532,7 +541,7 @@ function switchTab(name, btn) {
   if (name === 'channels' && !_chLoaded) chLoadChannels();
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
-  if (name === 'product') loadProductStatus();
+  if (name === 'product') { loadProductStatus(); loadProductInfo(); }
   if (name === 'admin') devLoadEdition();
 }
 
@@ -636,6 +645,50 @@ async function saveLicense() {
   if (!res.ok) { showToast('ライセンス保存失敗: ' + (data.detail || ''), true); return; }
   showToast('ライセンスを保存しました', false);
   await loadProductStatus();
+}
+
+async function loadProductInfo() {
+  try {
+    const res = await fetch('/api/settings/product-info');
+    const d = await res.json();
+    // サポート導線（診断パッケージ近くに表示）
+    const sup = document.getElementById('support-info');
+    if (d.support_url || d.support_email) {
+      let html = '困ったときは診断パッケージを作成し、以下へお問い合わせください：';
+      if (d.support_url) html += ` <a href="${d.support_url}" target="_blank" rel="noopener">サポートページ</a>`;
+      if (d.support_email) html += ` <a href="mailto:${d.support_email}">${d.support_email}</a>`;
+      sup.innerHTML = html;
+    } else {
+      sup.innerHTML = '<span class="hint">サポート問い合わせ先（PRODUCT_SUPPORT_URL / PRODUCT_SUPPORT_EMAIL）は未設定です。</span>';
+    }
+    // 現在バージョン・更新確認の可否
+    const cur = document.getElementById('update-current');
+    cur.textContent = `現在のバージョン: ${d.app_version}` + (d.update_check_enabled ? '' : '（更新確認URL未設定のため無効）');
+    document.getElementById('update-check-btn').disabled = !d.update_check_enabled;
+  } catch(e) {
+    document.getElementById('support-info').textContent = '製品情報の取得に失敗: ' + e;
+  }
+}
+
+async function checkUpdate() {
+  const out = document.getElementById('update-result');
+  out.textContent = '確認中...';
+  try {
+    const res = await fetch('/api/settings/check-update', {method:'POST'});
+    const d = await res.json();
+    if (!d.enabled) { out.textContent = '更新確認URLが未設定です。'; return; }
+    if (!d.ok) { out.textContent = d.error || '更新確認に失敗しました'; return; }
+    if (d.update_available) {
+      let html = `🆕 新しいバージョンがあります: ${d.latest}（現在: ${d.current}）`;
+      if (d.url) html += ` <a href="${d.url}" target="_blank" rel="noopener">ダウンロード</a>`;
+      if (d.notes) html += `<br><span class="hint">${d.notes}</span>`;
+      out.innerHTML = html;
+    } else {
+      out.textContent = `✅ 最新です（${d.current}）`;
+    }
+  } catch(e) {
+    out.textContent = '通信エラー: ' + e;
+  }
 }
 
 async function createDiagnostics() {

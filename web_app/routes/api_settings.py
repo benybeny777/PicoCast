@@ -271,6 +271,27 @@ def api_setup_complete(req: SetupCompleteRequest):
     return setup_gate_status()
 
 
+@router.get("/product-info")
+def api_product_info():
+    """サポート問い合わせ先・更新確認の有効状態など製品情報を返す（秘密値なし）。"""
+    from config import config
+    from core.update_check import is_update_check_enabled
+    from core.gui_support import build_app_version
+    return {
+        "app_version": build_app_version(),
+        "support_url": (config.PRODUCT_SUPPORT_URL or "").strip(),
+        "support_email": (config.PRODUCT_SUPPORT_EMAIL or "").strip(),
+        "update_check_enabled": is_update_check_enabled(),
+    }
+
+
+@router.post("/check-update")
+def api_check_update():
+    """更新確認を実行する。URL未設定時はネットワークアクセスしない。"""
+    from core.update_check import check_for_update
+    return check_for_update()
+
+
 @router.get("/license")
 def api_license_status():
     """ライセンス状態を返す。購入者情報や秘密値は返さない。"""

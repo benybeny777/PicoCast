@@ -6,6 +6,11 @@
 
 ## 2026-06-04
 
+### サポート導線・更新確認を製品管理タブに追加
+
+- 設定画面「製品管理」にサポート問い合わせ先（`PRODUCT_SUPPORT_URL` / `PRODUCT_SUPPORT_EMAIL`、空=非表示）を診断パッケージ付近に表示。`GET /api/settings/product-info`。
+- 更新確認機能を追加（`core/update_check.py`、`POST /api/settings/check-update`）。`PRODUCT_UPDATE_CHECK_URL` を設定したときだけ最新版JSON（`{latest_version, url, notes}`）を取得して現在ビルドと比較する。**未設定（既定）ではネットワークアクセスしない**。
+
 ### 初回セットアップの最初に法務同意（利用規約・EULA・プライバシーポリシー）を必須化
 
 - `/setup` の冒頭に同意カードを追加。利用規約 / 使用許諾（EULA）/ プライバシーポリシー / 特定商取引法に基づく表記へのリンクと同意チェックを表示する。

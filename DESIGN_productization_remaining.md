@@ -22,11 +22,17 @@
 - 生成物（Gemini/Stable Diffusion WebUI/VOICEVOX）の商用利用条件・各ソフトの規約順守を利用規約に明記。
 - README/設定画面からリンク。
 
-### 2. サポート導線  状態: 未着手
+### 2. サポート導線  状態: ✅ 完了
+- config `PRODUCT_SUPPORT_URL` / `PRODUCT_SUPPORT_EMAIL`（空=非表示）。`GET /api/settings/product-info`。設定画面「製品管理」の診断パッケージ近くに表示。
+
+(旧メモ)
 - config: `PRODUCT_SUPPORT_URL` / `PRODUCT_SUPPORT_EMAIL`（空=非表示）。
 - 設定画面「製品管理」の診断パッケージ近くに「診断ZIPを作ってここへ送付」導線を表示。
 
-### 3. 更新確認  状態: 未着手
+### 3. 更新確認  状態: ✅ 完了
+- `core/update_check.py`（URL未設定=無効・無アクセス）。`POST /api/settings/check-update`。製品管理タブに「更新を確認」ボタン。`tests/test_update_check.py`。
+
+(旧メモ)
 - config: `PRODUCT_UPDATE_CHECK_URL`（空=無効・ネットワークアクセスしない）。
 - `core/update_check.py`: URLからJSON `{"latest_version": "x.y.z", "url": "..."}` を取得し `build_app_version()` と比較。
 - 設定画面「製品管理」に「更新を確認」ボタン＋結果表示。URL未設定なら「未設定」と表示しアクセスしない。
