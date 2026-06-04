@@ -21,7 +21,12 @@ import hashlib
 
 _logger = logging.getLogger(__name__)
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from core.runtime_env import app_base_dir, resource_base_dir
+
+# 永続データ(settings.db / output)の基準。exe(onefile)では exe と同じフォルダ。
+_ROOT = app_base_dir()
+# 同梱リソース(config/prompt_profiles / config/SEED)の基準。exe では展開先フォルダ。
+_RES_ROOT = resource_base_dir()
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _lock = threading.Lock()
 _profile_context = threading.local()
@@ -224,13 +229,13 @@ def _ensure_handle_genre_profile(source_genre: str, target_genre: str) -> None:
     """handle 名の genre_profile フォルダがなければ既存 genre からコピーする。"""
     if not target_genre:
         return
-    genres_dir = os.path.join(_ROOT, "config", "prompt_profiles", "genres")
+    genres_dir = os.path.join(_RES_ROOT, "config", "prompt_profiles", "genres")
     target_dir = os.path.join(genres_dir, target_genre)
     if os.path.isdir(target_dir):
         return
     source_dir = os.path.join(genres_dir, source_genre)
     if not os.path.isdir(source_dir):
-        source_dir = os.path.join(_ROOT, "config", "SEED", "prompt_packs", "product", source_genre)
+        source_dir = os.path.join(_RES_ROOT, "config", "SEED", "prompt_packs", "product", source_genre)
     if not source_genre or not os.path.isdir(source_dir):
         return
     shutil.copytree(source_dir, target_dir)

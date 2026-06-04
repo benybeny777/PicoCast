@@ -413,8 +413,10 @@ BGM_PATH = os.path.join(ASSETS_DIR, "bgm", BGM_FILE) if BGM_FILE else ""
 # ───────────────────────────────────────────────
 # 出力ディレクトリ・ファイルパス
 # ───────────────────────────────────────────────
-OUTPUT_BASE_DIR       = os.environ.get("OUTPUT_BASE_DIR",       "")          # 全プロファイル共通の出力ベース(各profile_idフォルダの親)。空=リポジトリ直下 output/
-OUTPUT_DIR            = os.environ.get("OUTPUT_DIR",            "output")
+from core.runtime_env import app_base_dir as _app_base_dir
+_OUTPUT_ANCHOR = _app_base_dir()  # 出力の基準。exe(onefile)では exe と同じフォルダ・開発時はリポジトリルート
+OUTPUT_BASE_DIR       = os.environ.get("OUTPUT_BASE_DIR",       "")          # 全プロファイル共通の出力ベース(各profile_idフォルダの親)。空=既定 output/
+OUTPUT_DIR            = os.environ.get("OUTPUT_DIR",            os.path.join(_OUTPUT_ANCHOR, "output"))
 OUTPUT_DATA_DIR       = os.environ.get("OUTPUT_DATA_DIR",       os.path.join(OUTPUT_DIR, "000_data"))
 OUTPUT_ANALYTICS_DIR  = os.environ.get("OUTPUT_ANALYTICS_DIR",  os.path.join(OUTPUT_DIR, "000_analytics"))
 OUTPUT_LEGACY_DIR     = os.environ.get("OUTPUT_LEGACY_DIR",     os.path.join(OUTPUT_DIR, "000_legacy"))
