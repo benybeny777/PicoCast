@@ -22,21 +22,25 @@ class YouTubeUploaderTests(unittest.TestCase):
 
 def test_youtube_uploader_requires_active_profile(monkeypatch):
     import core.channel_profile as channel_profile
+    from core.error_codes import AppError
 
     monkeypatch.setattr(channel_profile, "get_active_profile", lambda: None)
 
-    with pytest.raises(RuntimeError, match="active channel profile"):
+    with pytest.raises(AppError) as exc:
         youtube_uploader._resolve_profile_id(None)
+    assert exc.value.code == "E-PROFILE-MISSING"
 
 
 def test_youtube_analytics_requires_active_profile(monkeypatch):
     import core.channel_profile as channel_profile
+    from core.error_codes import AppError
     from core import youtube_analytics
 
     monkeypatch.setattr(channel_profile, "get_active_profile", lambda: None)
 
-    with pytest.raises(RuntimeError, match="active channel profile"):
+    with pytest.raises(AppError) as exc:
         youtube_analytics._resolve_profile_id(None)
+    assert exc.value.code == "E-PROFILE-MISSING"
 
 
 if __name__ == "__main__":

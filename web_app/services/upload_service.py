@@ -5,6 +5,7 @@ YouTubeアップロードサービス。
 import os
 import shutil
 import threading
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -12,6 +13,7 @@ from core.output_paths import get_output_videos_dir, get_uploaded_dir, get_backu
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import is_video_folder, safe_output_path
 
+_logger = logging.getLogger(__name__)
 _JST = timezone(timedelta(hours=9))
 _slot_lock = threading.Lock()  # スロット割り当ての同時実行を防ぐ
 
@@ -30,6 +32,7 @@ def list_upload_candidates() -> list[dict[str, Any]]:
         try:
             names = sorted(os.listdir(search_dir), reverse=True)
         except OSError:
+            _logger.warning("アップロード候補フォルダ一覧の取得に失敗しました: dir=%s", search_dir, exc_info=True)
             continue
 
         for name in names:
@@ -42,6 +45,7 @@ def list_upload_candidates() -> list[dict[str, Any]]:
             try:
                 theme_dir = safe_output_path(rel, output_base=get_output_videos_dir())
             except Exception:
+                _logger.warning("アップロード候補パスの安全確認に失敗しました: name=%s", rel, exc_info=True)
                 continue
             if not os.path.isdir(theme_dir):
                 continue
@@ -137,6 +141,7 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
             progress_callback=lambda msg, tag="info": _log(job, msg, tag),
         )
     except Exception as e:
+        _logger.error("YouTubeアップロードに失敗しました: history_name=%s", history_name, exc_info=True)
         _log(job, f"アップロードエラー: {e}", "error")
         raise
 
@@ -169,6 +174,7 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
             else:
                 _log(job, "空きスロットが見つかりませんでした。非公開のままです。", "warning")
         except Exception as e:
+            _logger.warning("YouTube公開スロット設定に失敗しました: video_id=%s", video_id, exc_info=True)
             _log(job, f"スロット設定エラー（非公開のまま続行）: {e}", "warning")
 
     # 再生リストへ追加
@@ -215,6 +221,12 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
                         local_id, video_id, resolved,
                         create_result.get("id"), status="registered")
                 except Exception as _pl_e:
+                    _logger.warning(
+                        "再生リスト登録状態のDB同期に失敗しました: video_id=%s playlist=%s",
+                        video_id,
+                        resolved,
+                        exc_info=True,
+                    )
                     _log(job, f"⚠ 再生リストDB同期失敗: {_pl_e}", "warning")
             else:
                 _log(job, f"再生リスト追加失敗: {resolved} — {add_result['reason']}", "error")
@@ -238,6 +250,7 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
                     else:
                         _log(job, f"再生リスト追加スキップ: {result.get('reason', '不明')}", "warning")
             except Exception as e:
+                _logger.warning("後方互換再生リスト追加に失敗しました: video_id=%s", video_id, exc_info=True)
                 _log(job, f"再生リスト追加エラー（続行）: {e}", "warning")
 
     # youtube_status を DB に直接書き込む
@@ -259,6 +272,7 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
             _conn.commit()
         _log(job, "youtube_status を DB に保存しました", "info")
     except Exception as _db_e:
+        _logger.error("youtube_status のDB保存に失敗しました: local_id=%s", local_id, exc_info=True)
         _log(job, f"⚠ DB保存失敗（続行）: {_db_e}", "warning")
 
     # 000_uploaded/ へフォルダ移動（既に移動済みの場合はスキップ）
@@ -296,6 +310,6 @@ def _find_mp4(theme_dir: str) -> str | None:
             if fname.endswith("_native.mp4") or fname == "video_native.mp4":
                 return os.path.join(theme_dir, fname)
     except OSError:
-        pass
+        _logger.warning("MP4ファイル検索に失敗しました: dir=%s", theme_dir, exc_info=True)
     return None
 

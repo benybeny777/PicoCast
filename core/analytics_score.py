@@ -1,8 +1,10 @@
 import json
+import logging
 import os
 from datetime import date, datetime, timezone, timedelta
 from typing import Any
 
+_logger = logging.getLogger(__name__)
 
 SCORE_ORDER = {"A": 5, "B": 4, "C": 3, "D": 2, "E": 1, "未計測": 0, "対象外": -1}
 AUDIO_CUTOFF_RISK_DATE = date(2026, 5, 16)
@@ -557,6 +559,7 @@ def _analytics_date_range(days: int, generated_at: str | None = None) -> tuple[s
         try:
             end = datetime.fromisoformat(str(generated_at).replace("Z", "+00:00")).date()
         except Exception:
+            _logger.warning("Analytics期間のgenerated_at解析に失敗しました: generated_at=%s", generated_at, exc_info=True)
             end = datetime.now(timezone(timedelta(hours=9))).date()
     else:
         end = datetime.now(timezone(timedelta(hours=9))).date()

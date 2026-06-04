@@ -73,7 +73,11 @@ def _gpu_info() -> dict[str, Any]:
     try:
         proc = subprocess.run(
             [smi, "--query-gpu=name,driver_version,memory.total", "--format=csv,noheader"],
-            capture_output=True, text=True, timeout=15,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=15,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         # 診断データ収集なので、プローブ失敗は状態として記録する（パッケージ全体は止めない）

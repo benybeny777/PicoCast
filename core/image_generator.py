@@ -1,4 +1,5 @@
 import os
+import logging
 import re
 from google import genai
 from config import config
@@ -7,6 +8,8 @@ from config import (
     NANOBANANA_PRO_MODEL,
 )
 # IMAGE_BACKEND は実行時に config から直接参照する（monkeypatch対応）
+
+_logger = logging.getLogger(__name__)
 
 
 class ImageGenerationError(Exception):
@@ -73,6 +76,7 @@ def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
     try:
         ensure_ollama_server()
     except Exception as e:
+        _logger.error("Ollamaサーバーの起動確認に失敗しました", exc_info=True)
         raise AppError("E-OLLAMA-DOWN", detail="Stable Diffusion WebUI 画像の英語プロンプト変換に必要です", cause=e)
 
     system_instruction = (
@@ -95,6 +99,7 @@ def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
             resp.raise_for_status()
             translated = str(resp.json().get("response", "")).strip()
     except (requests.ConnectionError, requests.Timeout) as e:
+        _logger.error("Ollamaプロンプト翻訳APIへ接続できません", exc_info=True)
         raise AppError("E-OLLAMA-DOWN", detail="Stable Diffusion WebUI 画像の英語プロンプト変換に必要です", cause=e)
 
     if not translated:
@@ -216,6 +221,7 @@ class ImageGenerator:
                     try:
                         existing_nums.append(int(f[3:6]))
                     except ValueError:
+                        _logger.warning("背景画像ファイル名の番号解析に失敗しました: file=%s", f, exc_info=True)
                         pass
             next_num = max(existing_nums, default=0) + 1
             fname = f"bg_{next_num:03d}_001.png"
@@ -321,6 +327,7 @@ class ImageGenerator:
                     try:
                         existing_nums.append(int(f[3:6]))
                     except ValueError:
+                        _logger.warning("背景画像ファイル名の番号解析に失敗しました: file=%s", f, exc_info=True)
                         pass
             next_num = max(existing_nums, default=0) + 1
             fname = f"bg_{next_num:03d}_001.png"
@@ -360,6 +367,12 @@ class ImageGenerator:
             except Exception as e:
                 # 自動フォールバック禁止。HTTPステータスで分類してコード付き例外にする。
                 category, status = classify_image_api_error(e)
+                _logger.error(
+                    "Stable Diffusion WebUI 背景生成に失敗しました: category=%s status=%s",
+                    category,
+                    status,
+                    exc_info=True,
+                )
                 print(f"❌ Stable Diffusion WebUI 背景生成に失敗しました（category={category} / status={status}）。自動フォールバックは行いません。")
                 print(f"❌ エラー詳細: {e}")
                 raise ImageGenerationError(
@@ -447,6 +460,13 @@ class ImageGenerator:
             raise  # 既に分類済み（二重ラップしない）
         except Exception as e:
             category, status = classify_image_api_error(e)
+            _logger.error(
+                "Nano Banana 背景生成に失敗しました: category=%s status=%s model=%s",
+                category,
+                status,
+                model_name,
+                exc_info=True,
+            )
             print(f"  [AI] Nano Banana エラー(category={category} / status={status}): {e}")
             # 自動フォールバック禁止: 別モデル・別バックエンド・ローカル生成へ切り替えない。
             raise ImageGenerationError(

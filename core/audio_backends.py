@@ -133,6 +133,8 @@ def generate_aquestalk_audio(
             command,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=config.AQUESTALK_TIMEOUT_SEC,
         )
     except Exception as exc:

@@ -150,6 +150,25 @@ def test_playlist_categories_urban_legend(dual_profile_env):
     assert "食べ物カテゴリ" not in cats
 
 
+def test_playlist_categories_fail_without_active_profile(dual_profile_env):
+    cp, *_ = dual_profile_env
+    from core.error_codes import AppError
+    from core.playlist_resolver import get_standard_categories
+
+    with pytest.raises(AppError) as exc:
+        get_standard_categories()
+    assert exc.value.code == "E-PLAYLIST-CONFIG"
+
+
+def test_youtube_metadata_fails_without_active_profile(dual_profile_env):
+    from core.error_codes import AppError
+    from core.youtube_metadata import build_youtube_tags
+
+    with pytest.raises(AppError) as exc:
+        build_youtube_tags("テスト")
+    assert exc.value.code == "E-METADATA-CONFIG"
+
+
 # ── Analytics summary が別 profile へ混ざらない ───────────────────────────────
 
 def test_db_paths_are_separate(dual_profile_env):

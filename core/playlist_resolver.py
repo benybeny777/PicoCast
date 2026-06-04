@@ -4,19 +4,13 @@ YouTube上の実際の再生リスト名を解決するモジュール。
 
 再生リストカテゴリは active channel profile の genre_profile に応じた
 config/prompt_profiles/genres/{genre_profile}/playlist_categories.md から読み込む。
-profile 未設定の場合は食べ物チャンネル用カテゴリにフォールバック（後方互換）。
+profile 未設定・genre 未設定の場合は明示エラーで停止する。
 """
+from __future__ import annotations
 
-# 食べ物チャンネル用デフォルトカテゴリ（後方互換）
-_DEFAULT_CATEGORIES = (
-    "なんで？食べ物の形・容器・袋の秘密",
-    "昔は捨ててたのに今は高級品！食べ物の大逆転",
-    "実は薬・毒扱いだった！食べ物の黒歴史",
-    "実は日本生まれ！その名前、騙されてます",
-    "海外では信じられない！ニッポン食のギャップ",
-    "毎日使うのに知らない！調味料の意外すぎる秘密",
-    "コンビニ・スナック・チェーンの開発秘話",
-)
+import logging
+
+_logger = logging.getLogger(__name__)
 
 _NETA_KAIGI_SHORTS = "ずんだもんとめたんのネタ会議 Shorts"
 _NETA_KAIGI_LONG = "ずんだもんとめたんのネタ会議【じっくり版】"
@@ -25,42 +19,45 @@ _NETA_KAIGI_LONG = "ずんだもんとめたんのネタ会議【じっくり版
 def _get_standard_categories() -> tuple[str, ...]:
     """active profile の genre_profile に応じた再生リストカテゴリを返す。"""
     try:
-        from core.channel_profile import get_active_profile
-        profile = get_active_profile()
-        if profile:
-            from core.prompt_profile_loader import get_playlist_categories
-            cats = get_playlist_categories(profile.genre_profile)
-            if cats:
-                return cats
-    except Exception:
-        pass  # フォールバック許可: 再生リスト解決失敗時は未解決として扱う
-    return _DEFAULT_CATEGORIES
+        from core.channel_profile import require_active_profile
+        from core.error_codes import AppError
+        from core.prompt_profile_loader import get_playlist_categories
+
+        profile = require_active_profile()
+        cats = get_playlist_categories(profile.genre_profile)
+    except Exception as exc:
+        _logger.error("再生リストカテゴリの取得に失敗しました", exc_info=True)
+        raise AppError("E-PLAYLIST-CONFIG", detail="チャンネル設定とジャンル設定を確認してください。", cause=exc) from exc
+    if not cats:
+        _logger.error("再生リストカテゴリが未設定です: profile_id=%s genre_profile=%s", profile.profile_id, profile.genre_profile)
+        raise AppError("E-PLAYLIST-CONFIG", detail=f"{profile.genre_profile}/playlist_categories.md が空です。")
+    return cats
 
 
 def _get_suffix_shorts() -> str:
     try:
-        from core.channel_profile import get_active_profile
+        from core.channel_profile import require_active_profile
+        from core.error_codes import AppError
         from core.prompt_profile_loader import load_genre_profile_config
-        profile = get_active_profile()
-        if profile:
-            cfg = load_genre_profile_config(profile.genre_profile)
-            return cfg.get("playlist_suffix_shorts", " Shorts")
-    except Exception:
-        pass  # フォールバック許可: 再生リスト解決失敗時は未解決として扱う
-    return " Shorts"
+        profile = require_active_profile()
+        cfg = load_genre_profile_config(profile.genre_profile)
+        return cfg.get("playlist_suffix_shorts", " Shorts")
+    except Exception as exc:
+        _logger.error("Shorts再生リスト接尾辞の取得に失敗しました", exc_info=True)
+        raise AppError("E-PLAYLIST-CONFIG", detail="Shorts再生リスト接尾辞を取得できません。", cause=exc) from exc
 
 
 def _get_suffix_long() -> str:
     try:
-        from core.channel_profile import get_active_profile
+        from core.channel_profile import require_active_profile
+        from core.error_codes import AppError
         from core.prompt_profile_loader import load_genre_profile_config
-        profile = get_active_profile()
-        if profile:
-            cfg = load_genre_profile_config(profile.genre_profile)
-            return cfg.get("playlist_suffix_long", "【じっくり解説】")
-    except Exception:
-        pass  # フォールバック許可: 再生リスト解決失敗時は未解決として扱う
-    return "【じっくり解説】"
+        profile = require_active_profile()
+        cfg = load_genre_profile_config(profile.genre_profile)
+        return cfg.get("playlist_suffix_long", "【じっくり解説】")
+    except Exception as exc:
+        _logger.error("Long再生リスト接尾辞の取得に失敗しました", exc_info=True)
+        raise AppError("E-PLAYLIST-CONFIG", detail="Long再生リスト接尾辞を取得できません。", cause=exc) from exc
 
 
 def normalize_category(name: str) -> str:

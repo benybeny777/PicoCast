@@ -5,10 +5,13 @@ Shorts枠: 毎日 07:00 / 12:00 / 21:00 JST。
 Long枠: 毎日 22:00 JST。
 Shorts と Long は別枠として扱うため、同時刻をそれぞれ使用できる。
 """
+import logging
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from config import config as _cfg
+
+_logger = logging.getLogger(__name__)
 
 def _timezone_from_name(name: str):
     if name == "Asia/Tokyo":
@@ -140,8 +143,10 @@ def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
                 if dt > now + timedelta(minutes=5):
                     used.add(dt.isoformat())
             except Exception:
+                _logger.warning("YouTube予約枠publishAtの解析に失敗しました: publishAt=%s", pub_at_raw, exc_info=True)
                 continue
     except Exception:
+        _logger.warning("YouTube予約状況の取得に失敗したためローカル記録から予約枠を推定します", exc_info=True)
         schedule = schedule_from_records().get(video_type, {})
         used = set(schedule.keys())
 
@@ -164,6 +169,7 @@ def schedule_from_youtube() -> dict[str, dict]:
     try:
         statuses = get_channel_upload_video_statuses()
     except Exception:
+        _logger.warning("YouTube予約一覧の取得に失敗しました", exc_info=True)
         return schedules
     for _vid_id, status in statuses.items():
         vt = str(status.get("video_type") or "").lower()
@@ -179,6 +185,7 @@ def schedule_from_youtube() -> dict[str, dict]:
                 continue
             iso = dt.isoformat()
         except Exception:
+            _logger.warning("YouTube予約一覧publishAtの解析に失敗しました: video_id=%s publishAt=%s", _vid_id, pub_at_raw, exc_info=True)
             continue
         title = str(status.get("title") or "").strip()
         if not title:
@@ -197,6 +204,7 @@ def _scheduled_entries_from_youtube(video_type: str) -> list[dict]:
     try:
         statuses = get_channel_upload_video_statuses()
     except Exception:
+        _logger.warning("YouTube予約済みエントリの取得に失敗しました", exc_info=True)
         return entries
     for video_id, status in statuses.items():
         vt = str(status.get("video_type") or "").lower()
@@ -210,6 +218,7 @@ def _scheduled_entries_from_youtube(video_type: str) -> list[dict]:
             iso = _as_jst(datetime.fromisoformat(pub_at_raw.replace("Z", "+00:00"))).isoformat()
             slot_dt = _parse_slot(iso)
         except Exception:
+            _logger.warning("YouTube予約済みエントリpublishAtの解析に失敗しました: video_id=%s publishAt=%s", video_id, pub_at_raw, exc_info=True)
             continue
         if slot_dt <= now:
             continue
@@ -245,6 +254,7 @@ def schedule_from_records(records: list[dict] | None = None) -> dict[str, dict]:
         try:
             iso = _parse_slot(publish_at.replace("Z", "+00:00")).isoformat()
         except Exception:
+            _logger.warning("ローカルアップロード記録のpublish_at解析に失敗しました: publish_at=%s", publish_at, exc_info=True)
             continue
         title = str(record.get("title") or "").split("\n")[0].strip()
         if not title:
@@ -270,6 +280,7 @@ def build_rebalanced_schedule(
         try:
             slot_dt = _parse_slot(iso)
         except Exception:
+            _logger.warning("リバランス対象スロットの解析に失敗しました: iso=%s", iso, exc_info=True)
             fixed[iso] = title
             continue
 

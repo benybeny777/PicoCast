@@ -1,10 +1,13 @@
 import os
 import json
+import logging
 import re
 from google import genai
 from config import GEMINI_MODEL
 from core.ng_words import apply_ng_word_replacements
 from core.script_prompts import build_gemini_system_prompt
+
+_logger = logging.getLogger(__name__)
 
 # generate_script() は通常のWeb生成では呼ばれない（通常は pregenerated_script が渡される）。
 # __init__ / client は生成・画像プロンプト強化で必要なときに初期化する。
@@ -64,6 +67,7 @@ class AIGenerator:
                     return response.text
                 raise Exception(f"Google AI ({model_to_use}) が空の応答を返しました。")
             except Exception as e:
+                _logger.error("Google AI 台本生成に失敗しました", exc_info=True)
                 raise Exception(f"Google AI エラー: {e}")
 
         return "Error: Google API キーが未設定です。"
@@ -97,6 +101,7 @@ class AIGenerator:
             if response and response.text:
                 return apply_ng_word_replacements(response.text.strip())
         except Exception as e:
+            _logger.warning("チャプターマーカー生成に失敗しました", exc_info=True)
             print(f"  [AI] チャプターマーカー生成エラー: {e}")
         return ""
 
@@ -128,6 +133,7 @@ class AIGenerator:
             if response and response.text:
                 return apply_ng_word_replacements(response.text.strip())
         except Exception as e:
+            _logger.warning("固定コメント生成に失敗しました", exc_info=True)
             print(f"  [AI] 固定コメント生成エラー: {e}")
         return ""
 
@@ -201,6 +207,7 @@ C案:
                     result.append({"variant": variant, "title": title, "concept": concept})
             return result
         except Exception as e:
+            _logger.warning("タイトルA/B/C生成に失敗しました", exc_info=True)
             print(f"  [AI] タイトルA/B/C生成エラー: {e}")
             return []
 
@@ -250,8 +257,10 @@ C案:
 
             if len(enhanced) == len(bg_prompts):
                 return enhanced
+            _logger.warning("背景プロンプト強化の件数が一致しません: enhanced=%s original=%s", len(enhanced), len(bg_prompts))
             print(f"  [AI] プロンプト強化: 件数不一致 ({len(enhanced)} vs {len(bg_prompts)})、元のプロンプトを使用")
             return bg_prompts
         except Exception as e:
+            _logger.warning("背景プロンプト強化に失敗しました", exc_info=True)
             print(f"  [AI] プロンプト強化エラー: {e}")
             return bg_prompts

@@ -221,7 +221,10 @@ def repair() -> dict:
 def _run_powershell(script: str) -> subprocess.CompletedProcess:
     proc = subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     if proc.returncode != 0:
@@ -232,7 +235,10 @@ def _run_powershell(script: str) -> subprocess.CompletedProcess:
 def _windows_exists() -> bool:
     proc = subprocess.run(
         ["schtasks", "/query", "/tn", task_name()],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     return proc.returncode == 0
@@ -257,14 +263,20 @@ def _register_windows(times: list[str]) -> None:
 def _windows_delete(name: str) -> None:
     proc = subprocess.run(
         ["schtasks", "/delete", "/tn", name, "/f"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     # 既に存在しない場合はエラー扱いにしない（冪等）
     if proc.returncode != 0:
         check = subprocess.run(
             ["schtasks", "/query", "/tn", name],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         if check.returncode == 0:  # まだ存在する＝本当に削除失敗
@@ -282,7 +294,10 @@ def _windows_list_prefix() -> list[dict]:
     )
     proc = subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     tasks = []
@@ -315,15 +330,15 @@ def _register_mac(times: list[str]) -> None:
     with open(path, "wb") as f:
         plistlib.dump(plist, f)
     # 既存をunloadしてから登録（エラーは無視）
-    subprocess.run(["launchctl", "unload", path], capture_output=True, text=True)
-    proc = subprocess.run(["launchctl", "load", path], capture_output=True, text=True)
+    subprocess.run(["launchctl", "unload", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.run(["launchctl", "load", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if proc.returncode != 0:
         raise RuntimeError(f"launchctl load に失敗しました: {(proc.stderr or proc.stdout or '').strip()}")
 
 
 def _mac_delete(path: str) -> None:
     if path and os.path.isfile(path):
-        subprocess.run(["launchctl", "unload", path], capture_output=True, text=True)
+        subprocess.run(["launchctl", "unload", path], capture_output=True, text=True, encoding="utf-8", errors="replace")
         os.remove(path)
 
 

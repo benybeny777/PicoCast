@@ -332,6 +332,8 @@ def _probe_duration(path: str) -> float | None:
             [_ffprobe_bin(), "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", path],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=config.NATIVE_FFPROBE_TIMEOUT_SEC,
             check=True,
         )

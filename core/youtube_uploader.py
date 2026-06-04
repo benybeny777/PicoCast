@@ -24,13 +24,14 @@ def _resolve_profile_id(profile_id: str | None) -> str:
         return profile_id
     try:
         from core.channel_profile import get_active_profile
+        from core.error_codes import AppError
         p = get_active_profile()
     except Exception as exc:
         _logger.error("YouTubeアップロード用のactive profile取得に失敗しました", exc_info=True)
-        raise RuntimeError("active channel profile を取得できません。チャンネル設定を確認してください。") from exc
+        raise AppError("E-PROFILE-MISSING", detail="YouTubeアップロード用 profile を取得できません。", cause=exc) from exc
     if not p:
         _logger.error("YouTubeアップロード用のactive profileが未設定です")
-        raise RuntimeError("active channel profile が未設定です。先にチャンネル設定を作成・選択してください。")
+        raise AppError("E-PROFILE-MISSING", detail="YouTubeアップロード前にチャンネルを作成・選択してください。")
     return p.profile_id
 
 
@@ -138,6 +139,7 @@ def post_comment(video_id: str, comment_text: str, progress_callback=None, profi
         ).execute()
         return response.get("id")
     except Exception as e:
+        _logger.error("YouTubeコメント投稿に失敗しました: video_id=%s", video_id, exc_info=True)
         _log(f"  ⚠ コメント投稿エラー: {e}")
         if "forbidden" in str(e).lower() or "403" in str(e):
             _log("  💡 設定画面の「APIキー」タブで YouTube 認証（アップロード用）をやり直すと解決する場合があります")
@@ -310,6 +312,7 @@ def update_video_publish_time(video_id: str, publish_at, progress_callback=None)
         _log(f"  ✅ YouTube公開予定を変更: {publish_at_display} ({publish_at_str})")
         return True
     except Exception as e:
+        _logger.error("YouTube公開予定の変更に失敗しました: video_id=%s", video_id, exc_info=True)
         _log(f"  ⚠ 公開予定変更エラー: {e}")
         if "forbidden" in str(e).lower() or "403" in str(e):
             _log("  💡 設定画面の「APIキー」タブで YouTube 認証（アップロード用）をやり直すと解決する場合があります")
@@ -414,6 +417,7 @@ def add_video_to_playlist_by_name(video_id: str, playlist_name: str, progress_ca
         return result
     except Exception as e:
         err_str = str(e)
+        _logger.error("YouTube再生リスト追加に失敗しました: video_id=%s playlist=%s", video_id, playlist_name, exc_info=True)
         if "videoNotFound" in err_str or "Video not found" in err_str:
             result["reason"] = "動画がYouTubeに存在しません（削除済みの可能性）"
             result["not_found"] = True
@@ -445,6 +449,7 @@ def create_playlist(name: str, description: str = "", privacy: str = "public") -
         ).execute()
         return {"ok": True, "created": True, "id": resp.get("id"), "name": name, "reason": "作成しました"}
     except Exception as e:
+        _logger.error("YouTube再生リスト作成に失敗しました: name=%s", name, exc_info=True)
         return {"ok": False, "created": False, "id": None, "name": name, "reason": str(e)}
     finally:
         _close_youtube_client(youtube)
@@ -458,6 +463,7 @@ def _read_script_text_for_tags(mp4_path: str) -> str:
         from core.metadata_db import get_script_content
         return get_script_content(local_id) or ""
     except Exception:
+        _logger.warning("YouTubeタグ用の台本本文取得に失敗しました: local_id=%s", local_id, exc_info=True)
         return ""
 
 

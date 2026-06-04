@@ -1,11 +1,13 @@
 import os
 import gc
+import logging
 from dataclasses import dataclass
 from typing import Iterable
 
 from config import CHARACTER_EXPRESSION_PNGS, CHARACTER_PNGS, METAN_PSD_PATH, ZUNDAMON_PSD_PATH
 from core.runtime_env import app_base_dir
 
+_logger = logging.getLogger(__name__)
 
 CACHE_DIR = os.path.join(app_base_dir(), "data", "native_character_cache")
 
@@ -123,6 +125,7 @@ def _save_variant(
     try:
         from psd_tools import PSDImage
     except Exception:
+        _logger.warning("psd_tools の読み込みに失敗しました", exc_info=True)
         return None
     psd = None
     try:
@@ -144,11 +147,13 @@ def _save_variant(
         image.save(out_path)
         return out_path
     except Exception:
+        _logger.warning("PSDからキャラクター差分PNGを生成できませんでした: psd=%s out=%s", psd_path, out_path, exc_info=True)
         return None
     finally:
         try:
             del image
         except Exception:
+            _logger.warning("PSD合成画像リソースの解放に失敗しました", exc_info=True)
             pass  # フォールバック許可: 画像リソース解放の失敗は無視
         close = getattr(psd, "close", None)
         if callable(close):
@@ -190,11 +195,13 @@ def _save_difference_overlay(base_path: str, variant_path: str, out_path: str, p
         overlay.save(out_path)
         return out_path
     except Exception:
+        _logger.warning("差分オーバーレイ生成に失敗しました: base=%s variant=%s out=%s", base_path, variant_path, out_path, exc_info=True)
         return None
     finally:
         try:
             del base, variant, diff, cropped_variant, cropped_diff, mask, original_alpha, overlay
         except Exception:
+            _logger.warning("差分オーバーレイ画像リソースの解放に失敗しました", exc_info=True)
             pass  # フォールバック許可: 画像リソース解放の失敗は無視
         gc.collect()
 
@@ -234,11 +241,13 @@ def _save_manual_blink_overlay(name: str, base_path: str, out_path: str) -> str 
         overlay.save(out_path)
         return out_path
     except Exception:
+        _logger.warning("手動まばたきオーバーレイ生成に失敗しました: name=%s base=%s out=%s", name, base_path, out_path, exc_info=True)
         return None
     finally:
         try:
             del base, overlay, draw
         except Exception:
+            _logger.warning("手動まばたき画像リソースの解放に失敗しました", exc_info=True)
             pass  # フォールバック許可: 画像リソース解放の失敗は無視
         gc.collect()
 

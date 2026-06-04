@@ -5,6 +5,7 @@
 import os
 import subprocess
 import shutil
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -12,6 +13,8 @@ import httpx
 
 from config import config
 from core.output_paths import get_output_videos_dir
+
+_logger = logging.getLogger(__name__)
 
 # 起動時にウォームアップし、以降はキャッシュを返す
 _settings_status_cache: dict | None = None
@@ -22,6 +25,7 @@ def check_voicevox() -> dict[str, Any]:
         r = httpx.get(f"{config.VOICEVOX_URL}/version", timeout=config.WEB_VOICEVOX_CHECK_TIMEOUT_SEC)
         return {"ok": True, "version": r.text.strip('"')}
     except Exception as e:
+        _logger.warning("VOICEVOX疎通確認に失敗しました: url=%s", config.VOICEVOX_URL, exc_info=True)
         return {"ok": False, "error": str(e)}
 
 
@@ -33,8 +37,10 @@ def check_ollama() -> dict[str, Any]:
             models = r.json().get("models", [])
             return {"ok": True, "model_count": len(models)}
         else:
+            _logger.warning("Ollama疎通確認がHTTPエラーを返しました: status=%s", r.status_code)
             return {"ok": False, "error": f"Status code: {r.status_code}"}
     except Exception as e:
+        _logger.warning("Ollama疎通確認に失敗しました: url=%s", config.OLLAMA_BASE_URL, exc_info=True)
         return {"ok": False, "error": str(e)}
 
 
@@ -53,9 +59,11 @@ def check_sd_webui() -> dict[str, Any]:
                 result["manifest_total"] = len(statuses)
                 result["manifest_installed"] = sum(1 for s in statuses if s["installed"])
             except Exception:
+                _logger.warning("Stable Diffusion WebUIモデルマニフェスト状態の取得に失敗しました", exc_info=True)
                 pass  # フォールバック許可: マニフェスト情報は補助的。取得失敗しても疎通確認結果は返す
         return result
     except Exception as e:
+        _logger.warning("Stable Diffusion WebUI疎通確認に失敗しました: url=%s", config.SD_WEBUI_BASE_URL, exc_info=True)
         return {"ok": False, "url": config.SD_WEBUI_BASE_URL, "error": str(e)}
 
 
@@ -64,7 +72,11 @@ def check_ffmpeg() -> dict[str, Any]:
     try:
         result = subprocess.run(
             [bin_path, "-version"],
-            capture_output=True, text=True, timeout=config.WEB_FFMPEG_CHECK_TIMEOUT_SEC
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=config.WEB_FFMPEG_CHECK_TIMEOUT_SEC,
         )
         first_line = result.stdout.splitlines()[0] if result.stdout else ""
         ver_short = first_line.split(" Copyright")[0].strip() if " Copyright" in first_line else first_line
@@ -80,13 +92,18 @@ def check_ffmpeg() -> dict[str, Any]:
         try:
             encoders_result = subprocess.run(
                 [bin_path, "-encoders"],
-                capture_output=True, text=True, timeout=config.WEB_FFMPEG_CHECK_TIMEOUT_SEC
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=config.WEB_FFMPEG_CHECK_TIMEOUT_SEC,
             )
             if encoders_result.returncode == 0:
                 encoders_stdout = encoders_result.stdout
                 if configured_encoder in encoders_stdout:
                     gpu_supported = True
         except Exception as _e:
+            _logger.error("ffmpegエンコーダー一覧の取得に失敗しました: bin=%s", bin_path, exc_info=True)
             raise RuntimeError(f"Error: {_e}") from _e
 
         # 動作環境の判定
@@ -103,6 +120,7 @@ def check_ffmpeg() -> dict[str, Any]:
             "gpu": running_mode
         }
     except Exception as e:
+        _logger.warning("ffmpeg疎通確認に失敗しました: bin=%s", bin_path, exc_info=True)
         return {"ok": False, "error": str(e)}
 
 
@@ -227,6 +245,7 @@ def get_dashboard_summary() -> dict[str, Any]:
             ).fetchone()
         latest_analytics = row["collected_at"] if row else None
     except Exception:
+        _logger.warning("ダッシュボード用の最新Analytics取得に失敗しました", exc_info=True)
         pass  # フォールバック許可: 補助情報(最新Analytics)の取得失敗は無視（表示のみ）
 
     # output/ 配下の履歴数とMP4有無カウント
@@ -247,6 +266,7 @@ def get_dashboard_summary() -> dict[str, Any]:
                     mp4_count += 1
                     break
     except OSError:
+        _logger.warning("ダッシュボード用の履歴フォルダ集計に失敗しました", exc_info=True)
         pass
 
     # 予約中動画数
@@ -274,6 +294,7 @@ def _count_scheduled() -> int:
                 count += 1
         return count
     except Exception:
+        _logger.warning("予約中動画数の集計に失敗しました", exc_info=True)
         return 0
 
 
@@ -284,4 +305,5 @@ def _is_future_publish_at(publish_at_str: str, now_utc: datetime) -> bool:
         dt = datetime.fromisoformat(publish_at_str.replace("Z", "+00:00"))
         return dt > now_utc
     except Exception:
+        _logger.warning("公開予定日時の解析に失敗しました: publish_at=%s", publish_at_str, exc_info=True)
         return False

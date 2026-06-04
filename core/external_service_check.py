@@ -21,7 +21,11 @@ def _ffmpeg_lines() -> list[str]:
     try:
         ver_proc = subprocess.run(
             [ffmpeg, "-version"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
         version_line = ver_proc.stdout.splitlines()[0] if ver_proc.stdout else ""
         version = version_line.split(" ")[2] if len(version_line.split(" ")) > 2 else version_line
@@ -34,7 +38,11 @@ def _ffmpeg_lines() -> list[str]:
     try:
         enc_proc = subprocess.run(
             [ffmpeg, "-encoders"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
         enc_list = enc_proc.stdout
     except Exception:

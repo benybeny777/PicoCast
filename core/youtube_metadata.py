@@ -1,4 +1,7 @@
+import logging
 import re
+
+_logger = logging.getLogger(__name__)
 
 
 CHANNEL_DEFAULT_TAGS = [
@@ -191,21 +194,23 @@ def build_topic_tags(title: str, script_text: str = "") -> list[str]:
 
 
 def _active_genre_config() -> dict:
-    """active profile の genre profile.yaml 設定を返す（取得失敗時は空 dict）。
+    """active profile の genre profile.yaml 設定を返す。
 
     profile.yaml に seo_sentence_* / default_tags を定義したチャンネル（例: 都市伝説）は
-    それを使う。未定義のチャンネル（例: 食べ物）は従来の食べ物向け定数にフォールバックし、
+    それを使う。項目未定義のチャンネル（例: 食べ物）は従来の食べ物向け定数を使い、
     既存挙動を一切変えない。
     """
     try:
         from core.channel_profile import require_active_profile
+        from core.error_codes import AppError
         from core.prompt_profile_loader import load_genre_profile_config
         prof = require_active_profile()
         cfg = dict(load_genre_profile_config(prof.genre_profile) or {})
         cfg["__channel_default_hashtags__"] = prof.default_hashtags or ""
         return cfg
-    except Exception:
-        return {}  # フォールバック: profile未取得時は従来の食べ物挙動
+    except Exception as exc:
+        _logger.error("YouTubeメタデータ用のジャンル設定取得に失敗しました", exc_info=True)
+        raise AppError("E-METADATA-CONFIG", detail="チャンネル設定とジャンル設定を確認してください。", cause=exc) from exc
 
 
 def build_youtube_tags(

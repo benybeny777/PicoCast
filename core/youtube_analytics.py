@@ -22,13 +22,14 @@ def _resolve_profile_id(profile_id: str | None) -> str:
         return profile_id
     try:
         from core.channel_profile import get_active_profile
+        from core.error_codes import AppError
         p = get_active_profile()
     except Exception as exc:
         _logger.error("YouTube Analytics用のactive profile取得に失敗しました", exc_info=True)
-        raise RuntimeError("active channel profile を取得できません。チャンネル設定を確認してください。") from exc
+        raise AppError("E-PROFILE-MISSING", detail="YouTube Analytics用 profile を取得できません。", cause=exc) from exc
     if not p:
         _logger.error("YouTube Analytics用のactive profileが未設定です")
-        raise RuntimeError("active channel profile が未設定です。先にチャンネル設定を作成・選択してください。")
+        raise AppError("E-PROFILE-MISSING", detail="YouTube Analytics利用前にチャンネルを作成・選択してください。")
     return p.profile_id
 
 
@@ -158,6 +159,7 @@ def _video_metadata(youtube, video_ids):
                     scheduled_dt = datetime.fromisoformat(publish_at_str.replace("Z", "+00:00"))
                     publish_status = "scheduled" if scheduled_dt > now_utc else "published"
                 except Exception:
+                    _logger.warning("YouTube公開予定日時の解析に失敗しました: video_id=%s publishAt=%s", vid, publish_at_str, exc_info=True)
                     publish_status = "private"
             elif privacy == "unlisted":
                 publish_status = "unlisted"
@@ -280,6 +282,7 @@ def fetch_video_analytics(days=28):
         try:
             report = _query_report(analytics, start_date, end_date, metrics)
         except Exception:
+            _logger.warning("YouTube Analytics の impressions 指標取得に失敗したため基本指標で再取得します", exc_info=True)
             metrics = metrics[:-2]
             report = _query_report(analytics, start_date, end_date, metrics)
 

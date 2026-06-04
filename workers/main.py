@@ -97,6 +97,7 @@ def _find_locking_process(path):
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue
     except Exception:
+        _logger.warning("プロセスロック情報の確認に失敗しました", exc_info=True)
         return None  # フォールバック許可: プロセスロック確認は補助情報のため失敗しても継続
     return None
 
@@ -518,6 +519,7 @@ def _report_thumbnail_failure(err, topic, theme_dir, update_status):
             "retry_recommended": retry,
         })
     except Exception as rec_e:
+        _logger.error("画像生成失敗記録の保存に失敗しました", exc_info=True)
         update_status(f"    ⚠ 失敗記録の保存に失敗: {rec_e}", "warning")
     return msg
 
@@ -613,6 +615,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             "",
         ).strip()
     except Exception:
+        _logger.warning("サムネイル用テキストの抽出に失敗しました", exc_info=True)
         thumbnail_text = ""
     common_rules = (
         "\n\nLong video thumbnail A/B test rules: 16:9 landscape. "
@@ -833,6 +836,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         for line in get_service_info_lines():
             update_status(line)
     except Exception:
+        _logger.warning("外部サービス情報の表示に失敗しました", exc_info=True)
         pass  # フォールバック許可: デバイス情報表示は補助的
 
     # Step 1: スクリプト取得（形式判定のために先に行う）
@@ -1036,6 +1040,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         )
         update_status("💾 台本をDBへ保存しました")
     except Exception as e:
+        _logger.error("台本DB保存に失敗しました", exc_info=True)
         update_status(f"⚠ 台本DB保存に失敗: {e}", "error")
         raise
 
@@ -1103,6 +1108,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         )
         write_policy_file(theme_dir, cta_policy)
     except Exception as e:
+        _logger.error("CTA方針メタの保存に失敗しました", exc_info=True)
         update_status(f"  ⚠ CTA方針メタ保存をスキップ: {e}", "warning")
 
     ai_thumbnail_prompt = meta.get("thumbnail")
@@ -1144,6 +1150,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             else:
                 update_status("  ⚠ Ollama冒頭レビューはスキップされました")
         except Exception as e:
+            _logger.error("Ollama冒頭レビューに失敗しました", exc_info=True)
             opening_review_path = save_opening_review(
                 theme_dir,
                 opening_review,
@@ -1279,6 +1286,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 for issue in candidate_critical_errors[:3]:
                     update_status(f"    - リライト候補must_fix: {issue}", "warning")
             except Exception as e:
+                _logger.warning("Ollama冒頭リライトに失敗しました: model=%s", rewrite_model, exc_info=True)
                 update_status(f"  ⚠ Ollama({rewrite_model})冒頭リライト失敗: {e}", "warning")
                 rewrite_attempts.append({"model": rewrite_model, "accepted": False, "error": str(e)})
 
@@ -1554,6 +1562,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 _meta_info["original_to_tts"] = _changed_map
                 json.dump(_meta_info, _rmf, ensure_ascii=False, indent=2)
         except Exception as _e:
+            _logger.error("reading_map保存に失敗しました", exc_info=True)
             update_status(f"⚠ reading_map保存失敗: {_e}", "warning")
             
         if reading_normalizer.mode == "safe_auto" and reading_normalizer.candidates:
@@ -1563,6 +1572,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     json.dump(reading_normalizer.candidates, _rmf, ensure_ascii=False, indent=2)
                 update_status("🔎 読み候補を保存しました")
             except Exception as _e:
+                _logger.error("読み候補の保存に失敗しました", exc_info=True)
                 update_status(f"⚠ reading_candidates保存失敗: {_e}", "warning")
 
     vv = VoicevoxAPI()
@@ -1744,6 +1754,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 ww.setframerate(_sr); ww.setnchannels(_ch); ww.setsampwidth(_sw)
                 ww.writeframes(_orig + _silence)
         except Exception as _tail_e:
+            _logger.warning("WAV末尾への無音追加に失敗しました", exc_info=True)
             update_status(f"  ⚠ 無音追加失敗(無視): {_tail_e}")
         with wave.open(c["audio_path"], 'rb') as wr:
             wr.getnframes()
@@ -1933,6 +1944,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         from core.metadata_db import clear_image_generation_failures
         clear_image_generation_failures(_local_id_for_fail)
     except Exception:
+        _logger.warning("画像生成失敗記録のクリアに失敗しました", exc_info=True)
         pass  # フォールバック許可: 失敗記録クリアの失敗は生成本体を妨げない
 
     _bg_lock = threading.Lock()
@@ -1995,6 +2007,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                         "retry_recommended": getattr(_be, "retry_recommended", _category in ("api_busy", "quota")),
                     })
                 except Exception as _rec_e:
+                    _logger.error("背景生成失敗記録の保存に失敗しました", exc_info=True)
                     update_status(f"    ⚠ 失敗記録の保存に失敗: {_rec_e}", "warning")
 
     # 503（API混雑）が出た場合は、原因がユーザー側でないことを目立つ形で明示する
@@ -2033,6 +2046,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             with wave.open(_wp, "rb") as _wr:
                 _actual_sec += _wr.getnframes() / _wr.getframerate()
     except Exception as _e:
+        _logger.warning("実尺計算に失敗しました", exc_info=True)
         update_status(f"⚠ 実尺計算スキップ: {_e}", "warning")
         _actual_sec = 0.0
 
@@ -2093,6 +2107,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         local_id = os.path.basename(theme_dir)
         upsert_render_info(local_id, render_info)
     except Exception as e:
+        _logger.error("render_info DB保存に失敗しました", exc_info=True)
         update_status(f"⚠ render_info DB保存に失敗: {e}", "warning")
 
     # メタデータDB に同期（失敗しても生成結果は捨てない）
@@ -2109,6 +2124,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 )
                 _conn.commit()
     except Exception as _db_e:
+        _logger.error("メタデータDB同期に失敗しました", exc_info=True)
         update_status(f"⚠ メタデータDB同期失敗（続行）: {_db_e}", "warning")
 
     report.elapsed_sec = time.time() - pipeline_start

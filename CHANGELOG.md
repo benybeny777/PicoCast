@@ -6,6 +6,14 @@
 
 ## 2026-06-04
 
+### エラーコード管理とデバッグログ運用を強化
+
+- ユーザー操作で停止する設定系エラーを `E-PROFILE-MISSING` / `E-PLAYLIST-CONFIG` / `E-METADATA-CONFIG` として `core/error_codes.py` に追加し、active profile 未設定やジャンル設定欠落を安定したエラーコードで返すようにした。
+- 再生リスト解決とYouTubeメタデータ生成で、active profile 未設定時に古い食べ物チャンネル設定へ無言フォールバックする経路を廃止した。
+- 生成・画像生成・YouTubeアップロード・Analytics・スケジュール・サービスチェックの失敗経路に debug logging を追加し、画面表示やジョブログだけで原因が残らない箇所を減らした。
+- ffmpeg / ffprobe / PowerShell / schtasks / AquesTalk など外部コマンドの出力読み取りで `encoding="utf-8", errors="replace"` を明示し、Windows環境の文字コード差で診断やダッシュボード表示が警告を出さないようにした。
+- `AGENTS.md` に、ユーザー向け停止エラーは `ERROR_CATALOG` へ登録し、例外捕捉・許可フォールバック・失敗扱いの経路では必ず `logging` に原因と対象を残すルールを追記した。
+
 ### YouTube認証の未設定profileフォールバックを禁止
 
 - YouTubeアップロード / YouTube Analytics の認証 profile 解決で、active profile 未設定時に `"default"` へ落ちる古い後方互換フォールバックを廃止した。profile 未設定時は明示エラーで停止し、別チャンネルの認証情報を誤って参照しないようにした。

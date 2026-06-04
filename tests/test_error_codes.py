@@ -58,6 +58,13 @@ def test_every_catalog_entry_has_remediation():
     assert not missing, f"remediation 未設定のエラーコード: {missing}"
 
 
+def test_catalog_key_matches_error_code():
+    """カタログキーと ErrorDef.code は安定IDとして必ず一致させる。"""
+    from core.error_codes import ERROR_CATALOG
+    mismatched = [key for key, definition in ERROR_CATALOG.items() if key != definition.code]
+    assert not mismatched, f"key と code が不一致のエラーコード: {mismatched}"
+
+
 def test_format_error_with_fix_appends_remediation():
     from core.error_codes import format_error
     text = format_error("E-VOICEVOX-DOWN", with_fix=True)
