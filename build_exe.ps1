@@ -1,4 +1,4 @@
-# Native Video Factory — Nuitka exe ビルドスクリプト（Windows）
+﻿# Native Video Factory — Nuitka exe ビルドスクリプト（Windows）
 #
 # 配布用 onefile exe を作る。実行にはビルド用PCに Python + Nuitka + Cコンパイラが必要。
 # 配布先PCには Python は不要（exe に同梱）。VOICEVOX / ffmpeg は別途インストール。
