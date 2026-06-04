@@ -135,7 +135,7 @@ def post_comment(video_id: str, comment_text: str, progress_callback=None, profi
     except Exception as e:
         _log(f"  ⚠ コメント投稿エラー: {e}")
         if "forbidden" in str(e).lower() or "403" in str(e):
-            _log("  💡 token.json を削除して再認証すると解決する場合があります")
+            _log("  💡 設定画面の「APIキー」タブで YouTube 認証（アップロード用）をやり直すと解決する場合があります")
         return None
     finally:
         _close_youtube_client(youtube)
@@ -307,7 +307,7 @@ def update_video_publish_time(video_id: str, publish_at, progress_callback=None)
     except Exception as e:
         _log(f"  ⚠ 公開予定変更エラー: {e}")
         if "forbidden" in str(e).lower() or "403" in str(e):
-            _log("  💡 token.json を削除して再認証すると解決する場合があります")
+            _log("  💡 設定画面の「APIキー」タブで YouTube 認証（アップロード用）をやり直すと解決する場合があります")
         return False
     finally:
         _close_youtube_client(youtube)
@@ -417,7 +417,7 @@ def add_video_to_playlist_by_name(video_id: str, playlist_name: str, progress_ca
             result["reason"] = err_str
             _log(f"  ⚠ 再生リスト追加エラー: {e}")
             if "forbidden" in err_str.lower() or "403" in err_str:
-                _log("  💡 token.json を削除して再認証すると解決する場合があります。")
+                _log("  💡 設定画面の「APIキー」タブで YouTube 認証（アップロード用）をやり直すと解決する場合があります。")
         return result
     finally:
         _close_youtube_client(youtube)

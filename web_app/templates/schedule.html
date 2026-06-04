@@ -23,7 +23,7 @@
 {% if schedule_error %}
 <div class="card mt">
   <p class="error-text">YouTube APIエラー: {{ schedule_error }}</p>
-  <p class="hint">token.json が有効か、またはページ内「YouTube同期」ボタンで再試行してください。</p>
+  <p class="hint">設定画面の「APIキー」タブで YouTube 認証が有効か確認するか、ページ内「YouTube同期」ボタンで再試行してください。</p>
 </div>
 {% elif schedule_items %}
 <div class="card mt">
