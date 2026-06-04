@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -13,7 +14,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/yt-analytics.readonly",
     "https://www.googleapis.com/auth/youtube.force-ssl",
 ]
-_DEFAULT_PROFILE = "default"
+_logger = logging.getLogger(__name__)
 
 
 def _resolve_profile_id(profile_id: str | None) -> str:
@@ -22,9 +23,13 @@ def _resolve_profile_id(profile_id: str | None) -> str:
     try:
         from core.channel_profile import get_active_profile
         p = get_active_profile()
-        return p.profile_id if p else _DEFAULT_PROFILE
-    except Exception:
-        return _DEFAULT_PROFILE
+    except Exception as exc:
+        _logger.error("YouTube Analytics用のactive profile取得に失敗しました", exc_info=True)
+        raise RuntimeError("active channel profile を取得できません。チャンネル設定を確認してください。") from exc
+    if not p:
+        _logger.error("YouTube Analytics用のactive profileが未設定です")
+        raise RuntimeError("active channel profile が未設定です。先にチャンネル設定を作成・選択してください。")
+    return p.profile_id
 
 
 def _close_google_resource(resource):

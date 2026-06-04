@@ -6,6 +6,10 @@ import os
 from core.runtime_env import app_base_dir, resource_base_dir
 
 ASSET_REF_PREFIX = "asset:"
+_LEGACY_ASSET_PREFIXES = (
+    "assets/characters/",
+    "assets/sd_webui/",
+)
 
 
 def _norm_ref_path(value: str) -> str:
@@ -18,7 +22,11 @@ def _legacy_asset_rel(abs_path: str) -> str:
     index = normalized.lower().rfind(marker)
     if index < 0:
         return ""
-    return normalized[index + 1:]
+    rel = normalized[index + 1:]
+    rel_lower = rel.lower()
+    if not any(rel_lower.startswith(prefix) for prefix in _LEGACY_ASSET_PREFIXES):
+        return ""
+    return rel
 
 
 def asset_ref(relative_path: str) -> str:

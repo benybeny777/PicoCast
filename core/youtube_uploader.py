@@ -1,6 +1,7 @@
 import os
 import json
 import tempfile
+import logging
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -11,22 +12,26 @@ SCOPES = [
     "https://www.googleapis.com/auth/youtube.upload",
     "https://www.googleapis.com/auth/youtube.force-ssl",
 ]
-_DEFAULT_PROFILE = "default"
+_logger = logging.getLogger(__name__)
 
 
 def _resolve_profile_id(profile_id: str | None) -> str:
     """
     profile_id が未指定の場合、active channel profile の profile_id を使う。
-    active profile も未設定なら "default" にフォールバック。
+    active profile も未設定なら明示エラーで停止する。
     """
     if profile_id is not None:
         return profile_id
     try:
         from core.channel_profile import get_active_profile
         p = get_active_profile()
-        return p.profile_id if p else _DEFAULT_PROFILE
-    except Exception:
-        return _DEFAULT_PROFILE
+    except Exception as exc:
+        _logger.error("YouTubeアップロード用のactive profile取得に失敗しました", exc_info=True)
+        raise RuntimeError("active channel profile を取得できません。チャンネル設定を確認してください。") from exc
+    if not p:
+        _logger.error("YouTubeアップロード用のactive profileが未設定です")
+        raise RuntimeError("active channel profile が未設定です。先にチャンネル設定を作成・選択してください。")
+    return p.profile_id
 
 
 THUMB_MAX_BYTES = 2 * 1024 * 1024  # YouTube 上限 2MB

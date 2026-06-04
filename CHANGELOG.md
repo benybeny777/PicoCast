@@ -6,6 +6,11 @@
 
 ## 2026-06-04
 
+### YouTube認証の未設定profileフォールバックを禁止
+
+- YouTubeアップロード / YouTube Analytics の認証 profile 解決で、active profile 未設定時に `"default"` へ落ちる古い後方互換フォールバックを廃止した。profile 未設定時は明示エラーで停止し、別チャンネルの認証情報を誤って参照しないようにした。
+- exeパス互換の旧 `assets` 絶対パス救済は、同梱対象の `assets/characters/` と `assets/sd_webui/` に限定した。外部素材フォルダ内の unrelated な `assets/` パスは勝手に同梱リソース扱いしない。
+
 ### exe配布時のパス参照を相対化・永続領域へ整理
 
 - キャラクター立ち絵のDB保存値を `asset:assets/characters/reimu.png` 形式に対応させ、同梱リソース配下の絶対パスを保存時に `asset:` 参照へ正規化するようにした。native レンダラーは使用直前に `resource_base_dir()` 基準で解決するため、onefile の一時展開先が変わっても stale path にならない。

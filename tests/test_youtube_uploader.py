@@ -1,6 +1,8 @@
 import unittest
 from datetime import datetime
 
+import pytest
+
 from core import youtube_uploader
 
 
@@ -16,6 +18,25 @@ class YouTubeUploaderTests(unittest.TestCase):
 
         self.assertEqual(utc_text, "2026-05-21T22:00:00Z")
         self.assertEqual(display, "2026-05-22 07:00 JST")
+
+
+def test_youtube_uploader_requires_active_profile(monkeypatch):
+    import core.channel_profile as channel_profile
+
+    monkeypatch.setattr(channel_profile, "get_active_profile", lambda: None)
+
+    with pytest.raises(RuntimeError, match="active channel profile"):
+        youtube_uploader._resolve_profile_id(None)
+
+
+def test_youtube_analytics_requires_active_profile(monkeypatch):
+    import core.channel_profile as channel_profile
+    from core import youtube_analytics
+
+    monkeypatch.setattr(channel_profile, "get_active_profile", lambda: None)
+
+    with pytest.raises(RuntimeError, match="active channel profile"):
+        youtube_analytics._resolve_profile_id(None)
 
 
 if __name__ == "__main__":

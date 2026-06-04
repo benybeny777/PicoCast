@@ -58,3 +58,13 @@ def test_stale_absolute_asset_path_resolves_to_current_resource_root(tmp_path, m
     assert refs.resolve_path_ref(str(old_path)) == str(
         resource_root / "assets" / "characters" / "zundamon.png"
     )
+
+
+def test_unrelated_assets_path_is_not_rewritten(tmp_path, monkeypatch):
+    import core.path_refs as refs
+
+    external = tmp_path / "other" / "assets" / "documents" / "manual.pdf"
+    monkeypatch.setattr(refs, "resource_base_dir", lambda: str(tmp_path / "bundle"))
+
+    assert refs.resolve_path_ref(str(external)) == str(external)
+    assert refs.to_storable_path_ref(str(external)) == str(external)
