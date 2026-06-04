@@ -73,6 +73,22 @@ def test_aquestalk_requires_license_key_or_confirmed_flag(tmp_path, monkeypatch)
         )
 
 
+def test_aquestalk_engine_path_can_be_app_relative(tmp_path, monkeypatch):
+    from core import audio_backends
+    from config import config
+    import core.path_refs as refs
+
+    engine = tmp_path / "tools" / "aquestalk" / "engine.exe"
+    engine.parent.mkdir(parents=True)
+    engine.write_bytes(b"fake")
+
+    monkeypatch.setattr(refs, "app_base_dir", lambda: str(tmp_path))
+    monkeypatch.setattr(config, "AQUESTALK_ENABLED", True)
+    monkeypatch.setattr(config, "AQUESTALK_ENGINE_PATH", "tools/aquestalk/engine.exe")
+
+    assert audio_backends._require_aquestalk_ready() == str(engine)
+
+
 def test_aquestalk_generate_with_command_template(tmp_path, monkeypatch):
     from core.audio_backends import AudioSpeaker, generate_aquestalk_audio
     from config import config

@@ -24,4 +24,4 @@ dist/
 *.build/
 *.dist/
 *.onefile-build/
-# core/_build_version.py は追跡する（git無しのソース配布でもバージョンを出せるフォールバック。ビルド時に再生成）
+core/_build_version.py

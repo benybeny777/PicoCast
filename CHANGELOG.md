@@ -6,6 +6,13 @@
 
 ## 2026-06-04
 
+### exe配布時のパス参照を相対化・永続領域へ整理
+
+- キャラクター立ち絵のDB保存値を `asset:assets/characters/reimu.png` 形式に対応させ、同梱リソース配下の絶対パスを保存時に `asset:` 参照へ正規化するようにした。native レンダラーは使用直前に `resource_base_dir()` 基準で解決するため、onefile の一時展開先が変わっても stale path にならない。
+- native 立ち絵のPSD展開キャッシュを同梱 `assets/characters/_native_cache/` から `data/native_character_cache/` へ移動し、exe 終了で消える一時展開先や読み取り専用リソース配下へ書かないようにした。
+- `AQUESTALK_ENGINE_PATH` と Stable Diffusion WebUI モデルマニフェストは相対パス保存・実行時解決に対応した。アプリ配下の絶対パスは保存時に相対化し、外部ドライブや別アプリ本体など理由があるものだけ絶対パスを残す。既定マニフェストは既存の `assets/sd_webui/model_manifest.json` を `resource_base_dir()` 基準で読む。
+- ビルド時生成ファイル `core/_build_version.py` をリポジトリ追跡から外し、`build_exe.ps1` が生成する ignored ファイルとして扱うようにした。ビルドのたびに作業ツリーが汚れる問題を防ぐ。
+
 ### 固定コメント自動投稿をOSタスクへ一本化（Web=手動投稿のみ）
 
 - **方針変更**: Web UI 内の固定コメント自動投稿ウォッチャーを廃止し、Web は手動投稿のみに。自動投稿は OS タスク（Windows=タスクスケジューラ / macOS=launchd）経由に切り分けた。`AUTO_FIXED_COMMENT_ENABLED` 設定は撤去。

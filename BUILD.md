@@ -19,7 +19,7 @@
 
 `build_exe.ps1` がやること:
 1. Nuitka / zstandard 未導入なら導入
-2. `core/_build_version.py` にバージョンを焼き込む（HEAD コミット日付ベース）
+2. ignored 生成物 `core/_build_version.py` にバージョンを焼き込む（HEAD コミット日付ベース）
 3. コンパイル（テンプレート/static/legal/SEED/prompt_profiles/samples/assets を同梱）。既定は onefile、`-Standalone` で `dist\app.dist` を `dist\NativeVideoFactory` にリネーム
 4. 自己署名証明書が `CurrentUser\My` にあれば署名する。onefile=外側exeのみ／standalone=フォルダ内の未署名バイナリ全て（MS 署名済み DLL は上書きしない）
 
@@ -31,9 +31,12 @@
   → onefile でも **exe と同じフォルダの `data/`** に永続化（一時展開先に書いて消える問題を回避）。
 - 永続データ（`output/`・`data/settings.db`・`metadata.db`・`DEBUG_LOG_DIR`・バックアップ/診断）の基準を `app_base_dir()` に統一: `config/config.py`・`core/output_paths.py`・`core/channel_profile.py`・`core/channel_schedule.py`・`core/character_profile_store.py`・`core/prompt_template_store.py`・`core/bgm_store.py`・`web_app/services/backup_service.py`・`web_app/services/diagnostics_service.py`。同梱リソース（`config/prompt_profiles` / `config/SEED` / `assets` / 立ち絵等）だけ `resource_base_dir()`（展開先）から読む。runner 起動の cwd も `app_base_dir()`。
   → onefile でも出力・チャンネルDB・デバッグログが **exe と同じフォルダ** に永続化される（temp展開先に書いて消える問題を回避）。
+- 立ち絵などの同梱リソース参照は `asset:assets/characters/reimu.png` のようにDB保存し、実行時だけ `resource_base_dir()` へ解決する。アプリ配下の絶対パスは保存時に相対参照へ正規化する。
+- native 立ち絵のPSD展開キャッシュは `data/native_character_cache/` に保存する。同梱 `assets/` 配下には書き込まない。
+- `AQUESTALK_ENGINE_PATH` は相対パスなら `app_base_dir()` 基準で解決する。アプリ配下に同梱しない外部エンジンや別ドライブのツールだけ絶対パスを使う。
 - 出力ベースは設定 `OUTPUT_BASE_DIR`（設定DB）で別ドライブへ変更可。`/setup` の「出力先フォルダ」で絶対パス指定すれば exe 隣以外にも置ける。
 - `web_app/app.py`: job-runner を frozen 時は `exe --run-runner` で起動（`python -m workers.runner` の代替）。`main()` 先頭で `--run-runner` を処理。
-- `core/gui_support.py: build_app_version()`: 焼き込み `core/_build_version.py` を最優先。
+- `core/gui_support.py: build_app_version()`: frozen 時はビルド時生成の `core/_build_version.py` を最優先。通常開発時は git から算出し、ファイル未生成なら `APP_VERSION_BASE` へ戻る。
 
 ## 既知の残課題（実ビルド時に確認・対応）
 1. **出力先パス**: 対応済み。`output/`・チャンネル `settings.db`・`metadata.db`・`DEBUG_LOG_DIR` は `app_base_dir()`（frozen=exeフォルダ）基準に統一済みで、cwd に依存しない。`config.py` の `OUTPUT_DIR` も `app_base_dir()` 基準の絶対パスへ解決される。別ドライブへ置きたい場合は `/setup`「出力先フォルダ」で `OUTPUT_BASE_DIR` を絶対指定する。

@@ -154,10 +154,10 @@ yukkurijidou/
 - **合成順**: 生成時に `compose_character_section(profile_id)` が enabled のキャラを `sort_order` 順に合成し、台本プロンプトへ「キャラクター設定（最優先・厳守）」セクションとして注入する（`build_gemini_system_prompt` / `build_script_generation_prompt`）。合成は **script のみ**。ネタ会議（meeting）には注入しない。
 - **チャンネル別の既定**: 食べ物雑学堂（genre `zunkami` / `food_trivia`）は四国めたんを「辛口相方ツッコミ（ずんだハウス風）」（`metan_food_toxic`）にする。都市伝説（`zundamon_kowai`）は従来の「お嬢様毒舌めたん」（`metan_standard_toxic`）。別チャンネルのキャラ設定を流用しない（`profile_id` で厳密分離）。
 - **同名キャラの排他有効化**: `enabled=true` にする時は、同一 `profile_id` かつ同一 `character_name` の他キャラ設定を自動で `enabled=false` にする。四国めたんの辛口相方版とお嬢様毒舌版が同時にプロンプトへ混ざる事故を防ぐ。
-- **管理画面**: 設定画面「キャラクター設定」タブで active channel のキャラ設定を一覧・追加・編集・削除できる。役割・口調に加えて、音声バックエンド、話者ID/キー、表情別話者ID（JSON）、AquesTalk用 `voice_type/phont`、速度・高さ・音量、立ち絵PNGパス、クレジット要否、クレジット表記も編集できる。削除は確認ダイアログと `confirmed=true` 必須。画面上の有効トグルは保存後に一覧を再読み込みし、同名キャラの排他状態を即時反映する。
-- **追加キャラ**: seed は `ずんだもん` / `四国めたん` に加え、無効状態の `ゆっくり霊夢風` / `ゆっくり魔理沙風` を追補する。新規キャラは `character_name` を台本の話者名と一致させ、`voice_backend` と `portrait_png_path` を登録すれば台本生成プロンプトと native 立ち絵解決の対象になる。台本話者名 `霊夢` / `ゆっくり霊夢` / `reimu` は `霊夢`、`魔理沙` / `ゆっくり魔理沙` / `marisa` は `魔理沙` として音声設定を解決する。
+- **管理画面**: 設定画面「キャラクター設定」タブで active channel のキャラ設定を一覧・追加・編集・削除できる。役割・口調に加えて、音声バックエンド、話者ID/キー、表情別話者ID（JSON）、AquesTalk用 `voice_type/phont`、速度・高さ・音量、立ち絵PNG参照、クレジット要否、クレジット表記も編集できる。削除は確認ダイアログと `confirmed=true` 必須。画面上の有効トグルは保存後に一覧を再読み込みし、同名キャラの排他状態を即時反映する。
+- **追加キャラ**: seed は `ずんだもん` / `四国めたん` に加え、無効状態の `ゆっくり霊夢風` / `ゆっくり魔理沙風` を追補する。新規キャラは `character_name` を台本の話者名と一致させ、`voice_backend` と `portrait_png_path` を登録すれば台本生成プロンプトと native 立ち絵解決の対象になる。同梱立ち絵は `asset:assets/characters/reimu.png` のような `asset:` 参照で保存し、実行時に `resource_base_dir()` 基準で解決する。アプリ配下の絶対パスは保存時に相対参照へ正規化し、外部ドライブ等の任意素材だけ絶対パスを許可する。台本話者名 `霊夢` / `ゆっくり霊夢` / `reimu` は `霊夢`、`魔理沙` / `ゆっくり魔理沙` / `marisa` は `魔理沙` として音声設定を解決する。
 - **音声バックエンド**: `voice_backend=voicevox` の場合は `voice_speaker` または `voice_speaker_id` を VOICEVOX speaker ID として使い、`voice_styles_json` に `{"怒り": 9}` のような表情/スタイル別IDを持てる。`voice_backend=aquestalk` の場合は `voice_speaker` を内部speaker_key、`voice_type` をAquesTalk側の voice_type/phont 指定として扱い、`voice_speed` / `voice_pitch` / `voice_volume` を生成コマンドへ渡す。未対応バックエンド名は明示エラーで停止する。
-- **AquesTalk設定**: `AQUESTALK_ENABLED` / `AQUESTALK_ENGINE_PATH` / `AQUESTALK_LICENSE_CONFIRMED` / `AQUESTALK_COMMAND_TEMPLATE` / `AQUESTALK_DEFAULT_SPEED` / `AQUESTALK_DEFAULT_PITCH` / `AQUESTALK_DEFAULT_VOLUME` / `AQUESTALK_TIMEOUT_SEC` を設定DBで管理する。ライセンスキーは `encrypted_secrets:aquestalk_license_key` に暗号化保存し、レスポンス・ログには値を出さない。`AQUESTALK_COMMAND_TEMPLATE` は `{engine}` / `{text}` / `{output}` / `{voice}` / `{speaker}` / `{speed}` / `{pitch}` / `{volume}` / `{license_key}` を展開して実行する。
+- **AquesTalk設定**: `AQUESTALK_ENABLED` / `AQUESTALK_ENGINE_PATH` / `AQUESTALK_LICENSE_CONFIRMED` / `AQUESTALK_COMMAND_TEMPLATE` / `AQUESTALK_DEFAULT_SPEED` / `AQUESTALK_DEFAULT_PITCH` / `AQUESTALK_DEFAULT_VOLUME` / `AQUESTALK_TIMEOUT_SEC` を設定DBで管理する。`AQUESTALK_ENGINE_PATH` は相対パスなら `app_base_dir()` 基準で解決し、アプリ配下の絶対パスは保存時に相対化する。ライセンスキーは `encrypted_secrets:aquestalk_license_key` に暗号化保存し、レスポンス・ログには値を出さない。`AQUESTALK_COMMAND_TEMPLATE` は `{engine}` / `{text}` / `{output}` / `{voice}` / `{speaker}` / `{speed}` / `{pitch}` / `{volume}` / `{license_key}` を展開して実行する。
 - **必要クレジット**: 説明文末尾の「使用音声合成」は、台本で実際に発話したキャラの `credit_required` / `credit_text` から組み立てる。`credit_required=false` のキャラは表示しない。`credit_text` が空なら `voice_backend` と `character_name` から既定表記を作る。
 - **自動フォールバック禁止**: 有効なキャラ設定が無いチャンネルは `compose_character_section()` が例外を送出する（標準めたんへ勝手に戻さない）。
 - **移行**: 起動時 `ensure_character_profiles_all()` が既存チャンネルにキャラ設定を保証し、`migrate_strip_character_rules_from_templates()` が旧テンプレートに直書きされたキャラ設定の長文（旧 `METAN_TSUNDERE_RULES`）を除去する（マーカー検出・冪等）。
@@ -900,7 +900,7 @@ VOICE_READING_MODE = "safe_auto"
 
 ### AquesTalk音声生成
 
-- AquesTalkは実行ファイルまたはラッパーCLIを `AQUESTALK_ENGINE_PATH` に指定し、`AQUESTALK_COMMAND_TEMPLATE` で呼び出す。
+- AquesTalkは実行ファイルまたはラッパーCLIを `AQUESTALK_ENGINE_PATH` に指定し、`AQUESTALK_COMMAND_TEMPLATE` で呼び出す。`AQUESTALK_ENGINE_PATH` が相対パスの場合は exe / リポジトリルート（`app_base_dir()`）基準で解決する。
 - `ゆっくり霊夢風` は `AQUESTALK_REIMU_SPEAKER_KEY`（既定 `yukkuri_reimu`）、`ゆっくり魔理沙風` は `AQUESTALK_MARISA_SPEAKER_KEY`（既定 `yukkuri_marisa`）を内部speaker_keyとして使う。
 - 生成後は出力WAVを `wave.open()` で検証し、フレーム数0やWAV不正ならエラー停止する。
 

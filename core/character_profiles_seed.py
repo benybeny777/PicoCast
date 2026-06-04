@@ -23,10 +23,8 @@ from config import (
     AQUESTALK_REIMU_SPEAKER_KEY,
     AQUESTALK_REIMU_VOICE_TYPE,
     CHARACTERS,
-    CHARACTER_PNGS,
-    MARISA_CHARACTER_PNG_PATH,
-    REIMU_CHARACTER_PNG_PATH,
 )
+from core.path_refs import asset_ref
 from core.script_prompts import FOOD_GENRE_PROFILES, METAN_TSUNDERE_RULES
 
 
@@ -47,7 +45,7 @@ _ZUNDAMON = {
     "voice_speaker": str(CHARACTERS["ずんだもん"]["speaker_id"]),
     "voice_speaker_id": CHARACTERS["ずんだもん"]["speaker_id"],
     "voice_styles": CHARACTERS["ずんだもん"]["styles"],
-    "portrait_png_path": CHARACTER_PNGS["ずんだもん"],
+    "portrait_png_path": asset_ref("assets/characters/zundamon.png"),
     "credit_required": True,
     "credit_text": "VOICEVOX:ずんだもん",
 }
@@ -98,7 +96,7 @@ _METAN_FOOD_TOXIC = {
     "voice_speaker": str(CHARACTERS["めたん"]["speaker_id"]),
     "voice_speaker_id": CHARACTERS["めたん"]["speaker_id"],
     "voice_styles": CHARACTERS["めたん"]["styles"],
-    "portrait_png_path": CHARACTER_PNGS["四国めたん"],
+    "portrait_png_path": asset_ref("assets/characters/metan.png"),
     "credit_required": True,
     "credit_text": "VOICEVOX:四国めたん",
 }
@@ -121,7 +119,7 @@ _METAN_STANDARD_TOXIC = {
     "voice_speaker": str(CHARACTERS["めたん"]["speaker_id"]),
     "voice_speaker_id": CHARACTERS["めたん"]["speaker_id"],
     "voice_styles": CHARACTERS["めたん"]["styles"],
-    "portrait_png_path": CHARACTER_PNGS["四国めたん"],
+    "portrait_png_path": asset_ref("assets/characters/metan.png"),
     "credit_required": True,
     "credit_text": "VOICEVOX:四国めたん",
 }
@@ -141,7 +139,7 @@ _REIMU = {
     "voice_speed": AQUESTALK_DEFAULT_SPEED,
     "voice_pitch": AQUESTALK_DEFAULT_PITCH,
     "voice_volume": AQUESTALK_DEFAULT_VOLUME,
-    "portrait_png_path": REIMU_CHARACTER_PNG_PATH,
+    "portrait_png_path": asset_ref("assets/characters/reimu.png"),
     "credit_required": True,
     "credit_text": "AquesTalk:ゆっくり霊夢風",
 }
@@ -161,7 +159,7 @@ _MARISA = {
     "voice_speed": AQUESTALK_DEFAULT_SPEED,
     "voice_pitch": AQUESTALK_DEFAULT_PITCH,
     "voice_volume": AQUESTALK_DEFAULT_VOLUME,
-    "portrait_png_path": MARISA_CHARACTER_PNG_PATH,
+    "portrait_png_path": asset_ref("assets/characters/marisa.png"),
     "credit_required": True,
     "credit_text": "AquesTalk:ゆっくり魔理沙風",
 }

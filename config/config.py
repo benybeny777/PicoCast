@@ -3,6 +3,8 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+from core.runtime_env import app_base_dir as _app_base_dir, resource_base_dir as _resource_base_dir
+
 # .env の非認証設定を DB へ移行し、DB の設定を環境変数に反映する
 from core.settings_store import initialize as _init_settings
 _init_settings()
@@ -174,7 +176,7 @@ SD_WEBUI_NEGATIVE_PROMPT = os.environ.get(                                      
 SD_WEBUI_ROOT = os.environ.get("SD_WEBUI_ROOT", "")                                # Stable Diffusion WebUI 本体ルートディレクトリ（例: C:\sd.webui\webui）
 SD_MODEL_MANIFEST_PATH = os.environ.get(                                            # Stable Diffusion WebUI モデルマニフェストパス（空=同梱既定値を使用）
     "SD_MODEL_MANIFEST_PATH",
-    os.path.join(os.path.dirname(__file__), "assets", "sd_webui", "model_manifest.json"),
+    os.path.join(_resource_base_dir(), "assets", "sd_webui", "model_manifest.json"),
 )
 AUTO_DOWNLOAD_SD_MODELS = os.environ.get("AUTO_DOWNLOAD_SD_MODELS", "0").strip().lower() in ("1", "true", "yes", "on")  # 未導入モデルの自動ダウンロード許可（0=停止/手動のみ, 1=自動可）
 # HF_TOKEN は DB 暗号化保存へ移行済み。core.secret_store.load_secret("hf_token") を使うこと。
@@ -249,7 +251,7 @@ try:
 except (ValueError, TypeError):
     _thumbnail_hold_raw = 3
 THUMBNAIL_HOLD_FRAMES_SHORTS: int = max(1, min(5, _thumbnail_hold_raw))  # Shorts先頭サムネ保持フレーム数
-ASSETS_DIR        = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")  # プロジェクトルート/assets
+ASSETS_DIR        = os.path.join(_resource_base_dir(), "assets")  # 同梱リソースの assets ディレクトリ
 CHARACTER_PNG_DIR = os.path.join(ASSETS_DIR, "characters")      # キャラ PNG 格納ディレクトリ
 CHARACTER_PSD_DIR = os.path.join(CHARACTER_PNG_DIR, "psd")      # キャラ PSD 格納ディレクトリ
 ZUNDAMON_PSD_PATH = os.environ.get("ZUNDAMON_PSD_PATH", os.path.join(CHARACTER_PSD_DIR, "zundamon.psd"))  # ずんだもんPSD立ち絵
@@ -413,7 +415,6 @@ BGM_PATH = os.path.join(ASSETS_DIR, "bgm", BGM_FILE) if BGM_FILE else ""
 # ───────────────────────────────────────────────
 # 出力ディレクトリ・ファイルパス
 # ───────────────────────────────────────────────
-from core.runtime_env import app_base_dir as _app_base_dir
 _OUTPUT_ANCHOR = _app_base_dir()  # 出力の基準。exe(onefile)では exe と同じフォルダ・開発時はリポジトリルート
 OUTPUT_BASE_DIR       = os.environ.get("OUTPUT_BASE_DIR",       "")          # 全プロファイル共通の出力ベース(各profile_idフォルダの親)。空=既定 output/
 OUTPUT_DIR            = os.environ.get("OUTPUT_DIR",            os.path.join(_OUTPUT_ANCHOR, "output"))

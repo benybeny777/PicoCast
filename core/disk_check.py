@@ -25,11 +25,12 @@ def _nearest_existing(path: str) -> str:
 
 
 def _default_output_path() -> str:
+    from core.runtime_env import app_base_dir
     from core.channel_profile import get_active_profile
     profile = get_active_profile()
     if profile is not None and getattr(profile, "output_root_abs", ""):
         return profile.output_root_abs
-    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return app_base_dir()
 
 
 def free_gb(path: str | None = None) -> float:

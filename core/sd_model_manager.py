@@ -27,6 +27,7 @@ from typing import Any, Callable
 import httpx
 
 from config import config
+from core.path_refs import resolve_path_ref
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,8 @@ class SDWebUIModelManager:
         manifest_path: str | None = None,
     ):
         self.sd_root = (sd_root if sd_root is not None else config.SD_WEBUI_ROOT).rstrip("/\\")
-        self.manifest_path = (
-            manifest_path if manifest_path is not None else config.SD_MODEL_MANIFEST_PATH
-        )
+        configured_manifest = manifest_path if manifest_path is not None else config.SD_MODEL_MANIFEST_PATH
+        self.manifest_path = resolve_path_ref(configured_manifest)
 
     # ─────────────────────────────────────────
     # マニフェスト読み込み

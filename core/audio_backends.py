@@ -13,6 +13,7 @@ import wave
 from dataclasses import dataclass
 
 from config import config
+from core.path_refs import resolve_path_ref
 
 _logger = logging.getLogger(__name__)
 
@@ -54,10 +55,11 @@ def _require_aquestalk_ready(profile_id: str | None = None) -> str:
     if not config.AQUESTALK_ENABLED:
         _logger.error("AquesTalkが無効です")
         raise RuntimeError("AquesTalkが無効です。設定画面で AQUESTALK_ENABLED を有効にしてください。")
-    engine = str(config.AQUESTALK_ENGINE_PATH or "").strip()
-    if not engine:
+    configured_engine = str(config.AQUESTALK_ENGINE_PATH or "").strip()
+    if not configured_engine:
         _logger.error("AquesTalkエンジンパスが未設定です")
         raise RuntimeError("AquesTalkエンジンパスが未設定です。")
+    engine = resolve_path_ref(configured_engine)
     if not os.path.isfile(engine):
         _logger.error("AquesTalkエンジンが見つかりません: path=%s", engine)
         raise RuntimeError("AquesTalkエンジンが見つかりません。AQUESTALK_ENGINE_PATH を確認してください。")

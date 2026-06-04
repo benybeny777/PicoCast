@@ -19,6 +19,8 @@ def test_food_genre_enables_toxic_metan():
     from core.character_profiles_seed import _seed_set_for_genre
     by_key = {c["character_key"]: c for c in _seed_set_for_genre("zunkami")}
     assert "zundamon" in by_key
+    assert by_key["zundamon"]["portrait_png_path"] == "asset:assets/characters/zundamon.png"
+    assert by_key["reimu"]["portrait_png_path"] == "asset:assets/characters/reimu.png"
     assert by_key["metan_food_toxic"]["enabled"] is True
     assert by_key["metan_standard_toxic"]["enabled"] is False
     assert by_key["reimu"]["enabled"] is False
@@ -130,6 +132,24 @@ def test_store_create_enabled_disables_same_character_name(tmp_char_store):
 
     enabled = s.list_characters("zunkami", enabled_only=True)
     assert [c.character_key for c in enabled] == ["metan_standard_toxic"]
+
+
+def test_store_normalizes_portrait_path_under_resource_root(tmp_char_store, tmp_path, monkeypatch):
+    """同梱リソース配下の絶対パスはDB保存時に asset: 参照へ寄せる。"""
+    import core.path_refs as refs
+
+    resource_root = tmp_path / "bundle"
+    portrait = resource_root / "assets" / "characters" / "reimu.png"
+    monkeypatch.setattr(refs, "resource_base_dir", lambda: str(resource_root))
+    monkeypatch.setattr(refs, "app_base_dir", lambda: str(tmp_path / "app"))
+
+    s = tmp_char_store
+    s.create_character(profile_id="zunkami", character_key="reimu",
+                       display_name="霊夢", character_name="霊夢",
+                       portrait_png_path=str(portrait), enabled=True, sort_order=40)
+
+    chars = {c.character_key: c for c in s.list_characters("zunkami")}
+    assert chars["reimu"].portrait_png_path == "asset:assets/characters/reimu.png"
 
 
 def test_store_update_enabled_true_is_exclusive(tmp_char_store):

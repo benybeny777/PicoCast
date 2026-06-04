@@ -4,10 +4,10 @@ from dataclasses import dataclass
 from typing import Iterable
 
 from config import CHARACTER_EXPRESSION_PNGS, CHARACTER_PNGS, METAN_PSD_PATH, ZUNDAMON_PSD_PATH
+from core.runtime_env import app_base_dir
 
 
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-CACHE_DIR = os.path.join(ROOT_DIR, "assets", "characters", "_native_cache")
+CACHE_DIR = os.path.join(app_base_dir(), "data", "native_character_cache")
 
 
 @dataclass

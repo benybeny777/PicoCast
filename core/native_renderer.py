@@ -703,11 +703,12 @@ def _character_inputs(width: int, height: int, script_text: str = "") -> list[Ch
     try:
         from core.channel_profile import get_active_profile
         from core.character_profile_store import list_characters
+        from core.path_refs import resolve_path_ref
         profile = get_active_profile()
         if profile:
             known = {item.jp_name or item.name for item in variants}
             for character in list_characters(profile.profile_id):
-                path = str(character.portrait_png_path or "").strip()
+                path = resolve_path_ref(character.portrait_png_path)
                 if not path or not os.path.exists(path) or character.character_name in known:
                     continue
                 key = character_variant_key(character.character_name)

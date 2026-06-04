@@ -26,6 +26,7 @@ from datetime import datetime, timezone
 
 _logger = logging.getLogger(__name__)
 
+from core.path_refs import to_storable_path_ref
 from core.runtime_env import app_base_dir as _app_base_dir
 _ROOT = _app_base_dir()  # 永続データ(settings.db)の基準。exe(onefile)では exe と同じフォルダ
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
@@ -269,6 +270,7 @@ def create_character(
     """キャラクター設定を作成する。戻り値は character_id。"""
     character_id = str(uuid.uuid4())
     now = _now()
+    portrait_png_path = to_storable_path_ref(portrait_png_path)
     with _lock:
         conn = _open_db()
         try:
@@ -326,6 +328,8 @@ def _update_character_locked(conn: sqlite3.Connection, character_id: str, **fiel
         sets["enabled"] = 1 if sets["enabled"] else 0
     if "credit_required" in sets:
         sets["credit_required"] = 1 if sets["credit_required"] else 0
+    if "portrait_png_path" in sets:
+        sets["portrait_png_path"] = to_storable_path_ref(sets["portrait_png_path"])
     cols = ", ".join(f"{k}=?" for k in sets)
     vals = list(sets.values()) + [_now(), character_id]
     conn.execute(f"UPDATE character_profiles SET {cols}, updated_at=? WHERE character_id=?", vals)

@@ -232,7 +232,7 @@
       <div class="form-group"><label>高さ</label><input class="form-input" id="char-new-voice-pitch" type="number" placeholder="100"></div>
       <div class="form-group"><label>音量</label><input class="form-input" id="char-new-voice-volume" type="number" placeholder="100"></div>
       <div class="form-group wide"><label>表情別話者ID(JSON)</label><textarea class="form-input" id="char-new-voice-styles" rows="2" placeholder='{"ノーマル":3,"ツンツン":7}'></textarea></div>
-      <div class="form-group wide"><label>立ち絵PNGパス</label><input class="form-input" id="char-new-portrait" placeholder="assets/characters/reimu.png"></div>
+      <div class="form-group wide"><label>立ち絵PNG参照</label><input class="form-input" id="char-new-portrait" placeholder="asset:assets/characters/reimu.png"></div>
       <div class="form-group"><label>クレジット必要</label><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="char-new-credit-required" checked> 必要</label></div>
       <div class="form-group wide"><label>クレジット表記</label><input class="form-input" id="char-new-credit-text" placeholder="VOICEVOX:ずんだもん"></div>
       <div class="form-group wide"><label>役割</label><textarea class="form-input" id="char-new-role" rows="2"></textarea></div>
@@ -755,7 +755,7 @@ function characterCardHtml(c) {
       <div class="form-group"><label>高さ</label><input class="form-input" type="number" data-cid="${c.character_id}" data-field="voice_pitch" value="${c.voice_pitch ?? ''}"></div>
       <div class="form-group"><label>音量</label><input class="form-input" type="number" data-cid="${c.character_id}" data-field="voice_volume" value="${c.voice_volume ?? ''}"></div>
       <div class="form-group wide"><label>表情別話者ID(JSON)</label><textarea class="form-input" rows="2" data-cid="${c.character_id}" data-field="voice_styles_json">${esc(JSON.stringify(c.voice_styles || {}, null, 0))}</textarea></div>
-      <div class="form-group wide"><label>立ち絵PNGパス</label><input class="form-input" data-cid="${c.character_id}" data-field="portrait_png_path" value="${esc(c.portrait_png_path || '')}"></div>
+      <div class="form-group wide"><label>立ち絵PNG参照</label><input class="form-input" data-cid="${c.character_id}" data-field="portrait_png_path" value="${esc(c.portrait_png_path || '')}"></div>
       <div class="form-group"><label>クレジット必要</label><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-cid="${c.character_id}" data-field="credit_required" ${c.credit_required !== false ? 'checked' : ''}> 必要</label></div>
       <div class="form-group wide"><label>クレジット表記</label><input class="form-input" data-cid="${c.character_id}" data-field="credit_text" value="${esc(c.credit_text || '')}"></div>
       ${f('役割', 'role', c.role, 2, 'wide')}

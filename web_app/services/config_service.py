@@ -162,6 +162,9 @@ def _normalize_update_value(key: str, value: str) -> str:
         return ",".join(cfg._split_env_choices(value))
     if key == "WEB_DEFAULT_IMAGE_STYLE":
         return cfg._clean_env_choice(value)
+    if key in {"AQUESTALK_ENGINE_PATH", "SD_MODEL_MANIFEST_PATH"}:
+        from core.path_refs import to_storable_path_ref
+        return to_storable_path_ref(value)
     return str(value)
 
 
