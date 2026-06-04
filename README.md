@@ -10,7 +10,7 @@
 
 <br />
 
-> 台本を入力するだけで、**VOICEVOXによる音声合成**、**AIによる背景画像・サムネイル生成**、**ffmpegによる高品質なMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができるローカルWebツールです。
+> 台本を入力するだけで、**VOICEVOX / AquesTalk系による音声合成**、**AIによる背景画像・サムネイル生成**、**ffmpegによる高品質なMP4動画のレンダリング**、そして**YouTubeへの予約投稿・アナリティクス分析**までをシームレスに行うことができるローカルWebツールです。
 
 ---
 
@@ -20,6 +20,7 @@
 - [✨ 主な機能・特徴](#-主な機能特徴)
 - [🔄 システム処理フロー](#-システム処理フロー)
 - [🛠 前提条件](#-前提条件-prerequisites)
+- [💻 動作環境](#-動作環境)
 - [📦 セットアップ手順](#-セットアップ手順)
 - [💻 起動方法と起動オプション](#-起動方法と起動オプション)
 - [📝 基本のワークフロー](#-基本のワークフロー)
@@ -65,7 +66,7 @@
 graph TD
     A[台本入力] --> B[LLMによる品質レビュー]
     B -->|品質クリア| C[よみがな正規化]
-    C --> D[音声生成 VOICEVOX]
+    C --> D[音声生成 VOICEVOX/AquesTalk系]
     C --> E[画像生成 Nano Banana/Stable Diffusion WebUI]
     D --> F[ネイティブレンダリング ffmpeg]
     E --> F
@@ -80,7 +81,7 @@ graph TD
 ## ✨ 主な機能・特徴
 
 - 🎬 台本から動画を全自動生成（音声・背景・字幕・BGM・サムネイル・MP4）
-- 🗣 VOICEVOX 音声合成＋よみがな自動補正
+- 🗣 VOICEVOX / AquesTalk系 音声合成＋よみがな自動補正
 - 🖼 AI 画像生成（Gemini ⇄ Stable Diffusion WebUI 切替）
 - 🧠 台本の品質レビュー・自動リライト
 - 📅 YouTube 連携（予約投稿・再生リスト登録・固定コメント投稿）
@@ -95,6 +96,7 @@ graph TD
 |:---|:---|:---|
 | **Python 3.10+** | 実行環境 | `.venv` 仮想環境を使用 |
 | **VOICEVOX** | 音声合成 | デフォルトポート `50021` |
+| **AquesTalk系エンジン** | ゆっくり音声合成 | 任意。利用時はA-Quest公式ライセンス確認が必要 |
 | **ffmpeg** | 動画レンダリング | `h264_nvenc`（GPU）または `libx264`（CPU）|
 | **Ollama** | 品質レビュー等 | デフォルトモデル: `qwen3:8b` |
 | **Google AI Studio** | 台本・Gemini画像生成 | APIキーは設定画面で登録 |
@@ -116,6 +118,80 @@ graph TD
 
 > [!NOTE]
 > Google APIキーは「AI台本生成」または「Gemini画像生成」を使うときだけ必要です。**台本を手書きし、画像を Stable Diffusion WebUI で作るなら不要**です。同じ早見表は初回セットアップ（`/setup`）の冒頭にも表示されます。
+
+---
+
+## 💻 動作環境
+
+Native Video Factory はローカルPC上で動作する Web UI アプリです。
+動画生成には VOICEVOX、ffmpeg、各種APIキー、必要に応じて Ollama や Stable Diffusion WebUI を使用します。
+
+画像生成を Google AI画像生成モードで行う場合は、高性能GPUは必須ではありません。
+一方、Stable Diffusion WebUI によるローカル画像生成を使う場合は、GPU性能とメモリ容量の影響が大きくなります。
+
+### Windows版
+
+| 区分 | 最低動作環境 | 推奨環境 | ローカル画像生成も使う場合 |
+|---|---|---|---|
+| OS | Windows 10 / 11 64bit | Windows 11 64bit | Windows 11 64bit |
+| CPU | 4コア / 8スレッド以上 | 6コア以上 | 8コア以上 |
+| メモリ | 16GB以上 | 32GB以上 | 32〜64GB推奨 |
+| GPU | 不問 | NVIDIA GPU推奨 | NVIDIA RTX系推奨 |
+| VRAM | 不問 | 6GB以上推奨 | 8GB以上、できれば12GB以上 |
+| ストレージ空き | 20GB以上 | 50GB以上 | 100GB以上 |
+| ストレージ種別 | SSD推奨 | SSD推奨 | NVMe SSD推奨 |
+| ネット接続 | 必須 | 必須 | 必須 |
+
+#### Windows版の補足
+
+- Google AI画像生成モードでは、画像生成はクラウドAPI側で行われるため、高性能GPUは必須ではありません。
+- Stable Diffusion WebUI によるローカル画像生成を使う場合は、NVIDIA GPU と十分なVRAMを推奨します。
+- メモリ8GB以下、HDD環境、内蔵GPUのみでのローカル画像生成は推奨しません。
+- 快適に利用するにはメモリ32GB以上を推奨します。
+
+### Mac版
+
+| 区分 | 最低動作環境 | 推奨環境 | ローカル画像生成も使う場合 |
+|---|---|---|---|
+| OS | macOS 13 Ventura 以降 | macOS 14 Sonoma 以降 | macOS 14 Sonoma 以降 |
+| CPU | Apple M1 以降 | Apple M2 / M3 以降 | Apple M3 Pro / M4 Pro 以上推奨 |
+| Intel Mac | 非推奨 | 非推奨 | サポート対象外または非推奨 |
+| メモリ | 16GB以上 | 24〜32GB以上 | 32GB以上推奨 |
+| GPU | Apple Silicon 内蔵GPU | Apple Silicon 内蔵GPU | Apple Silicon 上位GPU推奨 |
+| ストレージ空き | 20GB以上 | 50GB以上 | 100GB以上 |
+| ストレージ種別 | SSD必須 | SSD推奨 | SSD必須 |
+| ネット接続 | 必須 | 必須 | 必須 |
+
+#### Mac版の補足
+
+- Mac版は Apple Silicon Mac 向けを基本とします。
+- Google AI画像生成モードでの利用を推奨します。
+- Macで Stable Diffusion WebUI を使う場合、Windows + NVIDIA GPU環境より導入や生成速度の面で不利になる場合があります。
+- ローカル画像生成は上級者向け機能として扱ってください。
+- 快適に利用するには Apple Silicon Mac、メモリ24GB以上を推奨します。
+
+### 必要な外部ソフト・サービス
+
+| 項目 | 必須/任意 | 用途 |
+|---|---|---|
+| VOICEVOX | 必須 | ずんだもん・四国めたん等の音声合成 |
+| AquesTalk系エンジン | 任意 | ゆっくり霊夢風・ゆっくり魔理沙風などの音声合成 |
+| ffmpeg | 必須 | native MP4 の動画出力 |
+| Google APIキー | Google AI画像生成・Gemini台本生成で必要 | 台本生成・背景画像生成・サムネイル生成 |
+| OpenAI APIキー | 任意 | ChatGPT生成前レビュー |
+| Ollama | 任意 / 一部機能で必要 | 冒頭レビュー、リライト、Stable Diffusion WebUI用プロンプト翻訳 |
+| Stable Diffusion WebUI | 任意 | ローカル画像生成 |
+| YouTube API連携 | 任意 | YouTubeアップロード、予約投稿、Analytics取得 |
+
+### 注意事項
+
+- 生成速度はPC性能、画像枚数、API混雑、VOICEVOXやOllamaの状態によって変わります。
+- Google AI画像生成モードではAPI利用料金が発生する場合があります。
+- YouTube連携を使う場合は、利用者自身のGoogle Cloud設定とOAuth認証が必要です。
+- Stable Diffusion WebUI を利用する場合は、別途セットアップとモデルの準備が必要です。
+- AquesTalk系エンジンを使う場合は、VOICEVOXとは別に [A-Quest公式ライセンス](https://store.a-quest.com/items/7413986) を確認してください。YouTube収益化や商用利用では利用者自身でライセンス条件を満たす必要があります。
+- 霊夢・魔理沙など東方Project由来のキャラ名や立ち絵を使う場合は、[東方Projectの二次創作ガイドライン](https://touhou-project.news/guideline/) と [動画配信サービスへの投稿に関するガイドライン](https://touhou-project.news/guideline_videoposting/) を確認してください。
+- 本アプリはローカルPC上で動作しますが、外部APIを利用する機能ではインターネット接続が必要です。
 
 ---
 

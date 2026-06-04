@@ -46,6 +46,7 @@ KNOWN_SECRET_TYPES: list[str] = [
     "youtube_client_secrets",
     "youtube_upload_token",
     "youtube_analytics_token",
+    "aquestalk_license_key",
 ]
 
 

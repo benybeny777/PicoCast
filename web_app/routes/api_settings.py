@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+import os
+from datetime import datetime
 from web_app.services.status_service import get_settings_status
 from web_app.services.config_service import get_editable_config, save_config
 from web_app.services.status_service import invalidate_settings_status_cache
@@ -33,6 +35,40 @@ def api_refresh_status():
     """サービスチェックを再実行してキャッシュを更新する。"""
     from web_app.services.status_service import refresh_settings_status
     return refresh_settings_status()
+
+
+@router.post("/aquestalk/test")
+def api_aquestalk_test():
+    """AquesTalkの短いテスト音声を生成する。秘密値は返さない。"""
+    try:
+        from core.audio_backends import AudioSpeaker, generate_aquestalk_audio
+        from core.channel_profile import get_active_profile
+        from config import config
+
+        profile = get_active_profile()
+        profile_id = profile.profile_id if profile else None
+        root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+        out_dir = os.path.join(root, "dev", "aquestalk_tests")
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"reimu_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav")
+        speaker = AudioSpeaker(
+            backend="aquestalk",
+            speaker=getattr(config, "AQUESTALK_REIMU_SPEAKER_KEY", "yukkuri_reimu"),
+            voice_type=getattr(config, "AQUESTALK_REIMU_VOICE_TYPE", "reimu"),
+            speed=config.AQUESTALK_DEFAULT_SPEED,
+            pitch=config.AQUESTALK_DEFAULT_PITCH,
+            volume=config.AQUESTALK_DEFAULT_VOLUME,
+            character_name="霊夢",
+        )
+        generate_aquestalk_audio(
+            text=config.AQUESTALK_TEST_TEXT,
+            speaker=speaker,
+            output_path=out_path,
+            profile_id=profile_id,
+        )
+        return {"ok": True, "path": out_path}
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 @router.get("/config")

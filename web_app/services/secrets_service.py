@@ -11,7 +11,7 @@ import os
 _logger = logging.getLogger(__name__)
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-_ALLOWED_API_KEY_TYPES = {"google_api_key", "openai_api_key", "hf_token"}
+_ALLOWED_API_KEY_TYPES = {"google_api_key", "openai_api_key", "hf_token", "aquestalk_license_key"}
 _ALLOWED_YOUTUBE_TYPES = {
     "youtube_client_secrets",
     "youtube_upload_token",
@@ -65,6 +65,7 @@ def save_secrets(updates: dict[str, str], profile_id: str | None = None) -> list
         "GOOGLE_API_KEY": "google_api_key",
         "OPENAI_API_KEY": "openai_api_key",
         "HF_TOKEN": "hf_token",
+        "AQUESTALK_LICENSE_KEY": "aquestalk_license_key",
     }
     for raw_key, value in updates.items():
         # ENV_KEY 形式でも secret_type 形式でも受け付ける

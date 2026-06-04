@@ -65,6 +65,16 @@ def test_status_shows_registered_after_save(client):
     assert resp.json()["secrets"]["google_api_key"] is True
 
 
+def test_status_shows_aquestalk_license_after_save(client):
+    """AquesTalkライセンスキーは値ではなく登録状態だけ返す。"""
+    client.post(
+        "/api/settings/secrets/api-key",
+        json={"secret_type": "aquestalk_license_key", "value": "AQUESTALK-LICENSE-TEST"},
+    )
+    body = client.get("/api/settings/secrets/status").json()
+    assert body["secrets"]["aquestalk_license_key"] is True
+
+
 def test_api_key_status_is_profile_scoped(client):
     """APIキーは profile_id ごとに登録状態が分離される。"""
     client.post(

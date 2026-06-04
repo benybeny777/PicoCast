@@ -17,6 +17,15 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "VOICEVOX_SYNTHESIS_TIMEOUT_SEC",  "type": "float", "label": "VOICEVOX 合成タイムアウト(秒)",          "default": str(cfg.VOICEVOX_SYNTHESIS_TIMEOUT_SEC),  "min": 5.0, "max": 300.0, "group": "タイムアウト", "admin": True},
     {"key": "VOICEVOX_QUERY_WORKERS",         "type": "int",   "label": "VOICEVOX クエリ並列数",                   "default": str(cfg.VOICEVOX_QUERY_WORKERS),          "min": 1,   "max": 16,             "group": "VOICEVOX"},
     {"key": "VOICEVOX_SYNTH_WORKERS",         "type": "int",   "label": "VOICEVOX 合成並列数",                     "default": str(cfg.VOICEVOX_SYNTH_WORKERS),          "min": 1,   "max": 16,             "group": "VOICEVOX"},
+    # ── AquesTalk ──
+    {"key": "AQUESTALK_ENABLED",              "type": "bool",  "label": "AquesTalk有効",                           "default": "1" if cfg.AQUESTALK_ENABLED else "0",                                                "group": "AquesTalk"},
+    {"key": "AQUESTALK_ENGINE_PATH",          "type": "str",   "label": "AquesTalkエンジン/ラッパーCLIパス",        "default": str(cfg.AQUESTALK_ENGINE_PATH),                    "allow_empty": True,             "group": "AquesTalk"},
+    {"key": "AQUESTALK_LICENSE_CONFIRMED",    "type": "bool",  "label": "A-Quest公式ライセンス確認済み",             "default": "1" if cfg.AQUESTALK_LICENSE_CONFIRMED else "0",                                      "group": "AquesTalk"},
+    {"key": "AQUESTALK_COMMAND_TEMPLATE",     "type": "str",   "label": "AquesTalkコマンドテンプレート",             "default": str(cfg.AQUESTALK_COMMAND_TEMPLATE),                                                   "group": "AquesTalk"},
+    {"key": "AQUESTALK_DEFAULT_SPEED",        "type": "int",   "label": "AquesTalk既定速度",                       "default": str(cfg.AQUESTALK_DEFAULT_SPEED),       "min": 50, "max": 300,                 "group": "AquesTalk"},
+    {"key": "AQUESTALK_DEFAULT_PITCH",        "type": "int",   "label": "AquesTalk既定高さ",                       "default": str(cfg.AQUESTALK_DEFAULT_PITCH),       "min": 50, "max": 300,                 "group": "AquesTalk"},
+    {"key": "AQUESTALK_DEFAULT_VOLUME",       "type": "int",   "label": "AquesTalk既定音量",                       "default": str(cfg.AQUESTALK_DEFAULT_VOLUME),      "min": 0,  "max": 300,                 "group": "AquesTalk"},
+    {"key": "AQUESTALK_TIMEOUT_SEC",          "type": "float", "label": "AquesTalk生成タイムアウト(秒)",             "default": str(cfg.AQUESTALK_TIMEOUT_SEC),         "min": 1,  "max": 300, "group": "タイムアウト", "admin": True},
     # ── 画像生成 ──
     {"key": "NANOBANANA_BG_WORKERS",          "type": "int",   "label": "Nano Banana 背景生成並列数",               "default": str(cfg.NANOBANANA_BG_WORKERS),           "min": 1,   "max": 10,             "group": "画像生成"},
     # ── 音声生成 ──

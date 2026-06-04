@@ -188,7 +188,11 @@
       <div class="form-group"><label>キャラ名</label><input class="form-input" id="char-new-name" placeholder="例: 四国めたん"></div>
       <div class="form-group"><label>並び順</label><input class="form-input" id="char-new-order" type="number" value="50"></div>
       <div class="form-group"><label>音声バックエンド</label><input class="form-input" id="char-new-voice-backend" value="voicevox" placeholder="voicevox / 外部アプリ名"></div>
-      <div class="form-group"><label>話者ID/名前</label><input class="form-input" id="char-new-voice-speaker" placeholder="VOICEVOXなら speaker ID"></div>
+      <div class="form-group"><label>話者ID/キー</label><input class="form-input" id="char-new-voice-speaker" placeholder="VOICEVOX ID / yukkuri_reimu"></div>
+      <div class="form-group"><label>voice_type/phont</label><input class="form-input" id="char-new-voice-type" placeholder="reimu"></div>
+      <div class="form-group"><label>速度</label><input class="form-input" id="char-new-voice-speed" type="number" placeholder="100"></div>
+      <div class="form-group"><label>高さ</label><input class="form-input" id="char-new-voice-pitch" type="number" placeholder="100"></div>
+      <div class="form-group"><label>音量</label><input class="form-input" id="char-new-voice-volume" type="number" placeholder="100"></div>
       <div class="form-group wide"><label>表情別話者ID(JSON)</label><textarea class="form-input" id="char-new-voice-styles" rows="2" placeholder='{"ノーマル":3,"ツンツン":7}'></textarea></div>
       <div class="form-group wide"><label>立ち絵PNGパス</label><input class="form-input" id="char-new-portrait" placeholder="assets/characters/reimu.png"></div>
       <div class="form-group"><label>クレジット必要</label><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="char-new-credit-required" checked> 必要</label></div>
@@ -321,13 +325,23 @@
         </td>
         <td><input id="secret-HF_TOKEN" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px"></td>
       </tr>
+      <tr>
+        <td>
+          <label for="secret-AQUESTALK_LICENSE_KEY"><strong>AQUESTALK_LICENSE_KEY</strong></label>
+          <br><small style="color:var(--text-muted)">現在: {% if status.aquestalk_license_key %}<span class="badge badge-ok">設定済み</span>{% else %}<span class="badge badge-warn">未設定</span>{% endif %}</small>
+          <br><small style="color:var(--text-dim)">AquesTalk系エンジンのライセンスキー。値は暗号化保存され、画面やログには表示しません。</small>
+        </td>
+        <td><input id="secret-AQUESTALK_LICENSE_KEY" type="password" autocomplete="new-password" placeholder="変更する場合のみ入力" class="form-input" style="width:240px"></td>
+      </tr>
       <tr><td><strong>YouTube Client Secrets</strong></td><td>{% if status.youtube_client_secrets %}<span class="badge badge-ok">登録済み</span>{% else %}<span class="badge badge-warn">未登録</span>{% endif %}</td></tr>
       <tr><td><strong>YouTube Upload OAuth</strong></td><td>{% if status.youtube_upload_token %}<span class="badge badge-ok">認証済み</span>{% else %}<span class="badge badge-warn">未認証</span>{% endif %}</td></tr>
       <tr><td><strong>YouTube Analytics OAuth</strong></td><td>{% if status.youtube_analytics_token %}<span class="badge badge-ok">認証済み</span>{% else %}<span class="badge badge-warn">未認証</span>{% endif %}</td></tr>
     </table>
     <div class="action-row mt">
       <button class="btn btn-primary" onclick="saveSecrets()">APIキーを保存</button>
+      <button class="btn btn-secondary" onclick="testAquesTalk()">霊夢テスト音声を生成</button>
     </div>
+    <div id="aquestalk-test-result" class="hint mt"></div>
   </div>
 </div>
 
@@ -697,7 +711,11 @@ function characterCardHtml(c) {
       <div class="form-group"><label>キャラ名</label><input class="form-input" data-cid="${c.character_id}" data-field="character_name" value="${esc(c.character_name || '')}"></div>
       <div class="form-group"><label>並び順</label><input class="form-input" type="number" data-cid="${c.character_id}" data-field="sort_order" value="${Number(c.sort_order || 0)}"></div>
       <div class="form-group"><label>音声バックエンド</label><input class="form-input" data-cid="${c.character_id}" data-field="voice_backend" value="${esc(c.voice_backend || 'voicevox')}"></div>
-      <div class="form-group"><label>話者ID/名前</label><input class="form-input" data-cid="${c.character_id}" data-field="voice_speaker" value="${esc(c.voice_speaker || c.voice_speaker_id || '')}"></div>
+      <div class="form-group"><label>話者ID/キー</label><input class="form-input" data-cid="${c.character_id}" data-field="voice_speaker" value="${esc(c.voice_speaker || c.voice_speaker_id || '')}"></div>
+      <div class="form-group"><label>voice_type/phont</label><input class="form-input" data-cid="${c.character_id}" data-field="voice_type" value="${esc(c.voice_type || '')}"></div>
+      <div class="form-group"><label>速度</label><input class="form-input" type="number" data-cid="${c.character_id}" data-field="voice_speed" value="${c.voice_speed ?? ''}"></div>
+      <div class="form-group"><label>高さ</label><input class="form-input" type="number" data-cid="${c.character_id}" data-field="voice_pitch" value="${c.voice_pitch ?? ''}"></div>
+      <div class="form-group"><label>音量</label><input class="form-input" type="number" data-cid="${c.character_id}" data-field="voice_volume" value="${c.voice_volume ?? ''}"></div>
       <div class="form-group wide"><label>表情別話者ID(JSON)</label><textarea class="form-input" rows="2" data-cid="${c.character_id}" data-field="voice_styles_json">${esc(JSON.stringify(c.voice_styles || {}, null, 0))}</textarea></div>
       <div class="form-group wide"><label>立ち絵PNGパス</label><input class="form-input" data-cid="${c.character_id}" data-field="portrait_png_path" value="${esc(c.portrait_png_path || '')}"></div>
       <div class="form-group"><label>クレジット必要</label><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-cid="${c.character_id}" data-field="credit_required" ${c.credit_required !== false ? 'checked' : ''}> 必要</label></div>
@@ -721,7 +739,7 @@ function characterPayload(cid) {
   document.querySelectorAll(`[data-cid="${cid}"]`).forEach(el => {
     const k = el.getAttribute('data-field');
     if (el.type === 'checkbox') body[k] = el.checked;
-    else if (el.type === 'number') body[k] = Number(el.value || 0);
+    else if (el.type === 'number') body[k] = el.value === '' ? null : Number(el.value || 0);
     else if (k === 'voice_styles_json') {
       body.voice_styles = el.value.trim() ? JSON.parse(el.value) : {};
     }
@@ -758,6 +776,10 @@ async function createCharacter() {
       sort_order: Number(document.getElementById('char-new-order').value || 0),
       voice_backend: document.getElementById('char-new-voice-backend').value.trim() || 'voicevox',
       voice_speaker: document.getElementById('char-new-voice-speaker').value.trim(),
+      voice_type: document.getElementById('char-new-voice-type').value.trim(),
+      voice_speed: document.getElementById('char-new-voice-speed').value === '' ? null : Number(document.getElementById('char-new-voice-speed').value || 0),
+      voice_pitch: document.getElementById('char-new-voice-pitch').value === '' ? null : Number(document.getElementById('char-new-voice-pitch').value || 0),
+      voice_volume: document.getElementById('char-new-voice-volume').value === '' ? null : Number(document.getElementById('char-new-voice-volume').value || 0),
       voice_styles: document.getElementById('char-new-voice-styles').value.trim() ? JSON.parse(document.getElementById('char-new-voice-styles').value) : {},
       portrait_png_path: document.getElementById('char-new-portrait').value.trim(),
       credit_required: document.getElementById('char-new-credit-required').checked,
@@ -777,7 +799,7 @@ async function createCharacter() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || '追加失敗');
     out.textContent = '追加しました';
-    ['char-new-key','char-new-display','char-new-name','char-new-voice-speaker','char-new-voice-styles','char-new-portrait','char-new-credit-text','char-new-role','char-new-tone','char-new-speaking','char-new-forbidden','char-new-dialogue'].forEach(id => document.getElementById(id).value = '');
+    ['char-new-key','char-new-display','char-new-name','char-new-voice-speaker','char-new-voice-type','char-new-voice-speed','char-new-voice-pitch','char-new-voice-volume','char-new-voice-styles','char-new-portrait','char-new-credit-text','char-new-role','char-new-tone','char-new-speaking','char-new-forbidden','char-new-dialogue'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('char-new-voice-backend').value = 'voicevox';
     document.getElementById('char-new-credit-required').checked = true;
     document.getElementById('char-new-order').value = '50';
@@ -1196,7 +1218,7 @@ async function deleteBgm(id) {
 
 async function saveSecrets() {
   const updates = {};
-  ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'HF_TOKEN'].forEach(key => {
+  ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'HF_TOKEN', 'AQUESTALK_LICENSE_KEY'].forEach(key => {
     const val = document.getElementById(`secret-${key}`).value;
     if (val.trim()) updates[key] = val;
   });
@@ -1215,7 +1237,7 @@ async function saveSecrets() {
       const errs = Array.isArray(data.detail) ? data.detail.join('\n') : (data.detail || JSON.stringify(data));
       showToast('エラー: ' + errs, true);
     } else {
-      ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'HF_TOKEN'].forEach(key => { document.getElementById(`secret-${key}`).value = ''; });
+      ['GOOGLE_API_KEY', 'OPENAI_API_KEY', 'HF_TOKEN', 'AQUESTALK_LICENSE_KEY'].forEach(key => { document.getElementById(`secret-${key}`).value = ''; });
       showToast(`保存しました (${data.saved.length}件)`, false);
     }
   } catch(e) {
@@ -1313,6 +1335,21 @@ function esc(str) {
     .replace(/</g,'&lt;')
     .replace(/>/g,'&gt;')
     .replace(/"/g,'&quot;');
+}
+
+async function testAquesTalk() {
+  const out = document.getElementById('aquestalk-test-result');
+  out.textContent = '生成中...';
+  try {
+    const res = await fetch('/api/settings/aquestalk/test', {method:'POST'});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+    out.textContent = `生成しました: ${data.path}`;
+    showToast('AquesTalkテスト音声を生成しました');
+  } catch(e) {
+    out.textContent = e.message || e;
+    showToast('AquesTalkテスト音声に失敗しました', true);
+  }
 }
 
 // 初期ロード

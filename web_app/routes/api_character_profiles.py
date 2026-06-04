@@ -30,6 +30,10 @@ def _to_dict(c) -> dict:
         "voice_speaker": c.voice_speaker,
         "voice_speaker_id": c.voice_speaker_id,
         "voice_styles": c.voice_styles or {},
+        "voice_type": c.voice_type,
+        "voice_speed": c.voice_speed,
+        "voice_pitch": c.voice_pitch,
+        "voice_volume": c.voice_volume,
         "portrait_png_path": c.portrait_png_path,
         "credit_required": c.credit_required,
         "credit_text": c.credit_text,
@@ -58,6 +62,10 @@ class CharacterUpdateRequest(BaseModel):
     voice_speaker: str | None = None
     voice_speaker_id: int | None = None
     voice_styles: dict[str, int] | None = None
+    voice_type: str | None = None
+    voice_speed: int | None = None
+    voice_pitch: int | None = None
+    voice_volume: int | None = None
     portrait_png_path: str | None = None
     credit_required: bool | None = None
     credit_text: str | None = None
@@ -78,6 +86,10 @@ class CharacterCreateRequest(BaseModel):
     voice_speaker: str = ""
     voice_speaker_id: int | None = None
     voice_styles: dict[str, int] = Field(default_factory=dict)
+    voice_type: str = ""
+    voice_speed: int | None = None
+    voice_pitch: int | None = None
+    voice_volume: int | None = None
     portrait_png_path: str = ""
     credit_required: bool = True
     credit_text: str = ""
@@ -131,6 +143,10 @@ def create_character_profile(req: CharacterCreateRequest):
             voice_speaker=req.voice_speaker,
             voice_speaker_id=req.voice_speaker_id,
             voice_styles=req.voice_styles,
+            voice_type=req.voice_type,
+            voice_speed=req.voice_speed,
+            voice_pitch=req.voice_pitch,
+            voice_volume=req.voice_volume,
             portrait_png_path=req.portrait_png_path,
             credit_required=req.credit_required,
             credit_text=req.credit_text,

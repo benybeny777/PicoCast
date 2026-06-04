@@ -50,6 +50,15 @@ DEFAULT_HASHTAGS     = os.environ.get("DEFAULT_HASHTAGS", "").strip()      # デ
 # ───────────────────────────────────────────────
 VOICEVOX_URL = os.environ.get("VOICEVOX_URL", "http://localhost:50021")  # VOICEVOX エンジン API エンドポイント
 VOICEVOX_PATH = os.environ.get("VOICEVOX_PATH", "")                     # VOICEVOX 自動起動用パス（空=手動起動）
+AQUESTALK_ENABLED = os.environ.get("AQUESTALK_ENABLED", "0").strip().lower() in ("1", "true", "yes", "on")  # AquesTalk系ゆっくり音声バックエンドを有効化
+AQUESTALK_ENGINE_PATH = os.environ.get("AQUESTALK_ENGINE_PATH", "")  # AquesTalk系エンジン実行ファイルまたはラッパーCLIのパス
+AQUESTALK_LICENSE_CONFIRMED = os.environ.get("AQUESTALK_LICENSE_CONFIRMED", "0").strip().lower() in ("1", "true", "yes", "on")  # A-Quest公式ライセンス確認済みフラグ
+AQUESTALK_COMMAND_TEMPLATE = os.environ.get("AQUESTALK_COMMAND_TEMPLATE", '"{engine}" --text "{text}" --output "{output}" --voice "{voice}" --speed {speed} --pitch {pitch} --volume {volume}')  # AquesTalk系エンジン呼び出しコマンドテンプレート
+AQUESTALK_DEFAULT_SPEED = int(os.environ.get("AQUESTALK_DEFAULT_SPEED", "100"))  # AquesTalk既定速度
+AQUESTALK_DEFAULT_PITCH = int(os.environ.get("AQUESTALK_DEFAULT_PITCH", "100"))  # AquesTalk既定高さ
+AQUESTALK_DEFAULT_VOLUME = int(os.environ.get("AQUESTALK_DEFAULT_VOLUME", "100"))  # AquesTalk既定音量
+AQUESTALK_TIMEOUT_SEC = float(os.environ.get("AQUESTALK_TIMEOUT_SEC", "60"))  # AquesTalk音声生成タイムアウト秒数
+AQUESTALK_TEST_TEXT = os.environ.get("AQUESTALK_TEST_TEXT", "ゆっくりしていってね")  # AquesTalk疎通テスト用テキスト
 VOICEVOX_QUERY_WORKERS  = int(os.environ.get("VOICEVOX_QUERY_WORKERS",  "4"))  # audio_query 並列数
 VOICEVOX_SYNTH_WORKERS  = int(os.environ.get("VOICEVOX_SYNTH_WORKERS",  "2"))  # synthesis 並列数
 NANOBANANA_BG_WORKERS   = int(os.environ.get("NANOBANANA_BG_WORKERS",   "3"))  # Nano Banana 背景生成並列数
@@ -203,8 +212,10 @@ NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-fl
 # ───────────────────────────────────────────────
 # キャラクター定義（VOICEVOX スピーカー ID）
 # ───────────────────────────────────────────────
-REIMU_VOICEVOX_SPEAKER_ID = int(os.environ.get("REIMU_VOICEVOX_SPEAKER_ID", "2"))  # 霊夢に割り当てるVOICEVOX speaker ID
-MARISA_VOICEVOX_SPEAKER_ID = int(os.environ.get("MARISA_VOICEVOX_SPEAKER_ID", "3"))  # 魔理沙に割り当てるVOICEVOX speaker ID
+AQUESTALK_REIMU_SPEAKER_KEY = os.environ.get("AQUESTALK_REIMU_SPEAKER_KEY", "yukkuri_reimu")  # ゆっくり霊夢風の内部speaker_key
+AQUESTALK_MARISA_SPEAKER_KEY = os.environ.get("AQUESTALK_MARISA_SPEAKER_KEY", "yukkuri_marisa")  # ゆっくり魔理沙風の内部speaker_key
+AQUESTALK_REIMU_VOICE_TYPE = os.environ.get("AQUESTALK_REIMU_VOICE_TYPE", "reimu")  # AquesTalk側の霊夢風voice_type/phont指定
+AQUESTALK_MARISA_VOICE_TYPE = os.environ.get("AQUESTALK_MARISA_VOICE_TYPE", "marisa")  # AquesTalk側の魔理沙風voice_type/phont指定
 CHARACTERS = {
     "ずんだもん": {
         "speaker_id": 3,
@@ -218,20 +229,6 @@ CHARACTERS = {
         "name": "四国めたん",
         "styles": {
             "ノーマル": 2, "あまあま": 0, "ツンツン": 6, "セクシー": 4, "ささやき": 36, "ヒソヒソ": 37
-        }
-    },
-    "霊夢": {
-        "speaker_id": REIMU_VOICEVOX_SPEAKER_ID,
-        "name": "霊夢",
-        "styles": {
-            "ノーマル": REIMU_VOICEVOX_SPEAKER_ID
-        }
-    },
-    "魔理沙": {
-        "speaker_id": MARISA_VOICEVOX_SPEAKER_ID,
-        "name": "魔理沙",
-        "styles": {
-            "ノーマル": MARISA_VOICEVOX_SPEAKER_ID
         }
     },
 }

@@ -1566,14 +1566,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 update_status(f"⚠ reading_candidates保存失敗: {_e}", "warning")
 
     vv = VoicevoxAPI()
-    if not vv.check_connection() and os.path.exists(VOICEVOX_PATH):
-        subprocess.Popen([VOICEVOX_PATH], creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(60):
-            if is_cancelled():
-                return cancel_result()
-            if vv.check_connection(): break
-            time.sleep(2)
 
     img_gen = ImageGenerator(
         width=width,
@@ -1611,10 +1603,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             _it["_bg_num"] = _pre_bg  # この時点での背景番号を一時保持
 
     # ══════════════════════════════════════════════════════════════════════════
-    # パス1: 全音声生成（VOICEVOX）
+    # パス1: 全音声生成（VOICEVOX / AquesTalk）
     # フェーズ1a: チャンクリスト収集
-    # フェーズ1b: audio_query を並列取得（ネットワークバウンド部分を高速化）
-    # フェーズ1c: synthesis を逐次実行（VOICEVOXのCPU処理はシリアルが安全）
+    # フェーズ1b: VOICEVOX audio_query を並列取得（ネットワークバウンド部分を高速化）
+    # フェーズ1c: VOICEVOX synthesis と AquesTalk 生成を実行
     # ══════════════════════════════════════════════════════════════════════════
     update_status(f"🎤 音声生成フェーズ（{total_voices}行）...")
 
@@ -1633,9 +1625,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         _v += 1
         try:
             from core.channel_profile import get_active_profile
-            from core.character_profile_store import resolve_character_voice
+            from core.audio_backends import resolve_audio_speaker
             profile = get_active_profile()
-            speaker_id = resolve_character_voice(profile.profile_id if profile else None, char_key, emotion)
+            profile_id = profile.profile_id if profile else None
+            speaker = resolve_audio_speaker(profile_id, char_key, emotion)
         except Exception:
             _logger.error("話者の音声設定解決に失敗しました: character=%s emotion=%s", char_key, emotion, exc_info=True)
             raise
@@ -1653,7 +1646,10 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             _voice_chunks.append({
                 "voice_num": _v, "audio_num": _a,
                 "char_key": char_key, "emotion": emotion,
-                "speaker_id": speaker_id, "speed_scale": speed_scale,
+                "speaker": speaker,
+                "speaker_id": speaker.speaker_id,
+                "backend": speaker.backend,
+                "speed_scale": speed_scale,
                 "speech_text": reading_map.get(chunk_text, chunk_text),
                 "chunk_text": chunk_text,
                 "audio_path": os.path.join(theme_audio_dir, audio_filename),
@@ -1666,20 +1662,37 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         if _orphans:
             update_status(f"🎤 不要な旧音声を {_orphans}件削除しました（台本変更分）")
 
-    # フェーズ1b: audio_query を並列取得
-    _QUERY_WORKERS = min(VOICEVOX_QUERY_WORKERS, len(_voice_chunks)) if _voice_chunks else 1
-    update_status(f"🎤 音声クエリ並列取得中（{len(_voice_chunks)}件、{_QUERY_WORKERS}並列）...")
+    _voicevox_chunks = [c for c in _voice_chunks if c["backend"] == "voicevox"]
+    _aquestalk_chunks = [c for c in _voice_chunks if c["backend"] == "aquestalk"]
+    if _voicevox_chunks:
+        if not vv.check_connection() and os.path.exists(VOICEVOX_PATH):
+            subprocess.Popen([VOICEVOX_PATH], creationflags=subprocess.CREATE_NEW_CONSOLE if sys.platform == 'win32' else 0,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(60):
+                if is_cancelled():
+                    return cancel_result()
+                if vv.check_connection(): break
+                time.sleep(2)
+        if not vv.check_connection():
+            _logger.error("VOICEVOXに接続できません: chunks=%s", len(_voicevox_chunks))
+            return finish_result("❌ VOICEVOXに接続できないため処理を中止しました")
+
+    # フェーズ1b: VOICEVOX audio_query を並列取得
+    _QUERY_WORKERS = min(VOICEVOX_QUERY_WORKERS, len(_voicevox_chunks)) if _voicevox_chunks else 1
+    update_status(f"🎤 VOICEVOX音声クエリ並列取得中（{len(_voicevox_chunks)}件、{_QUERY_WORKERS}並列）...")
     _queries: dict[int, tuple] = {}
     _query_error: str | None = None
     _query_error_chunk: dict | None = None
 
     def _do_query(idx: int, c: dict):
+        if c["speaker_id"] is None:
+            raise RuntimeError("VOICEVOX speaker ID は数値で指定してください。")
         q, kana = vv.audio_query_only(c["speech_text"], c["speaker_id"], speed_scale=c["speed_scale"])
         return idx, q, kana
 
-    if _voice_chunks:
+    if _voicevox_chunks:
         with ThreadPoolExecutor(max_workers=_QUERY_WORKERS) as _ex:
-            _futs = {_ex.submit(_do_query, i, c): i for i, c in enumerate(_voice_chunks)}
+            _futs = {_ex.submit(_do_query, i, c): i for i, c in enumerate(_voicevox_chunks)}
             for _fut in as_completed(_futs):
                 if is_cancelled():
                     break
@@ -1689,7 +1702,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 except Exception as _e:
                     from core.error_codes import AppError
                     _query_error = _e.user_message() if isinstance(_e, AppError) else str(_e)
-                    _query_error_chunk = _voice_chunks[_futs[_fut]]
+                    _query_error_chunk = _voicevox_chunks[_futs[_fut]]
                     break
 
     if is_cancelled():
@@ -1705,16 +1718,16 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             )
         _logger.error(
             "VOICEVOX audio_query failed: chunks=%s workers=%s%s reason=%s",
-            len(_voice_chunks),
+            len(_voicevox_chunks),
             _QUERY_WORKERS,
             _chunk_desc,
             _query_error,
         )
         return finish_result(f"❌ 音声クエリ失敗のため処理を中止しました\n理由: {_query_error}")
 
-    # フェーズ1c: synthesis を並列実行
-    _SYNTH_WORKERS = min(VOICEVOX_SYNTH_WORKERS, len(_voice_chunks)) if _voice_chunks else 1
-    update_status(f"🎤 音声合成並列開始（{len(_voice_chunks)}件、{_SYNTH_WORKERS}並列）...")
+    # フェーズ1c: VOICEVOX synthesis を並列実行
+    _SYNTH_WORKERS = min(VOICEVOX_SYNTH_WORKERS, len(_voicevox_chunks)) if _voicevox_chunks else 1
+    update_status(f"🎤 VOICEVOX音声合成並列開始（{len(_voicevox_chunks)}件、{_SYNTH_WORKERS}並列）...")
 
     def _do_synthesis(idx: int, c: dict) -> int:
         q, _ = _queries[idx]
@@ -1740,28 +1753,29 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     _synth_first_err_chunk: dict | None = None
     _report_lock = threading.Lock()
 
-    with ThreadPoolExecutor(max_workers=_SYNTH_WORKERS) as _sex:
-        _sfuts = {_sex.submit(_do_synthesis, i, c): i for i, c in enumerate(_voice_chunks)}
-        for _sfut in as_completed(_sfuts):
-            if is_cancelled():
-                break
-            _si = _sfuts[_sfut]
-            _sc = _voice_chunks[_si]
-            try:
-                _sfut.result()
-                with _report_lock:
-                    report.voices_generated += 1
-                _pv = _sc["chunk_text"][:20] + ("…" if len(_sc["chunk_text"]) > 20 else "")
-                update_status(
-                    f"🎤 音声合成完了 [{_sc['voice_num']}/{total_voices}]"
-                    f" {_sc['char_key']}({_sc['emotion']}) x{_sc['speed_scale']:g}「{_pv}」"
-                )
-            except Exception as _se:
-                with _report_lock:
-                    report.voices_failed += 1
-                    if _synth_first_err is None:
-                        _synth_first_err = _se
-                        _synth_first_err_chunk = _sc
+    if _voicevox_chunks:
+        with ThreadPoolExecutor(max_workers=_SYNTH_WORKERS) as _sex:
+            _sfuts = {_sex.submit(_do_synthesis, i, c): i for i, c in enumerate(_voicevox_chunks)}
+            for _sfut in as_completed(_sfuts):
+                if is_cancelled():
+                    break
+                _si = _sfuts[_sfut]
+                _sc = _voicevox_chunks[_si]
+                try:
+                    _sfut.result()
+                    with _report_lock:
+                        report.voices_generated += 1
+                    _pv = _sc["chunk_text"][:20] + ("…" if len(_sc["chunk_text"]) > 20 else "")
+                    update_status(
+                        f"🎤 VOICEVOX合成完了 [{_sc['voice_num']}/{total_voices}]"
+                        f" {_sc['char_key']}({_sc['emotion']}) x{_sc['speed_scale']:g}「{_pv}」"
+                    )
+                except Exception as _se:
+                    with _report_lock:
+                        report.voices_failed += 1
+                        if _synth_first_err is None:
+                            _synth_first_err = _se
+                            _synth_first_err_chunk = _sc
 
     if is_cancelled():
         return cancel_result()
@@ -1771,12 +1785,43 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         from core.error_codes import AppError
         _synth_reason = _synth_first_err.user_message() if isinstance(_synth_first_err, AppError) else str(_synth_first_err)
         msg = (
-            f"❌ 音声合成失敗のため処理を中止しました\n"
+            f"❌ VOICEVOX音声合成失敗のため処理を中止しました\n"
             f"対象: [{_ec['voice_num']}/{total_voices}] {_ec['char_key']}({_ec['emotion']})「{_pv}」\n"
             f"理由: {_synth_reason}"
         )
         update_status(msg, "error")
         return finish_result(msg)
+
+    # AquesTalk は外部エンジン/ライセンスの状態に依存するため、失敗時は即中止する。
+    if _aquestalk_chunks:
+        update_status(f"🎤 AquesTalk音声生成開始（{len(_aquestalk_chunks)}件）...")
+        try:
+            from core.audio_backends import generate_aquestalk_audio
+            from core.channel_profile import get_active_profile
+            profile = get_active_profile()
+            profile_id = profile.profile_id if profile else None
+            for _sc in _aquestalk_chunks:
+                if is_cancelled():
+                    return cancel_result()
+                generate_aquestalk_audio(
+                    text=_sc["speech_text"],
+                    speaker=_sc["speaker"],
+                    output_path=_sc["audio_path"],
+                    profile_id=profile_id,
+                    speed_scale=_sc["speed_scale"],
+                )
+                report.voices_generated += 1
+                _pv = _sc["chunk_text"][:20] + ("…" if len(_sc["chunk_text"]) > 20 else "")
+                update_status(
+                    f"🎤 AquesTalk合成完了 [{_sc['voice_num']}/{total_voices}]"
+                    f" {_sc['char_key']}({_sc['emotion']}) x{_sc['speed_scale']:g}「{_pv}」"
+                )
+        except Exception as _ae:
+            report.voices_failed += 1
+            _logger.error("AquesTalk音声生成に失敗しました", exc_info=True)
+            msg = f"❌ AquesTalk音声生成失敗のため処理を中止しました\n理由: {_ae}"
+            update_status(msg, "error")
+            return finish_result(msg)
 
     _existing_thumb = os.path.join(theme_dir, "thumbnails", "thumbnail.png")
     if reuse_backgrounds and _has_saved_thumb and os.path.exists(_existing_thumb):

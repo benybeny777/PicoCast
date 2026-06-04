@@ -15,12 +15,17 @@ from core.character_profile_store import (
     list_characters,
 )
 from config import (
+    AQUESTALK_DEFAULT_PITCH,
+    AQUESTALK_DEFAULT_SPEED,
+    AQUESTALK_DEFAULT_VOLUME,
+    AQUESTALK_MARISA_SPEAKER_KEY,
+    AQUESTALK_MARISA_VOICE_TYPE,
+    AQUESTALK_REIMU_SPEAKER_KEY,
+    AQUESTALK_REIMU_VOICE_TYPE,
     CHARACTERS,
     CHARACTER_PNGS,
     MARISA_CHARACTER_PNG_PATH,
-    MARISA_VOICEVOX_SPEAKER_ID,
     REIMU_CHARACTER_PNG_PATH,
-    REIMU_VOICEVOX_SPEAKER_ID,
 )
 from core.script_prompts import FOOD_GENRE_PROFILES, METAN_TSUNDERE_RULES
 
@@ -123,36 +128,42 @@ _METAN_STANDARD_TOXIC = {
 
 _REIMU = {
     "character_key": "reimu",
-    "display_name": "霊夢（ゆっくり司会）",
+    "display_name": "ゆっくり霊夢風（司会）",
     "character_name": "霊夢",
     "role": "落ち着いた司会・進行役。視聴者目線で話題を整理し、必要な疑問を短く挟む。情報を出しすぎず、会話の入口と締めを担当する。",
     "tone_style": "冷静で少しドライ。語尾は自然な口語。「〜ね」「〜よ」「どういうこと？」を使う。過剰に可愛くしない。",
     "speaking_rules": "1セリフは短く、進行・疑問・要約を中心にする。説明が長くなったら他キャラへ渡す。",
     "forbidden_phrases": "なのだ / ですわ / だぜ / 長い解説の独占",
     "dialogue_rules": "霊夢は会話の交通整理役。導入でテーマを提示し、途中で視聴者の疑問を代弁し、最後に短くまとめる。",
-    "voice_backend": "voicevox",
-    "voice_speaker": str(REIMU_VOICEVOX_SPEAKER_ID),
-    "voice_speaker_id": REIMU_VOICEVOX_SPEAKER_ID,
+    "voice_backend": "aquestalk",
+    "voice_speaker": AQUESTALK_REIMU_SPEAKER_KEY,
+    "voice_type": AQUESTALK_REIMU_VOICE_TYPE,
+    "voice_speed": AQUESTALK_DEFAULT_SPEED,
+    "voice_pitch": AQUESTALK_DEFAULT_PITCH,
+    "voice_volume": AQUESTALK_DEFAULT_VOLUME,
     "portrait_png_path": REIMU_CHARACTER_PNG_PATH,
     "credit_required": True,
-    "credit_text": "VOICEVOX:霊夢",
+    "credit_text": "AquesTalk:ゆっくり霊夢風",
 }
 
 _MARISA = {
     "character_key": "marisa",
-    "display_name": "魔理沙（ゆっくり相方）",
+    "display_name": "ゆっくり魔理沙風（相方）",
     "character_name": "魔理沙",
     "role": "勢いのある相方・ツッコミ役。疑問、驚き、軽い茶化しでテンポを作り、話を前に進める。",
     "tone_style": "明るく少し雑。語尾は「〜だぜ」「〜じゃないか」「マジか」を使う。強すぎる罵倒は避ける。",
     "speaking_rules": "1セリフは短くテンポ重視。驚きだけで終わらず、次の情報を引き出す問いにする。",
     "forbidden_phrases": "なのだ / ですわ / ただの相槌 / 視聴者を馬鹿にする表現",
     "dialogue_rules": "魔理沙は霊夢や他キャラの説明に対し、驚きと疑問で次の説明を引き出す。情報そのものを長く説明しない。",
-    "voice_backend": "voicevox",
-    "voice_speaker": str(MARISA_VOICEVOX_SPEAKER_ID),
-    "voice_speaker_id": MARISA_VOICEVOX_SPEAKER_ID,
+    "voice_backend": "aquestalk",
+    "voice_speaker": AQUESTALK_MARISA_SPEAKER_KEY,
+    "voice_type": AQUESTALK_MARISA_VOICE_TYPE,
+    "voice_speed": AQUESTALK_DEFAULT_SPEED,
+    "voice_pitch": AQUESTALK_DEFAULT_PITCH,
+    "voice_volume": AQUESTALK_DEFAULT_VOLUME,
     "portrait_png_path": MARISA_CHARACTER_PNG_PATH,
     "credit_required": True,
-    "credit_text": "VOICEVOX:魔理沙",
+    "credit_text": "AquesTalk:ゆっくり魔理沙風",
 }
 
 
@@ -199,6 +210,10 @@ def seed_character_profiles_for_profile(profile_id: str, genre_profile: str) -> 
             voice_speaker=item.get("voice_speaker", ""),
             voice_speaker_id=item.get("voice_speaker_id"),
             voice_styles=item.get("voice_styles"),
+            voice_type=item.get("voice_type", ""),
+            voice_speed=item.get("voice_speed"),
+            voice_pitch=item.get("voice_pitch"),
+            voice_volume=item.get("voice_volume"),
             portrait_png_path=item.get("portrait_png_path", ""),
             credit_required=item.get("credit_required", True),
             credit_text=item.get("credit_text", ""),

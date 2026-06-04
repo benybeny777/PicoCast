@@ -106,6 +106,12 @@ def check_ffmpeg() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
+def check_aquestalk(profile_id: str | None = None) -> dict[str, Any]:
+    from core.audio_backends import check_aquestalk as _check_aquestalk
+
+    return _check_aquestalk(profile_id=profile_id)
+
+
 def refresh_settings_status() -> dict[str, Any]:
     """サービスチェックを実行してキャッシュを更新して返す。"""
     global _settings_status_cache
@@ -141,6 +147,9 @@ def setup_readiness() -> dict[str, Any]:
         missing.append("VOICEVOX に接続できません。起動と URL（既定 http://localhost:50021）を確認してください。")
     if not check_ffmpeg().get("ok"):
         missing.append("ffmpeg が利用できません。インストールして PATH に通すか FFMPEG_BIN を設定してください。")
+    aquestalk = check_aquestalk()
+    if aquestalk.get("enabled") and not aquestalk.get("ok"):
+        missing.append(f"AquesTalk が利用できません。設定・エンジン配置・ライセンス確認を見直してください: {aquestalk.get('error', '')}")
     return {"ready": not missing, "missing": missing}
 
 
@@ -148,15 +157,17 @@ def get_settings_status() -> dict[str, Any]:
     root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=4) as ex:
+    with ThreadPoolExecutor(max_workers=5) as ex:
         f_vv     = ex.submit(check_voicevox)
         f_ffmpeg = ex.submit(check_ffmpeg)
         f_ollama = ex.submit(check_ollama)
         f_sd     = ex.submit(check_sd_webui)
+        f_aq     = ex.submit(check_aquestalk)
         voicevox_result = f_vv.result()
         ffmpeg_result   = f_ffmpeg.result()
         ollama_result   = f_ollama.result()
         sd_webui_result = f_sd.result()
+        aquestalk_result = f_aq.result()
 
     # 認証情報の登録状態は DB を正本とする（値は返さない）
     from core.secret_store import list_secret_status
@@ -171,6 +182,7 @@ def get_settings_status() -> dict[str, Any]:
 
     return {
         "voicevox": voicevox_result,
+        "aquestalk": aquestalk_result,
         "ffmpeg": ffmpeg_result,
         "ollama": ollama_result,
         "sd_webui": sd_webui_result,
@@ -178,6 +190,7 @@ def get_settings_status() -> dict[str, Any]:
         "google_api_key": secret_status["google_api_key"],              # DB登録状態のみ
         "openai_api_key": secret_status["openai_api_key"],              # DB登録状態のみ
         "hf_token": secret_status["hf_token"],                         # DB登録状態のみ
+        "aquestalk_license_key": secret_status["aquestalk_license_key"], # DB登録状態のみ
         "youtube_client_secrets": secret_status["youtube_client_secrets"],
         "youtube_upload_token": secret_status["youtube_upload_token"],
         "youtube_analytics_token": secret_status["youtube_analytics_token"],

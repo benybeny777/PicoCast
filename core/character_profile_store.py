@@ -30,6 +30,15 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _lock = threading.Lock()
 
+_CHARACTER_NAME_ALIASES = {
+    "reimu": "霊夢",
+    "ゆっくり霊夢": "霊夢",
+    "yukkuri_reimu": "霊夢",
+    "marisa": "魔理沙",
+    "ゆっくり魔理沙": "魔理沙",
+    "yukkuri_marisa": "魔理沙",
+}
+
 _DDL = """
 CREATE TABLE IF NOT EXISTS character_profiles (
     character_id      TEXT PRIMARY KEY,
@@ -46,6 +55,10 @@ CREATE TABLE IF NOT EXISTS character_profiles (
     voice_speaker     TEXT NOT NULL DEFAULT '',
     voice_speaker_id  INTEGER,
     voice_styles_json TEXT NOT NULL DEFAULT '{}',
+    voice_type        TEXT NOT NULL DEFAULT '',
+    voice_speed       INTEGER,
+    voice_pitch       INTEGER,
+    voice_volume      INTEGER,
     portrait_png_path TEXT NOT NULL DEFAULT '',
     credit_required   INTEGER NOT NULL DEFAULT 1,
     credit_text       TEXT NOT NULL DEFAULT '',
@@ -79,6 +92,10 @@ class CharacterProfile:
     voice_speaker: str = ""
     voice_speaker_id: int | None = None
     voice_styles: dict[str, int] | None = None
+    voice_type: str = ""
+    voice_speed: int | None = None
+    voice_pitch: int | None = None
+    voice_volume: int | None = None
     portrait_png_path: str = ""
     credit_required: bool = True
     credit_text: str = ""
@@ -100,6 +117,10 @@ class CharacterProfile:
             voice_speaker=row["voice_speaker"],
             voice_speaker_id=row["voice_speaker_id"],
             voice_styles=_parse_voice_styles(row["voice_styles_json"]),
+            voice_type=row["voice_type"],
+            voice_speed=row["voice_speed"],
+            voice_pitch=row["voice_pitch"],
+            voice_volume=row["voice_volume"],
             portrait_png_path=row["portrait_png_path"],
             credit_required=bool(row["credit_required"]),
             credit_text=row["credit_text"],
@@ -132,6 +153,10 @@ def _ensure_columns(conn: sqlite3.Connection) -> None:
         "voice_backend": "ALTER TABLE character_profiles ADD COLUMN voice_backend TEXT NOT NULL DEFAULT 'voicevox'",
         "voice_speaker": "ALTER TABLE character_profiles ADD COLUMN voice_speaker TEXT NOT NULL DEFAULT ''",
         "voice_styles_json": "ALTER TABLE character_profiles ADD COLUMN voice_styles_json TEXT NOT NULL DEFAULT '{}'",
+        "voice_type": "ALTER TABLE character_profiles ADD COLUMN voice_type TEXT NOT NULL DEFAULT ''",
+        "voice_speed": "ALTER TABLE character_profiles ADD COLUMN voice_speed INTEGER",
+        "voice_pitch": "ALTER TABLE character_profiles ADD COLUMN voice_pitch INTEGER",
+        "voice_volume": "ALTER TABLE character_profiles ADD COLUMN voice_volume INTEGER",
         "portrait_png_path": "ALTER TABLE character_profiles ADD COLUMN portrait_png_path TEXT NOT NULL DEFAULT ''",
         "credit_required": "ALTER TABLE character_profiles ADD COLUMN credit_required INTEGER NOT NULL DEFAULT 1",
         "credit_text": "ALTER TABLE character_profiles ADD COLUMN credit_text TEXT NOT NULL DEFAULT ''",
@@ -182,6 +207,13 @@ def _now() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat()
 
 
+def normalize_character_name(character_name: str) -> str:
+    """台本話者名の別名をキャラクター設定の character_name へ寄せる。"""
+    raw = str(character_name or "").strip()
+    key = raw.lower()
+    return _CHARACTER_NAME_ALIASES.get(key, raw)
+
+
 def has_characters(profile_id: str) -> bool:
     with _lock:
         conn = _open_db()
@@ -223,6 +255,10 @@ def create_character(
     voice_speaker: str = "",
     voice_speaker_id: int | None = None,
     voice_styles: dict[str, int] | str | None = None,
+    voice_type: str = "",
+    voice_speed: int | None = None,
+    voice_pitch: int | None = None,
+    voice_volume: int | None = None,
     portrait_png_path: str = "",
     credit_required: bool = True,
     credit_text: str = "",
@@ -249,14 +285,16 @@ def create_character(
                 INSERT INTO character_profiles
                     (character_id, profile_id, character_key, display_name, character_name,
                      role, tone_style, speaking_rules, forbidden_phrases, dialogue_rules,
-                     voice_backend, voice_speaker, voice_speaker_id, voice_styles_json, portrait_png_path,
+                     voice_backend, voice_speaker, voice_speaker_id, voice_styles_json,
+                     voice_type, voice_speed, voice_pitch, voice_volume, portrait_png_path,
                      credit_required, credit_text,
                      enabled, sort_order, created_at, updated_at)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (character_id, profile_id, character_key, display_name, character_name,
                  role, tone_style, speaking_rules, forbidden_phrases, dialogue_rules,
-                 voice_backend, voice_speaker, voice_speaker_id, _voice_styles_json(voice_styles), portrait_png_path,
+                 voice_backend, voice_speaker, voice_speaker_id, _voice_styles_json(voice_styles),
+                 voice_type, voice_speed, voice_pitch, voice_volume, portrait_png_path,
                  1 if credit_required else 0, credit_text,
                  1 if enabled else 0, sort_order, now, now),
             )
@@ -271,7 +309,8 @@ def _update_character_locked(conn: sqlite3.Connection, character_id: str, **fiel
     allowed = {
         "display_name", "character_name", "role", "tone_style", "speaking_rules",
         "forbidden_phrases", "dialogue_rules", "voice_backend", "voice_speaker",
-        "voice_speaker_id", "voice_styles", "voice_styles_json", "portrait_png_path",
+        "voice_speaker_id", "voice_styles", "voice_styles_json",
+        "voice_type", "voice_speed", "voice_pitch", "voice_volume", "portrait_png_path",
         "credit_required", "credit_text",
         "enabled", "sort_order",
     }
@@ -364,7 +403,7 @@ def delete_character(character_id: str) -> None:
 
 def resolve_character_voice_settings(profile_id: str | None, character_name: str, emotion: str = "ノーマル") -> dict:
     """profile のキャラ設定と config.CHARACTERS から音声バックエンド設定を解決する。"""
-    name = str(character_name or "").strip()
+    name = normalize_character_name(character_name)
     emotion = str(emotion or "ノーマル").strip() or "ノーマル"
     if profile_id:
         matches = [c for c in list_characters(profile_id) if c.character_name == name]
@@ -381,16 +420,39 @@ def resolve_character_voice_settings(profile_id: str | None, character_name: str
                     "backend": backend,
                     "speaker": speaker,
                     "speaker_id": int(speaker) if backend == "voicevox" and speaker.isdigit() else None,
+                    "voice_type": character.voice_type,
+                    "speed": character.voice_speed,
+                    "pitch": character.voice_pitch,
+                    "volume": character.voice_volume,
+                    "character_name": character.character_name,
                 }
             if character.voice_speaker_id is not None:
-                return {"backend": backend, "speaker": str(character.voice_speaker_id), "speaker_id": int(character.voice_speaker_id)}
+                return {
+                    "backend": backend,
+                    "speaker": str(character.voice_speaker_id),
+                    "speaker_id": int(character.voice_speaker_id),
+                    "voice_type": character.voice_type,
+                    "speed": character.voice_speed,
+                    "pitch": character.voice_pitch,
+                    "volume": character.voice_volume,
+                    "character_name": character.character_name,
+                }
 
     from config import CHARACTERS
     for config_item in CHARACTERS.values():
         if config_item.get("name") == name:
             styles = config_item.get("styles") or {}
             speaker_id = int(styles.get(emotion, config_item["speaker_id"]))
-            return {"backend": "voicevox", "speaker": str(speaker_id), "speaker_id": speaker_id}
+            return {
+                "backend": "voicevox",
+                "speaker": str(speaker_id),
+                "speaker_id": speaker_id,
+                "voice_type": "",
+                "speed": None,
+                "pitch": None,
+                "volume": None,
+                "character_name": name,
+            }
     _logger.error("未対応の話者です: profile_id=%s character=%s emotion=%s", profile_id, name, emotion)
     raise RuntimeError(f"未対応の話者です: {name}。キャラクター設定で音声バックエンドと話者IDを登録してください。")
 
@@ -425,7 +487,7 @@ def _default_credit_text(character: CharacterProfile) -> str:
 
 def build_character_credit_block(profile_id: str | None, character_names: list[str] | set[str] | tuple[str, ...] | None) -> str:
     """台本で使ったキャラクターに必要なクレジット表記を説明文用に組み立てる。"""
-    names = [str(name or "").strip() for name in (character_names or []) if str(name or "").strip()]
+    names = [normalize_character_name(name) for name in (character_names or []) if str(name or "").strip()]
     if not names:
         names = ["ずんだもん", "四国めたん"]
     lines: list[str] = []
