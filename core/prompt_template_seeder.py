@@ -43,14 +43,18 @@ def _load_genre_config(genre_profile: str) -> dict[str, str]:
     return config
 
 
-def _load_common_script_rules() -> str:
-    """script_prompts.py の共通ルール定数を結合して返す。"""
+def _load_common_script_rules(genre_profile: str | None = None) -> str:
+    """script_prompts.py の共通ルール定数（構成・尺・分量・出力形式）を結合して返す。
+
+    キャラクター設定（役割・口調・禁止台詞・掛け合い）は台本テンプレートから分離し、
+    character_profiles で管理する。台本生成時に compose_character_section() で合成するため、
+    ここには **キャラ設定（めたん毒舌ルール等）を含めない**。
+    """
     try:
         from core.script_prompts import (
             COMMON_SCRIPT_RULES,
             HIGH_TEMPO_RULES,
             SHORTS_QUANTITY_RULES,
-            METAN_TSUNDERE_RULES,
             METADATA_FORMAT,
             SCRIPT_BODY_FORMAT,
         )
@@ -64,8 +68,6 @@ def _load_common_script_rules() -> str:
             HIGH_TEMPO_RULES,
             "## Shorts 分量ルール（最優先）",
             SHORTS_QUANTITY_RULES,
-            "## めたん毒舌ルール（必須）",
-            METAN_TSUNDERE_RULES,
         ])
     except Exception as e:
         _logger.warning("[Seeder] 共通ルール読み込み失敗: %s", e)
@@ -183,6 +185,16 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
             is_default=True,
         )
         created += 1
+
+    # キャラクター設定（役割・口調・禁止台詞・掛け合い）を分離して投入する。
+    try:
+        from core.character_profiles_seed import seed_character_profiles_for_profile
+        char_created = seed_character_profiles_for_profile(profile_id, genre_profile)
+        if char_created:
+            _logger.info("[Seeder] %s にキャラクター設定を %d 件作成しました", profile_id, char_created)
+    except Exception as e:
+        _logger.error("[Seeder] %s のキャラクター設定 seed 失敗: %s", profile_id, e)
+        raise
 
     _logger.info(
         "[Seeder] %s (%s) にテンプレートを %d 件作成しました",

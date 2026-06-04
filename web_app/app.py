@@ -58,6 +58,19 @@ async def _lifespan(app):
         import logging
         logging.getLogger(__name__).warning("[TemplateSeed] 起動時 seed でエラー: %s", _e)
 
+    # キャラクター設定の分離・移行: 全チャンネルにキャラ設定を保証し、
+    # 旧テンプレートに直書きされたキャラ設定の長文を除去する（既存チャンネルの移行）。
+    try:
+        from core.character_profiles_seed import (
+            ensure_character_profiles_all,
+            migrate_strip_character_rules_from_templates,
+        )
+        ensure_character_profiles_all()
+        migrate_strip_character_rules_from_templates()
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).error("[CharacterSeed] 起動時キャラ設定の移行でエラー: %s", _e, exc_info=True)
+
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
     threading.Thread(target=preload_settings_screen_cache, daemon=True, name="settings-screen-preload").start()

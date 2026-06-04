@@ -35,12 +35,7 @@ SCRIPT_BODY_FORMAT = """\
 
 COMMON_SCRIPT_RULES = """\
 ## 台本生成ルール（共通・厳守）
-- キャラクターは「ずんだもん」と「四国めたん」の2人のみ。
-- ずんだもんはボクっ娘で、語尾は「〜なのだ」。情報を楽しく伝えるナビ役。
-- 四国めたんはプライド高めのお嬢様口調で「〜ですわ」「〜よ」を使う。**相槌役ではなく強めの毒舌ツッコミ役**。辛口編集者・毒舌プロデューサーとして動く。
-  (a) ずんだもんの説明が弱い時は制作目線で容赦なく刺す（例:「その入り、弱すぎてスワイプ案件ですわ」）
-  (b) 視聴者が感じる違和感を先に強く代弁する（例:「人間、急にありがたがりすぎですわ」）
-  (c) 昔の人の雑な判断・名前詐欺・抽象的な入口を辛口で指摘する
+- キャラクターは「ずんだもん」と「四国めたん」の2人のみ。**各キャラの役割・口調・禁止表現・掛け合い構造は別セクション「キャラクター設定」で定義する。台本テンプレートにキャラ設定を直書きしない。**
 - 感情は (ノーマル) (あまあま) (ツンツン) (ささやき) から選ぶ。
 - ずんだもん・四国めたんの両方に感情差分を使う。四国めたんを(ノーマル)に偏らせない。
 - 四国めたんのツッコミ・否定・強い反応は原則(ツンツン)、共感・うれしい反応は(あまあま)、秘密・小声の場面は(ささやき)にする。
@@ -402,6 +397,12 @@ METAN_TSUNDERE_RULES_MEETING = """
 """
 
 
+# 食べ物雑学堂チャンネルの genre_profile 群（辛口相方ルールを適用する対象）。
+# 稼働中チャンネルは genre "zunkami"、Git互換seedは "food_trivia"。都市伝説(zundamon_kowai/urban_legend)は対象外。
+FOOD_GENRE_PROFILES = ("zunkami", "food_trivia")
+
+
+
 def _get_default_template(kind: str):
     """active profile のデフォルトテンプレートを返す。存在しなければ例外。"""
     from core.channel_profile import require_active_profile
@@ -416,15 +417,24 @@ def _get_default_template(kind: str):
     return tmpl
 
 
+def _compose_character_section_for_active() -> str:
+    """active profile のキャラクター設定セクションを返す（自動フォールバックなし）。"""
+    from core.channel_profile import require_active_profile
+    from core.character_profiles_seed import compose_character_section
+    profile_id = require_active_profile().profile_id
+    return compose_character_section(profile_id)
+
+
 def build_script_generation_prompt(existing_titles=None) -> str:
     """
     台本生成プロンプトを組み立てる。
-    active profile のデフォルト script テンプレート (DB) を使う。
+    active profile のデフォルト script テンプレート (DB) ＋ キャラクター設定を合成する。
     """
     tmpl = _get_default_template("script")
     base = tmpl.system_rules
     if tmpl.script_rules:
         base += "\n\n" + tmpl.script_rules
+    base += "\n\n" + _compose_character_section_for_active()
     if existing_titles:
         lines = "\n".join(f"・{t}" for t in existing_titles)
         base += (
@@ -520,6 +530,7 @@ def build_gemini_system_prompt(
     base = tmpl.system_rules
     if tmpl.script_rules:
         base += "\n\n" + tmpl.script_rules
+    base += "\n\n" + _compose_character_section_for_active()
 
     existing_block = (
         f"\n\n━━━━━━━━━━━━━━━━━━\n既存タイトル重複禁止（台本生成時も適用）\n━━━━━━━━━━━━━━━━━━\n\n"
