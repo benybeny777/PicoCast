@@ -50,6 +50,7 @@ Write-Host "Nuitka ビルドを開始します（長時間かかります）..."
     --standalone --onefile `
     --assume-yes-for-downloads `
     --include-windows-runtime-dlls=yes `
+    --onefile-tempdir-spec="{CACHE_DIR}\NativeVideoFactory\{VERSION}" `
     --nofollow-import-to=PIL.ImageQt `
     --nofollow-import-to=PIL.ImageTk `
     --output-dir=dist `

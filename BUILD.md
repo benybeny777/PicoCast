@@ -34,7 +34,9 @@
 2. **隠れ import**: `uvicorn` のプロトコル実装、`google.genai`、`cryptography`(cffi/openssl)、`pillow`、`keyring`(任意) などが取り込み漏れする場合がある。起動時 ImportError が出たら `--include-module=...` を追記。
 3. **uvicorn の import 文字列**: `uvicorn.Config("web_app.app:app")` は文字列参照。エントリが `web_app/app.py` なので通常は同梱されるが、起動失敗時は `--include-module=web_app.app` を明示。
 4. **起動時間/サイズ**: onefile は初回展開で起動が遅め・サイズ大。`build_exe.ps1` は `zstandard` を導入して onefile を圧縮する（未導入だと圧縮スキップ警告＋サイズ増）。さらに小さくしたい/起動を速くしたい場合は `--standalone`（フォルダ配布）も検討。`--include-windows-runtime-dlls=yes` で VC++ ランタイムを同梱している（配布先にランタイムが無くても起動可能）。
-5. **コード署名**: 未署名だと SmartScreen 警告。配布時はコード署名証明書を検討（別途）。
+5. **コード署名 / ウイルス誤検知**: 未署名だと SmartScreen 警告に加え、Windows Defender が onefile 展開後の `app.dll` を `Program:Win32/Contebrew.A!ml` 等のML ヒューリスティックで**誤検知・隔離**し `Error 225 (load DLL)` で起動失敗することがある（Nuitka/PyInstaller共通の既知の誤検知）。
+   - 展開先は `--onefile-tempdir-spec="{CACHE_DIR}\NativeVideoFactory\{VERSION}"` で固定済み（ランダム temp ではなく `%LOCALAPPDATA%\NativeVideoFactory\<version>`）。開発機ではこのフォルダを Defender 除外に追加すれば再ビルドのたびに引っかからない: `Add-MpPreference -ExclusionPath "$env:LOCALAPPDATA\NativeVideoFactory"`（管理者）。
+   - 配布時の根本解決は**コード署名（Authenticode）**。署名すると ML 誤検知も SmartScreen も大幅に減る。`--standalone`（フォルダ配布）にすると temp 展開がなくなり誤検知されにくい。必要なら Microsoft へ誤検知申告（https://www.microsoft.com/wdsi/filesubmission ）。
 6. **動作確認**: ビルド後、別フォルダ（Python無し相当）で exe を起動し、(a) /setup 表示、(b) settings.db が exe_dir/data に作られる、(c) job-runner が起動する（生成ジョブが進む）、(d) VOICEVOX/ffmpeg 検出、を確認。
 
 ## 注意
