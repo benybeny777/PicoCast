@@ -276,14 +276,19 @@ def health():
 # ── グローバル例外ハンドラ（秘密値をログに出さない） ──────────────────────────
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
-    # スタックトレースは内部ログのみ。レスポンスには詳細を最小限にする
+    # スタックトレースは内部ログ（app_debug_web.log）に必ず残し、レスポンスには
+    # 追跡用の error_id だけ返す（秘密値や詳細メッセージはレスポンスに含めない）。
     import logging
-    import traceback
+    import uuid
     from core.error_codes import AppError
-    logging.getLogger(__name__).exception("未処理例外: %s %s", request.method, request.url.path)
-    traceback.print_exc()
-    # AppError はエラーコードと対処手順を持つので、ユーザーに対処を提示する
+    _log = logging.getLogger(__name__)
+
+    # AppError はエラーコードと対処手順を持つ想定内エラー。コード付きで記録し対処を提示する
     if isinstance(exc, AppError):
+        _log.warning(
+            "AppError: %s %s code=%s: %s",
+            request.method, request.url.path, exc.code, exc, exc_info=True,
+        )
         return JSONResponse(
             status_code=422,
             content={
@@ -293,9 +298,22 @@ async def generic_exception_handler(request: Request, exc: Exception):
                 "retry_recommended": exc.retry_recommended,
             },
         )
+
+    # 想定外の例外: error_id を発番し、ID・経路・型・メッセージ・全スタックをログへ残す。
+    # ユーザーには error_id を返し、ログ(app_debug_web.log)を error_id で追跡できるようにする。
+    error_id = uuid.uuid4().hex[:8]
+    _log.error(
+        "未処理例外[%s]: %s %s -> %s: %s",
+        error_id, request.method, request.url.path, type(exc).__name__, exc,
+        exc_info=True,
+    )
     return JSONResponse(
         status_code=500,
-        content={"error": "サーバーエラーが発生しました", "detail": type(exc).__name__},
+        content={
+            "error": "サーバーエラーが発生しました",
+            "detail": type(exc).__name__,
+            "error_id": error_id,
+        },
     )
 
 
