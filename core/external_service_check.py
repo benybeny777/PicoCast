@@ -27,6 +27,8 @@ def _ffmpeg_lines() -> list[str]:
         version = version_line.split(" ")[2] if len(version_line.split(" ")) > 2 else version_line
         version = version.split("-")[0]
     except Exception as e:
+        # フォールバック許可: バージョン取得失敗は状態表示用。詳細は debug ログへ残す。
+        _logger.debug("ffmpeg バージョン取得に失敗", exc_info=True)
         return [f"[外部] ffmpeg - 取得失敗: {e}"]
 
     try:
@@ -36,6 +38,8 @@ def _ffmpeg_lines() -> list[str]:
         )
         enc_list = enc_proc.stdout
     except Exception:
+        # フォールバック許可: エンコーダ一覧取得失敗時は空として扱い HW対応を「不明」表示にする。
+        _logger.debug("ffmpeg エンコーダ一覧の取得に失敗", exc_info=True)
         enc_list = ""
 
     hw_encoders = [e for e in ("h264_nvenc", "hevc_nvenc", "h264_amf", "h264_qsv") if e in enc_list]
@@ -63,6 +67,8 @@ def _voicevox_lines() -> list[str]:
         device_str = " / ".join(parts) or "不明"
         return [f"[外部] VOICEVOX {version} - 対応デバイス: {device_str}"]
     except Exception:
+        # フォールバック許可: 接続不可は「未起動」状態表示が正常動作。詳細は debug ログへ。
+        _logger.debug("VOICEVOX 状態確認に失敗 (%s)", base, exc_info=True)
         return [f"[外部] VOICEVOX - 未起動または接続不可 ({base})"]
 
 
@@ -81,10 +87,14 @@ def _sd_webui_lines() -> list[str]:
         try:
             model = requests.get(f"{base}/sdapi/v1/options", timeout=3).json().get("sd_model_checkpoint", "")
         except Exception:
+            # フォールバック許可: モデル名取得失敗時は省略表示にする。詳細は debug ログへ。
+            _logger.debug("Stable Diffusion WebUI モデル名の取得に失敗 (%s)", base, exc_info=True)
             model = ""
         model_str = f" / モデル: {model}" if model else ""
         return [f"[外部] Stable Diffusion WebUI - デバイス: {device_str}{model_str}"]
     except Exception:
+        # フォールバック許可: 接続不可は「未起動」状態表示が正常動作。詳細は debug ログへ。
+        _logger.debug("Stable Diffusion WebUI 状態確認に失敗 (%s)", base, exc_info=True)
         return [f"[外部] Stable Diffusion WebUI - 未起動または接続不可 ({base})"]
 
 
@@ -111,6 +121,8 @@ def _ollama_lines() -> list[str]:
         else:
             return [f"[外部] Ollama {version} - 起動中（モデル未ロード）"]
     except Exception:
+        # フォールバック許可: 接続不可は「未起動」状態表示が正常動作。詳細は debug ログへ。
+        _logger.debug("Ollama 状態確認に失敗 (%s)", base, exc_info=True)
         return [f"[外部] Ollama - 未起動または接続不可 ({base})"]
 
 

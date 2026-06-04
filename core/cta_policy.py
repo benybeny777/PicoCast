@@ -1,8 +1,11 @@
+import logging
 import os
 import re
 import subprocess
 
 from config import config as cfg
+
+_logger = logging.getLogger(__name__)
 
 
 SHORTS_DIRECT_NAVIGATION_NG = [
@@ -101,6 +104,8 @@ def _script_meta_from_text(script_text: str) -> dict[str, str]:
             if item["type"] in ScriptParser.META_TYPES
         }
     except Exception:
+        # フォールバック許可: CTA方針用のメタ抽出は補助機能。パース失敗で生成全体を止めない。
+        _logger.warning("CTA方針用の台本メタ抽出に失敗。空メタで続行します", exc_info=True)
         return {}
 
 
@@ -339,6 +344,8 @@ def probe_duration_sec(media_path: str) -> int | None:
         )
         return int(float(proc.stdout.strip()))
     except Exception:
+        # フォールバック許可: 尺は補助情報。ffprobe 失敗時は「不明(None)」として続行する。
+        _logger.warning("ffprobe による尺取得に失敗: %s", media_path, exc_info=True)
         return None
 
 
