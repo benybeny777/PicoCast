@@ -118,8 +118,10 @@ def test_is_shutdown_requested_false_initially():
 def test_is_shutdown_requested_true_after_shutdown(monkeypatch):
     _reload_module()
     import core.app_shutdown as m
-    monkeypatch.setattr(m, "_stop_server", lambda: None)
+    stopped = threading.Event()
+    monkeypatch.setattr(m, "_stop_server", lambda: stopped.set())
     monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
     m.request_shutdown(force=False)
     # フラグはリクエスト直後に立つ
     assert m.is_shutdown_requested() is True
+    assert stopped.wait(1.0)

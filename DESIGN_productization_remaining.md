@@ -9,7 +9,7 @@
 1. `git log --oneline -15` で直近コミットを確認（最新の機能は下記「タスク一覧」参照）。
 2. テスト基準: `./.venv/Scripts/python.exe -m pytest -q` が `385 passed, 1 skipped` 付近で緑。
 3. 稼働中アプリへ反映するには Web UI の再起動が必要（起動時 lifespan で seed/移行が走る）。
-4. 未完了の主タスク = 「タスク8の残: キャラクター設定UI」。下に実装メモあり。
+4. 未完了の主タスクはなし。任意の継続候補は「タスク6の生 `RuntimeError` の AppError 化」または「タスク8のテンプレート別 character_set 厳密化」。
 5. ローカル `data/settings.db` は移行適用済み（character_profiles seed＋旧テンプレ strip 実行済み）。別環境では起動時に自動移行。
 
 ## 方針・前提
@@ -77,10 +77,8 @@
 - `core/character_profile_store.py`（table）/`core/character_profiles_seed.py`（seed＋compose＋移行）。台本テンプレからキャラ設定分離。
 - 食べ物雑学堂(zunkami)=辛口相方めたん、都市伝説(zundamon_kowai)=お嬢様毒舌めたん。meetingは対象外。自動フォールバック禁止。
 - 起動時に ensure＋strip 移行。ローカルDBは適用済み（seed＋strip 実行済み）。tests/test_character_profiles.py。
-- 残（任意・実装メモ）: Web UIでキャラ設定を管理／選択。
-  - API案: `web_app/routes/api_character_profiles.py` に GET `/api/character-profiles`（active profileの一覧）、PATCH `/api/character-profiles/{id}`（enabled/各フィールド更新）、POST 追加、DELETE。`core/character_profile_store` のCRUDをそのまま薄く公開。app.py に router 登録。
-  - UI案: `settings.html` に「キャラクター設定」タブを追加。active profileのキャラを一覧表示し、enabledトグル＋各フィールド（role/tone_style/speaking_rules/forbidden_phrases/dialogue_rules）を編集保存。設定タブ切替の `switchTab('characters')` で読み込み。
-  - 「台本テンプレートごとに選択」を厳密にやる場合: `prompt_templates` に `character_set` 参照列を足し、compose時にそのセットのキャラのみ合成する拡張が必要（現状は channel 単位で enabled を合成）。まずは channel 単位の有効/無効編集で足りる。
+- UI実装メモ（完了済み）: `web_app/routes/api_character_profiles.py` の GET/PATCH/POST/DELETE と、`settings.html` の「キャラクター設定」タブで管理・切替可能。
+- 「台本テンプレートごとに選択」を厳密にやる場合: `prompt_templates` に `character_set` 参照列を足し、compose時にそのセットのキャラのみ合成する拡張が必要（現状は channel 単位で enabled を合成）。まずは channel 単位の有効/無効編集で足りる。
 
 ## 完了済み（このセッション、push 済み 〜3b98ad8）
 - 外部依存の導線 / エラー対処文言 / 購入動線UX / 起動自己回復 / クロスPC復元（パスフレーズ）
