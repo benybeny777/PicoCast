@@ -63,6 +63,12 @@
 - `core/runtime_env.py`（is_frozen / app_base_dir）、secret_store/settings_store を exe フォルダ基準に anchor、app.py の runner を frozen 対応（`--run-runner`）、version 焼き込み、`build_exe.ps1`＋`BUILD.md`。
 - 実ビルドは未実施（ユーザー選択: 準備のみ）。残課題は BUILD.md「既知の残課題」（出力先パス・隠れimport・コード署名・動作確認）。実行は `.\build_exe.ps1`。
 
+### 8. キャラクター設定の分離（character_profiles）  状態: ✅ 完了（UI選択は任意・未実装）
+- `core/character_profile_store.py`（table）/`core/character_profiles_seed.py`（seed＋compose＋移行）。台本テンプレからキャラ設定分離。
+- 食べ物雑学堂(zunkami)=辛口相方めたん、都市伝説(zundamon_kowai)=お嬢様毒舌めたん。meetingは対象外。自動フォールバック禁止。
+- 起動時に ensure＋strip 移行。ローカルDBは適用済み（seed＋strip 実行済み）。tests/test_character_profiles.py。
+- 残（任意）: Web UIで台本テンプレートごとに使用キャラ設定を選択（通常/辛口/ずんだハウス風/ネタ会議）。現状は channel 既定で1セット enabled。`character_profile_store` のCRUDは用意済みなので、設定画面にタブを足せば対応可能。
+
 ## 完了済み（このセッション、push 済み 〜3b98ad8）
 - 外部依存の導線 / エラー対処文言 / 購入動線UX / 起動自己回復 / クロスPC復元（パスフレーズ）
 - Stable Diffusion WebUI 時 Ollama 必須化 / 表記統一 / 必須構成早見表（/setup・README）
