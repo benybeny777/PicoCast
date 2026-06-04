@@ -11,7 +11,9 @@
 - VOICEVOX 未起動・タイムアウト時、生の `ConnectionError`（urllib3 のスタック）ではなく `E-VOICEVOX-DOWN`（「VOICEVOX を起動してください」等の対処手順つき）を表示するようにした。`core/voicevox.py` の POST を `_post()` で包み、音声クエリ・合成の失敗表示（`workers/main.py`）で `AppError.user_message()` を使う。
 - ffmpeg バイナリ未検出時、`[WinError 2]` ではなく `E-FFMPEG-MISSING`（PATH 追加 / FFMPEG_BIN 指定 / `/setup` 自動検出の案内つき）を表示するようにした（`core/native_renderer.py:_run_ffmpeg` / `_run_ffmpeg_capture`）。
 - 診断パッケージのエラーカタログに `remediation`（対処手順）も含めるようにした。
-- いずれも失敗時のメッセージ改善のみで、成功時の挙動・APIは不変。
+- YouTube 認証エラー時の誤誘導ヒントを修正した。認証は DB（`encrypted_secrets`）へ移行済みで `token.json` は使わないため、「token.json を削除して再認証」（存在しないファイル）の案内を、設定画面「APIキー」タブでの再認証案内に置き換えた（コメント投稿 / 公開予定変更 / 再生リスト追加 / スケジュール画面）。
+- ホーム画面で必須サービス（VOICEVOX / ffmpeg）未接続時に `/setup`（ダウンロード先・自動検出）への誘導ヒントを表示するようにした。
+- いずれも失敗時のメッセージ改善・誘導追加のみで、成功時の挙動・APIは不変。
 
 ### 製品化に向けた4機能を追加（外部依存導線・エラー対処・購入導線・起動自己回復・クロスPC復元）
 
