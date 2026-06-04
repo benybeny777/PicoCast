@@ -453,6 +453,7 @@ MAX_BACKGROUNDS_LONG_BUDGET = int(os.environ.get("MAX_BACKGROUNDS_LONG_BUDGET", 
 WEB_APP_NAME = os.environ.get("WEB_APP_NAME", "Native Video Factory")  # Web UI の表示アプリ名
 WEB_UI_HOST = os.environ.get("WEB_UI_HOST", "127.0.0.1")  # バインドホスト（外部公開禁止）
 WEB_UI_PORT = int(os.environ.get("WEB_UI_PORT", "58080"))  # ポート番号（他アプリと競合しにくい高番号）
+WEB_AUTO_OPEN_BROWSER = os.environ.get("WEB_AUTO_OPEN_BROWSER", "1").strip().lower() in ("1", "true", "yes", "on")  # 起動時にブラウザを自動で開くか（既定ON。CLIの--open-browser/--no-open-browserで上書き可）
 WEB_DEFAULT_IMAGE_STYLE = _clean_env_choice(os.environ.get("WEB_DEFAULT_IMAGE_STYLE", "アニメ"))  # Web UI の既定画像スタイル
 WEB_IMAGE_STYLE_CHOICES = _split_env_choices(os.environ.get("WEB_IMAGE_STYLE_CHOICES", "通常,アニメ,水彩"))  # Web UI 画像スタイル選択肢
 WEB_DEFAULT_REUSE_BACKGROUNDS = os.environ.get("WEB_DEFAULT_REUSE_BACKGROUNDS", "1").strip().lower() in ("1", "true", "yes", "on")  # Web UI 生成時の背景再利用既定値

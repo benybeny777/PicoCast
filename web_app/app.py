@@ -76,7 +76,11 @@ async def _lifespan(app):
     start_auto_watcher()
     threading.Thread(target=refresh_settings_status, daemon=True).start()
     threading.Thread(target=preload_settings_screen_cache, daemon=True, name="settings-screen-preload").start()
-    threading.Thread(target=log_external_services, daemon=True).start()
+    # 初回起動（セットアップ未完了）では VOICEVOX 未起動などの外部サービス警告が
+    # 混乱を招くため出さない。セットアップ完了後のみ起動時情報をログ/コンソールへ出す。
+    from core.setup_state import is_setup_completed
+    if is_setup_completed():
+        threading.Thread(target=log_external_services, daemon=True).start()
     yield
     # ── shutdown フェーズ（Ctrl+C / SIGTERM / /api/shutdown すべてここを通る） ──
     run_lifespan_shutdown()
@@ -356,9 +360,14 @@ def main():
                         help=f"使用するポート番号。省略時は config の WEB_UI_PORT ({WEB_UI_PORT}) を使用")
     parser.add_argument("--auto-port", action="store_true",
                         help="指定ポートが使用中の場合、自動で空きポートを探して起動する")
-    parser.add_argument("--open-browser", action="store_true", help="起動後にブラウザを開く")
+    parser.add_argument("--open-browser", action=argparse.BooleanOptionalAction, default=None,
+                        help="起動後にブラウザを開く（既定は設定 WEB_AUTO_OPEN_BROWSER に従う。--no-open-browser で無効）")
     parser.add_argument("--reload", action="store_true", help="ファイル変更時に自動リロード（開発用）")
     args = parser.parse_args()
+
+    # ブラウザ自動起動: CLI 明示が無ければ設定 WEB_AUTO_OPEN_BROWSER（既定ON）に従う
+    if args.open_browser is None:
+        args.open_browser = bool(getattr(config, "WEB_AUTO_OPEN_BROWSER", True))
 
     host = args.host
     port = args.port if args.port is not None else WEB_UI_PORT

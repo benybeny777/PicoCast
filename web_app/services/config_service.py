@@ -82,6 +82,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "VOICE_READING_MODE",         "type": "select", "label": "よみがな補正モード", "default": str(cfg.VOICE_READING_MODE), "choices": [("off", "無効 (off)"), ("dictionary", "自前辞書のみ (dictionary)"), ("safe_auto", "安全自動補正 (safe_auto)")], "group": "よみがな"},
     # ── Web UI ──
     {"key": "WEB_APP_NAME",                       "type": "str",   "label": "Web UI 表示名",             "default": str(cfg.WEB_APP_NAME),                                              "group": "Web UI", "admin": True},
+    {"key": "WEB_AUTO_OPEN_BROWSER",              "type": "bool",  "label": "起動時にブラウザを自動で開く", "default": "1" if cfg.WEB_AUTO_OPEN_BROWSER else "0",                         "group": "Web UI"},
     {"key": "WEB_DEFAULT_IMAGE_STYLE",            "type": "str",   "label": "Web既定画像スタイル",        "default": str(cfg.WEB_DEFAULT_IMAGE_STYLE),                                   "group": "Web UI"},
     {"key": "WEB_IMAGE_STYLE_CHOICES",            "type": "str",   "label": "Web画像スタイル選択肢",      "default": ",".join(cfg.WEB_IMAGE_STYLE_CHOICES),                              "group": "Web UI"},
     {"key": "WEB_DEFAULT_REUSE_BACKGROUNDS",      "type": "bool",  "label": "Web既定: 背景再利用",        "default": "1" if cfg.WEB_DEFAULT_REUSE_BACKGROUNDS          else "0",         "group": "Web UI"},
