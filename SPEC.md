@@ -531,7 +531,9 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 
 - active channel profile が存在しない初回起動時のみ、通常画面への GET を `/setup` へ誘導する（`web_app/app.py:setup_redirect_middleware`）。
 - active channel が登録済みであれば、`PRODUCT_SETUP_COMPLETED` が未完了でも通常画面・設定画面には入れる。未完了状態では生成・アップロード API を分かりやすい 403 でブロックする（`core/setup_state.py` の gate と `core/license_manager.py`）。完了状態は `data/settings.db:settings.PRODUCT_SETUP_COMPLETED` に保存する。
-- `/setup` ではチャンネル名・ハンドル・製品版 seed profile、APIキー登録導線、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録導線、サンプル台本のテスト生成、完了保存を扱う。
+- `/setup` ではチャンネル名・ハンドル・製品版 seed profile、APIキー登録導線（各キーの必要条件を明記）、ソフトウェアのインストール案内、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録導線、サンプル台本のテスト生成、完了保存を扱う。
+- インストール案内は `core/service_detector.py:get_installation_guides()` が返すカタログ（`label` / `required` / `purpose` / `download_url` / `steps` / `note`）を `/setup` のカードで常時表示する。VOICEVOX・ffmpeg を必須、Ollama・Stable Diffusion WebUI を任意として表示する。外部ソフトは同梱せず各自で入手させる方針。
+- APIキーの必要条件: Google API キー＝AI台本生成（Gemini）と Gemini 画像生成に必要（手書き台本＋Stable Diffusion WebUI 画像なら不要）、YouTube 認証＝アップロード時のみ必要、OpenAI / HF Token＝任意。
 - サンプル生成だけは `setup_test=true` により未完了状態でも登録できる。
 - 「プロセスを走査して自動設定」で外部依存サービスを検出できる（`core/service_detector.py`）。起動中プロセスと既定ポート（VOICEVOX 50021 / Ollama 11434 / Stable Diffusion WebUI 7860）、PATH 上の ffmpeg を走査し、`VOICEVOX_PATH` / `VOICEVOX_URL` / `OLLAMA_BASE_URL` / `SD_WEBUI_BASE_URL` / `FFMPEG_BIN` を `POST /api/settings/detect-services` で検出、`POST /api/settings/detect-services/apply` で EDITABLE_CONFIG 経由保存・即時反映する。秘密情報は扱わない。
 - 未検出のサービスには `core/service_detector.py:_INSTALL_GUIDE` のダウンロードURL（`config.py` の `VOICEVOX_DOWNLOAD_URL` / `FFMPEG_DOWNLOAD_URL` / `OLLAMA_DOWNLOAD_URL` / `SD_WEBUI_DOWNLOAD_URL`）とインストール手順、必須/任意（VOICEVOX・ffmpeg が必須、Ollama・Stable Diffusion WebUI が任意）を `detect_services()` の各 service に付与し、`/setup` でダウンロードリンクとして表示する。外部依存は同梱せず個別に入手させる方針。

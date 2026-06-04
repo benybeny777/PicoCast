@@ -6,6 +6,11 @@
 
 ## 2026-06-04
 
+### /setup にソフトウェアのインストール案内を追加・APIキーの必要条件を明記
+
+- `/setup` に各外部ソフト（VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI）のインストール案内カードを常時表示するようにした（用途・必須/任意・ダウンロードリンク・手順・補足）。`core/service_detector.py:get_installation_guides()` を追加。
+- APIキーの必要条件を `/setup` に明記した。Google API キーは AI台本生成（Gemini）と Gemini 画像生成に使うが、**台本を手書きし画像を Stable Diffusion WebUI で作るなら不要**。YouTube 認証は**アップロード時のみ必要**で生成だけなら不要。OpenAI / HF Token は任意。必須は VOICEVOX・ffmpeg のみ。
+
 ### 生成パイプラインのエラー文言を対処手順つきに改善（VOICEVOX未起動・ffmpeg未検出）
 
 - VOICEVOX 未起動・タイムアウト時、生の `ConnectionError`（urllib3 のスタック）ではなく `E-VOICEVOX-DOWN`（「VOICEVOX を起動してください」等の対処手順つき）を表示するようにした。`core/voicevox.py` の POST を `_post()` で包み、音声クエリ・合成の失敗表示（`workers/main.py`）で `AppError.user_message()` を使う。

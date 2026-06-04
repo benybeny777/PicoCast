@@ -26,11 +26,36 @@
 <div class="card">
   <h2>2. APIキー</h2>
   <p class="hint">APIキーは設定画面で暗号化保存します。値はこの画面やログには表示しません。</p>
-  <a class="btn btn-secondary" href="/settings#apikey">APIキー設定を開く</a>
+  <table class="status-table">
+    <tr><th>Google API キー</th><td>AI台本生成（Gemini）と Gemini 画像生成に使用。<strong>台本を手書きし、画像を Stable Diffusion WebUI で作るなら不要</strong>。</td></tr>
+    <tr><th>OpenAI API キー</th><td>台本の最終レビューに使用（任意）。</td></tr>
+    <tr><th>YouTube 認証</th><td><strong>YouTube へアップロードする場合のみ必要</strong>。生成だけなら不要。</td></tr>
+    <tr><th>HF Token</th><td>Stable Diffusion WebUI のモデルDL用（任意）。</td></tr>
+  </table>
+  <a class="btn btn-secondary mt" href="/settings#apikey">APIキー設定を開く</a>
 </div>
 
 <div class="card">
-  <h2>3. 外部サービス診断</h2>
+  <h2>3. ソフトウェアのインストール案内</h2>
+  <p class="hint">本ツールは外部ソフトを同梱しません。下記から各自で入手・インストールしてください。<strong>VOICEVOX と ffmpeg は必須</strong>、Ollama と Stable Diffusion WebUI は任意です。</p>
+  {% for g in install_guides %}
+  <div class="card" style="margin:10px 0; border-left:4px solid {% if g.required %}var(--accent2, #e07a5f){% else %}var(--border, #ccc){% endif %}">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+      <h3 style="margin:0">{{ g.label }}</h3>
+      {% if g.required %}<span class="badge badge-ng">必須</span>{% else %}<span class="badge badge-warn">任意</span>{% endif %}
+      <a class="btn btn-primary btn-xs" href="{{ g.download_url }}" target="_blank" rel="noopener">ダウンロード</a>
+    </div>
+    <p class="hint" style="margin:6px 0">{{ g.purpose }}</p>
+    <ol style="margin:6px 0 6px 18px; padding:0">
+      {% for step in g.steps %}<li>{{ step }}</li>{% endfor %}
+    </ol>
+    {% if g.note %}<p class="hint" style="margin:4px 0">💡 {{ g.note }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2>4. 外部サービス診断</h2>
   <p class="hint">VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI を起動した状態で「プロセスを走査」を押すと、起動中プロセスや既定ポートからパス・URLを検出して自動設定できます。</p>
   <div class="action-row">
     <button class="btn btn-secondary" onclick="setupRefreshStatus()">再診断</button>
@@ -41,13 +66,13 @@
 </div>
 
 <div class="card">
-  <h2>4. BGM</h2>
+  <h2>5. BGM</h2>
   <p class="hint">BGMはチャンネル別に登録されます。</p>
   <a class="btn btn-secondary" href="/settings#bgm">BGM設定を開く</a>
 </div>
 
 <div class="card">
-  <h2>5. サンプル台本テスト</h2>
+  <h2>6. サンプル台本テスト</h2>
   <textarea id="setup-sample-script" class="form-input" rows="10">動画形式: Shorts
 タイトル: セットアップテスト動画
 サムネ文字: テスト

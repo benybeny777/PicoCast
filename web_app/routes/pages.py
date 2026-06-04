@@ -204,9 +204,11 @@ def page_settings(request: Request):
 def page_setup(request: Request):
     from core.setup_state import setup_gate_status
     from web_app.services.status_service import get_cached_settings_status
+    from core.service_detector import get_installation_guides
     return _render(request, "setup.html", {
         "setup": setup_gate_status(),
         "status": get_cached_settings_status(),
+        "install_guides": get_installation_guides(),
     })
 
 

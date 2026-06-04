@@ -13,30 +13,90 @@ import psutil
 from config import config
 
 # 外部依存ソフトの入手先・インストール手順カタログ。
-# `/setup` で未検出のサービスにダウンロードリンクと手順を提示するために使う。
+# `/setup` のインストール案内と、未検出サービスのダウンロードリンク提示に使う。
 # URL は config.py（環境で差し替え可能）から引く。手順テキストは表示用の固定文。
+# install_hint=一行サマリ（検出表の列用）、steps=詳細手順（インストール案内カード用）。
 _INSTALL_GUIDE: dict[str, dict] = {
     "voicevox": {
+        "label": "VOICEVOX",
         "required": True,
+        "purpose": "ずんだもん・四国めたんなどの音声合成（必須）",
         "download_url": config.VOICEVOX_DOWNLOAD_URL,
         "install_hint": "公式サイトからインストーラを入手して起動し、エンジンを立ち上げた状態で再診断してください（既定ポート 50021）。",
+        "steps": [
+            "公式サイトからインストーラー（GPU版 / CPU版）をダウンロードする。",
+            "インストーラーを実行してインストールする。",
+            "VOICEVOX を起動し、エンジンが立ち上がるまで待つ（既定ポート 50021）。",
+            "起動した状態で下の「プロセスを走査して自動設定」を押すと自動検出されます。",
+        ],
+        "note": "起動していないと音声生成でエラー（E-VOICEVOX-DOWN）になります。動画生成中は起動したままにしてください。",
     },
     "ffmpeg": {
+        "label": "ffmpeg",
         "required": True,
+        "purpose": "音声・背景・字幕を合成して MP4 を書き出す（必須）",
         "download_url": config.FFMPEG_DOWNLOAD_URL,
         "install_hint": "ビルド版を解凍し、bin フォルダを PATH に通すか、解凍した ffmpeg.exe のパスを設定画面の FFMPEG_BIN に指定してください。",
+        "steps": [
+            "配布サイトから Windows 用ビルド（full 版）をダウンロードする。",
+            "任意のフォルダに解凍する（例: C:\\ffmpeg）。",
+            "解凍した bin フォルダを環境変数 PATH に追加する。または設定画面の FFMPEG_BIN に bin\\ffmpeg.exe のフルパスを指定する。",
+            "下の「プロセスを走査して自動設定」または「再診断」で検出を確認する。",
+        ],
+        "note": "GPU（NVENC）が使えない環境でも自動で CPU エンコード（libx264）に切り替わります。",
     },
     "ollama": {
+        "label": "Ollama",
         "required": False,
+        "purpose": "台本の冒頭品質レビュー・リライト（任意・ローカルLLM）",
         "download_url": config.OLLAMA_DOWNLOAD_URL,
         "install_hint": "台本の品質レビューに使います（任意）。インストール後 `ollama pull qwen3:8b` でモデルを取得し、起動した状態で再診断してください。",
+        "steps": [
+            "公式サイトからインストーラーをダウンロードしてインストールする。",
+            "コマンドプロンプトで `ollama pull qwen3:8b` を実行し、レビュー用モデルを取得する。",
+            "Ollama を起動した状態にする（既定ポート 11434）。",
+            "下の「再診断」で接続を確認する。",
+        ],
+        "note": "未導入でも動画生成は可能です。品質レビュー機能を使う場合のみ必要です。",
     },
     "sd_webui": {
+        "label": "Stable Diffusion WebUI",
         "required": False,
+        "purpose": "背景・サムネイル画像のローカル生成（任意・Gemini の代替）",
         "download_url": config.SD_WEBUI_DOWNLOAD_URL,
         "install_hint": "Gemini 画像生成の代替として使えます（任意）。`--api` 付きで起動した状態で再診断してください（既定ポート 7860）。",
+        "steps": [
+            "配布元から Stable Diffusion WebUI を入手してインストールする。",
+            "API を有効にするため `--api` を付けて起動する（既定ポート 7860）。",
+            "設定画面で画像生成バックエンドを Stable Diffusion WebUI に切り替える。",
+            "下の「再診断」で接続を確認する。",
+        ],
+        "note": "未導入でも Gemini（Google API キー）で画像生成できます。ローカル生成したい場合のみ必要です。",
     },
 }
+
+# インストール案内の表示順（必須を先に）
+_GUIDE_ORDER = ["voicevox", "ffmpeg", "ollama", "sd_webui"]
+
+
+def get_installation_guides() -> list[dict]:
+    """各外部依存ソフトのインストール案内（入手先・手順・必須/任意）を表示順で返す。
+
+    `/setup` のインストール案内カードで使う。秘密情報は含まない。
+    """
+    guides: list[dict] = []
+    for key in _GUIDE_ORDER:
+        g = _INSTALL_GUIDE[key]
+        guides.append({
+            "key": key,
+            "label": g["label"],
+            "required": g["required"],
+            "purpose": g["purpose"],
+            "download_url": g["download_url"],
+            "steps": list(g["steps"]),
+            "note": g.get("note", ""),
+        })
+    return guides
 
 
 def _listening_ports() -> dict[int, int]:
