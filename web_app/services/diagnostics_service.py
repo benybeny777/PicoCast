@@ -101,6 +101,7 @@ def _error_catalog() -> list[dict[str, Any]]:
             "message": item.message,
             "category": item.category,
             "retry_recommended": item.retry_recommended,
+            "remediation": item.remediation,
         }
         for item in ERROR_CATALOG.values()
     ]
