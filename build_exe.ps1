@@ -29,9 +29,18 @@ Write-Host "Nuitka を確認/導入します..."
 if ($LASTEXITCODE -ne 0) { throw "Nuitka のインストールに失敗しました。" }
 
 # 2. ビルドバージョンを焼き込む（exe では git が使えないため）
+#    python -c に複雑な文字列を渡すと PowerShell の引用符解釈で壊れるため、
+#    バージョン生成は PowerShell 側で行い、ファイル書き出しもここで行う。
 Write-Host "ビルドバージョンを生成します..."
-& $py -c "from core.gui_support import APP_VERSION_BASE; import subprocess; c=subprocess.check_output(['git','rev-list','--count','HEAD'],text=True).strip(); h=subprocess.check_output(['git','rev-parse','--short','HEAD'],text=True).strip(); open('core/_build_version.py','w',encoding='utf-8').write(f'BUILD_VERSION = \"{APP_VERSION_BASE}.{c}-{h}\"\n')"
-if ($LASTEXITCODE -ne 0) { throw "ビルドバージョンの生成に失敗しました。" }
+$verBase = (& $py -c "from core.gui_support import APP_VERSION_BASE; print(APP_VERSION_BASE)").Trim()
+if ($LASTEXITCODE -ne 0 -or -not $verBase) { throw "APP_VERSION_BASE の取得に失敗しました。" }
+$commitCount = (& git rev-list --count HEAD).Trim()
+$commitHash  = (& git rev-parse --short HEAD).Trim()
+$buildVersion = "$verBase.$commitCount-$commitHash"
+Set-Content -Path "core/_build_version.py" -Value "BUILD_VERSION = `"$buildVersion`"" -Encoding ascii
+Write-Host "BUILD_VERSION = $buildVersion"
+# Windows のバージョンリソース用に数値のみへ整形（例: 2026.05.19 -> 2026.5.19）
+$numVer = (($verBase -split '\.') | ForEach-Object { [int]$_ }) -join '.'
 
 # 3. Nuitka ビルド（onefile standalone）
 #    --include-data-dir で同梱リソースを含める。VOICEVOX/ffmpeg は同梱しない。
@@ -43,6 +52,8 @@ Write-Host "Nuitka ビルドを開始します（長時間かかります）..."
     --output-filename=NativeVideoFactory.exe `
     --company-name="Native Video Factory" `
     --product-name="Native Video Factory" `
+    --product-version=$numVer `
+    --file-version=$numVer `
     --include-data-dir=web_app/templates=web_app/templates `
     --include-data-dir=web_app/static=web_app/static `
     --include-data-dir=legal=legal `
