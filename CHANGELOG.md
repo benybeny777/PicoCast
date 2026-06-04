@@ -6,6 +6,13 @@
 
 ## 2026-06-04
 
+### 生成パイプラインのエラー文言を対処手順つきに改善（VOICEVOX未起動・ffmpeg未検出）
+
+- VOICEVOX 未起動・タイムアウト時、生の `ConnectionError`（urllib3 のスタック）ではなく `E-VOICEVOX-DOWN`（「VOICEVOX を起動してください」等の対処手順つき）を表示するようにした。`core/voicevox.py` の POST を `_post()` で包み、音声クエリ・合成の失敗表示（`workers/main.py`）で `AppError.user_message()` を使う。
+- ffmpeg バイナリ未検出時、`[WinError 2]` ではなく `E-FFMPEG-MISSING`（PATH 追加 / FFMPEG_BIN 指定 / `/setup` 自動検出の案内つき）を表示するようにした（`core/native_renderer.py:_run_ffmpeg` / `_run_ffmpeg_capture`）。
+- 診断パッケージのエラーカタログに `remediation`（対処手順）も含めるようにした。
+- いずれも失敗時のメッセージ改善のみで、成功時の挙動・APIは不変。
+
 ### 製品化に向けた4機能を追加（外部依存導線・エラー対処・購入導線・起動自己回復・クロスPC復元）
 
 - **外部依存のインストール導線**: `/setup` の外部サービス診断で、未検出の VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI にダウンロードリンクとインストール手順、必須/任意の区別を表示するようにした。DL URL は `config.py`（`VOICEVOX_DOWNLOAD_URL` 他）で差し替え可能。同梱せず個別入手する方針。

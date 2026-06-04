@@ -150,6 +150,17 @@ def _clear_native_work_dir(work_dir: str) -> None:
                 pass
 
 
+def _ffmpeg_missing_error(exc: FileNotFoundError) -> RuntimeError:
+    """ffmpeg バイナリ未検出を、対処手順を含む明確なエラーに変換する。
+
+    表示経路に依存せず str() に対処が出るよう with_fix 整形済み文言を使う。
+    """
+    from core.error_codes import format_error
+    err = RuntimeError(format_error("E-FFMPEG-MISSING", detail=str(FFMPEG_BIN), with_fix=True))
+    err.__cause__ = exc
+    return err
+
+
 def _run_ffmpeg(args: list[str]) -> None:
     startupinfo = None
     if os.name == "nt":
@@ -168,6 +179,8 @@ def _run_ffmpeg(args: list[str]) -> None:
             startupinfo=startupinfo,
             timeout=NATIVE_FFMPEG_TIMEOUT_SEC,
         )
+    except FileNotFoundError as exc:
+        raise _ffmpeg_missing_error(exc)
     except subprocess.TimeoutExpired as exc:
         tail = _subprocess_tail(exc.stderr or exc.stdout)
         raise TimeoutError(f"ffmpeg timed out after {NATIVE_FFMPEG_TIMEOUT_SEC:g}秒\n{tail}") from exc
@@ -182,17 +195,20 @@ def _run_ffmpeg_capture(args: list[str]) -> subprocess.CompletedProcess:
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
     run_args = _ffmpeg_noninteractive_args(args)
-    return subprocess.run(
-        run_args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        stdin=subprocess.DEVNULL,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        startupinfo=startupinfo,
-        timeout=NATIVE_FFMPEG_TIMEOUT_SEC,
-    )
+    try:
+        return subprocess.run(
+            run_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            startupinfo=startupinfo,
+            timeout=NATIVE_FFMPEG_TIMEOUT_SEC,
+        )
+    except FileNotFoundError as exc:
+        raise _ffmpeg_missing_error(exc)
 
 
 def _ffmpeg_noninteractive_args(args: list[str]) -> list[str]:

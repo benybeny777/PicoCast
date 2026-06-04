@@ -1659,7 +1659,8 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     idx, q, kana = _fut.result()
                     _queries[idx] = (q, kana)
                 except Exception as _e:
-                    _query_error = str(_e)
+                    from core.error_codes import AppError
+                    _query_error = _e.user_message() if isinstance(_e, AppError) else str(_e)
                     _query_error_chunk = _voice_chunks[_futs[_fut]]
                     break
 
@@ -1739,10 +1740,12 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     if _synth_first_err is not None:
         _ec = _synth_first_err_chunk
         _pv = _ec["chunk_text"][:20] + ("…" if len(_ec["chunk_text"]) > 20 else "")
+        from core.error_codes import AppError
+        _synth_reason = _synth_first_err.user_message() if isinstance(_synth_first_err, AppError) else str(_synth_first_err)
         msg = (
             f"❌ 音声合成失敗のため処理を中止しました\n"
             f"対象: [{_ec['voice_num']}/{total_voices}] {_ec['char_key']}({_ec['emotion']})「{_pv}」\n"
-            f"理由: {_synth_first_err}"
+            f"理由: {_synth_reason}"
         )
         update_status(msg, "error")
         return finish_result(msg)
