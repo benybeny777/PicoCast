@@ -152,6 +152,15 @@ def create_character(
     with _lock:
         conn = _open_db()
         try:
+            if enabled:
+                conn.execute(
+                    """
+                    UPDATE character_profiles
+                       SET enabled=0, updated_at=?
+                     WHERE profile_id=? AND character_name=? AND character_id<>?
+                    """,
+                    (now, profile_id, character_name, character_id),
+                )
             conn.execute(
                 """
                 INSERT INTO character_profiles
@@ -170,8 +179,8 @@ def create_character(
     return character_id
 
 
-def update_character(character_id: str, **fields) -> None:
-    """指定キャラクター設定のフィールドを更新する。"""
+def _update_character_locked(conn: sqlite3.Connection, character_id: str, **fields) -> None:
+    """conn と _lock を保持した状態でキャラクター設定を更新する。"""
     allowed = {
         "display_name", "character_name", "role", "tone_style", "speaking_rules",
         "forbidden_phrases", "dialogue_rules", "enabled", "sort_order",
@@ -183,19 +192,68 @@ def update_character(character_id: str, **fields) -> None:
         sets["enabled"] = 1 if sets["enabled"] else 0
     cols = ", ".join(f"{k}=?" for k in sets)
     vals = list(sets.values()) + [_now(), character_id]
+    conn.execute(f"UPDATE character_profiles SET {cols}, updated_at=? WHERE character_id=?", vals)
+
+
+def update_character(character_id: str, **fields) -> None:
+    """指定キャラクター設定のフィールドを更新する。"""
+    if fields.get("enabled") is True:
+        enable_fields = dict(fields)
+        enable_fields.pop("enabled", None)
+        enable_character_exclusive(character_id, **enable_fields)
+        return
     with _lock:
         conn = _open_db()
         try:
-            conn.execute(
-                f"UPDATE character_profiles SET {cols}, updated_at=? WHERE character_id=?", vals
-            )
+            _update_character_locked(conn, character_id, **fields)
             conn.commit()
         finally:
             conn.close()
 
 
+def enable_character_exclusive(character_id: str, **fields) -> None:
+    """指定キャラクターを有効化し、同一 profile・同一 character_name の他設定を無効化する。"""
+    with _lock:
+        conn = _open_db()
+        try:
+            row = conn.execute(
+                "SELECT profile_id, character_name FROM character_profiles WHERE character_id=?",
+                (character_id,),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("キャラクター設定が見つかりません")
+            update_fields = dict(fields)
+            update_fields["enabled"] = True
+            _update_character_locked(conn, character_id, **update_fields)
+            updated = conn.execute(
+                "SELECT profile_id, character_name FROM character_profiles WHERE character_id=?",
+                (character_id,),
+            ).fetchone()
+            profile_id = updated["profile_id"]
+            character_name = updated["character_name"]
+            now = _now()
+            conn.execute(
+                """
+                UPDATE character_profiles
+                   SET enabled=0, updated_at=?
+                 WHERE profile_id=? AND character_name=? AND character_id<>?
+                """,
+                (now, profile_id, character_name, character_id),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            _logger.error("キャラクター設定の排他有効化に失敗: character_id=%s", character_id, exc_info=True)
+            raise
+        finally:
+            conn.close()
+
+
 def set_enabled(character_id: str, enabled: bool) -> None:
-    update_character(character_id, enabled=enabled)
+    if enabled:
+        enable_character_exclusive(character_id)
+    else:
+        update_character(character_id, enabled=False)
 
 
 def delete_character(character_id: str) -> None:

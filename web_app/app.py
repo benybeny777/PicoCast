@@ -11,6 +11,7 @@
 """
 import os
 import sys
+import logging
 
 # プロジェクトルートをパスに追加（web_app/ から実行されても動くように）
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -27,6 +28,7 @@ from core.debug_logging import setup_debug_logging
 from core.gui_support import build_app_version
 
 setup_debug_logging(role="web")
+_logger = logging.getLogger(__name__)
 
 _runner_proc = None
 _runner_stop_event = None
@@ -162,12 +164,14 @@ def _kill_process_tree(proc) -> None:
                 _os.killpg(_os.getpgid(pid), signal.SIGTERM)
                 proc.wait(timeout=10)
             except Exception:
+                _logger.warning("runner プロセスグループの通常終了に失敗したため強制終了します: pid=%s", pid, exc_info=True)
                 _os.killpg(_os.getpgid(pid), signal.SIGKILL)
     except Exception:
+        _logger.error("runner プロセスツリー終了に失敗しました: pid=%s", pid, exc_info=True)
         try:
             proc.kill()
         except Exception:
-            pass
+            _logger.error("runner proc.kill() にも失敗しました: pid=%s", pid, exc_info=True)
 
 app = FastAPI(
     title=f"{config.WEB_APP_NAME} — Web UI",

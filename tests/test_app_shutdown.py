@@ -1,13 +1,6 @@
 """
 tests/test_app_shutdown.py — app_shutdown モジュールのユニットテスト
 """
-import importlib
-import threading
-import time
-
-import pytest
-
-
 def _reload_module():
     """テストごとにモジュールの状態をリセットする。"""
     import core.app_shutdown as m
@@ -30,11 +23,9 @@ def test_hook_called_once_on_shutdown(monkeypatch):
     monkeypatch.setattr(m, "_stop_server", lambda: None)
     monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
 
-    result = m.request_shutdown(force=False)
+    result = m.request_shutdown(force=False, async_shutdown=False)
     assert result["ok"] is True
 
-    # バックグラウンドスレッドが完了するのを待つ
-    time.sleep(0.5)
     assert called == [1], "フックが1回だけ呼ばれること"
 
 
@@ -49,8 +40,7 @@ def test_hook_exception_continues_next(monkeypatch):
 
     monkeypatch.setattr(m, "_stop_server", lambda: None)
     monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
-    m.request_shutdown(force=False)
-    time.sleep(0.5)
+    m.request_shutdown(force=False, async_shutdown=False)
 
     assert "ok" in order, "例外後のフックも実行されること"
 
@@ -82,9 +72,8 @@ def test_force_shutdown_calls_stop_workers(monkeypatch):
     monkeypatch.setattr(m, "_stop_workers", lambda timeout=10.0: stopped.append(True))
     monkeypatch.setattr(m, "_stop_server", lambda: None)
 
-    result = m.request_shutdown(force=True)
+    result = m.request_shutdown(force=True, async_shutdown=False)
     assert result["ok"] is True
-    time.sleep(0.5)
     assert stopped, "force=true で _stop_workers が呼ばれること"
 
 
@@ -98,8 +87,7 @@ def test_double_shutdown_returns_ok(monkeypatch):
     monkeypatch.setattr(m, "_stop_server", lambda: None)
     monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
 
-    r1 = m.request_shutdown(force=False)
-    time.sleep(0.3)
+    r1 = m.request_shutdown(force=False, async_shutdown=False)
     r2 = m.request_shutdown(force=False)
 
     assert r1["ok"] is True
@@ -118,10 +106,10 @@ def test_is_shutdown_requested_false_initially():
 def test_is_shutdown_requested_true_after_shutdown(monkeypatch):
     _reload_module()
     import core.app_shutdown as m
-    stopped = threading.Event()
-    monkeypatch.setattr(m, "_stop_server", lambda: stopped.set())
+    stopped = []
+    monkeypatch.setattr(m, "_stop_server", lambda: stopped.append(True))
     monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
-    m.request_shutdown(force=False)
+    m.request_shutdown(force=False, async_shutdown=False)
     # フラグはリクエスト直後に立つ
     assert m.is_shutdown_requested() is True
-    assert stopped.wait(1.0)
+    assert stopped

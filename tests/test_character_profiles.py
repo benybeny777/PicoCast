@@ -103,6 +103,46 @@ def test_store_create_list_enabled(tmp_char_store):
     assert [c.character_key for c in enabled] == ["metan_food_toxic"]
 
 
+def test_store_enables_same_character_name_exclusively(tmp_char_store):
+    """同じチャンネル・同じキャラ名のバリアントは1つだけ有効にする。"""
+    s = tmp_char_store
+    food_id = s.create_character(profile_id="zunkami", character_key="metan_food_toxic",
+                                 display_name="辛口相方めたん", character_name="四国めたん", enabled=True, sort_order=20)
+    standard_id = s.create_character(profile_id="zunkami", character_key="metan_standard_toxic",
+                                     display_name="標準めたん", character_name="四国めたん", enabled=False, sort_order=30)
+    s.enable_character_exclusive(standard_id)
+
+    chars = {c.character_key: c for c in s.list_characters("zunkami")}
+    assert chars["metan_food_toxic"].enabled is False
+    assert chars["metan_standard_toxic"].enabled is True
+    assert food_id != standard_id
+
+
+def test_store_create_enabled_disables_same_character_name(tmp_char_store):
+    """追加時に有効指定した場合も、既存の同名キャラを無効化する。"""
+    s = tmp_char_store
+    s.create_character(profile_id="zunkami", character_key="metan_food_toxic",
+                       display_name="辛口相方めたん", character_name="四国めたん", enabled=True, sort_order=20)
+    s.create_character(profile_id="zunkami", character_key="metan_standard_toxic",
+                       display_name="標準めたん", character_name="四国めたん", enabled=True, sort_order=30)
+
+    enabled = s.list_characters("zunkami", enabled_only=True)
+    assert [c.character_key for c in enabled] == ["metan_standard_toxic"]
+
+
+def test_store_update_enabled_true_is_exclusive(tmp_char_store):
+    """update_character で有効化しても同名キャラの排他制御を通る。"""
+    s = tmp_char_store
+    s.create_character(profile_id="zunkami", character_key="metan_food_toxic",
+                       display_name="辛口相方めたん", character_name="四国めたん", enabled=True, sort_order=20)
+    standard_id = s.create_character(profile_id="zunkami", character_key="metan_standard_toxic",
+                                     display_name="標準めたん", character_name="四国めたん", enabled=False, sort_order=30)
+    s.update_character(standard_id, enabled=True)
+
+    enabled = s.list_characters("zunkami", enabled_only=True)
+    assert [c.character_key for c in enabled] == ["metan_standard_toxic"]
+
+
 # ── API（別 profile 改変防止） ─────────────────────────────────────────────────
 
 def test_api_update_rejects_other_profile_character(monkeypatch):

@@ -74,11 +74,19 @@ def _assert_owned(character_id: str, profile_id: str):
 @router.patch("/{character_id}")
 def update_character_profile(character_id: str, req: CharacterUpdateRequest):
     """キャラクター設定を更新する（active profile のもののみ）。"""
-    from core.character_profile_store import update_character
+    from core.character_profile_store import enable_character_exclusive, update_character
     profile_id = _active_profile_id()
     _assert_owned(character_id, profile_id)
     fields = {k: v for k, v in req.model_dump().items() if v is not None}
-    update_character(character_id, **fields)
+    try:
+        if fields.get("enabled") is True:
+            fields.pop("enabled")
+            enable_character_exclusive(character_id, **fields)
+            fields["enabled"] = True
+        else:
+            update_character(character_id, **fields)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {"updated": character_id, "fields": list(fields.keys())}
 
 

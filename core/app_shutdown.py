@@ -80,6 +80,10 @@ def _stop_server() -> None:
         _uvicorn_server.should_exit = True
         return
 
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        _logger.warning("pytest 実行中のため、uvicorn 未設定時のシグナル停止を抑止します")
+        return
+
     # uvicorn.Server 参照がない場合のフォールバック（--reload モード等）
     _logger.warning("uvicorn サーバー参照が未設定 — シグナルで停止を試みます")
     try:
@@ -94,8 +98,20 @@ def _stop_server() -> None:
         os._exit(0)
 
 
+def _perform_shutdown(force: bool) -> None:
+    """終了フックからサーバー停止までを実行する。テストでは同期実行できるよう分離する。"""
+    if force:
+        running_now = _get_running_jobs()
+        if running_now:
+            _logger.info("実行中worker %d件に停止要求を送信します", len(running_now))
+            _stop_workers(timeout=10.0)
+    _run_hooks()
+    time.sleep(0.2)
+    _stop_server()
+
+
 # ── 公開API ─────────────────────────────────────────────────────────────────
-def request_shutdown(force: bool = False) -> dict:
+def request_shutdown(force: bool = False, *, async_shutdown: bool = True) -> dict:
     """
     終了要求を受け付ける。
 
@@ -128,17 +144,10 @@ def request_shutdown(force: bool = False) -> dict:
 
     _logger.info("正常終了要求を受け付けました (force=%s)", force)
 
-    def _do() -> None:
-        if force:
-            running_now = _get_running_jobs()
-            if running_now:
-                _logger.info("実行中worker %d件に停止要求を送信します", len(running_now))
-                _stop_workers(timeout=10.0)
-        _run_hooks()
-        time.sleep(0.2)
-        _stop_server()
-
-    threading.Thread(target=_do, daemon=True, name="shutdown-thread").start()
+    if async_shutdown:
+        threading.Thread(target=_perform_shutdown, args=(force,), daemon=True, name="shutdown-thread").start()
+    else:
+        _perform_shutdown(force)
     return {"ok": True, "message": "終了処理を開始しました"}
 
 

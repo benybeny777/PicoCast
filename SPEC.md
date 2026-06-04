@@ -152,6 +152,7 @@ yukkurijidou/
 - **テーブル列**: `character_id` / `profile_id`（channel）/ `character_key` / `display_name` / `character_name` / `role` / `tone_style` / `speaking_rules` / `forbidden_phrases` / `dialogue_rules` / `enabled` / `sort_order` / `created_at` / `updated_at`。
 - **合成順**: 生成時に `compose_character_section(profile_id)` が enabled のキャラを `sort_order` 順に合成し、台本プロンプトへ「キャラクター設定（最優先・厳守）」セクションとして注入する（`build_gemini_system_prompt` / `build_script_generation_prompt`）。合成は **script のみ**。ネタ会議（meeting）には注入しない。
 - **チャンネル別の既定**: 食べ物雑学堂（genre `zunkami` / `food_trivia`）は四国めたんを「辛口相方ツッコミ（ずんだハウス風）」（`metan_food_toxic`）にする。都市伝説（`zundamon_kowai`）は従来の「お嬢様毒舌めたん」（`metan_standard_toxic`）。別チャンネルのキャラ設定を流用しない（`profile_id` で厳密分離）。
+- **同名キャラの排他有効化**: `enabled=true` にする時は、同一 `profile_id` かつ同一 `character_name` の他キャラ設定を自動で `enabled=false` にする。四国めたんの辛口相方版とお嬢様毒舌版が同時にプロンプトへ混ざる事故を防ぐ。
 - **自動フォールバック禁止**: 有効なキャラ設定が無いチャンネルは `compose_character_section()` が例外を送出する（標準めたんへ勝手に戻さない）。
 - **移行**: 起動時 `ensure_character_profiles_all()` が既存チャンネルにキャラ設定を保証し、`migrate_strip_character_rules_from_templates()` が旧テンプレートに直書きされたキャラ設定の長文（旧 `METAN_TSUNDERE_RULES`）を除去する（マーカー検出・冪等）。
 - 共通定数 `METAN_TSUNDERE_RULES`（`core/script_prompts.py`）は **ネタ会議プロンプトのみ**で使用する（script 側はキャラ設定へ移行済み）。
@@ -782,6 +783,7 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 **Ctrl+C / SIGTERM:**
 - uvicorn が受信し lifespan の shutdown フェーズを実行 → `run_lifespan_shutdown()` でフック実行
 - `--reload` モードでは `uvicorn.Server` 参照なし（開発専用のため許容）
+- pytest 実行中に `uvicorn.Server` 参照が無い場合は、テストプロセスを落とさないためシグナル停止フォールバックを抑止する。`request_shutdown(..., async_shutdown=False)` で終了処理を同期実行できる。
 
 **shutdown hook 登録:**
 

@@ -55,7 +55,12 @@ def get_db_path() -> str:
     try:
         from core.output_paths import get_db_path as _op_get_db_path
         return _op_get_db_path()
-    except Exception:
+    except Exception as exc:
+        _logger.warning(
+            "active profile の metadata.db パス解決に失敗したため互換パスへ戻します: %s",
+            exc,
+            exc_info=True,
+        )  # フォールバック許可: profile 移行前の後方互換パスを維持する
         from config.config import OUTPUT_DATA_DIR
         return os.path.join(OUTPUT_DATA_DIR, "metadata.db")
 
@@ -84,7 +89,7 @@ def release_connection(conn: sqlite3.Connection) -> None:
         try:
             _connections.remove(conn)
         except ValueError:
-            pass
+            _logger.debug("追跡対象外のDB接続releaseを無視します")
 
 
 def close_all_connections() -> None:
