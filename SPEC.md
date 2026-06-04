@@ -153,6 +153,7 @@ yukkurijidou/
 - **合成順**: 生成時に `compose_character_section(profile_id)` が enabled のキャラを `sort_order` 順に合成し、台本プロンプトへ「キャラクター設定（最優先・厳守）」セクションとして注入する（`build_gemini_system_prompt` / `build_script_generation_prompt`）。合成は **script のみ**。ネタ会議（meeting）には注入しない。
 - **チャンネル別の既定**: 食べ物雑学堂（genre `zunkami` / `food_trivia`）は四国めたんを「辛口相方ツッコミ（ずんだハウス風）」（`metan_food_toxic`）にする。都市伝説（`zundamon_kowai`）は従来の「お嬢様毒舌めたん」（`metan_standard_toxic`）。別チャンネルのキャラ設定を流用しない（`profile_id` で厳密分離）。
 - **同名キャラの排他有効化**: `enabled=true` にする時は、同一 `profile_id` かつ同一 `character_name` の他キャラ設定を自動で `enabled=false` にする。四国めたんの辛口相方版とお嬢様毒舌版が同時にプロンプトへ混ざる事故を防ぐ。
+- **管理画面**: 設定画面「キャラクター設定」タブで active channel のキャラ設定を一覧・追加・編集・削除できる。削除は確認ダイアログと `confirmed=true` 必須。画面上の有効トグルは保存後に一覧を再読み込みし、同名キャラの排他状態を即時反映する。
 - **自動フォールバック禁止**: 有効なキャラ設定が無いチャンネルは `compose_character_section()` が例外を送出する（標準めたんへ勝手に戻さない）。
 - **移行**: 起動時 `ensure_character_profiles_all()` が既存チャンネルにキャラ設定を保証し、`migrate_strip_character_rules_from_templates()` が旧テンプレートに直書きされたキャラ設定の長文（旧 `METAN_TSUNDERE_RULES`）を除去する（マーカー検出・冪等）。
 - 共通定数 `METAN_TSUNDERE_RULES`（`core/script_prompts.py`）は **ネタ会議プロンプトのみ**で使用する（script 側はキャラ設定へ移行済み）。
@@ -595,7 +596,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 ### 設定画面の表示モード
 
 - 設定画面（`/settings`）上部の「表示モード」で **通常 / 詳細 / 開発者** を切り替え、危険設定・開発者向け機能を通常利用時は隠す。選択はブラウザの `localStorage`（`nvf_settings_mode`）に保持する純UI設定で、設定DBの正本ではない。
-- 通常: 設定変更 / チャンネル / APIキー / BGM / テンプレート / 製品管理。
+- 通常: 設定変更 / チャンネル / APIキー / BGM / テンプレート / キャラクター設定 / 製品管理。
 - 詳細: ＋ よみがな辞書 / Stable Diffusion WebUI 詳細（モデル選択）。
 - 開発者: ＋ 管理者設定（ジョブ並列数・ログ保持・DB診断・危険操作）。
 - 隠れたタブへの URL ハッシュ遷移時は必要なモードまで自動で引き上げる。破壊的操作は従来どおり `confirmed=true` と確認ダイアログを必須にする。

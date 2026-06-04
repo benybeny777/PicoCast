@@ -15,6 +15,70 @@
     color: #fff;
     font-weight: 700;
   }
+  .character-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .character-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 12px;
+  }
+  .character-card {
+    border-left: 4px solid var(--border, #64748b);
+  }
+  .character-card.is-enabled {
+    border-left-color: var(--success, #27ae60);
+  }
+  .character-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .character-title {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.25;
+  }
+  .character-meta {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+  .character-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .character-fields .wide {
+    grid-column: 1 / -1;
+  }
+  .character-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .character-empty {
+    border: 1px dashed var(--border, #64748b);
+    border-radius: 8px;
+    padding: 18px;
+    color: var(--text-muted);
+  }
+  @media (max-width: 760px) {
+    .character-grid,
+    .character-fields {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 <!-- ── 設定モード切替（通常 / 詳細 / 開発者） ── -->
 <div class="mode-bar" style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
@@ -106,11 +170,37 @@
 
 <!-- ── タブ: キャラクター設定 ── -->
 <div id="tab-characters" class="tab-panel">
-  <div class="card">
-    <h2>キャラクター設定</h2>
-    <p class="hint">このチャンネルの登場キャラクターの役割・口調・禁止表現・掛け合いを管理します。台本テンプレートとは分離され、生成時に「有効」なキャラ設定が合成されます（有効なキャラが無いと生成はエラーになります）。<strong>同名キャラ（四国めたんの「辛口相方」と「お嬢様毒舌」など）は1つだけ有効にしてください</strong>。トグルで切り替えられます。</p>
-    <div id="characters-list"><p class="hint">読み込み中...</p></div>
+  <div class="character-toolbar">
+    <div>
+      <h2 style="margin:0">キャラクター設定</h2>
+      <p class="hint" style="margin:.35rem 0 0">現在のチャンネルで台本生成に使う役割・口調・掛け合いを管理します。同じキャラ名のバリアントは、有効化した1件だけが使われます。</p>
+    </div>
+    <div class="action-row">
+      <button class="btn btn-secondary" onclick="loadCharacters()">更新</button>
+      <button class="btn btn-primary" onclick="toggleCharacterCreate()">追加</button>
+    </div>
   </div>
+  <div id="character-create" class="card" style="display:none">
+    <h3 style="margin-top:0">キャラクター追加</h3>
+    <div class="character-fields">
+      <div class="form-group"><label>キー</label><input class="form-input" id="char-new-key" placeholder="例: metan_variant"></div>
+      <div class="form-group"><label>表示名</label><input class="form-input" id="char-new-display" placeholder="例: 辛口相方めたん"></div>
+      <div class="form-group"><label>キャラ名</label><input class="form-input" id="char-new-name" placeholder="例: 四国めたん"></div>
+      <div class="form-group"><label>並び順</label><input class="form-input" id="char-new-order" type="number" value="50"></div>
+      <div class="form-group wide"><label>役割</label><textarea class="form-input" id="char-new-role" rows="2"></textarea></div>
+      <div class="form-group wide"><label>口調</label><textarea class="form-input" id="char-new-tone" rows="2"></textarea></div>
+      <div class="form-group wide"><label>話し方ルール</label><textarea class="form-input" id="char-new-speaking" rows="3"></textarea></div>
+      <div class="form-group wide"><label>禁止表現</label><textarea class="form-input" id="char-new-forbidden" rows="2"></textarea></div>
+      <div class="form-group wide"><label>掛け合いルール</label><textarea class="form-input" id="char-new-dialogue" rows="3"></textarea></div>
+    </div>
+    <div class="character-actions">
+      <label><input id="char-new-enabled" type="checkbox" checked> 有効</label>
+      <button class="btn btn-primary" onclick="createCharacter()">追加</button>
+      <button class="btn btn-secondary" onclick="toggleCharacterCreate(false)">閉じる</button>
+      <span id="char-create-result" class="hint"></span>
+    </div>
+  </div>
+  <div id="characters-list"><p class="hint">読み込み中...</p></div>
 </div>
 
 <!-- ── タブ: 設定変更 ── -->
@@ -525,6 +615,7 @@ let _dictLoaded = false;
 let _readingDictEntries = [];
 let _bgmLoaded = false;
 let _toastTimer = null;
+let _charactersLoaded = false;
 
 function showToast(msg, isError) {
   const el = document.getElementById('settings-toast');
@@ -553,10 +644,16 @@ function switchTab(name, btn) {
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
   if (name === 'product') { loadProductStatus(); loadProductInfo(); }
   if (name === 'admin') devLoadEdition();
-  if (name === 'characters') loadCharacters();
+  if (name === 'characters' && !_charactersLoaded) loadCharacters();
 }
 
 // ── キャラクター設定 ──
+function toggleCharacterCreate(force) {
+  const box = document.getElementById('character-create');
+  const show = (force === undefined) ? box.style.display === 'none' : !!force;
+  box.style.display = show ? '' : 'none';
+}
+
 async function loadCharacters() {
   const box = document.getElementById('characters-list');
   box.innerHTML = '<p class="hint">読み込み中...</p>';
@@ -565,40 +662,127 @@ async function loadCharacters() {
     const data = await res.json();
     if (!res.ok) { box.textContent = data.detail || '取得に失敗しました'; return; }
     const chars = data.characters || [];
-    if (!chars.length) { box.innerHTML = '<p class="hint">このチャンネルにキャラクター設定がありません。</p>'; return; }
-    box.innerHTML = chars.map(c => {
-      const f = (label, key, val, rows) =>
-        `<div class="form-group" style="margin-top:6px"><label>${label}</label>`
-        + `<textarea class="form-input" rows="${rows}" data-cid="${c.character_id}" data-field="${key}">${esc(val || '')}</textarea></div>`;
-      return `<div class="card" style="border-left:4px solid var(--accent2,#e07a5f)">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <h3 style="margin:0">${esc(c.character_name)}（${esc(c.display_name)}）</h3>
-          <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" data-cid="${c.character_id}" data-field="enabled" ${c.enabled?'checked':''}> 有効</label>
-          <span class="hint">key=${esc(c.character_key)}</span>
-        </div>
-        ${f('役割', 'role', c.role, 2)}
-        ${f('口調', 'tone_style', c.tone_style, 2)}
-        ${f('話し方ルール', 'speaking_rules', c.speaking_rules, 3)}
-        ${f('禁止表現', 'forbidden_phrases', c.forbidden_phrases, 2)}
-        ${f('掛け合いルール', 'dialogue_rules', c.dialogue_rules, 4)}
-        <div class="action-row mt"><button class="btn btn-primary" onclick="saveCharacter('${c.character_id}')">保存</button>
-          <span id="char-result-${c.character_id}" class="hint"></span></div>
-      </div>`;
-    }).join('');
+    _charactersLoaded = true;
+    if (!chars.length) {
+      box.innerHTML = '<div class="character-empty">このチャンネルにキャラクター設定がありません。</div>';
+      return;
+    }
+    box.innerHTML = `<div class="character-grid">${chars.map(characterCardHtml).join('')}</div>`;
   } catch(e) { box.textContent = '通信エラー: ' + e; }
+}
+
+function characterCardHtml(c) {
+  const f = (label, key, val, rows, extra='') =>
+    `<div class="form-group ${extra}"><label>${label}</label>`
+    + `<textarea class="form-input" rows="${rows}" data-cid="${c.character_id}" data-field="${key}">${esc(val || '')}</textarea></div>`;
+  const status = c.enabled ? '<span class="badge badge-ok">有効</span>' : '<span class="badge badge-ng">無効</span>';
+  return `<div class="card character-card ${c.enabled ? 'is-enabled' : ''}" id="char-card-${c.character_id}">
+    <div class="character-head">
+      <div>
+        <h3 class="character-title">${esc(c.character_name)} / ${esc(c.display_name)}</h3>
+        <div class="character-meta">${status}<span class="badge">${esc(c.character_key)}</span></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+        <input type="checkbox" data-cid="${c.character_id}" data-field="enabled" ${c.enabled?'checked':''} onchange="saveCharacter('${c.character_id}', true)"> 有効
+      </label>
+    </div>
+    <div class="character-fields">
+      <div class="form-group"><label>表示名</label><input class="form-input" data-cid="${c.character_id}" data-field="display_name" value="${esc(c.display_name || '')}"></div>
+      <div class="form-group"><label>キャラ名</label><input class="form-input" data-cid="${c.character_id}" data-field="character_name" value="${esc(c.character_name || '')}"></div>
+      <div class="form-group"><label>並び順</label><input class="form-input" type="number" data-cid="${c.character_id}" data-field="sort_order" value="${Number(c.sort_order || 0)}"></div>
+      ${f('役割', 'role', c.role, 2, 'wide')}
+      ${f('口調', 'tone_style', c.tone_style, 2, 'wide')}
+      ${f('話し方ルール', 'speaking_rules', c.speaking_rules, 3, 'wide')}
+      ${f('禁止表現', 'forbidden_phrases', c.forbidden_phrases, 2, 'wide')}
+      ${f('掛け合いルール', 'dialogue_rules', c.dialogue_rules, 4, 'wide')}
+    </div>
+    <div class="character-actions">
+      <button class="btn btn-primary" onclick="saveCharacter('${c.character_id}')">保存</button>
+      <button class="btn btn-danger" onclick="deleteCharacter('${c.character_id}')">削除</button>
+      <span id="char-result-${c.character_id}" class="hint"></span>
+    </div>
+  </div>`;
+}
+
+function characterPayload(cid) {
+  const body = {};
+  document.querySelectorAll(`[data-cid="${cid}"]`).forEach(el => {
+    const k = el.getAttribute('data-field');
+    if (el.type === 'checkbox') body[k] = el.checked;
+    else if (el.type === 'number') body[k] = Number(el.value || 0);
+    else body[k] = el.value;
+  });
+  return body;
 }
 
 async function saveCharacter(cid) {
   const out = document.getElementById('char-result-' + cid);
-  out.textContent = '保存中...';
-  const body = {};
-  document.querySelectorAll(`[data-cid="${cid}"]`).forEach(el => {
-    const k = el.getAttribute('data-field');
-    body[k] = (el.type === 'checkbox') ? el.checked : el.value;
-  });
-  const res = await fetch('/api/character-profiles/' + cid, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  const data = await res.json();
-  out.textContent = res.ok ? '保存しました' : (data.detail || '保存失敗');
+  if (out) out.textContent = '保存中...';
+  try {
+    const body = characterPayload(cid);
+    const res = await fetch('/api/character-profiles/' + cid, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '保存失敗');
+    if (out) out.textContent = '保存しました';
+    showToast('キャラクター設定を保存しました');
+    if (body.enabled) await loadCharacters();
+  } catch(e) {
+    if (out) out.textContent = e.message || e;
+    showToast('保存に失敗しました', true);
+  }
+}
+
+async function createCharacter() {
+  const out = document.getElementById('char-create-result');
+  out.textContent = '追加中...';
+  const body = {
+    character_key: document.getElementById('char-new-key').value.trim(),
+    display_name: document.getElementById('char-new-display').value.trim(),
+    character_name: document.getElementById('char-new-name').value.trim(),
+    sort_order: Number(document.getElementById('char-new-order').value || 0),
+    role: document.getElementById('char-new-role').value,
+    tone_style: document.getElementById('char-new-tone').value,
+    speaking_rules: document.getElementById('char-new-speaking').value,
+    forbidden_phrases: document.getElementById('char-new-forbidden').value,
+    dialogue_rules: document.getElementById('char-new-dialogue').value,
+    enabled: document.getElementById('char-new-enabled').checked,
+  };
+  if (!body.character_key || !body.display_name || !body.character_name) {
+    out.textContent = 'キー・表示名・キャラ名は必須です';
+    return;
+  }
+  try {
+    const res = await fetch('/api/character-profiles', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '追加失敗');
+    out.textContent = '追加しました';
+    ['char-new-key','char-new-display','char-new-name','char-new-role','char-new-tone','char-new-speaking','char-new-forbidden','char-new-dialogue'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('char-new-order').value = '50';
+    await loadCharacters();
+    showToast('キャラクター設定を追加しました');
+  } catch(e) {
+    out.textContent = e.message || e;
+    showToast('追加に失敗しました', true);
+  }
+}
+
+async function deleteCharacter(cid) {
+  const card = document.getElementById('char-card-' + cid);
+  const title = card ? card.querySelector('.character-title') : null;
+  const name = title ? title.textContent : 'このキャラクター設定';
+  if (!confirm(`${name}を削除しますか？`)) return;
+  const out = document.getElementById('char-result-' + cid);
+  if (out) out.textContent = '削除中...';
+  try {
+    const res = await fetch('/api/character-profiles/' + cid + '?confirmed=true', {method:'DELETE'});
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || '削除失敗');
+    await loadCharacters();
+    showToast('キャラクター設定を削除しました');
+  } catch(e) {
+    if (out) out.textContent = e.message || e;
+    showToast('削除に失敗しました', true);
+  }
 }
 
 // 一時的なデバッグ用: ライセンス edition 切替（後で削除する）
@@ -1101,7 +1285,11 @@ async function deleteDictEntry(dictType, word) {
 }
 
 function esc(str) {
-  return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  return String(str)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
 }
 
 // 初期ロード
@@ -1873,7 +2061,7 @@ setSettingsMode(getSettingsMode());
 
 // URL ハッシュで設定画面の各タブを自動選択
 const hashTab = window.location.hash ? window.location.hash.slice(1) : '';
-const knownHashTabs = new Set(['config', 'bgm', 'apikey', 'dict-base', 'sd-models', 'admin', 'product', 'channels', 'templates']);
+const knownHashTabs = new Set(['config', 'bgm', 'apikey', 'dict-base', 'sd-models', 'admin', 'product', 'channels', 'templates', 'characters']);
 if (knownHashTabs.has(hashTab)) {
   const btn = document.getElementById(`tab-btn-${hashTab}`);
   if (btn) {
