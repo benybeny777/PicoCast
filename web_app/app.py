@@ -223,6 +223,7 @@ from web_app.routes.api_db import router as db_router
 from web_app.routes.api_channel import router as channel_router
 from web_app.routes.api_channels import router as channels_router
 from web_app.routes.api_prompt_templates import router as prompt_templates_router
+from web_app.routes.api_character_profiles import router as character_profiles_router
 
 app.include_router(pages_router)
 app.include_router(status_router)
@@ -244,6 +245,7 @@ app.include_router(db_router)
 app.include_router(channel_router)
 app.include_router(channels_router)
 app.include_router(prompt_templates_router)
+app.include_router(character_profiles_router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
