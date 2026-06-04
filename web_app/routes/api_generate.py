@@ -27,6 +27,13 @@ def api_generate(req: GenerateRequest):
         assert_can_generate(len(scripts))
     except RuntimeError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
+    if not req.setup_test:
+        from core.disk_check import assert_enough_disk
+        from core.error_codes import AppError
+        try:
+            assert_enough_disk()
+        except AppError as exc:
+            raise HTTPException(status_code=422, detail=exc.user_message())
 
     if len(scripts) == 1:
         job_id = submit_generate_job(
@@ -75,6 +82,12 @@ def api_batch_generate(req: BatchGenerateRequest):
         assert_can_generate(len(req.scripts))
     except RuntimeError as exc:
         raise HTTPException(status_code=403, detail=str(exc))
+    from core.disk_check import assert_enough_disk
+    from core.error_codes import AppError
+    try:
+        assert_enough_disk()
+    except AppError as exc:
+        raise HTTPException(status_code=422, detail=exc.user_message())
     job_ids = submit_batch_generate_jobs(
         req.scripts,
         req.image_style,

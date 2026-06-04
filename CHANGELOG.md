@@ -6,6 +6,10 @@
 
 ## 2026-06-04
 
+### 生成前にディスク空き容量チェックを追加（E-DISK）
+
+- 動画生成ジョブ登録（`POST /api/generate` 単発/バッチ）の前に、出力先ドライブの空きが `DISK_MIN_FREE_GB`（既定 2GB、0 で無効）未満なら `E-DISK`（対処手順つき）で 422 停止する。`core/disk_check.py`。初回セットアップのサンプル生成（`setup_test`）は対象外。
+
 ### 初回セットアップ完了に最小構成の必須チェックを追加
 
 - セットアップ完了（`POST /api/settings/setup`）に、法務同意に加えて**最小構成（active channel profile / VOICEVOX 接続 / ffmpeg 利用可）の充足を必須化**。未充足なら 422 で不足項目を返す。`web_app/services/status_service.py:setup_readiness()` / `GET /api/settings/setup-readiness`。

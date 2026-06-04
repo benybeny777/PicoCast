@@ -46,7 +46,11 @@
 - `POST /api/settings/setup`（完了）で必須未達なら 422＋不足項目リストを返し完了をブロック。
 - 注意: Google APIキーは必須にしない（手書き台本＋Stable Diffusion WebUIなら不要）。既に完了済みユーザーには影響しない（完了ボタン押下時のみ判定）。
 
-### 5. ディスク空き容量の事前チェック（E-DISK 結線）  状態: 未着手
+### 5. ディスク空き容量の事前チェック（E-DISK 結線）  状態: ✅ 完了
+- `core/disk_check.py:assert_enough_disk()`（`DISK_MIN_FREE_GB`、既定2GB、0で無効）。`api_generate` の単発/バッチ登録で未満なら 422(E-DISK)。setup_test は除外。`tests/test_disk_check.py`。
+- 残: 必要ならレンダー専用エンドポイント（履歴からの再レンダー）にも結線可。
+
+(旧メモ)
 - config: `DISK_MIN_FREE_GB`（既定 2）。
 - 生成・レンダー登録の preflight（`web_app/routes/api_generate.py` 等）で出力先ドライブの空きを確認し、閾値未満なら `E-DISK` で停止。
 - `shutil.disk_usage(output_root)` を使用。閾値は控えめ（誤ブロック回避）。
