@@ -13,23 +13,25 @@
 # 注意: 本スクリプトは「準備」段階。実ビルドは長時間かつ数回の調整が必要なことがある。
 #       既知の残課題は BUILD.md を参照。
 
-$ErrorActionPreference = "Stop"
+# 注意: pip / Nuitka / git などネイティブコマンドは進捗・通知を stderr に出す。
+# $ErrorActionPreference="Stop" だと、その stderr 1行で NativeCommandError 扱いになり
+# ビルド途中で停止する。ここでは Continue にして各ステップを $LASTEXITCODE で判定する。
+$ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root
 
 $py = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $py)) { throw ".venv が見つかりません。先に仮想環境を作成してください。" }
 
-# 1. Nuitka を確認（無ければ導入）
-& $py -m pip show nuitka *> $null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Nuitka をインストールします..."
-    & $py -m pip install nuitka
-}
+# 1. Nuitka を確認/導入（既に入っていれば pip が「Requirement already satisfied」を返す）
+Write-Host "Nuitka を確認/導入します..."
+& $py -m pip install nuitka
+if ($LASTEXITCODE -ne 0) { throw "Nuitka のインストールに失敗しました。" }
 
 # 2. ビルドバージョンを焼き込む（exe では git が使えないため）
 Write-Host "ビルドバージョンを生成します..."
 & $py -c "from core.gui_support import APP_VERSION_BASE; import subprocess; c=subprocess.check_output(['git','rev-list','--count','HEAD'],text=True).strip(); h=subprocess.check_output(['git','rev-parse','--short','HEAD'],text=True).strip(); open('core/_build_version.py','w',encoding='utf-8').write(f'BUILD_VERSION = \"{APP_VERSION_BASE}.{c}-{h}\"\n')"
+if ($LASTEXITCODE -ne 0) { throw "ビルドバージョンの生成に失敗しました。" }
 
 # 3. Nuitka ビルド（onefile standalone）
 #    --include-data-dir で同梱リソースを含める。VOICEVOX/ffmpeg は同梱しない。
