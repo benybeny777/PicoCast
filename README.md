@@ -294,6 +294,14 @@ pip install --upgrade -r config/requirements.txt
 
 ---
 
+## 📄 法務ドキュメント（販売・配布時）
+
+販売・配布する場合に必要な法務文書のひな型を [legal/](legal/) に用意しています（`<要記入>` を埋め、公開前に専門家のレビューを受けてください）。
+
+- [利用規約](legal/利用規約.md) / [プライバシーポリシー](legal/プライバシーポリシー.md) / [特定商取引法に基づく表記](legal/特定商取引法に基づく表記.md) / [EULA](legal/EULA.md)
+
+---
+
 ## 🖥 開発環境
 
 - OS: Windows 11
