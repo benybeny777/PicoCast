@@ -292,6 +292,14 @@ OLLAMA_DOWNLOAD_URL   = os.environ.get("OLLAMA_DOWNLOAD_URL",   "https://ollama.
 SD_WEBUI_DOWNLOAD_URL = os.environ.get("SD_WEBUI_DOWNLOAD_URL", "https://github.com/lllyasviel/stable-diffusion-webui-forge/releases")  # Stable Diffusion WebUI 配布
 # 試用→購入の動線。trial 上限到達時や製品管理タブからこのURLへ誘導する（実キー検証はライセンス機能実装時に後付け）。
 PRODUCT_PURCHASE_URL = os.environ.get("PRODUCT_PURCHASE_URL", "")  # 購入ページURL（空=未設定。設定すると購入導線リンクを表示）
+# サポート導線。設定すると製品管理タブの診断パッケージ付近に問い合わせ先を表示する（空=非表示）。
+PRODUCT_SUPPORT_URL = os.environ.get("PRODUCT_SUPPORT_URL", "")      # サポート/問い合わせページURL（空=非表示）
+PRODUCT_SUPPORT_EMAIL = os.environ.get("PRODUCT_SUPPORT_EMAIL", "")  # サポート問い合わせメール（空=非表示）
+# 更新確認。URL を設定すると製品管理タブの「更新を確認」で最新版JSONを取得して比較する（空=無効・ネットワークアクセスしない）。
+PRODUCT_UPDATE_CHECK_URL = os.environ.get("PRODUCT_UPDATE_CHECK_URL", "")  # 更新確認用JSONのURL（空=無効）
+
+# 生成・レンダー前のディスク空き容量チェック（出力先ドライブ）。これ未満なら E-DISK で停止する。
+DISK_MIN_FREE_GB = float(os.environ.get("DISK_MIN_FREE_GB", "2"))    # 生成/レンダー登録時に必要な最低空き容量(GB)
 
 # ───────────────────────────────────────────────
 # native キャラクター描画
