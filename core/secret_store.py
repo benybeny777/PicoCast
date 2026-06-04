@@ -27,8 +27,11 @@ from datetime import datetime, timezone
 
 _logger = logging.getLogger(__name__)
 
-# プロジェクトルートは core/ の1階層上
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 永続データの基準ディレクトリ（開発=リポジトリルート / exe=exe のあるフォルダ）。
+# exe(onefile)では __file__ が一時展開先になるため、ここで anchor しないと
+# settings.db / マスターキーが終了時に消える一時領域に書かれてしまう。
+from core.runtime_env import app_base_dir
+_ROOT = app_base_dir()
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _MASTER_KEY_PATH = os.path.join(_ROOT, "data", "secret_master.key")
 

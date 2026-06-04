@@ -13,6 +13,13 @@ APP_VERSION_BASE = "2026.05.19"
 
 
 def build_app_version() -> str:
+    # ビルド時に焼き込んだバージョンを最優先（exe では git が使えないため）
+    try:
+        from core._build_version import BUILD_VERSION  # ビルド時生成・gitignore
+        if BUILD_VERSION:
+            return BUILD_VERSION
+    except Exception:
+        pass  # フォールバック許可: 焼き込みが無ければ git / 既定へ
     try:
         repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         count = subprocess.check_output(

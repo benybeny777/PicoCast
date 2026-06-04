@@ -18,3 +18,10 @@ data/settings.db-wal
 data/settings.db-shm
 data/secret_master.key
 .venv/
+
+# Nuitka / exe ビルド成果物
+dist/
+*.build/
+*.dist/
+*.onefile-build/
+core/_build_version.py

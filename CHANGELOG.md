@@ -6,6 +6,14 @@
 
 ## 2026-06-04
 
+### Nuitka exe ビルドの準備（frozen 対応・ビルドスクリプト）
+
+- `core/runtime_env.py` を追加（`is_frozen()` / `app_base_dir()`）。exe(onefile) では `__file__` が一時展開先になるため、永続データの基準を exe フォルダに anchor する。
+- `core/secret_store.py` / `core/settings_store.py` の `data/settings.db`・マスターキーを `app_base_dir()` 基準に変更（**開発時の挙動は不変**、exe 時のみ exe フォルダ直下に永続化）。
+- `web_app/app.py`: frozen 時は job-runner を `exe --run-runner` で起動（`python -m workers.runner` の代替）。`main()` 先頭で `--run-runner` を処理。
+- `core/gui_support.py: build_app_version()`: ビルド時焼き込み `core/_build_version.py`（gitignore）を最優先。
+- `build_exe.ps1`（Nuitka onefile・データ同梱）と `BUILD.md`（手順・既知の残課題）を追加。`.gitignore` にビルド成果物を追加。実コンパイルは未実施（準備段階）。
+
 ### 生成前にディスク空き容量チェックを追加（E-DISK）
 
 - 動画生成ジョブ登録（`POST /api/generate` 単発/バッチ）の前に、出力先ドライブの空きが `DISK_MIN_FREE_GB`（既定 2GB、0 で無効）未満なら `E-DISK`（対処手順つき）で 422 停止する。`core/disk_check.py`。初回セットアップのサンプル生成（`setup_test`）は対象外。

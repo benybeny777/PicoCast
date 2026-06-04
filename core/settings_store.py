@@ -21,8 +21,10 @@ import threading
 
 _logger = logging.getLogger(__name__)
 
-# このファイルは core/ 直下にあるので、2階層上がプロジェクトルート
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 永続データの基準ディレクトリ（開発=リポジトリルート / exe=exe のあるフォルダ）。
+# exe(onefile)では __file__ が一時展開先になるため app_base_dir() で anchor する。
+from core.runtime_env import app_base_dir
+_ROOT = app_base_dir()
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _ENV_PATH = os.path.join(_ROOT, ".env")
 _lock = threading.Lock()

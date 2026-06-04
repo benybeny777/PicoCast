@@ -86,9 +86,14 @@ def _start_job_runner() -> None:
     else:
         popen_extra = {"start_new_session": True}
 
+    # frozen(exe)時は `python -m workers.runner` が使えない（sys.executable が exe 自身）。
+    # exe を `--run-runner` 付きで再起動して runner を別プロセス起動する。
+    from core.runtime_env import is_frozen
+    runner_cmd = [sys.executable, "--run-runner"] if is_frozen() else [sys.executable, "-m", "workers.runner"]
+
     def _spawn():
         return subprocess.Popen(
-            [sys.executable, "-m", "workers.runner"],
+            runner_cmd,
             cwd=_ROOT,
             env=env,
             stdout=subprocess.DEVNULL,
@@ -316,6 +321,13 @@ def _open_browser_to(url: str) -> None:
 def main():
     import argparse
     from config import WEB_UI_HOST, WEB_UI_PORT
+
+    # frozen(exe)時の job-runner エントリ: exe 自身を `--run-runner` で起動すると
+    # Web アプリではなく runner ループを実行する（python -m workers.runner の代替）。
+    if "--run-runner" in sys.argv:
+        from workers.runner import main as runner_main
+        runner_main()
+        return
     parser = argparse.ArgumentParser(description=f"{config.WEB_APP_NAME} Web UI")
     parser.add_argument("--host", default=WEB_UI_HOST, help=f"bind host (default: {WEB_UI_HOST})")
     parser.add_argument("--port", type=int, default=None,

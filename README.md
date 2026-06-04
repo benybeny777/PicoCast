@@ -302,6 +302,12 @@ pip install --upgrade -r config/requirements.txt
 
 ---
 
+## 📦 配布用 exe のビルド（Nuitka）
+
+単一exe（onefile）を作る手順は **[BUILD.md](BUILD.md)** を参照してください（`.\build_exe.ps1`）。配布先PCには Python は不要です（exe に同梱）。VOICEVOX / ffmpeg は別途インストールが必要です。
+
+---
+
 ## 🖥 開発環境
 
 - OS: Windows 11

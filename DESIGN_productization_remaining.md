@@ -59,6 +59,10 @@
 - 中央カタログ(`core/error_codes.py`)は整備済み。VOICEVOX/ffmpeg/Ollama は対処つき化済み。
 - 残: パイプライン各所の生 `RuntimeError`/`Exception` を必要に応じ `AppError`(コード付き)へ。優先度低、影響範囲を確認しながら個別に。
 
+### 7. Nuitka exe 配布  状態: 🔶 準備のみ完了（実ビルド未実施）
+- `core/runtime_env.py`（is_frozen / app_base_dir）、secret_store/settings_store を exe フォルダ基準に anchor、app.py の runner を frozen 対応（`--run-runner`）、version 焼き込み、`build_exe.ps1`＋`BUILD.md`。
+- 実ビルドは未実施（ユーザー選択: 準備のみ）。残課題は BUILD.md「既知の残課題」（出力先パス・隠れimport・コード署名・動作確認）。実行は `.\build_exe.ps1`。
+
 ## 完了済み（このセッション、push 済み 〜3b98ad8）
 - 外部依存の導線 / エラー対処文言 / 購入動線UX / 起動自己回復 / クロスPC復元（パスフレーズ）
 - Stable Diffusion WebUI 時 Ollama 必須化 / 表記統一 / 必須構成早見表（/setup・README）
