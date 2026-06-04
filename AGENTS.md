@@ -74,7 +74,7 @@
 
 - Web UIヘッダーに現在の active channel profile（チャンネル名 / ハンドル）を常時表示する。
 - Web UI上で登録済み channel profile をいつでも切り替えられること。1つのWeb UIで複数プロファイルを選択・切替できることが完了条件であり、cloneごとに1プロファイルを固定する運用だけでは不十分。
-- 固定コメントは Web UI 内では手動投稿のみ（自動投稿ウォッチャーは持たない）。自動投稿は OS タスク（`core/fixed_comment_task.py` が Windows=タスクスケジューラ / macOS=launchd に登録）から `<exe> --post-fixed-comments` を定期実行して行う。対象は `AUTO_FIXED_COMMENT_PROFILE_SCOPE` に従い、`all` の場合は全 channel profile の metadata.db と profile_id 別 YouTube OAuth token を巡回する。二重投稿は `fixed_comment_service` が `youtube_status.fixed_comment_posted` を原子的に確保（claim）して防ぐ。タスクは exe 移動などでズレたら起動時に自動修正する。
+- 固定コメントは Web UI 内では手動投稿のみ（自動投稿ウォッチャーは持たない）。自動投稿は OS タスク（`core/fixed_comment_task.py` が Windows=タスクスケジューラ / macOS=launchd に登録）から `<exe> --post-fixed-comments` を定期実行して行う。対象は `AUTO_FIXED_COMMENT_PROFILE_SCOPE` に従い、`all` の場合は全 channel profile の metadata.db と profile_id 別 YouTube OAuth token を巡回する。二重投稿は投稿済みフラグ（`youtube_status.comment_thread_id` / `fixed_comment_posted`）の事前チェックで防ぐ（OSタスクは同時多重起動しないため実用上十分）。タスクは exe 移動などでズレたら起動時に自動修正する。
 - active profile 未設定時は YouTube操作とプロンプト生成を禁止する（`require_active_profile()` で例外）。
 
 ## プロジェクト概要

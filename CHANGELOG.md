@@ -10,7 +10,7 @@
 
 - **方針変更**: Web UI 内の固定コメント自動投稿ウォッチャーを廃止し、Web は手動投稿のみに。自動投稿は OS タスク（Windows=タスクスケジューラ / macOS=launchd）経由に切り分けた。`AUTO_FIXED_COMMENT_ENABLED` 設定は撤去。
 - 投稿の中核を job_manager/runner 非依存の `fixed_comment_service.post_fixed_comment_now()` に切り出し、`auto_fixed_comment_service.post_all_pending()` で対象プロファイルの未投稿分を直接投稿。CLI `<exe> --post-fixed-comments` を追加（アプリ非起動でも投稿）。
-- **二重投稿防止**: 投稿直前に `youtube_status.fixed_comment_posted` を原子的に確保（claim）し、手動投稿とOSタスク・複数タスク実行が重なっても1プロセスだけが投稿する（失敗時は claim を戻す）。
+- **二重投稿防止**: 投稿済みフラグ（`comment_thread_id` / `fixed_comment_posted`）の事前チェックで防ぐ（OSタスクは同時多重起動しないため実用上十分。完全同時の稀なケースは許容しシンプルさを優先）。
 - `core/fixed_comment_task.py` で OS タスクを登録/解除（実行時刻=予約スロット＋5分）。**タスク名にインストールディレクトリ識別子（リーフ名＋パスのハッシュ）**を含め、同一PCの複数インストールを区別。exe 移動などで生じたズレ・迷子タスクは `inspect()`/`repair()` で検出し、アプリ起動時に自動修正（＋設定画面の「見つけて修正」）。
 - 設定画面（製品管理タブ）にON/OFFトグルと修正、API `GET/POST /api/settings/fixed-comment-task`・`POST .../repair` を追加。
 
