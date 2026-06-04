@@ -33,8 +33,12 @@ from web_app.services import (
 )
 from web_app.job_manager import get_job_manager
 
-_TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "..", "templates")
-_STATIC_DIR = os.path.join(os.path.dirname(__file__), "..", "static")
+# onefile(exe)では __file__ の階層が展開先で平坦化されうるため、同梱リソースは
+# resource_base_dir()（<展開先> または開発時はリポジトリルート）基準で解決する。
+from core.runtime_env import resource_base_dir as _resource_base_dir
+_WEB_APP_DIR = os.path.join(_resource_base_dir(), "web_app")
+_TEMPLATES_DIR = os.path.join(_WEB_APP_DIR, "templates")
+_STATIC_DIR = os.path.join(_WEB_APP_DIR, "static")
 templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 router = APIRouter(tags=["pages"])
@@ -223,8 +227,7 @@ def page_legal(request: Request, doc: str):
     from core.legal_consent import LEGAL_DOCUMENTS
     if doc not in LEGAL_DOCUMENTS:
         raise HTTPException(status_code=404, detail="文書が見つかりません")
-    legal_path = os.path.join(os.path.dirname(__file__), "..", "..", "legal", doc)
-    legal_path = os.path.abspath(legal_path)
+    legal_path = os.path.abspath(os.path.join(_resource_base_dir(), "legal", doc))
     if not os.path.isfile(legal_path):
         raise HTTPException(status_code=404, detail="文書ファイルが見つかりません")
     with open(legal_path, "r", encoding="utf-8") as f:

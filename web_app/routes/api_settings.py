@@ -47,8 +47,8 @@ def api_aquestalk_test():
 
         profile = get_active_profile()
         profile_id = profile.profile_id if profile else None
-        root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-        out_dir = os.path.join(root, "dev", "aquestalk_tests")
+        from core.runtime_env import app_base_dir
+        out_dir = os.path.join(app_base_dir(), "dev", "aquestalk_tests")  # 書き込み先。exe では exe 隣
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, f"reimu_test_{datetime.now().strftime('%Y%m%d_%H%M%S')}.wav")
         speaker = AudioSpeaker(

@@ -181,7 +181,10 @@ app = FastAPI(
 )
 
 # 静的ファイル
-_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+# onefile(exe)では本モジュールはエントリのためルートに平坦化され __file__ が展開先直下を指す。
+# 同梱リソースは <展開先>/web_app/static にあるため resource_base_dir() 基準で解決する。
+from core.runtime_env import resource_base_dir as _resource_base_dir
+_STATIC_DIR = os.path.join(_resource_base_dir(), "web_app", "static")
 app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 

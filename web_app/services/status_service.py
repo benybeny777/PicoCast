@@ -154,7 +154,8 @@ def setup_readiness() -> dict[str, Any]:
 
 
 def get_settings_status() -> dict[str, Any]:
-    root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    from core.runtime_env import app_base_dir
+    root = app_base_dir()  # レガシー認証ファイルはユーザーデータ。exe では exe 隣
 
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=5) as ex:

@@ -10,7 +10,9 @@ import os
 
 _logger = logging.getLogger(__name__)
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+from core.runtime_env import app_base_dir as _app_base_dir
+# レガシー認証ファイル(client_secrets.json 等)はユーザーデータ。exe では exe 隣を見る。
+_ROOT = _app_base_dir()
 _ALLOWED_API_KEY_TYPES = {"google_api_key", "openai_api_key", "hf_token", "aquestalk_license_key"}
 _ALLOWED_YOUTUBE_TYPES = {
     "youtube_client_secrets",
