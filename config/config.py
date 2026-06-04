@@ -413,6 +413,7 @@ BGM_PATH = os.path.join(ASSETS_DIR, "bgm", BGM_FILE) if BGM_FILE else ""
 # ───────────────────────────────────────────────
 # 出力ディレクトリ・ファイルパス
 # ───────────────────────────────────────────────
+OUTPUT_BASE_DIR       = os.environ.get("OUTPUT_BASE_DIR",       "")          # 全プロファイル共通の出力ベース(各profile_idフォルダの親)。空=リポジトリ直下 output/
 OUTPUT_DIR            = os.environ.get("OUTPUT_DIR",            "output")
 OUTPUT_DATA_DIR       = os.environ.get("OUTPUT_DATA_DIR",       os.path.join(OUTPUT_DIR, "000_data"))
 OUTPUT_ANALYTICS_DIR  = os.environ.get("OUTPUT_ANALYTICS_DIR",  os.path.join(OUTPUT_DIR, "000_analytics"))

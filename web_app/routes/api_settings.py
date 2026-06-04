@@ -87,6 +87,38 @@ def api_save_config(updates: dict[str, str]):
     return {"saved": list(updates.keys()), "note": "保存しました。"}
 
 
+@router.get("/output-base")
+def api_get_output_base():
+    """現在の出力ベースディレクトリ・既定値・カスタム指定かを返す。"""
+    from web_app.services.output_dir_service import get_output_base_info
+    return get_output_base_info()
+
+
+class OutputBaseRequest(BaseModel):
+    path: str
+    confirmed: bool = False
+    move: bool = True
+
+
+@router.post("/output-base")
+def api_change_output_base(req: OutputBaseRequest):
+    """出力ベースディレクトリを変更し既存データを移動する。confirmed=true 必須。
+
+    実行中/待機中ジョブがある場合は 409 で拒否する。
+    """
+    from web_app.services.output_dir_service import change_output_base
+    try:
+        result = change_output_base(req.path, confirmed=req.confirmed, move=req.move)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except FileExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    invalidate_settings_status_cache()
+    return result
+
+
 @router.post("/secrets")
 def api_save_secrets(updates: dict[str, str]):
     """APIキーを DB へ暗号化保存する（後方互換エンドポイント）。値はレスポンスに含めない。"""

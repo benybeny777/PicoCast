@@ -928,7 +928,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     else:
         safe_topic = f"{_pfx_l}{safe_topic_body}"
 
-    from core.output_paths import get_output_videos_dir
+    from core.output_paths import get_output_videos_dir, get_backups_dir
     theme_dir = os.path.join(get_output_videos_dir(), safe_topic)
 
     width = 1080 if is_shorts else 1920
@@ -949,7 +949,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     _saved_thumb_dir = None
     _saved_audio_dir = None
     if os.path.exists(theme_dir):
-        backup_base = os.path.join("output", "000_backups")
+        backup_base = get_backups_dir()  # active profile の output_root/000_backups
         backup_name = f"{safe_topic}_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
         backup_dir = os.path.join(backup_base, backup_name)
         _BACKUP_TIMEOUT_SEC = 8

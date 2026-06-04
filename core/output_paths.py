@@ -20,14 +20,39 @@ active channel profile の output_root を基準にすべてのパスを解決�
 """
 from __future__ import annotations
 
+import logging
 import os
 import shutil
+
+_logger = logging.getLogger(__name__)
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def _abs(path: str) -> str:
     return path if os.path.isabs(path) else os.path.join(_ROOT, path)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 出力ベースディレクトリ（全プロファイル共通・設定で変更可能）
+# ─────────────────────────────────────────────────────────────────────────────
+
+def default_output_base_dir() -> str:
+    """既定の出力ベース（リポジトリ直下 output/）の絶対パス。"""
+    return os.path.join(_ROOT, "output")
+
+
+def output_base_dir() -> str:
+    """全プロファイル共通の出力ベースディレクトリ（絶対パス）。
+
+    config.OUTPUT_BASE_DIR が空なら既定の output/ を使う。相対指定なら
+    リポジトリルート基準で解決する。各 profile の出力はこの直下に置かれる。
+    """
+    from config import config as cfg
+    base = (getattr(cfg, "OUTPUT_BASE_DIR", "") or "").strip()
+    if not base:
+        return default_output_base_dir()
+    return base if os.path.isabs(base) else os.path.join(_ROOT, base)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -95,5 +120,105 @@ def migrate_root_file(
     if os.path.exists(old_path) and (overwrite or not os.path.exists(new_path)):
         shutil.move(old_path, new_path)
     return new_path
+
+
+def _is_subpath(child: str, parent: str) -> bool:
+    """child が parent の配下（または同一）かどうかを判定する。"""
+    child_n = os.path.normcase(os.path.normpath(os.path.abspath(child)))
+    parent_n = os.path.normcase(os.path.normpath(os.path.abspath(parent)))
+    if child_n == parent_n:
+        return True
+    return child_n.startswith(parent_n + os.sep)
+
+
+def relocate_output_base(new_base: str, *, move: bool = True) -> dict:
+    """出力ベースディレクトリを new_base へ変更し、既存データを移動/コピーする。
+
+    全プロファイルの output_root（各 profile_id フォルダ）と metadata.db を含む
+    既存の出力一式を新しいベースへ移し、config.OUTPUT_BASE_DIR を更新して永続化する。
+
+    呼び出し側で「実行中/待機中ジョブが無いこと」を保証してから呼ぶこと
+    （移動中に runner が metadata.db を掴んでいると破損するため）。
+
+    Args:
+        new_base: 新しい出力ベース（絶対パス推奨。相対ならリポジトリルート基準）。
+        move: True=移動（shutil.move）/ False=コピー（既存は残す）。
+
+    Returns:
+        {"old_base", "new_base", "moved", "entries"} の要約。
+    """
+    old_base = output_base_dir()
+    new_abs = new_base.strip()
+    if not new_abs:
+        raise ValueError("出力ベースのパスが空です")
+    new_abs = new_abs if os.path.isabs(new_abs) else os.path.join(_ROOT, new_abs)
+    new_abs = os.path.normpath(new_abs)
+    old_norm = os.path.normpath(old_base)
+
+    # 同一なら何もしない（設定だけ確定させる）
+    if os.path.normcase(new_abs) == os.path.normcase(old_norm):
+        _persist_output_base(new_abs)
+        return {"old_base": old_norm, "new_base": new_abs, "moved": False, "entries": []}
+
+    # 入れ子は不可（再帰移動・自己包含で壊れる）
+    if _is_subpath(new_abs, old_norm) or _is_subpath(old_norm, new_abs):
+        raise ValueError(
+            "新しい出力ベースは現在の出力ベースの内側/外側に入れ子にできません: "
+            f"old={old_norm} new={new_abs}"
+        )
+
+    if os.path.isfile(new_abs):
+        raise ValueError(f"指定パスは既存のファイルです: {new_abs}")
+
+    moved_entries: list[str] = []
+    if os.path.isdir(old_norm):
+        os.makedirs(new_abs, exist_ok=True)
+        for name in os.listdir(old_norm):
+            src = os.path.join(old_norm, name)
+            dst = os.path.join(new_abs, name)
+            if os.path.exists(dst):
+                raise FileExistsError(f"移動先に同名のエントリが既に存在します: {dst}")
+            if move:
+                shutil.move(src, dst)
+            elif os.path.isdir(src):
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+            moved_entries.append(name)
+        _logger.info(
+            "[OutputBase] 出力ベースを移設しました: %s -> %s (%s, %d 件)",
+            old_norm, new_abs, "move" if move else "copy", len(moved_entries),
+        )
+    else:
+        os.makedirs(new_abs, exist_ok=True)
+        _logger.info("[OutputBase] 旧出力ベースが無いため新規作成のみ: %s", new_abs)
+
+    _persist_output_base(new_abs)
+    return {
+        "old_base": old_norm,
+        "new_base": new_abs,
+        "moved": bool(moved_entries),
+        "entries": moved_entries,
+    }
+
+
+def _persist_output_base(new_abs: str) -> None:
+    """OUTPUT_BASE_DIR を設定 DB に保存し、現在プロセスへ即時反映する。"""
+    import sys
+    from core import settings_store
+    from config import config as cfg
+
+    settings_store.set_many({"OUTPUT_BASE_DIR": new_abs})
+    os.environ["OUTPUT_BASE_DIR"] = new_abs
+    setattr(cfg, "OUTPUT_BASE_DIR", new_abs)
+    # 'from config import OUTPUT_BASE_DIR' でキャプチャ済みのモジュールにも反映
+    for mod in list(sys.modules.values()):
+        if mod is None or mod is cfg:
+            continue
+        if hasattr(mod, "OUTPUT_BASE_DIR"):
+            try:
+                setattr(mod, "OUTPUT_BASE_DIR", new_abs)
+            except (AttributeError, TypeError):
+                pass
 
 

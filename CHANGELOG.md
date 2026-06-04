@@ -6,6 +6,13 @@
 
 ## 2026-06-04
 
+### 出力先フォルダを設定で変更可能にした
+
+- 全プロファイル共通の出力ベースディレクトリを設定 `OUTPUT_BASE_DIR`（設定 DB 保存）で変更できるようにした。既定はリポジトリ直下 `output/`。別ドライブ等への移設に対応する。
+- 変更時は既存の出力一式（各 profile フォルダ・metadata.db）を新ベースへ自動移動する `output_paths.relocate_output_base()` を追加。実行中/待機中ジョブがある場合は移動せず拒否し、移動先の同名衝突・現ベースとの入れ子指定も拒否する。
+- 初回セットアップ画面「7. 出力先フォルダ」と設定画面の製品管理タブ「出力先フォルダ」、API `GET/POST /api/settings/output-base`（`POST` は `confirmed=true` 必須）から変更できる。
+- 併せて、生成時の既存テーマ退避先がプロファイルを無視した相対パス `output/000_backups` に固定されていた不具合を修正し、active profile の `output_root/000_backups`（`get_backups_dir()`）へ退避するようにした。
+
 ### AquesTalk系ゆっくり音声バックエンドを追加
 
 - 音声生成に `voicevox` / `aquestalk` のバックエンド解決層を追加した。台本の各セリフは active profile のキャラクター設定から音声バックエンドを解決し、VOICEVOXまたはAquesTalk系エンジンでWAV生成する。

@@ -1793,12 +1793,20 @@ active profile によってすべての出力パス・DB・プロンプト・Ana
 ### 出力ディレクトリ構造（profile 別）
 
 ```
-output/{profile_id}/
+{出力ベース}/{profile_id}/
   videos/        ← 動画テーマフォルダ（Shorts_xxx / Long_xxx）。生成中・未アップロード
   000_uploaded/  ← YouTube アップロード済みアーカイブ（履歴画面でも表示）
   000_backups/   ← バックアップ
   000_data/      ← metadata.db（動画メタ・Analytics・youtube_status 等すべて格納）
 ```
+
+**出力ベースディレクトリ**は全プロファイル共通の親フォルダで、既定はリポジトリ直下の `output/` 。設定 `OUTPUT_BASE_DIR`（設定 DB に保存）で別ドライブ等へ変更できる。`core/output_paths.py` の `output_base_dir()` が解決し、各 profile の `output_root` はこの直下に置かれる。変更は次の入口で行う:
+
+- 初回セットアップ画面「7. 出力先フォルダ」（既定値として現状パスを表示）
+- 設定画面 → 製品管理タブ「出力先フォルダ」
+- API `GET /api/settings/output-base`（現在値・既定値・カスタムか）/ `POST /api/settings/output-base`（`confirmed=true` 必須）
+
+変更時は `output_paths.relocate_output_base()` が既存の出力一式（各 profile フォルダ・metadata.db）を新ベースへ移動し、`OUTPUT_BASE_DIR` を設定 DB に保存して即時反映する。**実行中/待機中ジョブがある場合は移動せず 409 で拒否**する（runner が metadata.db を掴んでいる間の移動による破損を防ぐため）。移動先に同名フォルダが既存なら拒否、現ベースとの入れ子指定も拒否する。
 
 生成時のフォルダ名は設定値 `FOLDER_PREFIX_SHORTS` / `FOLDER_PREFIX_LONG` / `FOLDER_PREFIX_MEETING` に正規化する。旧表記の `short_` / `shorts_` / `long_` / `meeting_` は読み取り・履歴・アップロード判定では後方互換として受け入れるが、新規生成では設定済みプレフィックスへ直す。
 

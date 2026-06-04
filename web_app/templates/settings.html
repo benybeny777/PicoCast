@@ -147,6 +147,23 @@
     <div id="update-result" class="hint mt"></div>
   </div>
   <div class="card">
+    <h2>出力先フォルダ</h2>
+    <p class="hint">動画・画像・音声・履歴・metadata.db を保存する出力ベースフォルダ（全チャンネル共通の親フォルダ）です。別ドライブへ移すときに変更します。変更すると<strong>既存の出力データを新しい場所へ移動</strong>します。実行中・待機中のジョブがあると変更できません。</p>
+    <div class="form-row mt">
+      <label class="form-label" style="min-width:120px">現在の出力先</label>
+      <code id="output-base-current" style="word-break:break-all">読み込み中…</code>
+    </div>
+    <div class="form-row mt">
+      <input id="output-base-path" class="form-input" style="width:520px" placeholder="新しい出力先フォルダの絶対パス（例: D:\yukkuri_output）">
+      <button class="btn btn-danger" onclick="changeOutputBase()">出力先を変更して移動</button>
+    </div>
+    <p class="hint">空欄で「既定に戻す」ボタンを使うとリポジトリ直下 output/ に戻せます（既存データも移動します）。</p>
+    <div class="form-row">
+      <button class="btn btn-secondary" onclick="resetOutputBase()">既定 (output/) に戻す</button>
+    </div>
+    <div id="output-base-result" class="hint mt"></div>
+  </div>
+  <div class="card">
     <h2>バックアップ / 復元</h2>
     <p class="hint">パスフレーズを入力すると認証情報（APIキー・OAuth）も再暗号化して同梱し、<strong>別PCでも同じパスフレーズで復元</strong>できます。空欄の場合は同一PC専用（別PCでは認証情報の再登録が必要）です。</p>
     <div class="form-row mt">
@@ -662,7 +679,7 @@ function switchTab(name, btn) {
   if (name === 'channels' && !_chLoaded) chLoadChannels();
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
-  if (name === 'product') { loadProductStatus(); loadProductInfo(); }
+  if (name === 'product') { loadProductStatus(); loadProductInfo(); loadOutputBase(); }
   if (name === 'admin') devLoadEdition();
   if (name === 'characters' && !_charactersLoaded) loadCharacters();
 }
@@ -1001,6 +1018,52 @@ async function restoreBackup() {
   if (!res.ok) { document.getElementById('backup-result').textContent = data.detail || '復元失敗'; return; }
   const imported = data.secrets_imported ? `（認証情報 ${data.secrets_imported} 件を取り込み）` : '';
   document.getElementById('backup-result').textContent = `復元しました: ${data.restored} ${imported}`;
+}
+
+async function loadOutputBase() {
+  const el = document.getElementById('output-base-current');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/settings/output-base');
+    const data = await res.json();
+    if (!res.ok) { el.textContent = data.detail || '取得失敗'; return; }
+    el.textContent = data.current + (data.is_custom ? '' : '（既定）');
+  } catch (e) {
+    el.textContent = '取得失敗';
+  }
+}
+
+async function _postOutputBase(path) {
+  const result = document.getElementById('output-base-result');
+  const res = await fetch('/api/settings/output-base', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({path, confirmed: true, move: true}),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    result.textContent = data.detail || '変更に失敗しました';
+    showToast(data.detail || '出力先の変更に失敗しました', true);
+    return;
+  }
+  const movedNote = data.moved ? `（${data.entries.length} 件を移動）` : '（移動対象なし）';
+  result.textContent = `出力先を変更しました: ${data.new_base} ${movedNote}`;
+  showToast('出力先を変更しました');
+  await loadOutputBase();
+}
+
+async function changeOutputBase() {
+  const path = document.getElementById('output-base-path').value.trim();
+  if (!path) { showToast('新しい出力先フォルダのパスを入力してください', true); return; }
+  if (!confirm(`出力先を次の場所へ変更し、既存データを移動します。\n\n${path}\n\n実行中・待機中のジョブが無いことを確認してください。続行しますか？`)) return;
+  await _postOutputBase(path);
+}
+
+async function resetOutputBase() {
+  if (!confirm('出力先を既定（リポジトリ直下 output/）に戻し、既存データを移動します。続行しますか？')) return;
+  // 既定パスは GET で取得して明示指定する
+  const info = await (await fetch('/api/settings/output-base')).json();
+  await _postOutputBase(info.default);
 }
 
 async function markSetupComplete() {

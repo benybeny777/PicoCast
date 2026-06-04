@@ -173,6 +173,19 @@
 </div>
 
 <div class="card">
+  <h2>7. 出力先フォルダ（任意）</h2>
+  <p class="hint">動画・画像・音声・履歴・metadata.db を保存する親フォルダです。既定は本体直下の <code>output/</code> です。別ドライブに保存したい場合のみ変更してください。<strong>変更すると既存の出力データを新しい場所へ移動</strong>します（セットアップ直後は移動対象がほぼ無いため安全です）。</p>
+  <div class="form-row">
+    <div class="form-group" style="flex:1; min-width:320px">
+      <label>出力先フォルダ（絶対パス）</label>
+      <input id="setup-output-base" class="form-input" placeholder="読み込み中…">
+    </div>
+  </div>
+  <button class="btn btn-secondary" onclick="setupSaveOutputBase()">この出力先にする</button>
+  <div id="setup-output-base-result" class="hint mt"></div>
+</div>
+
+<div class="card">
   <h2>完了</h2>
   <p class="hint">完了後、生成とアップロードのブロックが解除されます。完了には法務同意と最小構成（チャンネル / VOICEVOX / ffmpeg）が必要です。</p>
   <div class="action-row">
@@ -292,6 +305,31 @@ async function setupComplete() {
   out.textContent = data.completed ? 'セットアップ完了。通常画面へ移動できます。' : '未完了です';
   if (data.completed) setTimeout(() => location.href='/', 600);
 }
+async function setupLoadOutputBase() {
+  const input = document.getElementById('setup-output-base');
+  if (!input) return;
+  try {
+    const res = await fetch('/api/settings/output-base');
+    const data = await res.json();
+    // 既定値として現状のパスをプリフィルする
+    if (res.ok) input.value = data.current;
+    else input.placeholder = data.detail || '取得失敗';
+  } catch (e) {
+    input.placeholder = '取得失敗';
+  }
+}
+async function setupSaveOutputBase() {
+  const out = document.getElementById('setup-output-base-result');
+  const path = document.getElementById('setup-output-base').value.trim();
+  if (!path) { out.textContent = '出力先フォルダのパスを入力してください'; return; }
+  if (!confirm(`出力先を次の場所にします。既存データがあれば移動します。\n\n${path}\n\n続行しますか？`)) return;
+  out.textContent = '設定中...';
+  const res = await fetch('/api/settings/output-base', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path, confirmed:true, move:true})});
+  const data = await res.json();
+  if (!res.ok) { out.textContent = data.detail || '設定に失敗しました'; return; }
+  out.textContent = `出力先を設定しました: ${data.new_base}` + (data.moved ? `（${data.entries.length} 件を移動）` : '');
+}
 setupLoadGenres();
+setupLoadOutputBase();
 </script>
 {% endblock %}

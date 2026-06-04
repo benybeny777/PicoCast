@@ -1384,6 +1384,16 @@ def load_jobs_from_db(max_n: int = 500) -> list[dict]:
     return result
 
 
+def count_active_jobs() -> int:
+    """現在の profile の metadata.db で実行中(running)/待機中(queued)のジョブ数を返す。"""
+    initialize_db()
+    with ManagedConnection() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM jobs WHERE status IN ('queued', 'running')"
+        ).fetchone()
+    return int(row[0]) if row else 0
+
+
 def claim_queued_job(runner_pid: int, job_types: list[str] | tuple[str, ...] | None = None) -> dict | None:
     """最古の queued ジョブを running に原子的に更新して返す。"""
     initialize_db()

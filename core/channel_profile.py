@@ -27,6 +27,20 @@ _lock = threading.Lock()
 _profile_context = threading.local()
 
 
+def _output_base() -> str:
+    """全プロファイル共通の出力ベース絶対パス。
+
+    config.OUTPUT_BASE_DIR が設定されていればそれ（output_paths 経由で解決）、
+    未設定ならリポジトリルート直下の output/ を使う。
+    """
+    from config import config as cfg
+    custom_base = (getattr(cfg, "OUTPUT_BASE_DIR", "") or "").strip()
+    if custom_base:
+        from core.output_paths import output_base_dir
+        return output_base_dir()
+    return os.path.join(_ROOT, "output")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # データクラス
 # ─────────────────────────────────────────────────────────────────────────────
@@ -47,12 +61,14 @@ class ChannelProfile:
 
     @property
     def output_root_abs(self) -> str:
-        """output_root の絶対パスを返す。"""
+        """output_root の絶対パスを返す。
+
+        全プロファイル共通の出力ベース（設定で変更可能）の直下に profile_id
+        フォルダを置く。output_root に絶対パスが入っている場合はそれを優先する。
+        """
         if os.path.isabs(self.output_root):
             return self.output_root
-        if self.output_root == self.profile_id:
-            return os.path.join(_ROOT, "output", self.profile_id)
-        return os.path.join(_ROOT, self.output_root)
+        return os.path.join(_output_base(), self.output_root)
 
     @property
     def handle_normalized(self) -> str:
@@ -222,8 +238,9 @@ def _ensure_handle_genre_profile(source_genre: str, target_genre: str) -> None:
 
 
 def _migrate_output_dir(old_id: str, new_id: str) -> None:
-    old_path = os.path.join(_ROOT, "output", old_id)
-    new_path = os.path.join(_ROOT, "output", new_id)
+    base = _output_base()
+    old_path = os.path.join(base, old_id)
+    new_path = os.path.join(base, new_id)
     if not os.path.isdir(old_path) or os.path.exists(new_path):
         return
     os.replace(old_path, new_path)

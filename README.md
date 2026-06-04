@@ -344,6 +344,9 @@ pip install --upgrade -r config/requirements.txt
 | よみがな辞書・自動学習候補（**全チャンネル共通**） | `data/settings.db` (`reading_dictionary_entries` / `reading_candidates`) |
 | デバッグログ | `output/000_data/debug_logs/app_debug_web.log` / `app_debug_runner.log` |
 
+> [!NOTE]
+> 上表の `output/` は**出力ベースフォルダ**（全チャンネル共通の親）で、既定はリポジトリ直下 `output/` です。別ドライブ等へ変更したい場合は、初回セットアップ「7. 出力先フォルダ」または設定画面 → 製品管理タブ「出力先フォルダ」から変更できます。変更すると既存の出力データを新しい場所へ自動で移動します（実行中・待機中のジョブがあるときは変更できません）。
+
 > [!IMPORTANT]
 > `data/settings.db`・`data/secret_master.key`・`output/` などの機密・生成物は Git にコミットしないでください（`.gitignore` 済み）。
 
