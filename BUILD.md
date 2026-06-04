@@ -33,7 +33,7 @@
 1. **出力先パス**: 対応済み。`output/`・チャンネル `settings.db`・`metadata.db`・`DEBUG_LOG_DIR` は `app_base_dir()`（frozen=exeフォルダ）基準に統一済みで、cwd に依存しない。`config.py` の `OUTPUT_DIR` も `app_base_dir()` 基準の絶対パスへ解決される。別ドライブへ置きたい場合は `/setup`「出力先フォルダ」で `OUTPUT_BASE_DIR` を絶対指定する。
 2. **隠れ import**: `uvicorn` のプロトコル実装、`google.genai`、`cryptography`(cffi/openssl)、`pillow`、`keyring`(任意) などが取り込み漏れする場合がある。起動時 ImportError が出たら `--include-module=...` を追記。
 3. **uvicorn の import 文字列**: `uvicorn.Config("web_app.app:app")` は文字列参照。エントリが `web_app/app.py` なので通常は同梱されるが、起動失敗時は `--include-module=web_app.app` を明示。
-4. **起動時間/サイズ**: onefile は初回展開で起動が遅め・サイズ大。必要なら `--standalone`（フォルダ配布）も検討。
+4. **起動時間/サイズ**: onefile は初回展開で起動が遅め・サイズ大。`build_exe.ps1` は `zstandard` を導入して onefile を圧縮する（未導入だと圧縮スキップ警告＋サイズ増）。さらに小さくしたい/起動を速くしたい場合は `--standalone`（フォルダ配布）も検討。`--include-windows-runtime-dlls=yes` で VC++ ランタイムを同梱している（配布先にランタイムが無くても起動可能）。
 5. **コード署名**: 未署名だと SmartScreen 警告。配布時はコード署名証明書を検討（別途）。
 6. **動作確認**: ビルド後、別フォルダ（Python無し相当）で exe を起動し、(a) /setup 表示、(b) settings.db が exe_dir/data に作られる、(c) job-runner が起動する（生成ジョブが進む）、(d) VOICEVOX/ffmpeg 検出、を確認。
 

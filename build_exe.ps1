@@ -24,8 +24,9 @@ $py = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $py)) { throw ".venv が見つかりません。先に仮想環境を作成してください。" }
 
 # 1. Nuitka を確認/導入（既に入っていれば pip が「Requirement already satisfied」を返す）
+#    zstandard を入れると onefile が圧縮され exe が小さくなる（未導入だと圧縮スキップの警告が出る）。
 Write-Host "Nuitka を確認/導入します..."
-& $py -m pip install nuitka
+& $py -m pip install nuitka zstandard
 if ($LASTEXITCODE -ne 0) { throw "Nuitka のインストールに失敗しました。" }
 
 # 2. ビルドバージョンを焼き込む（exe では git が使えないため）
@@ -48,6 +49,7 @@ Write-Host "Nuitka ビルドを開始します（長時間かかります）..."
 & $py -m nuitka `
     --standalone --onefile `
     --assume-yes-for-downloads `
+    --include-windows-runtime-dlls=yes `
     --output-dir=dist `
     --output-filename=NativeVideoFactory.exe `
     --company-name="Native Video Factory" `
