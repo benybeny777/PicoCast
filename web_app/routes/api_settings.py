@@ -259,6 +259,13 @@ def api_setup_status():
     return setup_gate_status()
 
 
+@router.get("/setup-readiness")
+def api_setup_readiness():
+    """セットアップ完了に必要な最小構成（チャンネル/VOICEVOX/ffmpeg）の充足状況を返す。"""
+    from web_app.services.status_service import setup_readiness
+    return setup_readiness()
+
+
 @router.post("/setup")
 def api_setup_complete(req: SetupCompleteRequest):
     """初回セットアップ完了状態を保存する。完了には法務文書への同意が必須。"""
@@ -267,6 +274,10 @@ def api_setup_complete(req: SetupCompleteRequest):
         from core.legal_consent import is_consent_accepted
         if not is_consent_accepted():
             raise HTTPException(status_code=422, detail="先に利用規約・使用許諾（EULA）・プライバシーポリシーへの同意が必要です。")
+        from web_app.services.status_service import setup_readiness
+        readiness = setup_readiness()
+        if not readiness["ready"]:
+            raise HTTPException(status_code=422, detail="セットアップ完了に必要な項目が未完了です：\n- " + "\n- ".join(readiness["missing"]))
     set_setup_completed(req.completed)
     return setup_gate_status()
 

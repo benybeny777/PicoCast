@@ -126,6 +126,24 @@ def get_cached_settings_status() -> dict[str, Any]:
     return refresh_settings_status()
 
 
+def setup_readiness() -> dict[str, Any]:
+    """初回セットアップ完了の必須条件（最小構成）が揃っているか判定する。
+
+    必須（使い方に関係なく常に必要）: active channel profile / VOICEVOX 接続 / ffmpeg 利用可。
+    Google API キー等は使い方次第なので必須にしない（手書き台本＋Stable Diffusion WebUI なら不要）。
+    戻り値: {"ready": bool, "missing": [理由, ...]}
+    """
+    from core.channel_profile import get_active_profile
+    missing: list[str] = []
+    if get_active_profile() is None:
+        missing.append("チャンネル（active profile）が未作成です。手順1で作成してください。")
+    if not check_voicevox().get("ok"):
+        missing.append("VOICEVOX に接続できません。起動と URL（既定 http://localhost:50021）を確認してください。")
+    if not check_ffmpeg().get("ok"):
+        missing.append("ffmpeg が利用できません。インストールして PATH に通すか FFMPEG_BIN を設定してください。")
+    return {"ready": not missing, "missing": missing}
+
+
 def get_settings_status() -> dict[str, Any]:
     root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 

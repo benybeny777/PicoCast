@@ -6,6 +6,11 @@
 
 ## 2026-06-04
 
+### 初回セットアップ完了に最小構成の必須チェックを追加
+
+- セットアップ完了（`POST /api/settings/setup`）に、法務同意に加えて**最小構成（active channel profile / VOICEVOX 接続 / ffmpeg 利用可）の充足を必須化**。未充足なら 422 で不足項目を返す。`web_app/services/status_service.py:setup_readiness()` / `GET /api/settings/setup-readiness`。
+- `/setup` の完了欄に「必須条件を確認」ボタンを追加。Google API キーは使い方次第のため必須にしない（手書き台本＋Stable Diffusion WebUI なら不要）。
+
 ### サポート導線・更新確認を製品管理タブに追加
 
 - 設定画面「製品管理」にサポート問い合わせ先（`PRODUCT_SUPPORT_URL` / `PRODUCT_SUPPORT_EMAIL`、空=非表示）を診断パッケージ付近に表示。`GET /api/settings/product-info`。

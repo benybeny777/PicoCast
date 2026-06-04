@@ -37,7 +37,10 @@
 - `core/update_check.py`: URLからJSON `{"latest_version": "x.y.z", "url": "..."}` を取得し `build_app_version()` と比較。
 - 設定画面「製品管理」に「更新を確認」ボタン＋結果表示。URL未設定なら「未設定」と表示しアクセスしない。
 
-### 4. 初回セットアップ完了ゲートの必須チェック  状態: 未着手
+### 4. 初回セットアップ完了ゲートの必須チェック  状態: ✅ 完了
+- `web_app/services/status_service.py:setup_readiness()`（active profile / VOICEVOX / ffmpeg）。`GET /api/settings/setup-readiness`。`POST /api/settings/setup` 完了時に未充足なら422。/setup 完了欄に「必須条件を確認」ボタン。Google APIキーは必須にしない。
+
+(旧メモ)
 - `core/setup_state.py` に `setup_readiness()` を追加。
 - 必須（常時）: active profile 存在 / VOICEVOX 接続 / ffmpeg 利用可。
 - `POST /api/settings/setup`（完了）で必須未達なら 422＋不足項目リストを返し完了をブロック。
