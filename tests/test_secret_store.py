@@ -172,6 +172,37 @@ def test_profile_id_isolation(tmp_secret_store):
     assert not ss.has_secret("youtube_upload_token", profile_id="default")
 
 
+# ── パスフレーズ再暗号化（クロスPC） ──────────────────────────────────────────
+
+def test_passphrase_export_import_roundtrip_across_master_keys(tmp_secret_store, monkeypatch):
+    """別PC（別マスターキー）でも同じパスフレーズで認証情報を復元できる。"""
+    ss = tmp_secret_store
+    # PC-A のマスターキーで保存
+    ss.save_secret("google_api_key", "AIza-A", profile_id="chan_a")
+    ss.save_secret("youtube_upload_token", "tok-A", profile_id="chan_a")
+
+    blob = ss.export_secrets_with_passphrase("correct horse battery")
+
+    # 別PCを模す: 全シークレットを消し、マスターキーを別物に差し替える
+    ss.delete_secret("google_api_key", profile_id="chan_a")
+    ss.delete_secret("youtube_upload_token", profile_id="chan_a")
+    monkeypatch.setattr(ss, "_get_master_key", lambda: b"\x02" * 32)
+
+    count = ss.import_secrets_with_passphrase(blob, "correct horse battery")
+    assert count == 2
+    assert ss.load_secret("google_api_key", profile_id="chan_a") == "AIza-A"
+    assert ss.load_secret("youtube_upload_token", profile_id="chan_a") == "tok-A"
+
+
+def test_passphrase_import_wrong_passphrase_fails(tmp_secret_store):
+    """誤ったパスフレーズでは復号できない。"""
+    ss = tmp_secret_store
+    ss.save_secret("google_api_key", "AIza-secret")
+    blob = ss.export_secrets_with_passphrase("right-pass")
+    with pytest.raises(ss.SecretDecryptionError):
+        ss.import_secrets_with_passphrase(blob, "wrong-pass")
+
+
 # ── スレッドセーフ ────────────────────────────────────────────────────────────
 
 def test_concurrent_save_load(tmp_secret_store):

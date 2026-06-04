@@ -231,10 +231,14 @@ def favicon():
     return RedirectResponse(url="/static/favicon.svg", status_code=301)
 
 
-# /health はシンプルにトップレベルにも置く
+# /health はシンプルにトップレベルにも置く。
+# service マーカーで「ポートを使っているのが自分自身か」を起動時に判別できるようにする。
+_HEALTH_SERVICE_ID = "native-video-factory"
+
+
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "service": _HEALTH_SERVICE_ID, "app": config.WEB_APP_NAME}
 
 
 # ── グローバル例外ハンドラ（秘密値をログに出さない） ──────────────────────────
@@ -243,8 +247,20 @@ async def generic_exception_handler(request: Request, exc: Exception):
     # スタックトレースは内部ログのみ。レスポンスには詳細を最小限にする
     import logging
     import traceback
+    from core.error_codes import AppError
     logging.getLogger(__name__).exception("未処理例外: %s %s", request.method, request.url.path)
     traceback.print_exc()
+    # AppError はエラーコードと対処手順を持つので、ユーザーに対処を提示する
+    if isinstance(exc, AppError):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": exc.user_message(),
+                "code": exc.code,
+                "remediation": exc.remediation,
+                "retry_recommended": exc.retry_recommended,
+            },
+        )
     return JSONResponse(
         status_code=500,
         content={"error": "サーバーエラーが発生しました", "detail": type(exc).__name__},
@@ -270,6 +286,31 @@ def _find_free_port(host: str, start: int, limit: int = 20) -> int | None:
     return None
 
 
+def _probe_existing_instance(host: str, port: int) -> bool:
+    """指定 host:port で稼働しているのが本アプリ自身かを /health で判定する。
+
+    多重起動の検出に使う。別アプリが使っているポートと区別するため、
+    /health の service マーカーが一致するときだけ True を返す。
+    """
+    import json
+    import urllib.error
+    import urllib.request
+    url = f"http://{host}:{port}/health"
+    try:
+        with urllib.request.urlopen(url, timeout=1.0) as res:
+            if res.status != 200:
+                return False
+            data = json.loads(res.read().decode("utf-8"))
+            return data.get("service") == _HEALTH_SERVICE_ID
+    except (OSError, TimeoutError, ValueError, urllib.error.URLError):
+        return False
+
+
+def _open_browser_to(url: str) -> None:
+    import webbrowser
+    webbrowser.open(url)
+
+
 # ── 起動 ──────────────────────────────────────────────────────────────────
 def main():
     import argparse
@@ -290,24 +331,34 @@ def main():
     if host not in ("127.0.0.1", "localhost"):
         print(f"警告: ホスト '{host}' を指定しています。外部からのアクセスに注意してください。")
 
-    # ポート競合チェック
+    # ポート競合チェック（多重起動の検出 → 自己回復）
     if not _is_port_free(host, port):
-        if args.auto_port:
-            free = _find_free_port(host, port + 1)
-            if free is None:
-                print(f"エラー: ポート {port}〜{port + 19} がすべて使用中です。--port で別のポートを指定してください。")
-                sys.exit(1)
-            print(f"ポート {port} は使用中のため、{free} で起動します。")
-            port = free
-        else:
-            free = _find_free_port(host, port + 1)
+        existing_url = f"http://{host}:{port}"
+        # ① 多重起動: 同じポートで本アプリが既に動いていれば、二重起動せずブラウザだけ開く
+        if _probe_existing_instance(host, port):
+            print(f"{config.WEB_APP_NAME} は既に起動しています: {existing_url}")
+            print("二重起動はせず、既存のウィンドウを開きます。")
+            if args.open_browser:
+                _open_browser_to(existing_url)
+            return
+        # ② 別アプリがポートを使用中
+        free = _find_free_port(host, port + 1)
+        explicit_port = args.port is not None
+        if explicit_port and not args.auto_port:
+            # 明示的に --port 指定したポートは黙って変更しない（ユーザー意図を尊重）
             suggestion = f"  別のポートで起動: python web_app/app.py --port {free}" if free else ""
             print(
-                f"エラー: ポート {port} は既に使用中です。\n"
+                f"エラー: ポート {port} は別のアプリが使用中です。\n"
                 f"  自動で空きポートを探す: python web_app/app.py --auto-port\n"
                 f"{suggestion}"
             )
             sys.exit(1)
+        # 既定ポート（または --auto-port）は自己回復で空きポートへ退避する
+        if free is None:
+            print(f"エラー: ポート {port}〜{port + 19} がすべて使用中です。--port で別のポートを指定してください。")
+            sys.exit(1)
+        print(f"ポート {port} は別のアプリが使用中のため、{free} で起動します。")
+        port = free
 
     url = f"http://{host}:{port}"
     print(f"Web UI を起動しています: {url}")
@@ -355,18 +406,33 @@ def main():
         # 通常起動: uvicorn.Server を直接使い should_exit で安全停止できるようにする
         import asyncio
         from core.app_shutdown import set_uvicorn_server
-        uv_config = uvicorn.Config(
-            "web_app.app:app",
-            host=host,
-            port=port,
-            log_level="info",
-        )
-        server = uvicorn.Server(uv_config)
-        set_uvicorn_server(server)
-        try:
+
+        def _serve_on(bind_port: int) -> None:
+            uv_config = uvicorn.Config(
+                "web_app.app:app",
+                host=host,
+                port=bind_port,
+                log_level="info",
+            )
+            server = uvicorn.Server(uv_config)
+            set_uvicorn_server(server)
             asyncio.run(server.serve())
+
+        try:
+            _serve_on(port)
         except KeyboardInterrupt:
             pass
+        except OSError as exc:
+            # 起動直前のレースでポートを奪われた場合の自己回復: 空きポートで1度だけ再試行する
+            free = _find_free_port(host, port + 1)
+            if free is None:
+                print(f"エラー: ポート {port} の確保に失敗しました（{exc}）。空きポートも見つかりません。")
+                sys.exit(1)
+            print(f"ポート {port} の確保に失敗したため、{free} で起動し直します（{exc}）。")
+            try:
+                _serve_on(free)
+            except KeyboardInterrupt:
+                pass
 
 
 if __name__ == "__main__":

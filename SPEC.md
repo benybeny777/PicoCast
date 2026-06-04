@@ -534,6 +534,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - `/setup` ではチャンネル名・ハンドル・製品版 seed profile、APIキー登録導線、VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI 診断、BGM登録導線、サンプル台本のテスト生成、完了保存を扱う。
 - サンプル生成だけは `setup_test=true` により未完了状態でも登録できる。
 - 「プロセスを走査して自動設定」で外部依存サービスを検出できる（`core/service_detector.py`）。起動中プロセスと既定ポート（VOICEVOX 50021 / Ollama 11434 / Stable Diffusion WebUI 7860）、PATH 上の ffmpeg を走査し、`VOICEVOX_PATH` / `VOICEVOX_URL` / `OLLAMA_BASE_URL` / `SD_WEBUI_BASE_URL` / `FFMPEG_BIN` を `POST /api/settings/detect-services` で検出、`POST /api/settings/detect-services/apply` で EDITABLE_CONFIG 経由保存・即時反映する。秘密情報は扱わない。
+- 未検出のサービスには `core/service_detector.py:_INSTALL_GUIDE` のダウンロードURL（`config.py` の `VOICEVOX_DOWNLOAD_URL` / `FFMPEG_DOWNLOAD_URL` / `OLLAMA_DOWNLOAD_URL` / `SD_WEBUI_DOWNLOAD_URL`）とインストール手順、必須/任意（VOICEVOX・ffmpeg が必須、Ollama・Stable Diffusion WebUI が任意）を `detect_services()` の各 service に付与し、`/setup` でダウンロードリンクとして表示する。外部依存は同梱せず個別に入手させる方針。
 
 ### ライセンス管理
 
@@ -541,6 +542,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - edition は `trial` / `personal` / `pro` / `studio`。秘密情報や購入者情報をログ・レスポンスへ出さない。
 - 制限項目: Trial 透かし、1日生成本数、最大 channel profile 数、YouTubeアップロード可否、Analytics可否、テンプレート数上限。
 - Trial は native MP4 の最終出力へ `Native Video Factory Trial` の小さな透かしを焼き込む。
+- 試用→購入の動線（UX先行）: `get_license_info()` は `purchase_url`（`config.PRODUCT_PURCHASE_URL`）と `upgrade_available`（edition が studio 以外）を返す。上限到達エラー（生成本数・profile 数・アップロード・Analytics・テンプレート）の文言には購入導線を付ける。設定画面「製品管理」のライセンスカードに購入リンクとライセンスキー入力欄を表示し、`POST /api/settings/license` で即時反映する。実ライセンスキーの署名検証は未実装（後付け予定）。
 
 ### 診断パッケージ
 
@@ -555,7 +557,18 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - バックアップ対象は `data/settings.db` と各 `output/{profile_id}/000_data/metadata.db`。`prompt_templates` / `channel_profiles` / `bgm_assets` は `settings.db` 内のテーブルとして含まれる。
 - 復元前には現在の `settings.db` と profile 別 `metadata.db` を `pre_restore_*` に自動退避する。
 - バックアップの `metadata_schema_version` が現行より新しい場合は fail closed で中止する。
-- `encrypted_secrets` は同一PCのマスターキーでのみ復号可能。別PC復元時はAPIキー・OAuthを再登録する。
+- `encrypted_secrets` は同一PCのマスターキーでのみ復号可能。**パスフレーズを指定したバックアップでは認証情報を PBKDF2(SHA-256, 20万回) + AES-GCM でパスフレーズ由来鍵により再暗号化し、`secrets_export.enc` として同梱する**（`core/secret_store.py:export_secrets_with_passphrase`）。復元時は DB 復元後に同じパスフレーズで復号し、復元先 PC のマスターキーで `save_secret()` し直す（`import_secrets_with_passphrase`）。これにより別PCへ認証情報を移行できる。
+- パスフレーズを含むバックアップを復元するにはパスフレーズが必須（未入力なら中止）。パスフレーズ空欄のバックアップは従来どおり同一PC専用で、別PC復元時はAPIキー・OAuthを再登録する。
+- API: `POST /api/settings/backup`（`passphrase` 任意）、`POST /api/settings/restore`（`backup_path` / `confirmed=true` / `passphrase` 任意）。
+
+### 起動・多重起動の自己回復
+
+- `/health` は `{status, service: "native-video-factory", app}` を返す。`service` マーカーで「ポートを使っているのが本アプリ自身か」を起動時に判別する。
+- `web_app/app.py:main()` の起動時ポート処理:
+  - 既定ポートが使用中で、本アプリが既に起動している（`/health` の `service` 一致）場合は**二重起動せず**、`--open-browser` 指定時は既存ウィンドウを開いて終了する。
+  - 別アプリが使用中の場合、既定ポート（または `--auto-port`）なら自動で空きポートへ退避する。`--port` を明示指定したポートが別アプリ使用中のときはユーザー意図を尊重してエラー停止する。
+  - 起動直前のレースでポートを奪われた場合（`OSError`）は、空きポートで1度だけ再試行する。
+- job-runner はWeb起動時に常駐起動し、異常終了を監視して自動再起動する（`_start_job_runner` の watch スレッド）。
 
 ### 製品版SEED
 
@@ -1128,9 +1141,11 @@ Long ではタイトル候補（A/B/C案）を生成し、アップロード時�
 
 エラーコードと文言は `core/error_codes.py` の `ERROR_CATALOG` で一元管理する（コードは安定IDとして維持し、文言変更はここだけで行う）。
 
-- `ErrorDef(code, message, category, retry_recommended)` を保持し、`format_error(code, detail)` が `[CODE] 文言（detail）` を返す。`AppError(code, detail)` はコード付き例外。
+- `ErrorDef(code, message, category, retry_recommended, remediation)` を保持し、`format_error(code, detail, with_fix=False)` が `[CODE] 文言（detail）`（`with_fix=True` で末尾に ` 対処: <remediation>`）を返す。`AppError(code, detail)` はコード付き例外で、`AppError.user_message()` が「何が起きたか＋対処」をまとめて返す。
+- **すべての `ERROR_CATALOG` エントリに `remediation`（具体的な対処手順）を必須化する**（製品方針: 対処不明のエラーをユーザーに出さない）。`tests/test_error_codes.py` で全エントリの remediation を検証する。
+- Web の未処理 `AppError` はグローバル例外ハンドラ（`web_app/app.py`）が 422 で `{error: user_message, code, remediation, retry_recommended}` を返す。
 - 未登録コードは `E-UNKNOWN` にフォールバックする（参照で落とさない）。
-- 主なコード: `E-IMG-BUSY`（503混雑・再実行推奨）/ `E-IMG-AUTH`（401/403）/ `E-IMG-QUOTA`（429・レート制限/クォータ/残高）/ `E-IMG-FAIL`（画像生成その他）/ `E-SECRET-MISSING` / `E-SCRIPT-MISSING` / `E-VOICE-FAIL` / `E-RENDER-FAIL` / `E-UNKNOWN`。
+- 主なコード: `E-IMG-BUSY`（503混雑・再実行推奨）/ `E-IMG-AUTH`（401/403）/ `E-IMG-QUOTA`（429・レート制限/クォータ/残高）/ `E-IMG-FAIL`（画像生成その他）/ `E-SECRET-MISSING` / `E-SCRIPT-MISSING` / `E-VOICE-FAIL` / `E-RENDER-FAIL` / `E-VOICEVOX-DOWN` / `E-FFMPEG-MISSING` / `E-OLLAMA-DOWN` / `E-NET` / `E-UPLOAD-AUTH` / `E-UPLOAD-FAIL` / `E-SETUP-INCOMPLETE` / `E-LICENSE-LIMIT` / `E-DISK` / `E-UNKNOWN`。
 - 画像APIの `category` → コードは `image_error_code()` で変換する。新種別を増やすときは `ERROR_CATALOG` に追記する。
 - 画像生成失敗の表示は `format_image_error(code, backend=…, model=…, status_code=…, detail=…)` を使い、`[CODE] バックエンド名：文言（HTTP=… / model=… / detail）` の形にする。`backend_label()` が `nanobanana`→`Gemini` / `sd_webui`→`Stable Diffusion WebUI` に変換し、**どのバックエンドで・どの種別（混雑 / クォータ・残高 / 認証 / その他）の失敗か**を一目で判別できるようにする。残高切れと一時混雑を取り違える誤誘導文言（「接続・残高を確認」等）は使わない。
 - **サムネイル生成失敗は握りつぶさず `ImageGenerationError` を上位伝播する。** `generate_thumbnail()` は失敗時に分類済み例外を投げ、`run_pipeline` 側の `_report_thumbnail_failure()` が job ログ・デバッグログ（`_logger.error` にスタックと code/backend/category/HTTP）・`image_generation_failures`（`prompt="thumbnail"`）へ判別情報つきで記録し、トレースバックを生で出さずに `finish_result` で正常終了する（背景生成失敗と同じ扱い）。

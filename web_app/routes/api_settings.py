@@ -228,9 +228,14 @@ class SetupCompleteRequest(BaseModel):
     completed: bool = True
 
 
+class BackupRequest(BaseModel):
+    passphrase: str = ""
+
+
 class RestoreBackupRequest(BaseModel):
     backup_path: str
     confirmed: bool = False
+    passphrase: str = ""
 
 
 @router.get("/setup")
@@ -273,18 +278,25 @@ def api_create_diagnostics():
 
 
 @router.post("/backup")
-def api_create_backup():
-    """settings.db と profile 別 metadata.db のバックアップを作成する。"""
+def api_create_backup(req: BackupRequest | None = None):
+    """settings.db と profile 別 metadata.db のバックアップを作成する。
+
+    passphrase を指定すると認証情報を再暗号化して同梱し、別PCでも復元できる。
+    """
     from web_app.services.backup_service import create_backup
-    return create_backup()
+    passphrase = req.passphrase if req else ""
+    return create_backup(passphrase=passphrase)
 
 
 @router.post("/restore")
 def api_restore_backup(req: RestoreBackupRequest):
-    """バックアップZIPから復元する。confirmed=true 必須。"""
+    """バックアップZIPから復元する。confirmed=true 必須。
+
+    認証情報を同梱したバックアップは passphrase を指定して別PCでも復元できる。
+    """
     try:
         from web_app.services.backup_service import restore_backup
-        return restore_backup(req.backup_path, confirmed=req.confirmed)
+        return restore_backup(req.backup_path, confirmed=req.confirmed, passphrase=req.passphrase)
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 

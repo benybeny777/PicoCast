@@ -17,29 +17,64 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class ErrorDef:
     code: str
-    message: str                 # ユーザー向け既定文言（日本語）
+    message: str                 # ユーザー向け既定文言（何が起きたか）
     category: str                # auth / quota / api_busy / generic / config / pipeline ...
     retry_recommended: bool = False  # 時間を置いた再実行で回復する見込みがあるか
+    remediation: str = ""        # ユーザーが取るべき具体的な対処手順（必ず1つ以上）
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 中央カタログ（コード → 定義）。文言の変更はここだけで行う。
+# すべてのエントリに remediation（対処手順）を必ず付ける。製品版では
+# 「原因不明・対処不明」のエラーをユーザーに出さないことを方針とする。
 # ─────────────────────────────────────────────────────────────────────────────
 ERROR_CATALOG: dict[str, ErrorDef] = {
     # 画像生成（Gemini / Nano Banana / Stable Diffusion WebUI）
-    "E-IMG-BUSY":  ErrorDef("E-IMG-BUSY",  "一時的に混雑しています（提供元サーバー側の高負荷）。残高・APIキー・台本やプロンプトの問題ではありません。数分おいてから再実行してください。", "api_busy", True),
-    "E-IMG-AUTH":  ErrorDef("E-IMG-AUTH",  "認証・権限エラーです。設定画面のAPIキーが正しいか、課金・権限が有効かを確認してください。", "auth", False),
-    "E-IMG-QUOTA": ErrorDef("E-IMG-QUOTA", "利用上限に達しました（レート制限・クォータ・残高のいずれか）。提供元コンソールで利用量と課金状況を確認してください。", "quota", True),
-    "E-IMG-FAIL":  ErrorDef("E-IMG-FAIL",  "画像生成に失敗しました。エラー内容を確認してください。", "generic", False),
+    "E-IMG-BUSY":  ErrorDef("E-IMG-BUSY",  "一時的に混雑しています（提供元サーバー側の高負荷）。残高・APIキー・台本やプロンプトの問題ではありません。", "api_busy", True,
+                            "数分おいてから履歴の再生成（背景再利用）で未生成分だけ作り直してください。"),
+    "E-IMG-AUTH":  ErrorDef("E-IMG-AUTH",  "画像生成の認証・権限エラーです。", "auth", False,
+                            "設定画面のAPIキーが正しいか、課金・権限（Generative Language API の有効化）を確認して登録し直してください。"),
+    "E-IMG-QUOTA": ErrorDef("E-IMG-QUOTA", "画像生成の利用上限に達しました（レート制限・クォータ・残高のいずれか）。", "quota", True,
+                            "提供元コンソールで利用量と課金状況を確認し、上限引き上げか時間をおいて再実行してください。"),
+    "E-IMG-FAIL":  ErrorDef("E-IMG-FAIL",  "画像生成に失敗しました。", "generic", False,
+                            "デバッグログ（app_debug_*.log）でエラー内容を確認し、APIキー・プロンプト・画像エンジンの稼働状況を確認してください。"),
     # 認証情報
-    "E-SECRET-MISSING": ErrorDef("E-SECRET-MISSING", "必要なAPIキー/認証情報が未登録です。設定画面から登録してください。", "config", False),
+    "E-SECRET-MISSING": ErrorDef("E-SECRET-MISSING", "必要なAPIキー/認証情報が未登録です。", "config", False,
+                                 "設定画面の「APIキー」タブから対象の認証情報を登録してください。"),
     # 台本
-    "E-SCRIPT-MISSING": ErrorDef("E-SCRIPT-MISSING", "対象の台本がデータベースに見つかりません。", "pipeline", False),
+    "E-SCRIPT-MISSING": ErrorDef("E-SCRIPT-MISSING", "対象の台本がデータベースに見つかりません。", "pipeline", False,
+                                 "履歴一覧から対象動画を選び直すか、台本を再生成してください。フォルダ移動・削除をした場合は再取り込みが必要です。"),
     # 音声・レンダー
-    "E-VOICE-FAIL":  ErrorDef("E-VOICE-FAIL",  "音声生成に失敗したセリフがあります。", "pipeline", False),
-    "E-RENDER-FAIL": ErrorDef("E-RENDER-FAIL", "MP4のレンダリングに失敗しました。", "pipeline", False),
+    "E-VOICE-FAIL":  ErrorDef("E-VOICE-FAIL",  "音声生成に失敗したセリフがあります。", "pipeline", False,
+                              "VOICEVOX が起動しているか（既定 http://localhost:50021）確認し、該当セリフを修正して再生成してください。"),
+    "E-RENDER-FAIL": ErrorDef("E-RENDER-FAIL", "MP4のレンダリングに失敗しました。", "pipeline", False,
+                              "ffmpeg が利用可能か、音声・背景が揃っているかを確認し、履歴詳細の「動画再作成（レンダーのみ）」で作り直してください。"),
+    # 外部サービス稼働
+    "E-VOICEVOX-DOWN": ErrorDef("E-VOICEVOX-DOWN", "VOICEVOX に接続できません。", "config", True,
+                                "VOICEVOX を起動し、設定画面の VOICEVOX_URL（既定 http://localhost:50021）が正しいか確認してから再実行してください。"),
+    "E-FFMPEG-MISSING": ErrorDef("E-FFMPEG-MISSING", "ffmpeg が見つかりません。", "config", False,
+                                 "ffmpeg をインストールして PATH に通すか、設定画面の FFMPEG_BIN に ffmpeg.exe のパスを指定してください。/setup の自動検出も利用できます。"),
+    "E-OLLAMA-DOWN": ErrorDef("E-OLLAMA-DOWN", "Ollama に接続できません（台本の品質レビュー用）。", "config", True,
+                              "Ollama を起動するか、品質レビューを使わない設定にしてください。設定画面の OLLAMA_BASE_URL も確認してください。"),
+    # ネットワーク
+    "E-NET": ErrorDef("E-NET", "ネットワーク接続に失敗しました。", "network", True,
+                      "インターネット接続とプロキシ/ファイアウォール設定を確認し、しばらくしてから再実行してください。"),
+    # YouTube アップロード
+    "E-UPLOAD-AUTH": ErrorDef("E-UPLOAD-AUTH", "YouTube の認証が無効または未完了です。", "auth", False,
+                              "設定画面でYouTube Client Secretsを登録し、アップロード用のOAuth認証をやり直してください。トークン失効時は再認証が必要です。"),
+    "E-UPLOAD-FAIL": ErrorDef("E-UPLOAD-FAIL", "YouTube へのアップロードに失敗しました。", "pipeline", True,
+                              "ネットワークと認証状態を確認し、時間をおいて再実行してください。YouTube側の上限・重複の可能性もあります。"),
+    # ライセンス・セットアップ
+    "E-SETUP-INCOMPLETE": ErrorDef("E-SETUP-INCOMPLETE", "初回セットアップが未完了です。", "config", False,
+                                   "/setup を開き、チャンネル・APIキー・外部サービス診断を完了してください。"),
+    "E-LICENSE-LIMIT": ErrorDef("E-LICENSE-LIMIT", "現在のライセンスエディションの利用上限に達しました。", "license", False,
+                                "設定画面「製品管理」で上位エディションに切り替えるか、上限の範囲内で実行してください。"),
+    # ディスク
+    "E-DISK": ErrorDef("E-DISK", "ディスクの空き容量が不足している可能性があります。", "system", False,
+                       "出力先ドライブの空き容量を確保してから再実行してください。"),
     # 既定
-    "E-UNKNOWN": ErrorDef("E-UNKNOWN", "不明なエラーが発生しました。", "generic", False),
+    "E-UNKNOWN": ErrorDef("E-UNKNOWN", "不明なエラーが発生しました。", "generic", False,
+                          "デバッグログ（app_debug_*.log）を確認し、解決しない場合は設定画面「製品管理」から診断パッケージを作成して問い合わせてください。"),
 }
 
 
@@ -102,12 +137,19 @@ def get_error(code: str) -> ErrorDef:
     return ERROR_CATALOG.get(code, ERROR_CATALOG["E-UNKNOWN"])
 
 
-def format_error(code: str, detail: str = "") -> str:
-    """`[CODE] 文言（: detail）` 形式の表示文字列を返す。"""
+def format_error(code: str, detail: str = "", *, with_fix: bool = False) -> str:
+    """`[CODE] 文言（detail）` 形式の表示文字列を返す。
+
+    with_fix=True のとき、末尾に ` 対処: <remediation>` を付けて
+    「何が起きたか」と「どうすればよいか」を一目で示す。
+    """
     d = get_error(code)
     base = f"[{d.code}] {d.message}"
     detail = (detail or "").strip()
-    return f"{base}（{detail}）" if detail else base
+    text = f"{base}（{detail}）" if detail else base
+    if with_fix and d.remediation:
+        text = f"{text} 対処: {d.remediation}"
+    return text
 
 
 class AppError(Exception):
@@ -127,3 +169,11 @@ class AppError(Exception):
     @property
     def retry_recommended(self) -> bool:
         return self.definition.retry_recommended
+
+    @property
+    def remediation(self) -> str:
+        return self.definition.remediation
+
+    def user_message(self) -> str:
+        """ユーザー向けに「何が起きたか＋対処」をまとめた文字列を返す。"""
+        return format_error(self.code, self.detail, with_fix=True)

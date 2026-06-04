@@ -382,3 +382,111 @@ def list_secret_status(profile_id: str | None = None) -> dict[str, bool]:
             conn.close()
     registered = {r["secret_type"] for r in rows}
     return {t: (t in registered) for t in KNOWN_SECRET_TYPES}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# パスフレーズ再暗号化（クロスPC バックアップ／復元）
+#
+# encrypted_secrets は同一PCのマスターキー（DPAPI / keyring）でしか復号できない。
+# 別PCへ移行できるよう、バックアップ時にユーザー指定のパスフレーズで全シークレットを
+# 再暗号化したエクスポート blob を作り、復元先で同じパスフレーズで取り込み、その PC の
+# マスターキーで保存し直す。パスフレーズ無しのバックアップにはこの blob を含めない。
+# ─────────────────────────────────────────────────────────────────────────────
+
+_PBKDF2_ITERATIONS = 200_000  # パスフレーズ KDF の反復回数
+
+
+def _all_secret_refs() -> list[tuple[str, str]]:
+    """登録済み全シークレットの (profile_id, secret_type) を返す。"""
+    with _lock:
+        conn = _open_db()
+        try:
+            rows = conn.execute(
+                "SELECT profile_id, secret_type FROM encrypted_secrets"
+            ).fetchall()
+        finally:
+            conn.close()
+    return [(r["profile_id"], r["secret_type"]) for r in rows]
+
+
+def _derive_passphrase_key(passphrase: str, salt: bytes) -> bytes:
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+    from cryptography.hazmat.primitives import hashes
+    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=_PBKDF2_ITERATIONS)
+    return kdf.derive(passphrase.encode("utf-8"))
+
+
+def export_secrets_with_passphrase(passphrase: str) -> bytes:
+    """全シークレットをパスフレーズで再暗号化したエクスポート blob（JSON envelope）を返す。
+
+    別PCでも復元できるよう、ローカルのマスターキーで復号した値を
+    パスフレーズ由来鍵（PBKDF2 + AES-GCM）で再暗号化する。
+    """
+    import base64
+    import json
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+    passphrase = (passphrase or "").strip()
+    if not passphrase:
+        raise SecretError("パスフレーズが空です")
+
+    payload: dict[str, str] = {}
+    for pid, secret_type in _all_secret_refs():
+        # load_secret はローカルのマスターキーで復号する
+        payload[f"{pid}\t{secret_type}"] = load_secret(secret_type, profile_id=pid)
+
+    salt = secrets.token_bytes(16)
+    nonce = secrets.token_bytes(12)
+    key = _derive_passphrase_key(passphrase, salt)
+    plaintext = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    ciphertext = AESGCM(key).encrypt(nonce, plaintext, None)
+    envelope = {
+        "v": 1,
+        "kdf": "pbkdf2-sha256",
+        "iters": _PBKDF2_ITERATIONS,
+        "salt": base64.b64encode(salt).decode("ascii"),
+        "nonce": base64.b64encode(nonce).decode("ascii"),
+        "ct": base64.b64encode(ciphertext).decode("ascii"),
+        "count": len(payload),
+    }
+    return json.dumps(envelope).encode("utf-8")
+
+
+def import_secrets_with_passphrase(blob: bytes, passphrase: str) -> int:
+    """エクスポート blob をパスフレーズで復号し、この PC のマスターキーで保存し直す。
+
+    戻り値: 取り込んだシークレット件数。パスフレーズ不一致・破損時は SecretDecryptionError。
+    """
+    import base64
+    import json
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    from cryptography.exceptions import InvalidTag
+
+    passphrase = (passphrase or "").strip()
+    if not passphrase:
+        raise SecretError("パスフレーズが空です")
+
+    try:
+        envelope = json.loads(bytes(blob).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        raise SecretDecryptionError("シークレットエクスポートの形式が不正です")
+    if envelope.get("v") != 1:
+        raise SecretDecryptionError("未対応のシークレットエクスポート形式です")
+
+    salt = base64.b64decode(envelope["salt"])
+    nonce = base64.b64decode(envelope["nonce"])
+    ciphertext = base64.b64decode(envelope["ct"])
+    key = _derive_passphrase_key(passphrase, salt)
+    try:
+        plaintext = AESGCM(key).decrypt(nonce, ciphertext, None)
+    except InvalidTag:
+        raise SecretDecryptionError("パスフレーズが異なるか、エクスポートが破損しています")
+
+    payload = json.loads(plaintext.decode("utf-8"))
+    count = 0
+    for ref, value in payload.items():
+        pid, _, secret_type = ref.partition("\t")
+        # save_secret はこの PC のマスターキーで暗号化して保存し直す
+        save_secret(secret_type, value, profile_id=pid)
+        count += 1
+    return count

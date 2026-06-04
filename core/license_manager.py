@@ -4,10 +4,26 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from config import config
 from core.settings_store import get_all, set_many
 
 LICENSE_EDITION_KEY = "LICENSE_EDITION"
 LICENSE_ID_KEY = "LICENSE_ID"
+
+# trial / 上限到達時に購入を促す対象（最上位 studio は購入訴求しない）
+_PAID_EDITIONS = ("personal", "pro", "studio")
+
+
+def purchase_url() -> str:
+    """購入ページURL（未設定なら空文字）。"""
+    return (config.PRODUCT_PURCHASE_URL or "").strip()
+
+
+def _purchase_cta() -> str:
+    """上限到達エラーへ付ける購入導線の文言。URL未設定時は誘導文のみ。"""
+    base = "上位エディションへのアップグレードで上限を解放できます"
+    url = purchase_url()
+    return f"{base}（購入: {url}）。" if url else f"{base}。"
 
 
 @dataclass(frozen=True)
@@ -43,6 +59,8 @@ def get_license_info() -> dict:
     return {
         "edition": edition,
         "registered": bool(settings.get(LICENSE_ID_KEY, "").strip()),
+        "purchase_url": purchase_url(),
+        "upgrade_available": edition != "studio",
         "limits": {
             "watermark": limits.watermark,
             "daily_generations": limits.daily_generations,
@@ -77,7 +95,7 @@ def assert_profile_limit_for_create() -> None:
         return
     from core.channel_profile import list_profiles
     if len(list_profiles()) >= limits.max_profiles:
-        raise RuntimeError(f"{limits.edition} では channel profile は最大 {limits.max_profiles} 件です。")
+        raise RuntimeError(f"{limits.edition} では channel profile は最大 {limits.max_profiles} 件です。{_purchase_cta()}")
 
 
 def _today_window_jst() -> tuple[datetime, datetime]:
@@ -127,20 +145,20 @@ def assert_can_generate(batch_count: int = 1) -> None:
     if current + batch_count > limits.daily_generations:
         raise RuntimeError(
             f"{limits.edition} の1日生成上限は {limits.daily_generations} 本です。"
-            f"本日登録済み: {current} 本。"
+            f"本日登録済み: {current} 本。{_purchase_cta()}"
         )
 
 
 def assert_can_upload() -> None:
     limits = current_limits()
     if not limits.youtube_upload:
-        raise RuntimeError(f"{limits.edition} では YouTube アップロードは利用できません。")
+        raise RuntimeError(f"{limits.edition} では YouTube アップロードは利用できません。{_purchase_cta()}")
 
 
 def assert_can_use_analytics() -> None:
     limits = current_limits()
     if not limits.analytics:
-        raise RuntimeError(f"{limits.edition} では Analytics は利用できません。")
+        raise RuntimeError(f"{limits.edition} では Analytics は利用できません。{_purchase_cta()}")
 
 
 def assert_template_limit(profile_id: str, adding: int = 1) -> None:
@@ -150,4 +168,4 @@ def assert_template_limit(profile_id: str, adding: int = 1) -> None:
     from core.prompt_template_store import list_templates
     current = len(list_templates(profile_id))
     if current + adding > limits.template_limit:
-        raise RuntimeError(f"{limits.edition} ではテンプレートは最大 {limits.template_limit} 件です。")
+        raise RuntimeError(f"{limits.edition} ではテンプレートは最大 {limits.template_limit} 件です。{_purchase_cta()}")

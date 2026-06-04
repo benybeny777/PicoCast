@@ -53,6 +53,7 @@
   <div class="card">
     <h2>ライセンス</h2>
     <div id="license-status" class="hint">読み込み中...</div>
+    <div id="license-purchase" class="mt" style="display:none"></div>
     <div class="form-row mt">
       <select id="license-edition" class="form-input" style="width:160px">
         <option value="trial">trial</option>
@@ -60,9 +61,10 @@
         <option value="pro">pro</option>
         <option value="studio">studio</option>
       </select>
-      <input id="license-id" class="form-input" style="width:260px" placeholder="ライセンスID（任意）">
-      <button class="btn btn-primary" onclick="saveLicense()">保存</button>
+      <input id="license-id" class="form-input" style="width:260px" placeholder="ライセンスキー（任意・購入後に入力）">
+      <button class="btn btn-primary" onclick="saveLicense()">登録</button>
     </div>
+    <p class="hint mt">購入後に届いたライセンスキーを入力して「登録」すると即時反映されます。</p>
   </div>
   <div class="card">
     <h2>診断パッケージ</h2>
@@ -72,9 +74,14 @@
   </div>
   <div class="card">
     <h2>バックアップ / 復元</h2>
-    <button class="btn btn-secondary" onclick="createBackup()">バックアップ作成</button>
+    <p class="hint">パスフレーズを入力すると認証情報（APIキー・OAuth）も再暗号化して同梱し、<strong>別PCでも同じパスフレーズで復元</strong>できます。空欄の場合は同一PC専用（別PCでは認証情報の再登録が必要）です。</p>
+    <div class="form-row mt">
+      <input id="backup-passphrase" type="password" class="form-input" style="width:320px" placeholder="パスフレーズ（任意・クロスPC復元用）">
+      <button class="btn btn-secondary" onclick="createBackup()">バックアップ作成</button>
+    </div>
     <div class="form-row mt">
       <input id="restore-path" class="form-input" style="width:520px" placeholder="復元する backup_*.zip のパス">
+      <input id="restore-passphrase" type="password" class="form-input" style="width:320px" placeholder="パスフレーズ（認証情報同梱バックアップの復元時）">
       <button class="btn btn-danger" onclick="restoreBackup()">復元</button>
     </div>
     <div id="backup-result" class="hint mt"></div>
@@ -602,6 +609,18 @@ async function loadProductStatus() {
     const data = await res.json();
     document.getElementById('license-edition').value = data.edition || 'trial';
     document.getElementById('license-status').textContent = `edition=${data.edition}, registered=${data.registered}, limits=${JSON.stringify(data.limits)}`;
+    // 試用→購入の導線: trial や上位余地がある場合に購入リンクを表示する
+    const box = document.getElementById('license-purchase');
+    if (data.upgrade_available && data.purchase_url) {
+      const label = data.edition === 'trial' ? '製品版を購入してすべての機能を解放' : '上位エディションにアップグレード';
+      box.innerHTML = `<a class="btn btn-primary" href="${data.purchase_url}" target="_blank" rel="noopener">🛒 ${label}</a>`;
+      box.style.display = '';
+    } else if (data.upgrade_available && data.edition === 'trial') {
+      box.innerHTML = '<span class="hint">購入ページURL（PRODUCT_PURCHASE_URL）が未設定です。</span>';
+      box.style.display = '';
+    } else {
+      box.style.display = 'none';
+    }
   } catch(e) {
     document.getElementById('license-status').textContent = 'ライセンス状態の取得に失敗: ' + e;
   }
@@ -626,18 +645,24 @@ async function createDiagnostics() {
 }
 
 async function createBackup() {
-  const res = await fetch('/api/settings/backup', {method:'POST'});
+  const passphrase = document.getElementById('backup-passphrase').value;
+  const res = await fetch('/api/settings/backup', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({passphrase})});
   const data = await res.json();
-  document.getElementById('backup-result').textContent = res.ok ? `作成しました: ${data.path}` : (data.detail || '作成失敗');
+  if (!res.ok) { document.getElementById('backup-result').textContent = data.detail || '作成失敗'; return; }
+  const secretsNote = data.secrets_included ? '（認証情報を同梱: 同じパスフレーズで別PC復元可）' : '（認証情報は同梱せず・同一PC専用）';
+  document.getElementById('backup-result').textContent = `作成しました: ${data.path} ${secretsNote}`;
 }
 
 async function restoreBackup() {
   const backup_path = document.getElementById('restore-path').value.trim();
+  const passphrase = document.getElementById('restore-passphrase').value;
   if (!backup_path) { showToast('復元するZIPパスを入力してください', true); return; }
   if (!confirm('現在の settings.db と metadata.db を退避してから復元します。続行しますか？')) return;
-  const res = await fetch('/api/settings/restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({backup_path, confirmed:true})});
+  const res = await fetch('/api/settings/restore', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({backup_path, confirmed:true, passphrase})});
   const data = await res.json();
-  document.getElementById('backup-result').textContent = res.ok ? `復元しました: ${data.restored}` : (data.detail || '復元失敗');
+  if (!res.ok) { document.getElementById('backup-result').textContent = data.detail || '復元失敗'; return; }
+  const imported = data.secrets_imported ? `（認証情報 ${data.secrets_imported} 件を取り込み）` : '';
+  document.getElementById('backup-result').textContent = `復元しました: ${data.restored} ${imported}`;
 }
 
 async function markSetupComplete() {

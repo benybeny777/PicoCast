@@ -283,6 +283,17 @@ TRIAL_WATERMARK_FONT_SCALE  = float(os.environ.get("TRIAL_WATERMARK_FONT_SCALE",
 TRIAL_WATERMARK_FONT_MIN_PX = int(os.environ.get("TRIAL_WATERMARK_FONT_MIN_PX", "18"))      # 透かし文字サイズの下限px
 
 # ───────────────────────────────────────────────
+# 製品版: 外部依存ソフトの入手先・購入導線
+# ───────────────────────────────────────────────
+# 外部依存ソフトは同梱せず個別にダウンロードさせる。/setup で未検出時にこのURLへ誘導する。
+VOICEVOX_DOWNLOAD_URL = os.environ.get("VOICEVOX_DOWNLOAD_URL", "https://voicevox.hiroshiba.jp/")        # VOICEVOX 公式ダウンロード
+FFMPEG_DOWNLOAD_URL   = os.environ.get("FFMPEG_DOWNLOAD_URL",   "https://www.gyan.dev/ffmpeg/builds/")   # ffmpeg Windows ビルド配布
+OLLAMA_DOWNLOAD_URL   = os.environ.get("OLLAMA_DOWNLOAD_URL",   "https://ollama.com/download")           # Ollama 公式ダウンロード
+SD_WEBUI_DOWNLOAD_URL = os.environ.get("SD_WEBUI_DOWNLOAD_URL", "https://github.com/lllyasviel/stable-diffusion-webui-forge/releases")  # Stable Diffusion WebUI 配布
+# 試用→購入の動線。trial 上限到達時や製品管理タブからこのURLへ誘導する（実キー検証はライセンス機能実装時に後付け）。
+PRODUCT_PURCHASE_URL = os.environ.get("PRODUCT_PURCHASE_URL", "")  # 購入ページURL（空=未設定。設定すると購入導線リンクを表示）
+
+# ───────────────────────────────────────────────
 # native キャラクター描画
 # ───────────────────────────────────────────────
 NATIVE_RENDER_CHARACTERS = os.environ.get("NATIVE_RENDER_CHARACTERS", "1").strip().lower() in ("1", "true", "yes", "on")  # キャラ描画 有効/無効

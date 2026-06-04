@@ -15,6 +15,25 @@ def test_license_defaults_to_trial(monkeypatch):
     assert info["limits"]["youtube_upload"] is False
 
 
+def test_license_info_exposes_purchase_url_and_upgrade(monkeypatch):
+    import core.license_manager as lm
+    monkeypatch.setattr(lm, "get_all", lambda: {})
+    monkeypatch.setattr(lm.config, "PRODUCT_PURCHASE_URL", "https://example.com/buy")
+    info = lm.get_license_info()
+    assert info["purchase_url"] == "https://example.com/buy"
+    assert info["upgrade_available"] is True  # trial は上位余地あり
+
+
+def test_upload_block_message_includes_purchase_cta(monkeypatch):
+    import core.license_manager as lm
+    monkeypatch.setattr(lm, "get_all", lambda: {"LICENSE_EDITION": "trial"})
+    monkeypatch.setattr(lm.config, "PRODUCT_PURCHASE_URL", "https://example.com/buy")
+    import pytest
+    with pytest.raises(RuntimeError) as exc:
+        lm.assert_can_upload()
+    assert "https://example.com/buy" in str(exc.value)
+
+
 def test_diagnostics_masks_secret_values(tmp_path, monkeypatch):
     import web_app.services.diagnostics_service as ds
 

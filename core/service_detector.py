@@ -10,6 +10,34 @@ import shutil
 
 import psutil
 
+from config import config
+
+# 外部依存ソフトの入手先・インストール手順カタログ。
+# `/setup` で未検出のサービスにダウンロードリンクと手順を提示するために使う。
+# URL は config.py（環境で差し替え可能）から引く。手順テキストは表示用の固定文。
+_INSTALL_GUIDE: dict[str, dict] = {
+    "voicevox": {
+        "required": True,
+        "download_url": config.VOICEVOX_DOWNLOAD_URL,
+        "install_hint": "公式サイトからインストーラを入手して起動し、エンジンを立ち上げた状態で再診断してください（既定ポート 50021）。",
+    },
+    "ffmpeg": {
+        "required": True,
+        "download_url": config.FFMPEG_DOWNLOAD_URL,
+        "install_hint": "ビルド版を解凍し、bin フォルダを PATH に通すか、解凍した ffmpeg.exe のパスを設定画面の FFMPEG_BIN に指定してください。",
+    },
+    "ollama": {
+        "required": False,
+        "download_url": config.OLLAMA_DOWNLOAD_URL,
+        "install_hint": "台本の品質レビューに使います（任意）。インストール後 `ollama pull qwen3:8b` でモデルを取得し、起動した状態で再診断してください。",
+    },
+    "sd_webui": {
+        "required": False,
+        "download_url": config.SD_WEBUI_DOWNLOAD_URL,
+        "install_hint": "Gemini 画像生成の代替として使えます（任意）。`--api` 付きで起動した状態で再診断してください（既定ポート 7860）。",
+    },
+}
+
 
 def _listening_ports() -> dict[int, int]:
     """LISTEN中の TCP ポート -> pid のマップ。
@@ -65,6 +93,12 @@ def detect_services() -> dict:
     proposed: dict[str, str] = {}
 
     def _add(service: dict) -> None:
+        # 未検出サービスにダウンロードリンク・インストール手順・必須/任意を付与する
+        guide = _INSTALL_GUIDE.get(service.get("key", ""), {})
+        service["required"] = guide.get("required", False)
+        if not service.get("running"):
+            service["download_url"] = guide.get("download_url", "")
+            service["install_hint"] = guide.get("install_hint", "")
         services.append(service)
         proposed.update(service.get("config", {}))
 

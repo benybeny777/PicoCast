@@ -191,11 +191,12 @@ pip install --upgrade -r config/requirements.txt
 ## 🏷 製品版MVP運用
 
 - 初回セットアップ状態は `data/settings.db:settings` に保存します。未完了時は生成・アップロードをブロックします。
-- ライセンス未登録時は `trial` として扱い、native MP4 に小さな透かしを入れます。`personal` / `pro` / `studio` は設定画面「製品管理」で切り替えます。
+- ライセンス未登録時は `trial` として扱い、native MP4 に小さな透かしを入れます。`personal` / `pro` / `studio` は設定画面「製品管理」で切り替えます。trial の生成上限に達すると、購入導線（`PRODUCT_PURCHASE_URL` を設定すると購入ページへのリンク）を提示します。購入後のライセンスキーは「製品管理」タブで入力すると即時反映されます（実キー検証はライセンス機能実装時に後付け）。
 - 診断パッケージは設定画面「製品管理」から作成します。ZIPには設定状態・ジョブログ・エラーコード・スキーマ情報を含めますが、APIキー、OAuth token、client_secrets、台本本文、生成動画、画像は含めません。
-- バックアップは `data/settings.db` と profile 別 `metadata.db` をZIP化します。`encrypted_secrets` は同一PCのマスターキーでのみ復号可能なため、別PC復元時は認証情報を再登録してください。
+- バックアップは `data/settings.db` と profile 別 `metadata.db` をZIP化します。**パスフレーズを入力すると認証情報（APIキー・OAuth）も再暗号化して同梱し、別PCでも同じパスフレーズで復元できます**（PBKDF2 + AES-GCM）。パスフレーズ空欄の場合は従来どおり同一PC専用で、別PC復元時は認証情報を再登録してください。
 - 製品版初期テンプレートは `config/SEED/prompt_packs/product/` 配下に置きます。食べ物雑学専用・実績入りテンプレートは製品版seedへ入れません。
-- 外部サービスのパス/URLは、初回セットアップの「プロセスを走査して自動設定」で起動中の VOICEVOX / Ollama / Stable Diffusion WebUI / ffmpeg から自動検出できます。
+- 外部サービスのパス/URLは、初回セットアップの「プロセスを走査して自動設定」で起動中の VOICEVOX / Ollama / Stable Diffusion WebUI / ffmpeg から自動検出できます。**未検出のサービスはダウンロードリンクとインストール手順を `/setup` に表示します**（同梱せず個別に入手する方針。VOICEVOX / ffmpeg が必須、Ollama / Stable Diffusion WebUI は任意）。
+- 多重起動やポート競合に自己回復します。既定ポートが他アプリで使用中なら自動で空きポートへ退避し、本アプリが既に同じポートで起動している場合は二重起動せず既存ウィンドウを開きます。
 - 販売版では環境変数 `DEVELOPER_TOOLS_ENABLED=0` で起動すると、管理者設定タブ・開発者モード・edition切替などの開発者向けUIをサーバー側で非表示にし、管理者向け設定項目のAPI変更も拒否します。
 
 ---

@@ -62,12 +62,23 @@ def _settings_schema_snapshot() -> dict:
     return {"tables": tables}
 
 
-def create_backup() -> dict[str, str]:
+_SECRETS_EXPORT_NAME = "secrets_export.enc"
+
+
+def create_backup(passphrase: str = "") -> dict[str, str]:
+    """settings.db と profile 別 metadata.db をZIP化する。
+
+    passphrase を指定すると、認証情報（encrypted_secrets）をそのパスフレーズで
+    再暗号化したエクスポートを同梱し、別PCでも同じパスフレーズで復元できるようにする。
+    passphrase 未指定時は従来どおり同一PC専用（認証情報は別PCで復号不可）。
+    """
     from core.channel_profile import list_profiles
     from core.metadata_db import SCHEMA_VERSION
 
+    passphrase = (passphrase or "").strip()
     _BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     path = _BACKUP_DIR / f"backup_{_stamp()}.zip"
+    secrets_included = False
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         if _SETTINGS_DB.exists():
             _checkpoint_sqlite(_SETTINGS_DB)
@@ -77,14 +88,23 @@ def create_backup() -> dict[str, str]:
             if meta.exists():
                 _checkpoint_sqlite(meta)
                 zf.write(meta, f"output/{profile.profile_id}/000_data/metadata.db")
+        if passphrase:
+            from core.secret_store import export_secrets_with_passphrase
+            zf.writestr(_SECRETS_EXPORT_NAME, export_secrets_with_passphrase(passphrase))
+            secrets_included = True
         manifest = {
             "created_at": datetime.now(timezone.utc).isoformat(),
             "metadata_schema_version": SCHEMA_VERSION,
             "settings_schema": _settings_schema_snapshot(),
-            "encrypted_secrets_note": "encrypted_secrets は同一PCのマスターキーでのみ復号可能です。別PCでは認証情報を再登録してください。",
+            "secrets_export_included": secrets_included,
+            "encrypted_secrets_note": (
+                "認証情報をパスフレーズで再暗号化して同梱しました。別PCでは同じパスフレーズを入力して復元してください。"
+                if secrets_included
+                else "encrypted_secrets は同一PCのマスターキーでのみ復号可能です。別PCでは認証情報を再登録してください。"
+            ),
         }
         zf.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-    return {"path": str(path), "filename": path.name}
+    return {"path": str(path), "filename": path.name, "secrets_included": secrets_included}
 
 
 def _pre_restore_backup() -> Path:
@@ -98,7 +118,7 @@ def _pre_restore_backup() -> Path:
     return dest
 
 
-def restore_backup(backup_path: str, *, confirmed: bool = False) -> dict:
+def restore_backup(backup_path: str, *, confirmed: bool = False, passphrase: str = "") -> dict:
     if not confirmed:
         raise RuntimeError("confirmed=true が必要です")
     src = Path(backup_path).resolve()
@@ -107,6 +127,8 @@ def restore_backup(backup_path: str, *, confirmed: bool = False) -> dict:
     if _ROOT not in src.parents and _BACKUP_DIR not in src.parents:
         raise RuntimeError("復元できるのはプロジェクト配下のバックアップZIPだけです")
 
+    passphrase = (passphrase or "").strip()
+    secrets_imported = 0
     with zipfile.ZipFile(src, "r") as zf:
         names = set(zf.namelist())
         if "manifest.json" not in names:
@@ -115,6 +137,10 @@ def restore_backup(backup_path: str, *, confirmed: bool = False) -> dict:
         from core.metadata_db import SCHEMA_VERSION
         if int(manifest.get("metadata_schema_version", -1)) > SCHEMA_VERSION:
             raise RuntimeError("バックアップのDBスキーマが新しすぎるため復元を中止しました")
+
+        has_secrets_export = _SECRETS_EXPORT_NAME in names
+        if has_secrets_export and not passphrase:
+            raise RuntimeError("このバックアップには暗号化された認証情報が含まれます。復元にはパスフレーズが必要です。")
 
         pre = _pre_restore_backup()
         for name in names:
@@ -130,8 +156,15 @@ def restore_backup(backup_path: str, *, confirmed: bool = False) -> dict:
                 shutil.copyfileobj(source, dest)
             # 復元した main ファイルに古い WAL が再生されないよう -wal / -shm を除去する
             _remove_wal_siblings(target)
+
+        # settings.db 復元後に、同梱の認証情報を「この PC のマスターキー」で保存し直す。
+        # これで別PCのマスターキーで暗号化された encrypted_secrets を上書きし、クロスPC復元を成立させる。
+        if has_secrets_export and passphrase:
+            from core.secret_store import import_secrets_with_passphrase
+            secrets_imported = import_secrets_with_passphrase(zf.read(_SECRETS_EXPORT_NAME), passphrase)
     return {
         "restored": str(src),
         "pre_restore_backup": str(pre),
+        "secrets_imported": secrets_imported,
         "note": "復元を反映するためアプリの再起動を推奨します。",
     }

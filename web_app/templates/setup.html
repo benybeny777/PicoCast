@@ -129,7 +129,17 @@ async function setupDetectServices() {
     const rows = (data.services || []).map(s => {
       const cfg = Object.entries(s.config || {}).map(([k,v]) => `${k} = ${v}`).join('<br>');
       const mark = s.running ? '✅' : '—';
-      return `<tr><td>${mark} ${s.label}</td><td>${s.detail || ''}</td><td>${cfg || '<span class="hint">自動設定なし</span>'}</td></tr>`;
+      const tag = s.required ? '<span class="hint">（必須）</span>' : '<span class="hint">（任意）</span>';
+      let third;
+      if (s.running) {
+        third = cfg || '<span class="hint">自動設定なし</span>';
+      } else if (s.download_url) {
+        third = `<a class="btn btn-secondary" href="${s.download_url}" target="_blank" rel="noopener">ダウンロード</a>`
+              + (s.install_hint ? `<div class="hint mt">${s.install_hint}</div>` : '');
+      } else {
+        third = '<span class="hint">未検出</span>';
+      }
+      return `<tr><td>${mark} ${s.label} ${tag}</td><td>${s.detail || ''}</td><td>${third}</td></tr>`;
     }).join('');
     const hasProposed = Object.keys(_setupDetectProposed).length > 0;
     box.innerHTML =

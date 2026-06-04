@@ -49,3 +49,19 @@ def test_image_generation_error_exposes_catalog_code():
     assert ImageGenerationError("x", category="api_busy").code == "E-IMG-BUSY"
     assert ImageGenerationError("x", category="auth").code == "E-IMG-AUTH"
     assert ImageGenerationError("x", category="generic").code == "E-IMG-FAIL"
+
+
+def test_every_catalog_entry_has_remediation():
+    """製品方針: すべてのエラーに対処手順を必ず付ける。"""
+    from core.error_codes import ERROR_CATALOG
+    missing = [code for code, d in ERROR_CATALOG.items() if not d.remediation.strip()]
+    assert not missing, f"remediation 未設定のエラーコード: {missing}"
+
+
+def test_format_error_with_fix_appends_remediation():
+    from core.error_codes import format_error
+    text = format_error("E-VOICEVOX-DOWN", with_fix=True)
+    assert text.startswith("[E-VOICEVOX-DOWN] ")
+    assert "対処:" in text
+    # with_fix=False では対処を付けない（既存の表示互換）
+    assert "対処:" not in format_error("E-VOICEVOX-DOWN")
