@@ -4,6 +4,48 @@
 <h1>初回セットアップ</h1>
 
 <div class="card">
+  <h2>必須構成 早見表</h2>
+  <p class="hint">使い方によって必要なソフト・APIキーが変わります。<strong>VOICEVOX と ffmpeg は常に必須</strong>です。凡例：✅必須 ／ △任意 ／ —不要</p>
+  <div style="overflow-x:auto">
+    <table class="status-table" style="min-width:680px">
+      <thead>
+        <tr>
+          <th style="text-align:left">使い方</th>
+          <th>VOICEVOX</th>
+          <th>ffmpeg</th>
+          <th>Google<br>APIキー</th>
+          <th>Stable Diffusion<br>WebUI</th>
+          <th>Ollama</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="text-align:left">手書き台本 ＋ SD WebUI 画像<br><span class="hint">（最小構成・Google APIキー不要）</span></td>
+          <td>✅</td><td>✅</td><td>—</td><td>✅</td><td>✅</td>
+        </tr>
+        <tr>
+          <td style="text-align:left">手書き台本 ＋ Gemini 画像</td>
+          <td>✅</td><td>✅</td><td>✅</td><td>—</td><td>△</td>
+        </tr>
+        <tr>
+          <td style="text-align:left">AI台本生成 ＋ Gemini 画像</td>
+          <td>✅</td><td>✅</td><td>✅</td><td>—</td><td>△</td>
+        </tr>
+        <tr>
+          <td style="text-align:left">AI台本生成 ＋ SD WebUI 画像</td>
+          <td>✅</td><td>✅</td><td>✅<br><span class="hint">（台本用）</span></td><td>✅</td><td>✅</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <ul class="hint" style="margin:8px 0 0 18px; padding:0">
+    <li><strong>YouTube 認証</strong>：YouTube へアップロードする場合のみ必須（生成だけなら不要）。</li>
+    <li><strong>Ollama</strong>：Stable Diffusion WebUI 画像のプロンプト英訳に必須。台本の品質レビューは任意。</li>
+    <li><strong>OpenAI APIキー</strong>＝台本の最終レビュー用（任意）、<strong>HF Token</strong>＝Stable Diffusion WebUI のモデルDL用（任意）。</li>
+  </ul>
+</div>
+
+<div class="card">
   <h2>1. チャンネル</h2>
   <div class="form-row">
     <div class="form-group">
