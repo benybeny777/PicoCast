@@ -6,6 +6,12 @@
 
 ## 2026-06-04
 
+### Stable Diffusion WebUI 使用時は Ollama を必須化（プロンプト英訳）
+
+- Stable Diffusion WebUI 画像生成は日本語プロンプトの英訳に Ollama を使うため、Ollama 未起動・接続不可時は生のエラーではなく `E-OLLAMA-DOWN`（対処手順つき）で明確に停止するようにした（`core/image_generator.py:_translate_to_english_for_sd`）。背景生成エラー表示でも `AppError.user_message()` で対処手順を出す。
+- `E-OLLAMA-DOWN` の文言を「品質レビュー専用」からバックエンド非依存に変更し、Stable Diffusion WebUI 英訳でも使う旨を明記した。
+- `/setup` のインストール案内で、Ollama は「品質レビューは任意・Stable Diffusion WebUI 使用時は必須」と明示し、Stable Diffusion WebUI の手順にも Ollama 導入を追記した。
+
 ### /setup にソフトウェアのインストール案内を追加・APIキーの必要条件を明記
 
 - `/setup` に各外部ソフト（VOICEVOX / ffmpeg / Ollama / Stable Diffusion WebUI）のインストール案内カードを常時表示するようにした（用途・必須/任意・ダウンロードリンク・手順・補足）。`core/service_detector.py:get_installation_guides()` を追加。

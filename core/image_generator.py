@@ -58,16 +58,22 @@ def classify_image_api_error(exc: Exception) -> tuple[str, int | None]:
 def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
     """Ollama を使って日本語の背景描写を SD 向け英語プロンプトに翻訳する。
 
-    失敗時は例外をそのまま伝播させる（サイレントフォールバック禁止）。
+    Stable Diffusion WebUI バックエンドでは Ollama を必須とする。接続不可・
+    タイムアウト時は対処手順つきの E-OLLAMA-DOWN を送出する（サイレントフォールバック禁止）。
     """
     import requests
+    from core.error_codes import AppError
 
     ollama_base = config.OLLAMA_BASE_URL.rstrip("/")
     model = config.OLLAMA_TRANSLATE_MODEL
 
-    # Ollama 疎通確認（起動済みでなければ opening_quality.ensure_ollama_server に倣い起動）
+    # Ollama 疎通確認（起動済みでなければ opening_quality.ensure_ollama_server に倣い起動）。
+    # Stable Diffusion WebUI 画像生成では英訳に Ollama が必須なので、起動できなければ明確に止める。
     from core.opening_quality import ensure_ollama_server
-    ensure_ollama_server()
+    try:
+        ensure_ollama_server()
+    except Exception as e:
+        raise AppError("E-OLLAMA-DOWN", detail="Stable Diffusion WebUI 画像の英語プロンプト変換に必要です", cause=e)
 
     system_instruction = (
         "You are an expert Stable Diffusion prompt engineer. "
@@ -84,9 +90,12 @@ def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
         "stream": False,
         "options": {"temperature": 0.2},
     }
-    with requests.post(f"{ollama_base}/api/generate", json=body, timeout=60) as resp:
-        resp.raise_for_status()
-        translated = str(resp.json().get("response", "")).strip()
+    try:
+        with requests.post(f"{ollama_base}/api/generate", json=body, timeout=60) as resp:
+            resp.raise_for_status()
+            translated = str(resp.json().get("response", "")).strip()
+    except (requests.ConnectionError, requests.Timeout) as e:
+        raise AppError("E-OLLAMA-DOWN", detail="Stable Diffusion WebUI 画像の英語プロンプト変換に必要です", cause=e)
 
     if not translated:
         raise RuntimeError("Ollama からの翻訳結果が空でした")

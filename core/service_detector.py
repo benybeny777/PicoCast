@@ -48,30 +48,31 @@ _INSTALL_GUIDE: dict[str, dict] = {
     "ollama": {
         "label": "Ollama",
         "required": False,
-        "purpose": "台本の冒頭品質レビュー・リライト（任意・ローカルLLM）",
+        "purpose": "台本の冒頭品質レビュー（任意）／Stable Diffusion WebUI 画像の英語プロンプト変換（SD WebUI 使用時は必須）",
         "download_url": config.OLLAMA_DOWNLOAD_URL,
-        "install_hint": "台本の品質レビューに使います（任意）。インストール後 `ollama pull qwen3:8b` でモデルを取得し、起動した状態で再診断してください。",
+        "install_hint": "台本の品質レビューに使います。Stable Diffusion WebUI で画像生成する場合は英訳に必須です。インストール後 `ollama pull qwen3:8b` でモデルを取得し、起動した状態で再診断してください。",
         "steps": [
             "公式サイトからインストーラーをダウンロードしてインストールする。",
-            "コマンドプロンプトで `ollama pull qwen3:8b` を実行し、レビュー用モデルを取得する。",
+            "コマンドプロンプトで `ollama pull qwen3:8b` を実行し、モデルを取得する。",
             "Ollama を起動した状態にする（既定ポート 11434）。",
             "下の「再診断」で接続を確認する。",
         ],
-        "note": "未導入でも動画生成は可能です。品質レビュー機能を使う場合のみ必要です。",
+        "note": "品質レビューだけなら任意ですが、Stable Diffusion WebUI で画像生成する場合はプロンプト英訳に必須です（未起動だと E-OLLAMA-DOWN で停止）。Gemini 画像生成のみなら不要です。",
     },
     "sd_webui": {
         "label": "Stable Diffusion WebUI",
         "required": False,
         "purpose": "背景・サムネイル画像のローカル生成（任意・Gemini の代替）",
         "download_url": config.SD_WEBUI_DOWNLOAD_URL,
-        "install_hint": "Gemini 画像生成の代替として使えます（任意）。`--api` 付きで起動した状態で再診断してください（既定ポート 7860）。",
+        "install_hint": "Gemini 画像生成の代替として使えます（任意）。`--api` 付きで起動した状態で再診断してください（既定ポート 7860）。利用時は Ollama も必須です。",
         "steps": [
             "配布元から Stable Diffusion WebUI を入手してインストールする。",
             "API を有効にするため `--api` を付けて起動する（既定ポート 7860）。",
             "設定画面で画像生成バックエンドを Stable Diffusion WebUI に切り替える。",
+            "プロンプト英訳に使う Ollama も導入・起動しておく（上記参照）。",
             "下の「再診断」で接続を確認する。",
         ],
-        "note": "未導入でも Gemini（Google API キー）で画像生成できます。ローカル生成したい場合のみ必要です。",
+        "note": "未導入でも Gemini（Google API キー）で画像生成できます。ローカル生成したい場合のみ必要で、その際は Ollama も必須です。",
     },
 }
 

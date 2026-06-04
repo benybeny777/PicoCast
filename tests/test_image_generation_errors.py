@@ -165,3 +165,36 @@ def test_clear_single_failure_index(monkeypatch):
     m.clear_image_generation_failure("Shorts_x", 4)
     remaining = [f["failed_index"] for f in m.get_image_generation_failures("Shorts_x")]
     assert remaining == [6]
+
+
+# ── SD WebUI バックエンドの Ollama 必須 ────────────────────────────────────────
+
+def test_sd_translate_raises_ollama_down_when_server_unavailable(monkeypatch):
+    """Stable Diffusion WebUI 用の英訳で Ollama 起動不可なら E-OLLAMA-DOWN。"""
+    import core.image_generator as ig
+    from core.error_codes import AppError
+    import core.opening_quality as oq
+
+    monkeypatch.setattr(oq, "ensure_ollama_server", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("no ollama")))
+    with pytest.raises(AppError) as exc:
+        ig._translate_to_english_for_sd("夜の街")
+    assert exc.value.code == "E-OLLAMA-DOWN"
+    assert "対処:" in exc.value.user_message()
+
+
+def test_sd_translate_raises_ollama_down_on_connection_error(monkeypatch):
+    """Ollama は起動扱いでも、翻訳リクエストが接続不可なら E-OLLAMA-DOWN。"""
+    import core.image_generator as ig
+    from core.error_codes import AppError
+    import core.opening_quality as oq
+    import requests
+
+    monkeypatch.setattr(oq, "ensure_ollama_server", lambda *a, **k: None)
+
+    def _boom(*a, **k):
+        raise requests.ConnectionError("refused")
+
+    monkeypatch.setattr(requests, "post", _boom)
+    with pytest.raises(AppError) as exc:
+        ig._translate_to_english_for_sd("夜の街")
+    assert exc.value.code == "E-OLLAMA-DOWN"

@@ -272,7 +272,7 @@ for idx, item in enumerate(dialogue_items):
 - 日本語の説明文は `core/image_generator.py: _translate_to_english_for_sd()` でまず Ollama（`OLLAMA_TRANSLATE_MODEL`）を使って英語プロンプトに翻訳し、その結果に英語品質補助サフィックスを自動付加してから送信する。
   - 背景用サフィックス: `anime style background, colorful manga illustration, ...` 等
   - サムネイル用サフィックス: `bold Japanese YouTube thumbnail style, ...` 等
-- Ollama が未起動の場合は `ensure_ollama_server()` で自動起動を試みる。翻訳失敗時は例外を伝播して停止する（サイレントスキップなし）。
+- Ollama が未起動の場合は `ensure_ollama_server()` で自動起動を試みる。**Stable Diffusion WebUI バックエンドでは Ollama を必須とし**、起動不可・接続不可・タイムアウト時は `E-OLLAMA-DOWN`（対処手順つき `AppError`）で停止する（サイレントスキップ・サイレントフォールバックなし）。Gemini（nanobanana）バックエンドでは Ollama は不要。
 - API未起動・HTTPエラー・画像なし・タイムアウトはすべて `RuntimeError` として上位に伝播する。他エンジンへの自動フォールバックは行わない。
 - 設定: `SD_WEBUI_BASE_URL`, `SD_WEBUI_TIMEOUT_SEC`, `SD_WEBUI_MODEL`, `SD_WEBUI_SAMPLER`, `SD_WEBUI_STEPS`, `SD_WEBUI_CFG_SCALE`, `SD_WEBUI_WIDTH`, `SD_WEBUI_HEIGHT`, `SD_WEBUI_NEGATIVE_PROMPT`
 

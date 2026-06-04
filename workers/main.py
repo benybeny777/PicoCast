@@ -1903,7 +1903,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     f"｜model={_model}｜HTTP={_status}｜既存背景は再利用可（未生成分のみ再生成されます）",
                     "error",
                 )
-                update_status(f"    error: {_be}", "error")
+                from core.error_codes import AppError as _AppErr
+                _be_msg = _be.user_message() if isinstance(_be, _AppErr) else _be
+                update_status(f"    error: {_be_msg}", "error")
                 # 失敗を metadata.db に記録（_meta JSON は作らない）
                 try:
                     from core.metadata_db import record_image_generation_failure

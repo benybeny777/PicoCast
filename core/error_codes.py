@@ -54,8 +54,8 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
                                 "VOICEVOX を起動し、設定画面の VOICEVOX_URL（既定 http://localhost:50021）が正しいか確認してから再実行してください。"),
     "E-FFMPEG-MISSING": ErrorDef("E-FFMPEG-MISSING", "ffmpeg が見つかりません。", "config", False,
                                  "ffmpeg をインストールして PATH に通すか、設定画面の FFMPEG_BIN に ffmpeg.exe のパスを指定してください。/setup の自動検出も利用できます。"),
-    "E-OLLAMA-DOWN": ErrorDef("E-OLLAMA-DOWN", "Ollama に接続できません（台本の品質レビュー用）。", "config", True,
-                              "Ollama を起動するか、品質レビューを使わない設定にしてください。設定画面の OLLAMA_BASE_URL も確認してください。"),
+    "E-OLLAMA-DOWN": ErrorDef("E-OLLAMA-DOWN", "Ollama に接続できません。", "config", True,
+                              "Ollama を起動してください（未導入ならインストール後 `ollama pull qwen3:8b`）。台本の品質レビューと、Stable Diffusion WebUI 画像の英語プロンプト変換で使用します。設定画面の OLLAMA_BASE_URL も確認してください。"),
     # ネットワーク
     "E-NET": ErrorDef("E-NET", "ネットワーク接続に失敗しました。", "network", True,
                       "インターネット接続とプロキシ/ファイアウォール設定を確認し、しばらくしてから再実行してください。"),
