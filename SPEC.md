@@ -1433,7 +1433,7 @@ Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リス
 
 **自動投稿はOSタスクのみ（アプリ非起動でも投稿）**: 自動投稿はアプリと切り離し、OS スケジューラから単発投稿を定期実行します。
 - 投稿の中核は `fixed_comment_service.post_fixed_comment_now()`（job_manager / runner を介さず YouTube へ直接投稿）。手動投稿（job 経由）もこの関数を共有する。
-- 二重投稿は投稿済みフラグ（`youtube_status.comment_thread_id` / `fixed_comment_posted`）の事前チェックで防ぐ。OSタスクは同一タスクを同時多重起動しない設定のため、これで実用上十分（手動投稿とタスクが完全同時に走る稀なケースは許容）。
+- 二重投稿防止: YouTube API を呼ぶ**前**に `youtube_status.fixed_comment_posted` を `0→1` へ条件付き原子 UPDATE して投稿権を確保（claim）する。SQLite は書き込みを直列化するため、手動投稿とOSタスク・複数タスクが完全同時に走っても UPDATE が成立する1プロセスだけが投稿する。投稿失敗時は claim を戻して再試行可能にする。
 - CLI エントリ `<exe> --post-fixed-comments`（開発時 `python -m web_app.app --post-fixed-comments`）が `auto_fixed_comment_service.post_all_pending()` を1回実行し、対象プロファイルの未投稿固定コメントを直接投稿して終了する。対象は `AUTO_FIXED_COMMENT_PROFILE_SCOPE`（`all`=全 channel profile の metadata.db と profile_id 別 YouTube OAuth token を巡回 / `active`=アクティブのみ）。
 - `core/fixed_comment_task.py` が OS スケジューラへ登録/解除/検査/修復する。Windows=タスクスケジューラ（`Register-ScheduledTask`、ユーザータスク・管理者権限不要）、macOS=launchd LaunchAgent（`~/Library/LaunchAgents`）。実行時刻は予約スロット時刻＋5分。
 - **タスク名/ラベルにはインストールディレクトリの識別子（リーフ名＋パスのSHA1先頭8桁）を含める**ため、同一PCで複数のインストール/テストディレクトリを使い分けても区別できる。

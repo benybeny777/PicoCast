@@ -188,8 +188,12 @@ def post_fixed_comment_now(
     if is_cancelled():
         return {"cancelled": True}
 
-    # 二重投稿は上の already_posted 判定（comment_thread_id / fixed_comment_posted）で防ぐ。
-    # OSタスクは同一タスクを同時多重起動しないため、これで実用上十分。
+    # 二重投稿防止: YouTube API を呼ぶ「前」に DB 上で投稿権を原子的に確保する。
+    # SQLite は書き込みを直列化するため、同時実行でも UPDATE が成立するのは1プロセスだけ。
+    if not _claim_fixed_comment(local_id, context):
+        log("別の処理が投稿中のためスキップしました", "warning")
+        return {"skipped": True, "reason": "already_claimed", "video_id": video_id}
+
     try:
         from core.youtube_uploader import post_comment
         comment_thread_id = post_comment(
@@ -199,10 +203,12 @@ def post_fixed_comment_now(
             profile_id=context.get("profile_id"),
         )
     except Exception as e:
+        _release_fixed_comment_claim(local_id, context)  # 失敗したら投稿権を戻して再試行可能にする
         log(f"投稿エラー: {e}", "error")
         raise
 
     if not comment_thread_id:
+        _release_fixed_comment_claim(local_id, context)
         raise Exception("コメント投稿が失敗しました（YouTube API がIDを返しませんでした）")
 
     log(f"固定コメント投稿完了: comment_thread_id={comment_thread_id}", "success")
@@ -325,6 +331,45 @@ def _mark_fixed_comment_db(local_id: str, comment_thread_id: str | None = None, 
             WHERE local_id=?
             """,
             (comment_thread_id, local_id),
+        )
+        conn.commit()
+    finally:
+        _close_metadata_connection(conn, manager)
+
+
+def _claim_fixed_comment(local_id: str, context: dict[str, Any]) -> bool:
+    """投稿前に DB 上で原子的に投稿権を確保する。確保できたら True。
+
+    `fixed_comment_posted` を 0→1 へ条件付き UPDATE する。複数プロセス（手動投稿と
+    OSタスクなど）が同時に同じ動画を処理しても、UPDATE が成立するのは1プロセスだけなので
+    YouTube API を呼ぶ前に排他でき、二重投稿を防げる。投稿失敗時は _release で戻す。
+    """
+    conn, manager = _open_metadata_connection(context)
+    try:
+        cur = conn.execute(
+            """
+            UPDATE youtube_status
+            SET fixed_comment_posted=1
+            WHERE local_id=?
+              AND COALESCE(fixed_comment_posted,0)=0
+              AND COALESCE(fixed_comment_id,'')=''
+            """,
+            (local_id,),
+        )
+        conn.commit()
+        return cur.rowcount == 1
+    finally:
+        _close_metadata_connection(conn, manager)
+
+
+def _release_fixed_comment_claim(local_id: str, context: dict[str, Any]) -> None:
+    """投稿に失敗したときに、確保した投稿権（fixed_comment_posted）を戻して再試行可能にする。"""
+    conn, manager = _open_metadata_connection(context)
+    try:
+        conn.execute(
+            "UPDATE youtube_status SET fixed_comment_posted=0 "
+            "WHERE local_id=? AND COALESCE(fixed_comment_id,'')=''",
+            (local_id,),
         )
         conn.commit()
     finally:

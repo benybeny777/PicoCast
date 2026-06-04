@@ -187,6 +187,55 @@ def test_post_all_pending_counts_failures(monkeypatch):
     assert result["profiles"] == 1
 
 
+# ── 二重投稿防止（投稿権の原子確保） ─────────────────────────────────────────
+
+def test_claim_fixed_comment_is_exclusive(tmp_path):
+    import sqlite3
+    import web_app.services.fixed_comment_service as fc
+
+    db = tmp_path / "metadata.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE youtube_status (local_id TEXT PRIMARY KEY, fixed_comment_posted INTEGER, fixed_comment_id TEXT)"
+    )
+    conn.execute("INSERT INTO youtube_status(local_id, fixed_comment_posted, fixed_comment_id) VALUES ('vid1', 0, '')")
+    conn.commit()
+    conn.close()
+
+    ctx = {"profile_id": "p", "db_path": str(db)}
+
+    # 1回目は確保成功、2回目は既に posted=1 のため失敗（＝同時実行で片方だけ投稿）
+    assert fc._claim_fixed_comment("vid1", ctx) is True
+    assert fc._claim_fixed_comment("vid1", ctx) is False
+
+    # 投稿失敗を模して release すると、再び確保できる（再試行可能）
+    fc._release_fixed_comment_claim("vid1", ctx)
+    assert fc._claim_fixed_comment("vid1", ctx) is True
+
+
+def test_claim_not_released_when_already_posted(tmp_path):
+    import sqlite3
+    import web_app.services.fixed_comment_service as fc
+
+    db = tmp_path / "metadata.db"
+    conn = sqlite3.connect(db)
+    conn.execute(
+        "CREATE TABLE youtube_status (local_id TEXT PRIMARY KEY, fixed_comment_posted INTEGER, fixed_comment_id TEXT)"
+    )
+    # 既に投稿済み（comment id あり）
+    conn.execute("INSERT INTO youtube_status(local_id, fixed_comment_posted, fixed_comment_id) VALUES ('vid1', 1, 'ct_x')")
+    conn.commit()
+    conn.close()
+
+    ctx = {"profile_id": "p", "db_path": str(db)}
+    # 投稿済みの行は release で 0 に戻さない（fixed_comment_id がある間は保護）
+    fc._release_fixed_comment_claim("vid1", ctx)
+    conn = sqlite3.connect(db)
+    posted = conn.execute("SELECT fixed_comment_posted FROM youtube_status WHERE local_id='vid1'").fetchone()[0]
+    conn.close()
+    assert posted == 1
+
+
 # ── API ───────────────────────────────────────────────────────────────────────
 
 def test_api_fixed_comment_task_status_and_toggle(monkeypatch):
