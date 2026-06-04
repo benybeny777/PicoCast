@@ -58,6 +58,7 @@ def dual_profile_env(tmp_path, monkeypatch):
     monkeypatch.setattr(ppl, "_PROFILES_DIR", profiles_dir)
     monkeypatch.setattr(ppl, "_GENRES_DIR", genres_dir)
     monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
+    monkeypatch.setattr(cp, "_RES_ROOT", str(tmp_path))
 
     food = cp.ChannelProfile(
         profile_id="food_trivia",

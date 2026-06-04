@@ -35,6 +35,7 @@ def patch_secret_store(tmp_path, monkeypatch):
     monkeypatch.setattr(ss, "_get_master_key", lambda: _key)
     monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
     monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
+    monkeypatch.setattr(cp, "_RES_ROOT", str(tmp_path))
 
 
 @pytest.fixture()

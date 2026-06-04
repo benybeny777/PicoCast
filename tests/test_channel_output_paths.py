@@ -28,6 +28,7 @@ def profile_env(tmp_path, monkeypatch):
 
     monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
     monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
+    monkeypatch.setattr(cp, "_RES_ROOT", str(tmp_path))
 
     # food_trivia profile
     food = cp.ChannelProfile(
