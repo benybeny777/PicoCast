@@ -120,6 +120,7 @@ yukkurijidou/
 │   ├── youtube_analytics.py # YouTube Analytics API取得（維持率取得含む）
 │   ├── retention_analysis.py # 視聴者維持率の離脱・ループ点分析
 │   ├── comment_templates.py # 固定コメント自動生成テンプレート（めたん調）
+│   ├── fixed_comment_task.py # 固定コメント投稿のOSタスク登録（Win=タスクスケジューラ/Mac=launchd・アプリ非起動でも投稿）
 │   ├── upload_scheduler.py # YouTube Data API とチャンネル別設定を正とするアップロードスケジュール管理
 │   ├── upload_records.py   # metadata.db の youtube_status + render_info からアップロード記録を構築
 │   ├── output_paths.py     # 出力パスの集約・マイグレーション
@@ -1429,6 +1430,13 @@ Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リス
 `💬 固定コメント` は、`output/{profile_id}/000_uploaded/` 配下のアップロード済み履歴から、`youtube_status` テーブルに `video_id` がある公開済み動画を選んでコメント投稿します。候補の最終判定は YouTube Data API の現在状態を正とし、ローカルDBの `publish_status` が `scheduled` / `reserved` のまま残っていても YouTube 側が `public` なら候補に表示します。YouTube Data API で状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は `youtube_status` テーブルの `fixed_comment_id` に保存します。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted_at` を記録できます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
 
 固定コメントの手動画面は active profile のみを対象にします。自動投稿ウォッチャーは `AUTO_FIXED_COMMENT_PROFILE_SCOPE` で対象を切り替え、既定の `all` では登録済み channel profile すべての `metadata.db` と profile_id 別 YouTube OAuth token を使って未投稿候補を巡回します。`active` に設定すると従来通り active profile のみを対象にします。
+
+**アプリ非起動でも自動投稿（OSタスク登録）**: アプリ内ウォッチャーは Web プロセス稼働中のみ動くため、アプリを起動していない時間帯の投稿に対応するため OS スケジューラへ単発投稿を登録できます。
+- 投稿の中核は `fixed_comment_service.post_fixed_comment_now()`（job_manager / runner を介さず YouTube へ直接投稿）。アプリ内ウォッチャーの投稿ジョブもこの関数を共有する。
+- CLI エントリ `<exe> --post-fixed-comments`（開発時 `python -m web_app.app --post-fixed-comments`）が `auto_fixed_comment_service.post_all_pending()` を1回実行し、対象プロファイルの未投稿固定コメントを直接投稿して終了する。`AUTO_FIXED_COMMENT_PROFILE_SCOPE` に従う。
+- `core/fixed_comment_task.py` が OS スケジューラへ登録/解除する。Windows=タスクスケジューラ（`Register-ScheduledTask`、ユーザータスク・管理者権限不要）、macOS=launchd LaunchAgent（`~/Library/LaunchAgents`）。実行時刻は予約スロット時刻＋5分。
+- **タスク名/ラベルにはインストールディレクトリの識別子（リーフ名＋パスのSHA1先頭8桁）を含める**ため、同一PCで複数のインストール/テストディレクトリを使い分けても区別できる。
+- 設定画面（設定 → 製品管理タブ「固定コメント自動投稿」）でON/OFF。API は `GET /api/settings/fixed-comment-task`（状態）/ `POST /api/settings/fixed-comment-task`（`{enabled}` で登録/解除）。認証は `secret_store`（DB）から読むのでアプリ非起動でも投稿できる。Windows / macOS 以外は未対応。
 
 台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。`metadata.db` の `render_info` テーブルへ保存し、Analytics 一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。
 

@@ -372,6 +372,16 @@ def main():
         from workers.runner import main as runner_main
         runner_main()
         return
+
+    # 固定コメント一括投稿エントリ: Web/runner 非起動でも単発で未投稿の固定コメントを投稿する。
+    # OS のタスクスケジューラ / launchd から定期実行する（core.fixed_comment_task が登録）。
+    if "--post-fixed-comments" in sys.argv:
+        from core.debug_logging import setup_debug_logging
+        setup_debug_logging(role="fixed_comment")
+        from web_app.services.auto_fixed_comment_service import post_all_pending
+        res = post_all_pending(log=lambda msg, tag="info": print(msg, flush=True))
+        print(f"完了: posted={res['posted']} failed={res['failed']} profiles={res['profiles']}", flush=True)
+        return
     parser = argparse.ArgumentParser(description=f"{config.WEB_APP_NAME} Web UI")
     parser.add_argument("--host", default=WEB_UI_HOST, help=f"bind host (default: {WEB_UI_HOST})")
     parser.add_argument("--port", type=int, default=None,

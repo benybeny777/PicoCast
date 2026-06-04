@@ -119,6 +119,30 @@ def api_change_output_base(req: OutputBaseRequest):
     return result
 
 
+@router.get("/fixed-comment-task")
+def api_fixed_comment_task_status():
+    """固定コメント自動投稿タスク（OSスケジューラ）の登録状態を返す。"""
+    from core.fixed_comment_task import status
+    return status()
+
+
+class FixedCommentTaskRequest(BaseModel):
+    enabled: bool
+
+
+@router.post("/fixed-comment-task")
+def api_fixed_comment_task(req: FixedCommentTaskRequest):
+    """固定コメント自動投稿タスクを登録/解除する。
+
+    アプリ非起動でも、予約スロット時刻に未投稿の固定コメントを投稿する OS タスクを作る。
+    """
+    from core.fixed_comment_task import register, unregister
+    try:
+        return register() if req.enabled else unregister()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
 @router.post("/secrets")
 def api_save_secrets(updates: dict[str, str]):
     """APIキーを DB へ暗号化保存する（後方互換エンドポイント）。値はレスポンスに含めない。"""

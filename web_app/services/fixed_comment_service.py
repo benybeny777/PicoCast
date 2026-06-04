@@ -129,6 +129,35 @@ def mark_fixed_comment_posted(history_name: str, profile_id: str | None = None) 
 
 
 def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False, profile_id: str | None = None) -> dict[str, Any]:
+    """job_manager 経由（Web/runner 上）の固定コメント投稿。中核は post_fixed_comment_now と共有。"""
+    return post_fixed_comment_now(
+        history_name,
+        profile_id=profile_id,
+        auto_posted=auto_posted,
+        log=lambda msg, tag="info": _log(job, msg, tag),
+        is_cancelled=job.cancel_event.is_set,
+    )
+
+
+def post_fixed_comment_now(
+    history_name: str,
+    profile_id: str | None = None,
+    auto_posted: bool = False,
+    log=None,
+    is_cancelled=None,
+) -> dict[str, Any]:
+    """固定コメントを YouTube へ直接投稿する（job_manager / runner を介さない）。
+
+    Web UI が起動していなくても呼べる中核処理。`log(msg, tag)` は進捗ログ用コールバック
+    （省略時は無出力）、`is_cancelled()` はキャンセル判定（省略時は常に継続）。
+    """
+    if log is None:
+        def log(_msg, _tag="info"):
+            return None
+    if is_cancelled is None:
+        def is_cancelled():
+            return False
+
     context = _fixed_comment_context(profile_id)
     theme_dir = _safe_fixed_comment_theme_dir(history_name, context)
     if not os.path.isdir(theme_dir):
@@ -153,10 +182,10 @@ def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False, p
 
     publish_status = str(record.get("publish_status") or "").lower()
     if publish_status not in ("published", "public", "manual_published"):
-        _log(job, f"注意: 動画が非公開または予約状態です (status={publish_status})", "warning")
+        log(f"注意: 動画が非公開または予約状態です (status={publish_status})", "warning")
 
-    _log(job, f"固定コメント投稿中: video_id={video_id}", "info")
-    if job.cancel_event.is_set():
+    log(f"固定コメント投稿中: video_id={video_id}", "info")
+    if is_cancelled():
         return {"cancelled": True}
 
     try:
@@ -164,17 +193,17 @@ def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False, p
         comment_thread_id = post_comment(
             video_id=video_id,
             comment_text=fixed_comment,
-            progress_callback=lambda msg: _log(job, msg, "info"),
+            progress_callback=lambda msg: log(msg, "info"),
             profile_id=context.get("profile_id"),
         )
     except Exception as e:
-        _log(job, f"投稿エラー: {e}", "error")
+        log(f"投稿エラー: {e}", "error")
         raise
 
     if not comment_thread_id:
         raise Exception("コメント投稿が失敗しました（YouTube API がIDを返しませんでした）")
 
-    _log(job, f"固定コメント投稿完了: comment_thread_id={comment_thread_id}", "success")
+    log(f"固定コメント投稿完了: comment_thread_id={comment_thread_id}", "success")
 
     _mark_fixed_comment_db(local_id, comment_thread_id=comment_thread_id, context=context)
 

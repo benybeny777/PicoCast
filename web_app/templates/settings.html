@@ -164,6 +164,22 @@
     <div id="output-base-result" class="hint mt"></div>
   </div>
   <div class="card">
+    <h2>固定コメント自動投稿（アプリ非起動でも）</h2>
+    <p class="hint">ONにすると、OSのスケジューラ（Windows=タスクスケジューラ / macOS=launchd）に登録し、<strong>このアプリを起動していなくても</strong>予約スロット時刻に未投稿の固定コメントを自動投稿します。投稿対象は設定変更タブの「固定コメント 自動投稿対象」に従います。</p>
+    <div class="form-row mt">
+      <label class="form-label" style="min-width:120px">状態</label>
+      <span id="fc-task-status">読み込み中…</span>
+    </div>
+    <div class="form-row mt">
+      <label style="display:flex; align-items:center; gap:8px">
+        <input type="checkbox" id="fc-task-enabled" onchange="saveFixedCommentTask()">
+        <span>アプリ非起動でも自動投稿する（OSタスクを登録）</span>
+      </label>
+    </div>
+    <p class="hint" id="fc-task-detail"></p>
+    <div id="fc-task-result" class="hint mt"></div>
+  </div>
+  <div class="card">
     <h2>バックアップ / 復元</h2>
     <p class="hint">パスフレーズを入力すると認証情報（APIキー・OAuth）も再暗号化して同梱し、<strong>別PCでも同じパスフレーズで復元</strong>できます。空欄の場合は同一PC専用（別PCでは認証情報の再登録が必要）です。</p>
     <div class="form-row mt">
@@ -679,7 +695,7 @@ function switchTab(name, btn) {
   if (name === 'channels' && !_chLoaded) chLoadChannels();
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
-  if (name === 'product') { loadProductStatus(); loadProductInfo(); loadOutputBase(); }
+  if (name === 'product') { loadProductStatus(); loadProductInfo(); loadOutputBase(); loadFixedCommentTask(); }
   if (name === 'admin') devLoadEdition();
   if (name === 'characters' && !_charactersLoaded) loadCharacters();
 }
@@ -1064,6 +1080,51 @@ async function resetOutputBase() {
   // 既定パスは GET で取得して明示指定する
   const info = await (await fetch('/api/settings/output-base')).json();
   await _postOutputBase(info.default);
+}
+
+async function loadFixedCommentTask() {
+  const statusEl = document.getElementById('fc-task-status');
+  const cb = document.getElementById('fc-task-enabled');
+  const detail = document.getElementById('fc-task-detail');
+  if (!statusEl) return;
+  try {
+    const res = await fetch('/api/settings/fixed-comment-task');
+    const d = await res.json();
+    if (!res.ok) { statusEl.textContent = d.detail || '取得失敗'; return; }
+    if (!d.supported) {
+      statusEl.textContent = `このOS（${d.os}）は未対応です`;
+      cb.disabled = true; detail.textContent = '';
+      return;
+    }
+    cb.disabled = false;
+    cb.checked = !!d.registered;
+    statusEl.textContent = d.registered ? '✅ 登録済み（アプリ非起動でも投稿）' : '未登録（アプリ起動中のみ投稿）';
+    detail.textContent = `タスク名: ${d.task_name} ／ 実行時刻: ${(d.times||[]).join(', ')} ／ 対象: ${d.target_dir}`;
+  } catch (e) {
+    statusEl.textContent = '取得失敗';
+  }
+}
+
+async function saveFixedCommentTask() {
+  const cb = document.getElementById('fc-task-enabled');
+  const result = document.getElementById('fc-task-result');
+  const enabled = cb.checked;
+  result.textContent = enabled ? 'タスクを登録しています...' : 'タスクを解除しています...';
+  const res = await fetch('/api/settings/fixed-comment-task', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({enabled}),
+  });
+  const d = await res.json();
+  if (!res.ok) {
+    result.textContent = d.detail || '失敗しました';
+    showToast(d.detail || 'タスク操作に失敗しました', true);
+    cb.checked = !enabled;  // 失敗したら元に戻す
+    return;
+  }
+  showToast(enabled ? 'OSタスクを登録しました' : 'OSタスクを解除しました');
+  result.textContent = '';
+  await loadFixedCommentTask();
 }
 
 async function markSetupComplete() {

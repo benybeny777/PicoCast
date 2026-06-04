@@ -6,6 +6,13 @@
 
 ## 2026-06-04
 
+### 固定コメントをアプリ非起動でも自動投稿（OSタスク登録）
+
+- 固定コメント投稿の中核を job_manager / runner 非依存の `fixed_comment_service.post_fixed_comment_now()` に切り出し、`auto_fixed_comment_service.post_all_pending()` で対象プロファイルの未投稿分を直接投稿できるようにした。
+- CLI エントリ `<exe> --post-fixed-comments`（開発時 `python -m web_app.app --post-fixed-comments`）を追加。Web/runner 非起動でも単発で未投稿の固定コメントを投稿する。
+- `core/fixed_comment_task.py` で OS スケジューラへ登録/解除（Windows=タスクスケジューラ / macOS=launchd LaunchAgent、実行時刻=予約スロット＋5分）。**タスク名にインストールディレクトリ識別子（リーフ名＋パスのハッシュ）**を含め、同一PCの複数インストールを区別。
+- 設定画面（製品管理タブ）にON/OFFトグル、API `GET/POST /api/settings/fixed-comment-task` を追加。
+
 ### アプリバージョンの動的化とWeb UI表示
 
 - バージョンの日付部分をハードコード（`APP_VERSION_BASE="2026.05.19"`）から HEAD コミット日付の動的取得に変更し、化石化しないようにした（`{コミット日付}.{コミット数}-{hash}`）。開発時は git から算出し、古い焼き込み `_build_version.py` を優先しない。exe(frozen)時のみ焼き込みを優先する。
