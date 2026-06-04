@@ -1,5 +1,4 @@
 import json
-import os
 import re
 from datetime import datetime, timedelta, timezone
 
@@ -14,7 +13,6 @@ SCOPES = [
     "https://www.googleapis.com/auth/yt-analytics.readonly",
     "https://www.googleapis.com/auth/youtube.force-ssl",
 ]
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
 _DEFAULT_PROFILE = "default"
 
 

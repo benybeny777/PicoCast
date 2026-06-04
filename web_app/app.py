@@ -126,13 +126,14 @@ def _start_job_runner() -> None:
 
     # frozen(exe)時は `python -m workers.runner` が使えない（sys.executable が exe 自身）。
     # exe を `--run-runner` 付きで再起動して runner を別プロセス起動する。
-    from core.runtime_env import is_frozen
+    from core.runtime_env import is_frozen, app_base_dir
     runner_cmd = [sys.executable, "--run-runner"] if is_frozen() else [sys.executable, "-m", "workers.runner"]
+    runner_cwd = app_base_dir()  # exe(onefile)では exe フォルダ。一時展開先を cwd にしない
 
     def _spawn():
         return subprocess.Popen(
             runner_cmd,
-            cwd=_ROOT,
+            cwd=runner_cwd,
             env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

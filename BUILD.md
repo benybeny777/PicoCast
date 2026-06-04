@@ -29,7 +29,7 @@
 - `core/runtime_env.py`: `is_frozen()` / `app_base_dir()`（永続データの基準）/ `resource_base_dir()`（同梱リソースの基準）。
 - `core/secret_store.py` / `core/settings_store.py`: `data/settings.db`・マスターキーを `app_base_dir()` 基準に。
   → onefile でも **exe と同じフォルダの `data/`** に永続化（一時展開先に書いて消える問題を回避）。
-- `core/channel_profile.py` / `core/output_paths.py` / `config/config.py`: 永続データ（`output/`・チャンネル `settings.db`・`metadata.db`・`DEBUG_LOG_DIR`）の基準を `app_base_dir()` に統一。同梱リソース（`config/prompt_profiles` / `config/SEED`）だけ `resource_base_dir()`（展開先）から読む。
+- 永続データ（`output/`・`data/settings.db`・`metadata.db`・`DEBUG_LOG_DIR`・バックアップ/診断）の基準を `app_base_dir()` に統一: `config/config.py`・`core/output_paths.py`・`core/channel_profile.py`・`core/channel_schedule.py`・`core/character_profile_store.py`・`core/prompt_template_store.py`・`core/bgm_store.py`・`web_app/services/backup_service.py`・`web_app/services/diagnostics_service.py`。同梱リソース（`config/prompt_profiles` / `config/SEED` / `assets` / 立ち絵等）だけ `resource_base_dir()`（展開先）から読む。runner 起動の cwd も `app_base_dir()`。
   → onefile でも出力・チャンネルDB・デバッグログが **exe と同じフォルダ** に永続化される（temp展開先に書いて消える問題を回避）。
 - 出力ベースは設定 `OUTPUT_BASE_DIR`（設定DB）で別ドライブへ変更可。`/setup` の「出力先フォルダ」で絶対パス指定すれば exe 隣以外にも置ける。
 - `web_app/app.py`: job-runner を frozen 時は `exe --run-runner` で起動（`python -m workers.runner` の代替）。`main()` 先頭で `--run-runner` を処理。

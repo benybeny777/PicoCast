@@ -8,7 +8,8 @@ import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[2]
+from core.runtime_env import app_base_dir as _app_base_dir
+_ROOT = Path(_app_base_dir())  # 永続データの基準。exe(onefile)では exe と同じフォルダ
 _BACKUP_DIR = _ROOT / "output" / "_backups"
 _SETTINGS_DB = _ROOT / "data" / "settings.db"
 _SQLITE_MAGIC = b"SQLite format 3\x00"

@@ -21,7 +21,8 @@ from datetime import datetime, timezone
 
 _logger = logging.getLogger(__name__)
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+from core.runtime_env import app_base_dir as _app_base_dir
+_ROOT = _app_base_dir()  # 永続データ(settings.db)の基準。exe(onefile)では exe と同じフォルダ
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _lock = threading.Lock()
 

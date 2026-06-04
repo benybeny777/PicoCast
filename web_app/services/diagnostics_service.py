@@ -12,7 +12,8 @@ from typing import Any
 
 from core.settings_store import get_all
 
-_ROOT = Path(__file__).resolve().parents[2]
+from core.runtime_env import app_base_dir as _app_base_dir
+_ROOT = Path(_app_base_dir())  # 永続データの基準。exe(onefile)では exe と同じフォルダ
 _DIAG_DIR = _ROOT / "output" / "_diagnostics"
 _SECRET_PATTERNS = (
     "key",
