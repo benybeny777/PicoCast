@@ -172,6 +172,19 @@ def test_profile_id_isolation(tmp_secret_store):
     assert not ss.has_secret("youtube_upload_token", profile_id="default")
 
 
+def test_require_current_profile_id_raises_when_inactive(tmp_secret_store, tmp_path, monkeypatch):
+    """API利用前の profile 解決は default に落とさず未設定エラーにする。"""
+    ss = tmp_secret_store
+    import core.channel_profile as cp
+
+    monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
+    monkeypatch.setattr(cp, "_RES_ROOT", str(tmp_path))
+
+    with pytest.raises(cp.NoActiveProfileError):
+        ss.require_current_profile_id()
+
+
 # ── パスフレーズ再暗号化（クロスPC） ──────────────────────────────────────────
 
 def test_passphrase_export_import_roundtrip_across_master_keys(tmp_secret_store, monkeypatch):

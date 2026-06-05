@@ -145,8 +145,8 @@ class ImageGenerator:
 
         self.client = None
         if self.background_engine == "nanobanana":
-            from core.secret_store import current_profile_id_or_default, has_secret, load_secret
-            profile_id = current_profile_id_or_default()
+            from core.secret_store import require_current_profile_id, has_secret, load_secret
+            profile_id = require_current_profile_id()
             if not has_secret("google_api_key", profile_id=profile_id):
                 from core.error_codes import format_error
                 raise RuntimeError(format_error("E-SECRET-MISSING", "Google API キー（設定画面の「認証情報」から登録）"))

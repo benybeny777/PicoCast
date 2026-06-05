@@ -321,6 +321,15 @@ def test_existing_profile_schedule_is_updated_to_current_default(profile_db):
     assert schedule.long_times == ["22:00"]
 
 
+def test_get_schedule_without_active_profile_raises(profile_db):
+    cp = profile_db
+    import core.channel_schedule as cs
+
+    assert cp.get_active_profile() is None
+    with pytest.raises(cp.NoActiveProfileError):
+        cs.get_schedule()
+
+
 # ── 初期プロファイル自動作成なし ────────────────────────────────────────────
 
 def test_env_config_does_not_create_profile(profile_db, monkeypatch):

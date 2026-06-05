@@ -234,8 +234,8 @@ class SDWebUIModelManager:
             )
 
         # 認証チェック
-        from core.secret_store import current_profile_id_or_default, has_secret, load_secret
-        profile_id = current_profile_id_or_default()
+        from core.secret_store import require_current_profile_id, has_secret, load_secret
+        profile_id = require_current_profile_id()
         hf_token = load_secret("hf_token", profile_id=profile_id) if has_secret("hf_token", profile_id=profile_id) else ""
         if entry.get("requires_auth"):
             if not hf_token:

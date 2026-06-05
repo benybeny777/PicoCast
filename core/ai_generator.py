@@ -1,4 +1,3 @@
-import os
 import json
 import logging
 import re
@@ -15,8 +14,8 @@ class AIGenerator:
     def __init__(self, debug=False):
         self.debug = debug
         self.client = None
-        from core.secret_store import current_profile_id_or_default, has_secret, load_secret
-        profile_id = current_profile_id_or_default()
+        from core.secret_store import require_current_profile_id, has_secret, load_secret
+        profile_id = require_current_profile_id()
         if has_secret("google_api_key", profile_id=profile_id):
             self.client = genai.Client(api_key=load_secret("google_api_key", profile_id=profile_id))
 
@@ -70,7 +69,8 @@ class AIGenerator:
                 _logger.error("Google AI 台本生成に失敗しました", exc_info=True)
                 raise Exception(f"Google AI エラー: {e}")
 
-        return "Error: Google API キーが未設定です。"
+        from core.error_codes import format_error
+        raise RuntimeError(format_error("E-SECRET-MISSING", "Google API キー（設定画面の「認証情報」から登録）"))
 
     def generate_chapter_markers(self, script_text: str) -> str:
         """ロング台本からYouTube用チャプターマーカーを生成する（1行≒3秒で推定）。"""

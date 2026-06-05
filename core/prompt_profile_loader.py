@@ -72,6 +72,7 @@ def list_product_seed_profiles() -> list[str]:
 
 def _read_genre_file(genre_profile: str, filename: str, required: bool = True) -> str:
     """genres/{genre_profile}/{filename} を読む。required=True で存在しなければ FileNotFoundError。"""
+    validate_genre_profile_exists(genre_profile)
     path = _GENRES_DIR / genre_profile / filename
     if path.exists():
         return path.read_text(encoding="utf-8").strip()
@@ -93,8 +94,10 @@ def _read_genre_file_optional(genre_profile: str, filename: str) -> str:
 def load_genre_profile_config(genre_profile: str) -> dict[str, str]:
     """
     genres/{genre_profile}/profile.yaml を読み込み dict で返す。
-    存在しない場合は空 dict。PyYAML 依存なしで key: value 形式をパース。
+    profile.yaml が存在しない場合は空 dict。genre_profile 自体がなければ例外。
+    PyYAML 依存なしで key: value 形式をパース。
     """
+    validate_genre_profile_exists(genre_profile)
     path = _GENRES_DIR / genre_profile / "profile.yaml"
     if not path.exists():
         return {}
@@ -126,10 +129,10 @@ def get_playlist_categories(genre_profile: str) -> tuple[str, ...]:
     return tuple(categories)
 
 
-def get_default_hashtags(genre_profile: str, fallback: str = "") -> str:
-    """genre profile の default_hashtags を返す。なければ fallback。"""
+def get_default_hashtags(genre_profile: str) -> str:
+    """genre profile の default_hashtags を返す。未定義なら空文字。"""
     config = load_genre_profile_config(genre_profile)
-    return config.get("default_hashtags", fallback)
+    return config.get("default_hashtags", "")
 
 
 def get_used_topics_text(genre_profile: str) -> str:
