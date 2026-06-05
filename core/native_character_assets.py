@@ -11,6 +11,39 @@ _logger = logging.getLogger(__name__)
 
 CACHE_DIR = os.path.join(app_base_dir(), "data", "native_character_cache")
 
+# キャッシュ生成ロジックを変更したら必ず bump する。値が変わると各キャラの
+# キャッシュPNGを自動削除して再生成する（手動削除を不要にするため）。
+# 2: 四国めたんの腕「普通」正規化を修正（マイク差分の混入解消）
+_CACHE_VERSION = "2"
+_CACHE_VERSION_FILE = ".cache_version"
+
+
+def _invalidate_stale_cache(char_dir: str) -> None:
+    """生成ロジックのバージョンが変わっていたら、キャッシュ済みPNGを削除して再生成させる。"""
+    marker = os.path.join(char_dir, _CACHE_VERSION_FILE)
+    current = None
+    if os.path.exists(marker):
+        try:
+            with open(marker, encoding="utf-8") as f:
+                current = f.read().strip()
+        except OSError:
+            _logger.warning("キャッシュバージョンの読み込みに失敗しました: marker=%s", marker, exc_info=True)
+    if current == _CACHE_VERSION:
+        return
+    for file_name in os.listdir(char_dir):
+        if file_name == _CACHE_VERSION_FILE:
+            continue
+        try:
+            os.remove(os.path.join(char_dir, file_name))
+        except OSError:
+            _logger.warning("古いキャラクターキャッシュの削除に失敗しました: file=%s", file_name, exc_info=True)
+    try:
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write(_CACHE_VERSION)
+        _logger.info("キャラクターキャッシュをバージョン%sへ更新するため再生成します: dir=%s", _CACHE_VERSION, char_dir)
+    except OSError:
+        _logger.warning("キャッシュバージョンの書き込みに失敗しました: marker=%s", marker, exc_info=True)
+
 
 @dataclass
 class CharacterVariantSet:
@@ -272,6 +305,7 @@ def _expression_paths(jp_name: str) -> dict[str, str]:
 def _ensure_variants(name: str, jp_name: str, psd_path: str | None, static_path: str | None) -> CharacterVariantSet:
     char_dir = os.path.join(CACHE_DIR, name)
     os.makedirs(char_dir, exist_ok=True)
+    _invalidate_stale_cache(char_dir)
     expressions = _expression_paths(jp_name)
     if not psd_path or not os.path.exists(psd_path):
         return CharacterVariantSet(name, static_path, static_path, static_path, static_path, static_path, static_path, expressions, jp_name)
