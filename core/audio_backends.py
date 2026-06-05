@@ -72,6 +72,7 @@ def _load_aquestalk_license_key(profile_id: str | None) -> str:
     try:
         return load_secret("aquestalk_license_key", profile_id=profile_id).strip()
     except SecretNotFoundError:
+        _logger.warning("AquesTalkライセンスキーが未登録です: profile_id=%s", profile_id)
         return ""
     except Exception:
         _logger.error("AquesTalkライセンスキーの読み込みに失敗しました", exc_info=True)

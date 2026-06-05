@@ -9,6 +9,7 @@ import shutil
 import sqlite3
 import subprocess
 import uuid
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -22,6 +23,7 @@ _ALLOWED_EXTS = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
 # BGM 実ファイルの既定保存先（プロファイルルート相対）
 _BGM_REL_DIR = os.path.join("000_assets", "bgm")
 _MIGRATED_REL = False
+_logger = logging.getLogger(__name__)
 
 
 def _to_rel(profile, path: str) -> str:
@@ -40,6 +42,7 @@ def _to_rel(profile, path: str) -> str:
     try:
         rel = os.path.relpath(p, profile.output_root_abs)
     except ValueError:
+        _logger.debug("BGMパスの相対化に失敗しました。basename保存へ切り替えます: path=%s", p, exc_info=True)
         rel = None  # 別ドライブ等
     if rel is None or rel.startswith(".."):
         rel = os.path.join(_BGM_REL_DIR, os.path.basename(p))

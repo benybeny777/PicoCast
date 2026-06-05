@@ -1,5 +1,6 @@
 import requests
 import os
+import logging
 from config import (
     VOICEVOX_URL,
     VOICE_SPEED_SCALE,
@@ -8,6 +9,9 @@ from config import (
     VOICEVOX_QUERY_TIMEOUT_SEC,
     VOICEVOX_SYNTHESIS_TIMEOUT_SEC,
 )
+
+_logger = logging.getLogger(__name__)
+
 
 class VoicevoxAPI:
     def __init__(self, base_url=VOICEVOX_URL):
@@ -18,6 +22,7 @@ class VoicevoxAPI:
             with requests.get(f"{self.base_url}/version", timeout=VOICEVOX_CONNECTION_TIMEOUT_SEC) as response:
                 return response.status_code == 200
         except Exception:
+            _logger.debug("VOICEVOX 接続確認に失敗しました: base_url=%s", self.base_url, exc_info=True)
             return False
 
     def _post(self, path, **kwargs):

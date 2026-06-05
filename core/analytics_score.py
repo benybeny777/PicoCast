@@ -25,6 +25,7 @@ def _num(value, default=0.0):
     try:
         return float(value)
     except (TypeError, ValueError):
+        _logger.debug("数値変換に失敗しました: value=%r default=%r", value, default, exc_info=True)
         return default
 
 
@@ -44,6 +45,7 @@ def is_audio_cutoff_risk(published_at) -> bool:
         try:
             published_date = date.fromisoformat(text[:10])
         except (TypeError, ValueError):
+            _logger.debug("公開日の解析に失敗しました: published_at=%r", published_at, exc_info=True)
             return False
     return published_date <= AUDIO_CUTOFF_RISK_DATE
 
@@ -365,6 +367,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
                 if hours_since < 24:
                     is_provisional = True
             except Exception:
+                _logger.warning("公開後経過時間の算出に失敗しました: published_at=%r", pub_val, exc_info=True)
                 pass  # フォールバック許可: 日付パース失敗時は本判定とする
 
     # 横展開の最低視聴率ライン（viewsだけ・avg_percentだけで横展開しない）

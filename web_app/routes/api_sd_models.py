@@ -70,6 +70,7 @@ def _run_download(model_id: str) -> None:
         try:
             sd_model_service.rescan_models()
         except Exception:
+            logger.warning("SDモデルダウンロード後の再スキャンに失敗しました: model_id=%s", model_id, exc_info=True)
             pass  # フォールバック許可: rescan は補助的操作。ダウンロード完了後の通知のみ
 
         _progress[model_id] = _make_progress("done")
@@ -112,6 +113,7 @@ def list_models():
         models = sd_model_service.get_model_list()
         return {"status": "ok", "models": models}
     except Exception as e:
+        logger.error("SDモデル一覧取得に失敗しました", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -122,6 +124,7 @@ def list_webui_models():
         models = sd_model_service.get_installed_models_from_webui()
         return {"status": "ok", "models": models}
     except Exception as e:
+        logger.error("Stable Diffusion WebUI のモデル一覧取得に失敗しました", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -132,6 +135,7 @@ def get_current_model():
         model = sd_model_service.get_current_model_from_webui()
         return {"status": "ok", "model": model}
     except Exception as e:
+        logger.error("Stable Diffusion WebUI の現在モデル取得に失敗しました", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -165,6 +169,7 @@ def delete_model(req: ModelIdConfirmedRequest):
         path = sd_model_service.delete_model(req.model_id, confirmed=True)
         return {"status": "ok", "deleted": path}
     except Exception as e:
+        logger.error("SDモデル削除に失敗しました: model_id=%s", req.model_id, exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -191,6 +196,7 @@ def use_model(req: ModelNameRequest):
         save_config({"SD_WEBUI_MODEL": req.model_name})
         return {"status": "ok", "model_name": req.model_name}
     except Exception as e:
+        logger.error("Stable Diffusion WebUI のモデル切り替えに失敗しました: model=%s", req.model_name, exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -201,4 +207,5 @@ def rescan():
         sd_model_service.rescan_models()
         return {"status": "ok"}
     except Exception as e:
+        logger.error("Stable Diffusion WebUI の再スキャンに失敗しました", exc_info=True)
         return {"status": "error", "message": str(e)}

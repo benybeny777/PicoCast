@@ -127,6 +127,7 @@ class ManagedConnection:
                 try:
                     self._conn.rollback()
                 except Exception:
+                    _logger.warning("DBトランザクションrollbackに失敗しました", exc_info=True)
                     pass  # フォールバック許可: クリーンアップ中の rollback 失敗は無視
             release_connection(self._conn)
             self._conn = None
@@ -484,7 +485,7 @@ def _find_mp4(output_dir: str) -> str | None:
             if f.endswith("_native.mp4") or f.endswith(".mp4"):
                 return os.path.join(output_dir, f)
     except OSError:
-        pass
+        _logger.warning("metadata同期用MP4検索に失敗しました: dir=%s", output_dir, exc_info=True)
     return None
 
 
@@ -985,12 +986,14 @@ def get_render_info(local_id: str) -> dict:
             try:
                 d[key] = _json.loads(val)
             except Exception:
+                _logger.warning("render_info JSON列のパースに失敗しました: local_id=%s key=%s", local_id, key, exc_info=True)
                 pass  # フォールバック許可: JSON列のパース失敗時は生値を保持
     nr = d.pop("native_renderer_json", None)
     if nr:
         try:
             d["native_renderer"] = _json.loads(nr)
         except Exception:
+            _logger.warning("render_info native_renderer_json のパースに失敗しました: local_id=%s", local_id, exc_info=True)
             pass  # フォールバック許可: JSON列のパース失敗時は生値を保持
     return d
 
@@ -1215,6 +1218,7 @@ def get_opening_review_debug(local_id: str) -> dict | None:
     try:
         return json.loads(row["opening_review_debug"])
     except (ValueError, TypeError):
+        _logger.warning("opening_review_debug のJSONパースに失敗しました: local_id=%s", local_id, exc_info=True)
         return None
 
 
@@ -1368,16 +1372,19 @@ def load_jobs_from_db(max_n: int = 500) -> list[dict]:
         try:
             d["logs"] = _json.loads(d.pop("logs_json") or "[]")
         except Exception:
+            _logger.warning("jobs.logs_json のパースに失敗しました: job_id=%s", d.get("job_id"), exc_info=True)
             d["logs"] = []
         try:
             result_raw = d.pop("result_json", None)
             d["result"] = _json.loads(result_raw) if result_raw else None
         except Exception:
+            _logger.warning("jobs.result_json のパースに失敗しました: job_id=%s", d.get("job_id"), exc_info=True)
             d["result"] = None
         try:
             params_raw = d.pop("params_json", None)
             d["params"] = _json.loads(params_raw) if params_raw else {}
         except Exception:
+            _logger.warning("jobs.params_json のパースに失敗しました: job_id=%s", d.get("job_id"), exc_info=True)
             d["params"] = {}
         d["cancel_requested"] = bool(d.get("cancel_requested"))
         result.append(d)
@@ -1440,10 +1447,12 @@ def claim_queued_job(runner_pid: int, job_types: list[str] | tuple[str, ...] | N
     try:
         d["params"] = json.loads(d.pop("params_json") or "{}")
     except Exception:
+        _logger.warning("取得ジョブの params_json パースに失敗しました: job_id=%s", d.get("job_id"), exc_info=True)
         d["params"] = {}
     try:
         d["logs"] = json.loads(d.get("logs_json") or "[]")
     except Exception:
+        _logger.warning("取得ジョブの logs_json パースに失敗しました: job_id=%s", d.get("job_id"), exc_info=True)
         d["logs"] = []
     return d
 
@@ -1462,6 +1471,7 @@ def append_job_logs(job_id: str, entries: list[dict]) -> None:
         try:
             logs = json.loads(row["logs_json"] or "[]")
         except Exception:
+            _logger.warning("追記前の jobs.logs_json パースに失敗しました: job_id=%s", job_id, exc_info=True)
             logs = []
         logs.extend(entries)
         # logs_json 肥大と flush 毎の再シリアライズコストを抑えるため上限で切り詰める
@@ -1929,6 +1939,7 @@ def _import_one(folder: str, ok_ref: list, warn_ref: list, fail_ref: list) -> No
         ok_ref[0] += 1
         print(f"  [OK] {os.path.basename(folder)}")
     except Exception as e:
+        _logger.error("既存出力フォルダのmetadata取り込みに失敗しました: folder=%s", folder, exc_info=True)
         fail_ref[0] += 1
         print(f"  [NG] {os.path.basename(folder)}: {e}")
 

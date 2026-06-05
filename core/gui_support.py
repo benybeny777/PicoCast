@@ -1,5 +1,6 @@
 import hashlib
 import io
+import logging
 import os
 import re
 import subprocess
@@ -7,6 +8,8 @@ import subprocess
 import requests
 
 from config import FFMPEG_BIN, NATIVE_FFMPEG_ENCODER, NATIVE_FFMPEG_PRESET
+
+_logger = logging.getLogger(__name__)
 
 
 # git も焼き込みバージョンも取得できないときの最終フォールバックのみに使う。
@@ -20,6 +23,7 @@ def _baked_version() -> str | None:
         from core._build_version import BUILD_VERSION  # ビルド時生成・gitignore
         return BUILD_VERSION or None
     except Exception:
+        _logger.debug("焼き込みバージョンの読み込みに失敗しました", exc_info=True)
         return None
 
 
@@ -55,6 +59,7 @@ def build_app_version() -> str:
         return version + ("-dirty" if dirty else "")
     except Exception:
         # git も使えない最終手段: 焼き込みがあれば使い、無ければ既定値
+        _logger.warning("gitからアプリバージョンを算出できませんでした", exc_info=True)
         return _baked_version() or APP_VERSION_BASE
 
 
@@ -108,6 +113,7 @@ def unified_check(name: str, primary_url: str, path: str) -> dict:
                 found_url = url
                 break
         except Exception:
+            _logger.debug("サービス疎通確認に失敗しました: name=%s url=%s", name, url, exc_info=True)
             continue
     return {
         "name": name,
@@ -150,6 +156,7 @@ def ffmpeg_native_status() -> dict:
             result["error"] = (proc.stderr or proc.stdout or "").strip().splitlines()[-1:]
             result["error"] = result["error"][0] if result["error"] else f"exit {proc.returncode}"
     except Exception as e:
+        _logger.warning("ffmpeg native status の取得に失敗しました", exc_info=True)
         result["error"] = str(e)
     return result
 
@@ -162,6 +169,7 @@ def file_digest(path: str) -> str:
                 h.update(chunk)
         return h.hexdigest()
     except Exception:
+        _logger.warning("ファイルハッシュ計算に失敗しました: path=%s", path, exc_info=True)
         return ""
 
 

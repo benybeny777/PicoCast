@@ -4,11 +4,14 @@ output/ 配下の生成物を走査し、メタ情報は metadata.db から取�
 """
 import os
 import shutil
+import logging
 from typing import Any
 
 from core.output_paths import get_output_videos_dir, get_uploaded_dir, get_output_root
 from core.metadata_db import ManagedConnection, initialize_db
 from web_app.security import find_history_dir, is_video_folder, safe_output_path
+
+_logger = logging.getLogger(__name__)
 
 def _is_management(name: str) -> bool:
     """[Shorts]/[Long] プレフィックスがないフォルダは管理用として扱う。"""
@@ -21,7 +24,7 @@ def _find_mp4(theme_dir: str) -> str | None:
             if name.endswith("_native.mp4") or name == "video_native.mp4":
                 return name
     except OSError:
-        pass
+        _logger.warning("履歴MP4検索に失敗しました: dir=%s", theme_dir, exc_info=True)
     return None
 
 
@@ -59,6 +62,7 @@ def _has_generated_artifact(theme_dir: str, db_info: dict[str, Any]) -> bool:
             if any(entry.is_file() for entry in os.scandir(target_dir)):
                 return True
         except OSError:
+            _logger.warning("履歴成果物フォルダの走査に失敗しました: dir=%s", target_dir, exc_info=True)
             continue
     return False
 
@@ -102,6 +106,7 @@ def _build_metadata_txt(db_info: dict[str, Any]) -> str:
             try:
                 parsed = _json.loads(raw)
             except Exception:
+                _logger.debug("タグのJSON解析に失敗したため生文字列を返します: raw=%r", raw, exc_info=True)
                 return raw
         else:
             parsed = raw
@@ -297,6 +302,7 @@ def list_histories(include_management: bool = False, include_uploaded: bool = Fa
         try:
             entries = sorted(os.scandir(search_dir), key=lambda e: e.name, reverse=True)
         except OSError:
+            _logger.warning("履歴一覧フォルダの走査に失敗しました: dir=%s", search_dir, exc_info=True)
             continue
 
         for entry in entries:
@@ -314,6 +320,7 @@ def list_histories(include_management: bool = False, include_uploaded: bool = Fa
             try:
                 theme_dir = safe_output_path(entry.path, output_base=output_root)
             except Exception:
+                _logger.warning("履歴フォルダの安全確認に失敗しました: path=%s", entry.path, exc_info=True)
                 continue
             _valid.append((name, theme_dir, is_mgmt))
 
@@ -384,6 +391,7 @@ def get_history_detail(history_name: str) -> dict[str, Any] | None:
             theme_dir = safe_output_path(candidate, output_base=output_root)
             break
         except Exception:
+            _logger.warning("履歴詳細フォルダの安全確認に失敗しました: path=%s", candidate, exc_info=True)
             continue
     if theme_dir is None:
         return None

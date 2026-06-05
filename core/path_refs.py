@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import os
+import logging
 
 from core.runtime_env import app_base_dir, resource_base_dir
 
 ASSET_REF_PREFIX = "asset:"
+_logger = logging.getLogger(__name__)
 _LEGACY_ASSET_PREFIXES = (
     "assets/characters/",
     "assets/sd_webui/",
@@ -76,11 +78,13 @@ def to_storable_path_ref(value: str, *, base_dir: str | None = None) -> str:
         if os.path.commonpath([abs_path, resource_root]) == resource_root:
             return asset_ref(os.path.relpath(abs_path, resource_root))
     except ValueError:
+        _logger.debug("resource_root基準のパス相対化に失敗しました: path=%s root=%s", abs_path, resource_root, exc_info=True)
         pass
     try:
         if os.path.commonpath([abs_path, app_root]) == app_root:
             return _norm_ref_path(os.path.relpath(abs_path, app_root))
     except ValueError:
+        _logger.debug("app_root基準のパス相対化に失敗しました: path=%s root=%s", abs_path, app_root, exc_info=True)
         pass
     legacy_rel = _legacy_asset_rel(abs_path)
     if legacy_rel and not os.path.exists(abs_path):

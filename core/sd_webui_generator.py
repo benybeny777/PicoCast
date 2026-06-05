@@ -78,6 +78,7 @@ class StableDiffusionWebUIGenerator:
             r = self._client.get(f"{self.base_url}/sdapi/v1/options", timeout=5)
             return r.status_code == 200
         except Exception:
+            logger.debug("Stable Diffusion WebUI疎通確認に失敗しました: url=%s", self.base_url, exc_info=True)
             return False
 
     def check_health(self) -> dict:
@@ -221,6 +222,7 @@ class StableDiffusionWebUIGenerator:
                 try:
                     os.remove(tmp_path)
                 except OSError:
+                    logger.warning("Stable Diffusion WebUI生成一時ファイルの削除に失敗しました: path=%s", tmp_path, exc_info=True)
                     pass
             raise
 

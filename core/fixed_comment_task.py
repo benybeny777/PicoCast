@@ -353,6 +353,7 @@ def _mac_list_prefix() -> list[dict]:
             with open(path, "rb") as f:
                 data = plistlib.load(f)
         except Exception:
+            _logger.warning("LaunchAgent plist の読み込みに失敗したためスキップします: path=%s", path, exc_info=True)
             continue
         program_args = data.get("ProgramArguments") or [""]
         tasks.append({

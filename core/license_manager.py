@@ -1,11 +1,14 @@
 """製品版ライセンスとエディション制限の管理。"""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from config import config
 from core.settings_store import get_all, set_many
+
+_logger = logging.getLogger(__name__)
 
 LICENSE_EDITION_KEY = "LICENSE_EDITION"
 LICENSE_ID_KEY = "LICENSE_ID"
@@ -111,6 +114,7 @@ def _parse_dt(value: str) -> datetime | None:
     try:
         return datetime.fromisoformat(value)
     except ValueError:
+        _logger.debug("ライセンス日時の解析に失敗しました: value=%r", value, exc_info=True)
         return None
 
 

@@ -1,10 +1,13 @@
 """
 メタデータDB 管理 API。
 """
+import logging
+
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 
 router = APIRouter(prefix="/api/db", tags=["metadata_db"])
+_logger = logging.getLogger(__name__)
 
 
 def _ensure_init():
@@ -135,6 +138,7 @@ def api_db_import_all():
                     ok += 1
                     _log(job, f"✅ {local_id}", "info")
                 except Exception as e:
+                    _logger.error("metadata DB import に失敗しました: folder=%s", root, exc_info=True)
                     fail += 1
                     _log(job, f"❌ {local_id}: {e}", "error")
         _log(job, f"完了: 成功={ok} / 失敗={fail}", "success")

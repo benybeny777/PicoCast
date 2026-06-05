@@ -346,6 +346,7 @@ def _is_port_free(host: str, port: int) -> bool:
             s.bind((host, port))
             return True
         except OSError:
+            _logger.debug("ポートbind確認に失敗しました: host=%s port=%s", host, port, exc_info=True)
             return False
 
 
@@ -373,6 +374,7 @@ def _probe_existing_instance(host: str, port: int) -> bool:
             data = json.loads(res.read().decode("utf-8"))
             return data.get("service") == _HEALTH_SERVICE_ID
     except (OSError, TimeoutError, ValueError, urllib.error.URLError):
+        _logger.debug("既存インスタンス疎通確認に失敗しました: url=%s", url, exc_info=True)
         return False
 
 
@@ -474,6 +476,7 @@ def main():
                             return
                 except (OSError, TimeoutError, urllib.error.URLError):
                     # フォールバック許可: サーバー起動待ちの疎通失敗は短時間リトライする
+                    _logger.debug("ブラウザ自動起動待ちのhealth確認に失敗しました: url=%s", health_url, exc_info=True)
                     time.sleep(0.2)
                     continue
                 time.sleep(0.2)
@@ -517,6 +520,7 @@ def main():
         except KeyboardInterrupt:
             pass
         except OSError as exc:
+            _logger.error("Web UI 起動ポートの確保に失敗しました: host=%s port=%s", host, port, exc_info=True)
             # 起動直前のレースでポートを奪われた場合の自己回復: 空きポートで1度だけ再試行する
             free = _find_free_port(host, port + 1)
             if free is None:

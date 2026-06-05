@@ -222,6 +222,7 @@ def _persist_output_base(new_abs: str) -> None:
             try:
                 setattr(mod, "OUTPUT_BASE_DIR", new_abs)
             except (AttributeError, TypeError):
+                _logger.warning("OUTPUT_BASE_DIR の実行時反映に失敗しました: module=%s", getattr(mod, "__name__", ""), exc_info=True)
                 pass
 
 

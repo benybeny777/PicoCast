@@ -325,6 +325,7 @@ def _scheduled_entries_from_records(records: list[dict], video_type: str) -> lis
                 iso = _parse_slot(publish_at.replace("Z", "+00:00")).isoformat()
                 slot_dt = _parse_slot(iso)
             except Exception:
+                _logger.warning("publish_at の解析に失敗したため対象外とします: publish_at=%r", publish_at, exc_info=True)
                 continue
             if slot_dt <= now and str(record.get("publish_status") or "").lower() != "scheduled":
                 continue

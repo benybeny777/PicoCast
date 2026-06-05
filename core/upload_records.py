@@ -1,5 +1,8 @@
 from datetime import datetime
+import logging
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 
 def load_upload_records() -> list[dict[str, Any]]:
@@ -49,13 +52,14 @@ def _to_timestamp(value) -> int | None:
     try:
         return int(value.timestamp())
     except AttributeError:
-        pass
+        _logger.debug("timestamp() を持たない値のため文字列日時として解析します: value=%r", value, exc_info=True)
     try:
         text = str(value).strip()
         if not text:
             return None
         return int(datetime.fromisoformat(text.replace("Z", "+00:00")).timestamp())
     except Exception:
+        _logger.warning("アップロード記録の日時解析に失敗しました: value=%r", value, exc_info=True)
         return None
 
 

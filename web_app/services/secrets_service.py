@@ -92,6 +92,7 @@ def save_client_secrets(json_text: str, profile_id: str | None = None) -> list[s
     try:
         json.loads(json_text)
     except json.JSONDecodeError as e:
+        _logger.warning("youtube_client_secrets JSON の解析に失敗しました", exc_info=True)
         errors.append(f"JSON 解析エラー: {e.msg}")
         return errors
 
@@ -180,6 +181,7 @@ def delete_legacy_file(filename: str, confirmed: bool = False) -> dict:
         _logger.info("[SecretsService] 旧認証ファイルを削除しました: %s", filename)
         return {"ok": True, "deleted": filename}
     except OSError as e:
+        _logger.error("旧認証ファイルの削除に失敗しました: filename=%s", filename, exc_info=True)
         return {"ok": False, "error": f"削除失敗: {type(e).__name__}"}
 
 

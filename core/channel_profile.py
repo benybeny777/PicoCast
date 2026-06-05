@@ -349,7 +349,7 @@ class profile_context:
             try:
                 delattr(_profile_context, "profile_id")
             except AttributeError:
-                pass
+                _logger.debug("profile_id コンテキストは未設定のため削除をスキップしました", exc_info=True)
         else:
             _profile_context.profile_id = self._previous
         return False

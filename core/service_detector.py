@@ -7,10 +7,13 @@ SD_WEBUI_BASE_URL / FFMPEG_BIN）への適用候補として返す。秘密情�
 from __future__ import annotations
 
 import shutil
+import logging
 
 import psutil
 
 from config import config
+
+_logger = logging.getLogger(__name__)
 
 # 外部依存ソフトの入手先・インストール手順カタログ。
 # `/setup` のインストール案内と、未検出サービスのダウンロードリンク提示に使う。
@@ -110,6 +113,7 @@ def _listening_ports() -> dict[int, int]:
     try:
         conns = psutil.net_connections(kind="tcp")
     except (psutil.AccessDenied, PermissionError):
+        _logger.debug("LISTENポート一覧の取得権限がありません", exc_info=True)
         return ports
     for conn in conns:
         if conn.status == psutil.CONN_LISTEN and conn.laddr and conn.pid:
@@ -123,6 +127,7 @@ def _proc_exe(pid: int | None) -> str:
     try:
         return psutil.Process(pid).exe() or ""
     except (psutil.NoSuchProcess, psutil.AccessDenied, ValueError):
+        _logger.debug("プロセス実行ファイルパスの取得に失敗しました: pid=%s", pid, exc_info=True)
         return ""
 
 
@@ -133,6 +138,7 @@ def _find_process_exe_by_keyword(keywords: list[str]) -> str:
             name = (proc.info.get("name") or "").lower()
             exe = proc.info.get("exe") or ""
         except (psutil.NoSuchProcess, psutil.AccessDenied):
+            _logger.debug("プロセス情報の取得に失敗しました", exc_info=True)
             continue
         hay = f"{name} {exe.lower()}"
         if exe and any(k in hay for k in kws):

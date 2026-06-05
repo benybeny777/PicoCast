@@ -1,3 +1,5 @@
+import logging
+
 from config import (
     NATIVE_LONG_BODY_VOICE_SPEED,
     NATIVE_LONG_INTRO_VOICE_SPEED,
@@ -9,6 +11,7 @@ from config import (
     VOICE_TAIL_SAFETY_SEC,
 )
 
+_logger = logging.getLogger(__name__)
 
 INTER_DIALOGUE_GAP_SEC = 0.2
 
@@ -134,6 +137,7 @@ def pre_generate_check(items: list[dict], is_shorts: bool) -> tuple[list[str], l
                         f"Shortsセリフ数は許容内ですが、安定目標は{NATIVE_SHORTS_LINES_TARGET_MIN}〜{NATIVE_SHORTS_LINES_TARGET_MAX}行です"
                     )
     except Exception as exc:
+        _logger.error("生成前チェックに失敗しました", exc_info=True)
         errors.append(f"生成前チェック失敗: {exc}")
 
     return errors, warnings

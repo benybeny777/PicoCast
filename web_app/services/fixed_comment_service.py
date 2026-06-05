@@ -4,6 +4,7 @@ metadata.db の youtube_status / video_metadata を正本として扱う。
 """
 import os
 import sqlite3
+import logging
 from collections.abc import Iterable
 from datetime import datetime
 from typing import Any
@@ -12,6 +13,8 @@ from core.output_paths import get_output_videos_dir, get_uploaded_dir, get_outpu
 from core.metadata_db import ManagedConnection, initialize_db
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import is_video_folder, safe_output_path
+
+_logger = logging.getLogger(__name__)
 
 
 def list_fixed_comment_candidates(only_unposted: bool = True, profile_id: str | None = None) -> list[dict[str, Any]]:
@@ -25,6 +28,7 @@ def list_fixed_comment_candidates(only_unposted: bool = True, profile_id: str | 
         try:
             _safe_fixed_comment_theme_dir(relative_name, context)
         except Exception:
+            _logger.warning("固定コメント候補フォルダの安全確認に失敗しました: name=%s", relative_name, exc_info=True)
             continue
         if not os.path.isdir(theme_dir):
             continue
@@ -223,6 +227,7 @@ def _iter_candidate_dirs(context: dict[str, Any]) -> Iterable[tuple[str, str]]:
     try:
         names = sorted(os.listdir(output_videos_dir), reverse=True)
     except OSError:
+        _logger.warning("固定コメント候補の出力フォルダ走査に失敗しました: dir=%s", output_videos_dir, exc_info=True)
         names = []
 
     for name in names:
@@ -235,6 +240,7 @@ def _iter_candidate_dirs(context: dict[str, Any]) -> Iterable[tuple[str, str]]:
     try:
         uploaded_names = sorted(os.listdir(uploaded_dir), reverse=True)
     except OSError:
+        _logger.warning("固定コメント候補のアップロード済みフォルダ走査に失敗しました: dir=%s", uploaded_dir, exc_info=True)
         return
 
     for name in uploaded_names:

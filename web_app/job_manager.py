@@ -217,6 +217,7 @@ class JobManager:
                     job.status = JobStatus.SUCCESS
                     job.result = result
             except Exception as e:
+                _job_logger.error("[%s job=%s] ジョブ実行に失敗しました", job.type, job.job_id[:8], exc_info=True)
                 job.status = JobStatus.FAILED
                 job.error = str(e)
                 job.progress_text = f"エラー: {e}"
@@ -250,6 +251,7 @@ def _log(job: Job, message: str, tag: str = "info") -> None:
     try:
         _job_logger.log(_TAG_TO_LEVEL.get(tag, logging.INFO), "[%s job=%s] %s", job.type, job.job_id[:8], message)
     except Exception:
+        logging.getLogger(__name__).warning("ジョブログのデバッグログミラーに失敗しました: job_id=%s", job.job_id, exc_info=True)
         pass  # フォールバック許可: デバッグログへのミラー失敗は本処理を妨げない
 
 

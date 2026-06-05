@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import threading
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -19,6 +20,7 @@ from core.runtime_env import app_base_dir as _app_base_dir
 _ROOT = _app_base_dir()  # 永続データ(settings.db)の基準。exe(onefile)では exe と同じフォルダ
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _lock = threading.Lock()
+_logger = logging.getLogger(__name__)
 
 _MIGRATION_KEY = "upload_slots_20260601_071221_22"
 
@@ -229,6 +231,7 @@ def get_schedule(profile_id: str | None = None) -> ChannelSchedule:
             active = get_active_profile()
             profile_id = active.profile_id if active else ""
         except Exception:
+            _logger.warning("スケジュール取得時のactive profile解決に失敗しました", exc_info=True)
             profile_id = ""
     if not profile_id:
         return _default_schedule("default")

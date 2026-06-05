@@ -168,6 +168,7 @@ def _get_master_key_unix() -> bytes:
         _logger.info("[SecretStore] keyring にマスターキーを新規生成しました")
         return new_key
     except Exception:
+        _logger.warning("keyring からマスターキーを取得できないため NVF_MASTER_KEY 環境変数へ切り替えます", exc_info=True)
         pass  # フォールバック許可: keyring 不可時は環境変数フォールバックへ続行
 
     env_key = os.environ.get("NVF_MASTER_KEY", "")

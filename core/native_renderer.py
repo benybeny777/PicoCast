@@ -4,6 +4,7 @@ import gc
 import re
 import subprocess
 import wave
+import logging
 from dataclasses import dataclass
 
 from config import (
@@ -131,7 +132,9 @@ def _trial_watermark_filter(width: int, height: int) -> str | None:
         f"text='{text}':"
         f"x=w-tw-24:y=h-th-24:fontsize={font_size}:"
         "fontcolor=white@0.72:box=1:boxcolor=black@0.35:boxborderw=8"
-    )
+)
+
+_logger = logging.getLogger(__name__)
 
 
 def _clear_native_work_dir(work_dir: str) -> None:
@@ -147,6 +150,7 @@ def _clear_native_work_dir(work_dir: str) -> None:
             try:
                 os.remove(path)
             except OSError:
+                _logger.warning("native作業ファイルの削除に失敗しました: path=%s", path, exc_info=True)
                 pass
 
 
@@ -259,9 +263,11 @@ def media_duration_sec(path: str) -> float | None:
             timeout=NATIVE_FFPROBE_TIMEOUT_SEC,
         )
         if proc.returncode != 0:
+            _logger.warning("ffprobeによるメディア尺取得に失敗しました: path=%s returncode=%s", path, proc.returncode)
             return None
         return float((proc.stdout or "").strip())
     except Exception:
+        _logger.warning("メディア尺取得に失敗しました: path=%s", path, exc_info=True)
         return None
 
 
@@ -335,6 +341,7 @@ def _audio_analysis_summary(path: str) -> str:
             return f"音量解析失敗 ({proc.returncode}): {tail}"
         return "\n".join(summary_lines[-12:]) if summary_lines else "音量解析結果を取得できませんでした"
     except Exception as e:
+        _logger.warning("音量解析に失敗しました: path=%s", path, exc_info=True)
         return f"音量解析失敗: {e}"
     finally:
         proc = None
@@ -449,6 +456,7 @@ def _dialogue_captions(script_text: str) -> list[CaptionChunk]:
     try:
         items = ScriptParser.parse_string(script_text or "")
     except Exception:
+        _logger.warning("字幕用台本パースに失敗しました", exc_info=True)
         return []
     captions: list[CaptionChunk] = []
     for item in items:
@@ -463,6 +471,7 @@ def _dialogue_caption_events(script_text: str) -> list[tuple[CaptionChunk, str |
     try:
         items = ScriptParser.parse_string(script_text or "")
     except Exception:
+        _logger.warning("字幕イベント用台本パースに失敗しました", exc_info=True)
         return []
     events: list[tuple[CaptionChunk, str | None]] = []
     pending_telops: list[str] = []
@@ -603,6 +612,7 @@ def _background_for_audio(audio_path: str, bg_files: list[str]) -> str:
     try:
         bg_idx = int(os.path.basename(audio_path).split("_", 1)[0])
     except Exception:
+        _logger.debug("音声ファイル名から背景番号を解析できませんでした: path=%s", audio_path, exc_info=True)
         bg_idx = 1
     return bg_files[min(max(bg_idx - 1, 0), len(bg_files) - 1)]
 
@@ -1126,6 +1136,7 @@ def _video_size(output_dir: str, script_text: str) -> tuple[int, int]:
                 return 1920, 1080
             return 1080, 1920
     except Exception as _e:
+        _logger.error("台本から画面サイズを推定できませんでした", exc_info=True)
         raise RuntimeError(f"Error: {_e}") from _e
     return 1920, 1080
 
@@ -1287,11 +1298,13 @@ def render_native(
                 except Exception as e:
                     last_error = e
                     if enc_idx == 0 and len(encode_candidates) > 1:
+                        _logger.warning("GPUエンコードに失敗したため次のエンコード候補へ切り替えます", exc_info=True)
                         continue
                     raise
         except Exception as effect_error:
             if not (NATIVE_ENABLE_MOTION_EFFECTS and is_shorts):
                 raise
+            _logger.warning("軽量エフェクト付きsegmentレンダーに失敗したため静的レンダーへ切り替えます: segment=%s", idx, exc_info=True)
             motion_fallback_count += 1
             if progress_callback:
                 progress_callback(f"⚠ segment {idx}: 軽量エフェクトに失敗したため静的レンダーで続行します")
@@ -1328,6 +1341,7 @@ def render_native(
                 except Exception as e:
                     last_error = e
                     if enc_idx == 0 and len(encode_candidates) > 1:
+                        _logger.warning("静的segmentのGPUエンコードに失敗したため次の候補へ切り替えます", exc_info=True)
                         continue
                     raise RuntimeError(f"エフェクトなし再レンダーにも失敗しました: {e}") from effect_error
         if last_error:

@@ -2,7 +2,10 @@
 台本生成プロンプト・タイトル案プロンプトを組み立てて返すサービス。
 Web UIのプロンプト生成ボタンから呼び出す。
 """
+import logging
 from typing import Optional
+
+_logger = logging.getLogger(__name__)
 
 
 def _active_genre_profile() -> str:
@@ -77,6 +80,7 @@ def _read_latest_analytics_summary() -> str:
         meta = {k: full.get(k) for k in ("generated_at", "days", "start_date", "end_date")}
         return build_performance_summary(items, meta=meta)
     except Exception:
+        _logger.warning("プロンプト用Analyticsサマリー取得に失敗しました", exc_info=True)
         return ""
 
 

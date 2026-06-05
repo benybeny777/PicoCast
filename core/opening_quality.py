@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import subprocess
@@ -7,6 +8,8 @@ from datetime import datetime, timezone
 from typing import Any
 
 import requests
+
+_logger = logging.getLogger(__name__)
 
 from config import (
     OPENAI_FINAL_REVIEW_MODEL,
@@ -272,6 +275,7 @@ def _ollama_is_ready(timeout=1.5) -> bool:
         with requests.get(f"{OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=timeout) as response:
             return response.ok
     except requests.RequestException:
+        _logger.debug("Ollama ready check に失敗しました: url=%s", OLLAMA_BASE_URL, exc_info=True)
         return False
 
 
@@ -462,6 +466,12 @@ def ollama_opening_review(local_review: dict[str, Any], title: str, thumbnail_te
             }
             return normalized
         except Exception as exc:
+            _logger.warning(
+                "Ollama冒頭レビューに失敗しました: attempt=%s model=%s",
+                attempt + 1,
+                OLLAMA_REVIEW_MODEL,
+                exc_info=True,
+            )
             last_error = exc
             prompt = (
                 "前回の出力はJSONとして不正でした。次はJSONだけ返してください。\n"
@@ -818,6 +828,7 @@ def check_openai_final_review_connection(timeout: int = 10) -> dict[str, Any]:
             response.raise_for_status()
         return {"ok": True, "model": OPENAI_FINAL_REVIEW_MODEL}
     except Exception as e:
+        _logger.warning("OpenAI最終レビュー疎通確認に失敗しました: model=%s", OPENAI_FINAL_REVIEW_MODEL, exc_info=True)
         return {
             "ok": False,
             "error": str(e),

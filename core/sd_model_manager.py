@@ -133,6 +133,7 @@ class SDWebUIModelManager:
             try:
                 file_path = self._resolve_model_path(m)
             except RuntimeError:
+                logger.warning("SDモデルパスの解決に失敗しました: id=%s filename=%s", m.get("id"), m.get("filename"), exc_info=True)
                 file_path = None
 
             installed = os.path.isfile(file_path) if file_path else False
@@ -316,6 +317,7 @@ class SDWebUIModelManager:
                 try:
                     os.remove(part_path)
                 except OSError:
+                    logger.warning("SDモデルの一時ダウンロードファイル削除に失敗しました: path=%s", part_path, exc_info=True)
                     pass
             raise RuntimeError(
                 f"SDモデルダウンロード中にエラーが発生しました: {filename}\n詳細: {e}"
@@ -327,6 +329,7 @@ class SDWebUIModelManager:
                     try:
                         os.remove(part_path)
                     except OSError:
+                        logger.warning("SDモデルの一時ダウンロードファイル削除に失敗しました: path=%s", part_path, exc_info=True)
                         pass
 
         # SHA256 検証（非空時のみ）

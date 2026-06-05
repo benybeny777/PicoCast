@@ -3,9 +3,12 @@
 YouTube Data API と metadata.db を正として扱う。
 破壊的操作（公開予定変更・削除・詰め直し）は確認必須。
 """
+import logging
 from typing import Any
 
 from web_app.job_manager import Job, _log, get_job_manager
+
+_logger = logging.getLogger(__name__)
 
 
 def list_schedule(
@@ -25,6 +28,7 @@ def list_schedule(
             dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
             return dt.astimezone(JST).isoformat()
         except Exception:
+            _logger.warning("YouTube公開予定日時のJST変換に失敗しました: publish_at=%s", raw, exc_info=True)
             return raw
 
     try:
@@ -75,6 +79,7 @@ def _is_future(publish_at_str: str, now_utc) -> bool:
         dt = datetime.fromisoformat(publish_at_str.replace("Z", "+00:00"))
         return dt > now_utc
     except Exception:
+        _logger.warning("公開予定日時の未来判定に失敗しました: publish_at=%s", publish_at_str, exc_info=True)
         return True
 
 
@@ -96,6 +101,7 @@ def _run_sync(job: Job) -> dict[str, Any]:
         _log(job, f"同期完了: {result}", "success")
         return {"result": str(result)}
     except Exception as e:
+        _logger.error("スケジュール同期ジョブに失敗しました", exc_info=True)
         _log(job, f"同期エラー: {e}", "error")
         raise
 
@@ -126,6 +132,7 @@ def _fmt_jst(iso: str) -> str:
         jst = dt.astimezone(timezone(timedelta(hours=9)))
         return jst.strftime("%m/%d %H:%M JST")
     except Exception:
+        _logger.debug("JST表示用フォーマットに失敗したため元のISO文字列を返します: iso=%r", iso, exc_info=True)
         return iso
 
 
@@ -153,6 +160,7 @@ def _run_rebalance(job: Job) -> dict[str, Any]:
             "long_changes": [{"old": o, "new": n, "title": t} for o, n, t in long_changes],
         }
     except Exception as e:
+        _logger.error("スケジュール詰め直し計算ジョブに失敗しました", exc_info=True)
         _log(job, f"計算エラー: {e}", "error")
         raise
 
@@ -196,6 +204,7 @@ def _run_apply_rebalance(job: Job) -> dict[str, Any]:
         _log(job, f"完了: {ok_count}/{len(all_changes)} 件適用", "success")
         return {"applied": ok_count, "total": len(all_changes)}
     except Exception as e:
+        _logger.error("スケジュール詰め直し適用ジョブに失敗しました", exc_info=True)
         _log(job, f"適用エラー: {e}", "error")
         raise
 
@@ -221,6 +230,7 @@ def _run_update_schedule(job: Job, video_id: str, publish_at: str) -> dict[str, 
             dt = dt.replace(tzinfo=_JST)
         publish_at_jst = dt.astimezone(_JST).isoformat()
     except Exception:
+        _logger.warning("公開予定変更日時のJST正規化に失敗しました: publish_at=%s", publish_at, exc_info=True)
         publish_at_jst = publish_at
 
     _log(job, f"公開予定変更中: {video_id} → {publish_at_jst}", "info")

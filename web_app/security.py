@@ -5,7 +5,10 @@
 - 秘密ファイルの読み取り禁止
 """
 import os
+import logging
 from fastapi import HTTPException
+
+_logger = logging.getLogger(__name__)
 
 # 絶対に読み取り・返却してはならないファイル名
 _SECRET_FILES = frozenset({
@@ -55,6 +58,7 @@ def is_safe_output_path(path: str) -> bool:
         safe_output_path(path)
         return True
     except HTTPException:
+        _logger.debug("output_root 外または秘密ファイルのため不許可と判定しました: path=%s", path, exc_info=True)
         return False
 
 
@@ -78,6 +82,7 @@ def find_history_dir(history_name: str) -> str | None:
             try:
                 return safe_output_path(candidate, output_base=output_base)
             except HTTPException:
+                _logger.debug("履歴フォルダの安全性検証に失敗しました: candidate=%s", candidate, exc_info=True)
                 return None
     return None
 

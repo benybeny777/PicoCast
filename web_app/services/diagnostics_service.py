@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import platform
 import sys
 import zipfile
@@ -11,6 +12,8 @@ from pathlib import Path
 from typing import Any
 
 from core.settings_store import get_all
+
+_logger = logging.getLogger(__name__)
 
 from core.runtime_env import app_base_dir as _app_base_dir
 _ROOT = Path(_app_base_dir())  # 永続データの基準。exe(onefile)では exe と同じフォルダ
@@ -81,6 +84,7 @@ def _gpu_info() -> dict[str, Any]:
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         # 診断データ収集なので、プローブ失敗は状態として記録する（パッケージ全体は止めない）
+        _logger.warning("診断用 nvidia-smi の実行に失敗しました", exc_info=True)
         return {"detected": False, "reason": f"nvidia-smi 実行エラー: {type(exc).__name__}"}
     if proc.returncode != 0:
         return {"detected": False, "reason": f"nvidia-smi 失敗 (code={proc.returncode})"}
@@ -94,6 +98,7 @@ def _schema_versions() -> dict[str, Any]:
         from core.metadata_db import SCHEMA_VERSION
         result["metadata_schema_version"] = SCHEMA_VERSION
     except Exception as exc:
+        _logger.warning("診断用metadata schema version取得に失敗しました", exc_info=True)
         result["metadata_schema_error"] = str(exc)
     return result
 

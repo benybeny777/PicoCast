@@ -4,8 +4,11 @@ APIキー・トークンなど認証情報は対象外（encrypted_secrets で�
 一部設定は保存直後に現在プロセスへ反映する。
 """
 import os
+import logging
 from typing import Any
 from config import config as cfg
+
+_logger = logging.getLogger(__name__)
 
 # 編集可能な設定項目の定義（秘密値は含めない）
 EDITABLE_CONFIG: list[dict[str, Any]] = [
@@ -211,6 +214,7 @@ def _validate(updates: dict[str, str]) -> list[str]:
                 if raw_val not in choices:
                     errors.append(f"{key}: 選択肢にない値です")
         except (ValueError, TypeError):
+            _logger.warning("設定値バリデーション中の型変換に失敗しました: key=%s value=%r", key, raw_val, exc_info=True)
             errors.append(f"{key}: '{raw_val}' は {spec['type']} として無効です")
     return errors
 
@@ -246,6 +250,7 @@ def _apply_runtime_updates(updates: dict[str, str]) -> None:
             else:
                 value = str(raw_val)
         except (ValueError, TypeError):
+            _logger.warning("保存済み設定の実行時反映に失敗しました: key=%s value=%r", key, raw_val, exc_info=True)
             continue
 
         # config モジュール自身を更新
@@ -259,4 +264,4 @@ def _apply_runtime_updates(updates: dict[str, str]) -> None:
                 try:
                     setattr(mod, key, value)
                 except (AttributeError, TypeError):
-                    pass
+                    _logger.warning("設定値のモジュール反映に失敗しました: key=%s module=%s", key, getattr(mod, "__name__", ""), exc_info=True)

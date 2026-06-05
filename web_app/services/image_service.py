@@ -4,11 +4,14 @@ output/{history_name}/backgrounds/ および thumbnails/ を走査する。
 再生成はジョブ化して実行。パストラバーサル対策は security.py 経由で行う。
 """
 import os
+import logging
 from typing import Any
 
 from core.output_paths import get_output_videos_dir
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import find_history_dir
+
+_logger = logging.getLogger(__name__)
 
 
 def _detect_is_shorts_from_dir(theme_dir: str) -> bool:
@@ -80,6 +83,7 @@ def _read_bg_prompt(bg_dir: str, fname: str) -> str:
             content = content.split("【台本】")[0].strip()
         return content
     except Exception:
+        _logger.warning("背景プロンプトの読み取りに失敗しました: dir=%s file=%s", bg_dir, fname, exc_info=True)
         return ""
 
 
@@ -90,6 +94,7 @@ def _image_meta(path: str, replacement: dict[str, Any] | None = None) -> dict[st
         with Image.open(path) as img:
             width, height = img.size
     except Exception:
+        _logger.warning("画像メタ情報の取得に失敗しました: path=%s", path, exc_info=True)
         pass  # フォールバック許可: 画像サイズ取得失敗時は既定サイズで継続
     return {
         "width": width,
@@ -112,6 +117,7 @@ def _replacement_map(history_name: str) -> dict[str, dict[str, Any]]:
                 result[key] = row
         return result
     except Exception:
+        _logger.warning("画像差し替え履歴の取得に失敗しました: history=%s", history_name, exc_info=True)
         return {}
 
 
@@ -130,6 +136,7 @@ def save_bg_prompts(history_name: str, prompts: dict[str, str]) -> list[str]:
         try:
             bg_num = int(fname.split("_")[1])
         except (ValueError, IndexError):
+            _logger.warning("保存対象の背景プロンプトキー解析に失敗しました: key=%s", key, exc_info=True)
             continue
         prompt_path = os.path.join(bg_dir, f"prompt_bg_{bg_num:04d}.txt")
         with open(prompt_path, "w", encoding="utf-8") as f:
@@ -216,6 +223,12 @@ def _run_regenerate(
                     from core.metadata_db import clear_image_generation_failure
                     clear_image_generation_failure(os.path.basename(theme_dir.rstrip("/\\")), bg_num)
                 except Exception:
+                    _logger.warning(
+                        "背景再生成後の失敗記録クリアに失敗しました: history=%s bg_num=%s",
+                        history_name,
+                        bg_num,
+                        exc_info=True,
+                    )
                     pass  # フォールバック許可: 記録クリア失敗は再生成本体を妨げない
 
             elif key.startswith("thumbnails/"):
@@ -232,6 +245,7 @@ def _run_regenerate(
                 raise ValueError(f"未対応のキー: {key}")
 
         except Exception as e:
+            _logger.error("画像再生成に失敗しました: history=%s key=%s", history_name, key, exc_info=True)
             _log(job, f"再生成エラー ({key}): {e}", "error")
             failed.append(key)
 

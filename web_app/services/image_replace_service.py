@@ -7,6 +7,7 @@ from __future__ import annotations
 import os
 import shutil
 import uuid
+import logging
 from datetime import datetime
 from io import BytesIO
 from typing import Any
@@ -22,6 +23,7 @@ from core.output_paths import get_backups_dir
 from web_app.security import find_history_dir, safe_output_path
 
 _ALLOWED_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+_logger = logging.getLogger(__name__)
 
 
 def replace_image(history_name: str, target_key: str, image_bytes: bytes, filename: str, confirmed: bool) -> dict[str, Any]:
@@ -64,11 +66,22 @@ def replace_image(history_name: str, target_key: str, image_bytes: bytes, filena
             try:
                 shutil.copy2(backup_path, target_path)
             except Exception as rollback_error:
+                _logger.error(
+                    "画像差し替え失敗後のロールバックに失敗しました: history=%s target=%s",
+                    history_name,
+                    target_key,
+                    exc_info=True,
+                )
                 cleanup_errors.append(f"rollback={rollback_error}")
         if os.path.exists(tmp_path):
             try:
                 os.remove(tmp_path)
             except OSError as cleanup_error:
+                _logger.warning(
+                    "画像差し替え失敗後の一時ファイル削除に失敗しました: path=%s",
+                    tmp_path,
+                    exc_info=True,
+                )
                 cleanup_errors.append(f"tmp_cleanup={cleanup_error}")
         if cleanup_errors:
             raise RuntimeError(f"画像差し替えに失敗し、復旧処理にも失敗しました: {', '.join(cleanup_errors)}") from e

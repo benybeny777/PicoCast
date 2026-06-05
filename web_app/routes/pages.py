@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 import os
+import logging
 
 from config import config as _cfg
 from config import (
@@ -42,6 +43,7 @@ _STATIC_DIR = os.path.join(_WEB_APP_DIR, "static")
 templates = Jinja2Templates(directory=_TEMPLATES_DIR)
 
 router = APIRouter(tags=["pages"])
+_logger = logging.getLogger(__name__)
 
 # 表示用アプリバージョン（起動時に一度だけ算出。実行中は変わらない）
 from core.gui_support import build_app_version as _build_app_version
@@ -71,6 +73,7 @@ def _static_asset_version() -> int:
         ]
         return int(max(os.path.getmtime(path) for path in paths if os.path.exists(path)))
     except Exception:
+        _logger.warning("静的アセットバージョンの算出に失敗しました", exc_info=True)
         return 0
 
 
@@ -170,6 +173,7 @@ def page_schedule(request: Request):
         scheduled = schedule_service.list_schedule(include_published=False)
         schedule_error = None
     except Exception as e:
+        _logger.error("スケジュールページ用データ取得に失敗しました", exc_info=True)
         scheduled = []
         schedule_error = str(e)
     from core.channel_schedule import get_schedule, schedule_to_dict

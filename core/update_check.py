@@ -10,11 +10,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.request
 
 from config import config
 from core.gui_support import build_app_version
+
+_logger = logging.getLogger(__name__)
 
 
 def is_update_check_enabled() -> bool:
@@ -38,6 +41,7 @@ def check_for_update(timeout: float = 5.0) -> dict:
         with urllib.request.urlopen(req, timeout=timeout) as res:
             data = json.loads(res.read().decode("utf-8"))
     except (urllib.error.URLError, OSError, TimeoutError, ValueError) as e:
+        _logger.warning("更新情報の取得に失敗しました: url=%s", url, exc_info=True)
         return {"enabled": True, "ok": False, "current": current, "error": f"更新情報の取得に失敗しました: {e}"}
 
     latest = str(data.get("latest_version", "")).strip()

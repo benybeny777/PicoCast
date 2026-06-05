@@ -12,6 +12,8 @@ GET  /api/prompt-profiles    - 利用可能な genre_profile 一覧
 
 プロファイル作成・更新ではチャンネル別投稿予約スロットも同時に保存する。
 """
+import logging
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -32,6 +34,7 @@ from core.channel_profile import (
 )
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
+_logger = logging.getLogger(__name__)
 
 
 class ChannelProfileRequest(BaseModel):
@@ -79,6 +82,7 @@ def _profile_to_dict(p: ChannelProfile) -> dict:
         }
         d["schedule"] = schedule_to_dict(get_schedule(p.profile_id))
     except Exception:
+        _logger.warning("チャンネルプロファイル付随情報の取得に失敗しました: profile_id=%s", p.profile_id, exc_info=True)
         d["auth"] = {
             "google_api_key": False,
             "openai_api_key": False,
@@ -212,6 +216,7 @@ def api_validate_channel(profile_id: str):
         from core.prompt_profile_loader import validate_genre_profile_exists, list_available_genre_profiles
         validate_genre_profile_exists(profile.genre_profile)
     except Exception as e:
+        _logger.warning("genre_profile の検証に失敗しました: profile_id=%s genre_profile=%s", profile_id, profile.genre_profile, exc_info=True)
         errors.append(str(e))
         available = list_available_genre_profiles()
         errors.append(f"利用可能な genre_profile: {available}")
