@@ -14,6 +14,7 @@
 - `prompt_profile_loader` の genre profile 設定読み込みでも、未知ジャンル時に空値へ落ちず `GenreProfileNotFoundError` で停止するようにした。
 - `AIGenerator.generate_script()` は Google API キー未設定時に `"Error: ..."` 文字列を返さず、エラーコード付き例外で停止するようにした。
 - `metadata.db` パス解決も active profile 未設定時に旧 `OUTPUT_DATA_DIR` へ戻らないようにし、別チャンネルや旧互換DBへ誤って書き込まないようにした。
+- Web API の例外変換ヘルパー `web_app.routes.errors.raise_api_error()` / `error_payload()` を追加し、BGM / キャラクター設定 / 画像差し替え / SDモデル API の失敗を必ず debug log に残してからエラーレスポンスへ変換するようにした。
 
 ---
 

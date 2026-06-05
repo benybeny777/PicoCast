@@ -2,7 +2,7 @@ import os
 import tempfile
 from typing import Any
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, UploadFile
 from pydantic import BaseModel
 
 from core.bgm_store import (
@@ -12,6 +12,7 @@ from core.bgm_store import (
     set_default_bgm,
     update_bgm_asset,
 )
+from web_app.routes.errors import raise_api_error
 
 router = APIRouter(prefix="/api/bgm", tags=["bgm"])
 
@@ -61,7 +62,7 @@ async def api_create_bgm(
             note=note,
         )
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_api_error(e, action="BGM素材登録")
     finally:
         await audio_file.close()
         if temp_path and os.path.exists(temp_path):
@@ -74,7 +75,7 @@ def api_update_bgm(bgm_id: str, req: BgmUpdateRequest):
         updates: dict[str, Any] = {k: v for k, v in req.model_dump().items() if v is not None}
         return update_bgm_asset(bgm_id, updates)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_api_error(e, action="BGM素材更新")
 
 
 @router.post("/{bgm_id}/default")
@@ -82,7 +83,7 @@ def api_set_default_bgm(bgm_id: str):
     try:
         return set_default_bgm(bgm_id)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_api_error(e, action="既定BGM設定")
 
 
 @router.delete("/{bgm_id}")
@@ -90,4 +91,4 @@ def api_delete_bgm(bgm_id: str, req: BgmDeleteRequest):
     try:
         return disable_bgm_asset(bgm_id, confirmed=req.confirmed)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_api_error(e, action="BGM素材削除")
