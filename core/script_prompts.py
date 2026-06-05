@@ -397,12 +397,6 @@ METAN_TSUNDERE_RULES_MEETING = """
 """
 
 
-# 食べ物雑学堂チャンネルの genre_profile 群（辛口相方ルールを適用する対象）。
-# 稼働中チャンネルは genre "zunkami"、Git互換seedは "food_trivia"。都市伝説(zundamon_kowai/urban_legend)は対象外。
-FOOD_GENRE_PROFILES = ("zunkami", "food_trivia")
-
-
-
 def _get_default_template(kind: str):
     """active profile のデフォルトテンプレートを返す。存在しなければ例外。"""
     from core.channel_profile import require_active_profile

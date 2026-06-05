@@ -1723,6 +1723,7 @@ YouTube OAuth:
 | `SD_WEBUI_HEIGHT` | `.env` / `config.py` | Stable Diffusion WebUI 出力高さ(px)（横動画基準） |
 | `SD_WEBUI_NEGATIVE_PROMPT` | `.env` / `config.py` | Stable Diffusion WebUI ネガティブプロンプト（人物・低品質抑制） |
 | `CHARACTERS` | `config.py` | VOICEVOX話者ID・スタイルID |
+| `CHARACTER_FOOD_TOXIC_GENRE_PROFILES` | `.env` / `config.py` | キャラクターseed時に「辛口相方めたん」を既定有効にする genre_profile のカンマ区切り |
 | `CHARACTER_PNGS` | `config.py` | native合成用キャラ立ち絵 |
 | `CHARACTER_EXPRESSION_PNGS` | `config.py` | native表情指定用PNG。素材未配置時は既定立ち絵へフォールバック |
 | `THUMBNAIL_CHARACTER_PNGS` | `config.py` | サムネ生成用参照画像 |
