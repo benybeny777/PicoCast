@@ -8,6 +8,7 @@ from web_app.schemas import HistoryRegenerateRequest, RenderRequest
 from web_app.services.history_service import list_histories, get_history_detail, delete_history
 from web_app.services.generation_service import submit_history_regenerate_jobs
 from web_app.services.render_service import submit_render_job
+from web_app.routes.errors import raise_api_error
 from web_app.security import find_history_dir
 
 router = APIRouter(prefix="/api/history", tags=["history"])
@@ -43,9 +44,9 @@ def api_delete_history(history_name: str, req: HistoryDeleteRequest):
     try:
         return delete_history(history_name, confirmed=True)
     except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise_api_error(e, status_code=404, action="履歴削除")
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise_api_error(e, status_code=400, action="履歴削除")
 
 
 @router.post("/{history_name}/render")
@@ -73,8 +74,7 @@ def api_open_folder(history_name: str):
         else:
             subprocess.Popen(["xdg-open", path])
     except Exception as e:
-        # サイレントに失敗させず、原因をフロントへ返す
-        raise HTTPException(status_code=500, detail=f"フォルダを開けませんでした: {e}") from e
+        raise_api_error(e, status_code=500, action="履歴フォルダを開く", detail=f"フォルダを開けませんでした: {e}")
     return {"opened": path}
 
 

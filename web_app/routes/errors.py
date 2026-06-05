@@ -8,10 +8,16 @@ from fastapi import HTTPException
 _logger = logging.getLogger(__name__)
 
 
-def raise_api_error(exc: Exception, *, status_code: int = 400, action: str = "API処理") -> None:
+def raise_api_error(
+    exc: Exception,
+    *,
+    status_code: int = 400,
+    action: str = "API処理",
+    detail: str | None = None,
+) -> None:
     """例外をログへ残して HTTPException として送出する。"""
     _logger.error("%sに失敗しました", action, exc_info=True)
-    raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    raise HTTPException(status_code=status_code, detail=detail or str(exc)) from exc
 
 
 def error_payload(exc: Exception, *, action: str = "API処理") -> dict[str, str]:
