@@ -320,6 +320,7 @@ def _cleanup_orphan_audio(audio_dir: str, expected_filenames: set[str]) -> int:
                 os.remove(os.path.join(audio_dir, f))
                 removed += 1
             except OSError:
+                _logger.debug("余剰WAVの削除に失敗しました（掃除は継続）: file=%s", f, exc_info=True)
                 pass  # フォールバック許可: 個別削除失敗は掃除全体を止めない
     return removed
 
@@ -972,6 +973,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 if removed_old_backups:
                     update_status(f"🧹 古い同一テーマのバックアップを削除しました: {removed_old_backups}件")
         except (PermissionError, Exception) as e:
+            _logger.warning("既存テーマフォルダの退避に失敗しました: theme_dir=%s", theme_dir, exc_info=True)
             locker = find_locking_process(theme_dir) if isinstance(e, PermissionError) else None
             locker_info = f" (ロック: {locker})" if locker else ""
             update_status(
@@ -1426,6 +1428,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 report.elapsed_sec = time.time() - pipeline_start
                 return finish_result(msg)
         except Exception as e:
+            _logger.error("ChatGPT生成前レビューに失敗しました: theme_dir=%s", theme_dir, exc_info=True)
             final_review_path = save_final_review(theme_dir, {"error": str(e), "stage": "pre_generation"})
             msg = f"❌ ChatGPT生成前レビュー失敗: {e} ({final_review_path})"
             update_status(msg, "error")

@@ -499,7 +499,8 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
                 try:
                     record["published_at"] = _parse_slot(str(published_at).replace("Z", "+00:00")).isoformat()
                 except Exception:
-                    record["published_at"] = published_at
+                    _logger.warning("published_atの解析に失敗したため受領値をそのまま保存します: published_at=%r", published_at, exc_info=True)
+                    record["published_at"] = published_at  # フォールバック許可: 正規化失敗時はYouTube受領値を保持
             published += 1
         elif privacy in ("private", "unlisted") and yt_publish_at:
             yt_dt = _parse_slot(str(yt_publish_at).replace("Z", "+00:00"))

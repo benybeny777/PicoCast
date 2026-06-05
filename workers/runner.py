@@ -92,7 +92,7 @@ class _BufferedJobLog:
                 normalized_message,
             )
         except Exception:
-            pass  # フォールバック許可: デバッグログへのミラー失敗はジョブ進行を妨げない
+            logging.getLogger(__name__).warning("ジョブログのデバッグログミラーに失敗しました: job_id=%s", self.job_id, exc_info=True)  # フォールバック許可: ミラー失敗はジョブ進行を妨げない（自己ロガー再帰回避のため別ロガー使用）
         if force or time.monotonic() - self._last_flush >= JOB_LOG_FLUSH_INTERVAL_SEC:
             self.flush()
 
@@ -181,6 +181,7 @@ def _run_render(job: dict, cancel_event: threading.Event, log: _BufferedJobLog) 
             cancel_event=cancel_event,
         )
     except RenderCancelled:
+        _logger.info("レンダーがキャンセルされました: job=%s history=%s", log.job_id[:8], history_name)
         return {"cancelled": True}
     output_path = render_result.output_path if hasattr(render_result, "output_path") else str(render_result)
     done_msg = f"✅ MP4 生成完了: {os.path.basename(output_path)}"

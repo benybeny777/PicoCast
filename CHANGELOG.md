@@ -6,6 +6,12 @@
 
 ## 2026-06-05
 
+### 残存サイレント例外ハンドラへログを付与
+
+- 全コードベースを AST で走査し、ログも再送出もしないサイレントな例外ハンドラを洗い出した。診断時にスタックトレース／原因が失われていた箇所へ既存規約 `_logger.<level>(..., exc_info=True)` でログを追加。
+- 対象: 予約公開の `published_at` 解析失敗フォールバック（`core/upload_scheduler.py`）、余剰WAV削除失敗・既存テーマ退避失敗・生成前レビュー失敗（`workers/main.py`）、ジョブログのミラー失敗・レンダーキャンセル（`workers/runner.py`）。
+- キャンセル／`KeyboardInterrupt` の正常系、プロセス走査中の `psutil` 例外（ログspam源）、後段で集約報告される例外は意図的に対象外とした。
+
 ### キャラクターseedのジャンル判定を設定化
 
 - `script_prompts.py` に置かれていた食べ物系 genre_profile 判定を `config/config.py` の `CHARACTER_FOOD_TOXIC_GENRE_PROFILES` へ移し、辛口相方めたんを既定有効にするジャンルを環境変数で調整できるようにした。
