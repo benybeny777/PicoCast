@@ -48,6 +48,21 @@ def test_initialize_idempotent(tmp_db):
     tmp_db.initialize_db()  # 2回目
 
 
+def test_get_db_path_without_active_profile_raises(tmp_path, monkeypatch):
+    """active profile 未設定時は互換 metadata.db パスへ戻さず停止する。"""
+    import core.channel_profile as cp
+    import core.metadata_db as m
+
+    monkeypatch.setattr(cp, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
+    monkeypatch.setattr(cp, "_RES_ROOT", str(tmp_path))
+
+    with pytest.raises(cp.NoActiveProfileError):
+        m.get_db_path()
+
+    assert not (tmp_path / "metadata.db").exists()
+
+
 def test_reap_stale_running_jobs_only_marks_runner_jobs(tmp_db):
     """runner 管轄外の軽量ジョブは stale 回収で failed にしない。"""
     old_heartbeat = "2026-01-01T00:00:00+09:00"

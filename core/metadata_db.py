@@ -49,20 +49,11 @@ SCHEMA_VERSION = 7
 def get_db_path() -> str:
     """
     active profile の output_root 配下の metadata.db パスを返す。
-    profile 未設定なら config の OUTPUT_DATA_DIR にフォールバック（後方互換）。
+    profile 未設定なら require_active_profile() 由来の例外を送出する。
     profile が変わるとパスが変わるため、キャッシュしない。
     """
-    try:
-        from core.output_paths import get_db_path as _op_get_db_path
-        return _op_get_db_path()
-    except Exception as exc:
-        _logger.warning(
-            "active profile の metadata.db パス解決に失敗したため互換パスへ戻します: %s",
-            exc,
-            exc_info=True,
-        )  # フォールバック許可: profile 移行前の後方互換パスを維持する
-        from config.config import OUTPUT_DATA_DIR
-        return os.path.join(OUTPUT_DATA_DIR, "metadata.db")
+    from core.output_paths import get_db_path as _op_get_db_path
+    return _op_get_db_path()
 
 
 # ── 接続 ────────────────────────────────────────────────────────────────────
