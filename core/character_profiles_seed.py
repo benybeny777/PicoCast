@@ -13,6 +13,7 @@ from core.character_profile_store import (
     CharacterProfile,
     create_character,
     list_characters,
+    update_character,
 )
 from config import (
     AQUESTALK_DEFAULT_PITCH,
@@ -223,6 +224,52 @@ def seed_character_profiles_for_profile(profile_id: str, genre_profile: str) -> 
     return created
 
 
+# 空欄補完の対象（旧seedで作成され音声・立ち絵・クレジットが空のままのキャラを補う）
+_BACKFILL_FIELDS = (
+    "voice_backend", "voice_speaker", "voice_speaker_id", "voice_styles",
+    "voice_type", "voice_speed", "voice_pitch", "voice_volume",
+    "portrait_png_path", "credit_text",
+)
+
+
+def _is_empty(value) -> bool:
+    return value is None or value == "" or value == {} or value == []
+
+
+def _has_voice_identity(character: CharacterProfile) -> bool:
+    """話者が一つでも設定済みか（=ユーザーが触った形跡があるか）。"""
+    return (
+        bool((character.voice_speaker or "").strip())
+        or character.voice_speaker_id is not None
+        or bool(character.voice_styles)
+    )
+
+
+def backfill_character_profiles_from_seed(profile_id: str, genre_profile: str) -> int:
+    """既存キャラの空フィールドを seed 既定値で補完する（非破壊・冪等）。
+
+    旧 seed で作成され音声/立ち絵/クレジットが空のままのチャンネル向けの移行処理。
+    話者がまだ一つも設定されていないキャラ（=未移行とみなせる行）だけを対象にし、
+    既に値が入っているフィールドは上書きしない。戻り値: 補完したキャラ件数。
+    """
+    seed_by_key = {item["character_key"]: item for item in _seed_set_for_genre(genre_profile)}
+    updated = 0
+    for character in list_characters(profile_id):
+        seed_item = seed_by_key.get(character.character_key)
+        # seed に無いキャラ・既に話者設定済みのキャラはユーザー資産として尊重し触らない
+        if not seed_item or _has_voice_identity(character):
+            continue
+        patch: dict = {}
+        for field in _BACKFILL_FIELDS:
+            if not _is_empty(getattr(character, field, None)) or _is_empty(seed_item.get(field)):
+                continue
+            patch[field] = seed_item.get(field)
+        if patch:
+            update_character(character.character_id, **patch)
+            updated += 1
+    return updated
+
+
 # 既存テンプレートに直書きされていた「めたん毒舌ルール」の検出マーカー。
 # これを含む script テンプレートは、キャラ設定分離後に該当ブロックを除去する対象。
 _LEGACY_CHARACTER_MARKER = "四国めたん 役割固定ルール"
@@ -237,6 +284,8 @@ def ensure_character_profiles_all() -> dict[str, int]:
             results[profile.profile_id] = seed_character_profiles_for_profile(
                 profile.profile_id, profile.genre_profile
             )
+            # 旧seedで作成され音声/立ち絵/クレジットが空のままの既存キャラを既定値で補完する
+            backfill_character_profiles_from_seed(profile.profile_id, profile.genre_profile)
         except Exception:
             raise
     return results

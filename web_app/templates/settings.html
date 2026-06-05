@@ -104,6 +104,12 @@
   }
   .char-subtab-panel { display: none; }
   .char-subtab-panel.active { display: block; }
+  /* キャラ設定の長文フィールドは内容に合わせて伸ばし、手動リサイズも可能にする */
+  .character-card textarea.char-autogrow {
+    min-height: 84px;
+    resize: vertical;
+    line-height: 1.55;
+  }
   @media (max-width: 760px) {
     .character-grid,
     .character-fields {
@@ -793,6 +799,20 @@ function renderCharacterTabs(chars) {
   }).join('');
 
   box.innerHTML = `<div class="char-subtab-bar">${tabs}</div>${panels}`;
+  autoGrowVisibleCharTextareas();
+}
+
+// 内容に合わせて textarea の高さを自動調整する（長文を小さな枠に押し込めない）。
+function autoGrowTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = (el.scrollHeight + 2) + 'px';
+}
+
+// 表示中タブの textarea のみ採寸する。非表示パネルは scrollHeight=0 で測れないため、
+// タブ切替時にも採寸し直す。
+function autoGrowVisibleCharTextareas() {
+  document.querySelectorAll('#characters-list .char-subtab-panel.active textarea.char-autogrow')
+    .forEach(autoGrowTextarea);
 }
 
 function switchCharTab(name) {
@@ -801,12 +821,13 @@ function switchCharTab(name) {
     b.classList.toggle('active', b.dataset.chartab === name));
   document.querySelectorAll('#characters-list .char-subtab-panel').forEach(p =>
     p.classList.toggle('active', p.dataset.chartabPanel === name));
+  autoGrowVisibleCharTextareas();
 }
 
 function characterCardHtml(c) {
   const f = (label, key, val, rows, extra='') =>
     `<div class="form-group ${extra}"><label>${label}</label>`
-    + `<textarea class="form-input" rows="${rows}" data-cid="${c.character_id}" data-field="${key}">${esc(val || '')}</textarea></div>`;
+    + `<textarea class="form-input char-autogrow" rows="${rows}" oninput="autoGrowTextarea(this)" data-cid="${c.character_id}" data-field="${key}">${esc(val || '')}</textarea></div>`;
   const status = c.enabled ? '<span class="badge badge-ok">有効</span>' : '<span class="badge badge-ng">無効</span>';
   return `<div class="card character-card ${c.enabled ? 'is-enabled' : ''}" id="char-card-${c.character_id}">
     <div class="character-head">
