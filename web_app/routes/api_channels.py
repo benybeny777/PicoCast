@@ -32,6 +32,7 @@ from core.channel_profile import (
     save_profile,
     validate_profile,
 )
+from web_app.routes.errors import raise_api_error
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
 _logger = logging.getLogger(__name__)
@@ -135,7 +136,7 @@ def api_create_channel(req: ChannelProfileRequest):
         from core.license_manager import assert_profile_limit_for_create
         assert_profile_limit_for_create()
     except RuntimeError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise_api_error(e, status_code=403, action="チャンネルプロファイル作成上限確認")
     derived_profile_id = profile_id_from_handle(req.channel_handle)
     profile = ChannelProfile(
         profile_id=derived_profile_id,
@@ -151,9 +152,9 @@ def api_create_channel(req: ChannelProfileRequest):
         save_profile(profile)
         _save_channel_schedule(derived_profile_id, req)
     except ProfileValidationError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="チャンネルプロファイル作成")
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="チャンネル投稿スケジュール作成")
     return {"saved": derived_profile_id}
 
 
@@ -181,9 +182,9 @@ def api_update_channel(profile_id: str, req: ChannelProfileRequest):
         save_profile(profile)
         _save_channel_schedule(derived_profile_id, req)
     except ProfileValidationError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="チャンネルプロファイル更新")
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="チャンネル投稿スケジュール更新")
     return {"saved": derived_profile_id}
 
 
@@ -193,7 +194,7 @@ def api_activate_channel(profile_id: str):
     try:
         activate_profile(profile_id)
     except ProfileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise_api_error(e, status_code=404, action="チャンネルプロファイル有効化")
     from web_app.services.status_service import invalidate_settings_status_cache
     invalidate_settings_status_cache()
     return {"activated": profile_id}
@@ -232,9 +233,9 @@ def api_delete_channel(profile_id: str, req: DeleteRequest):
     try:
         delete_profile(profile_id, confirmed=req.confirmed)
     except ProfileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise_api_error(e, status_code=404, action="チャンネルプロファイル削除")
     except ChannelProfileError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="チャンネルプロファイル削除")
     return {"deleted": profile_id}
 
 
