@@ -121,6 +121,7 @@ def _save_variant(
     mouth_names: list[str] | None = None,
     eye_names: list[str] | None = None,
     hide_markers: list[str] | None = None,
+    normalize_arms: bool = False,
 ) -> str | None:
     try:
         from psd_tools import PSDImage
@@ -128,6 +129,7 @@ def _save_variant(
         _logger.warning("psd_tools の読み込みに失敗しました", exc_info=True)
         return None
     psd = None
+    image = None
     try:
         psd = PSDImage.open(psd_path)
         if mouth_names:
@@ -136,9 +138,13 @@ def _save_variant(
             _set_group_variant_deep(_find_group(psd, "!目"), eye_names)
         for marker in hide_markers or []:
             _set_group_visible(_find_group(psd, marker), False)
-        if "四国めたん" in os.path.basename(psd_path):
-            _set_group_variant(_find_group(psd, "!左腕"), ["普通"])
-            _set_group_variant(_find_group(psd, "!右腕"), ["普通"])
+        if normalize_arms:
+            # PSDの腕グループはマイク等を持った差分が既定表示のことがあるため、必ず「普通」へ寄せる。
+            # （ファイル名でめたんを判定すると metan.psd 等のリネームで漏れるためフラグで制御する）
+            if not _set_group_variant(_find_group(psd, "!左腕"), ["普通"]):
+                _logger.warning("左腕の「普通」レイヤーを選択できませんでした: psd=%s", psd_path)
+            if not _set_group_variant(_find_group(psd, "!右腕"), ["普通"]):
+                _logger.warning("右腕の「普通」レイヤーを選択できませんでした: psd=%s", psd_path)
         image = psd.composite(force=True)
         if image is None:
             return None
@@ -163,6 +169,7 @@ def _save_variant(
 
 
 def _save_difference_overlay(base_path: str, variant_path: str, out_path: str, padding: int = 8) -> str | None:
+    base = variant = diff = cropped_variant = cropped_diff = mask = original_alpha = overlay = None
     try:
         from PIL import Image, ImageChops, ImageFilter
 
@@ -211,6 +218,7 @@ def _save_mouth_overlay(base_path: str, variant_path: str, out_path: str) -> str
 
 
 def _save_manual_blink_overlay(name: str, base_path: str, out_path: str) -> str | None:
+    base = overlay = draw = None
     try:
         from PIL import Image, ImageDraw
 
@@ -290,16 +298,18 @@ def _ensure_variants(name: str, jp_name: str, psd_path: str | None, static_path:
         "eye_closed_overlay": os.path.join(char_dir, "eye_closed_overlay.png"),
         "eye_closed_manual": os.path.join(char_dir, "eye_closed_manual.png"),
     }
+    # めたんの立ち絵PSDは腕グループでマイク等の差分が既定表示のことがあるため腕を「普通」へ正規化する
+    normalize_arms = jp_name == "四国めたん"
     if not os.path.exists(outputs["base"]):
-        _save_variant(psd_path, outputs["base"])
+        _save_variant(psd_path, outputs["base"], normalize_arms=normalize_arms)
     if not os.path.exists(outputs["mouth_closed"]):
-        _save_variant(psd_path, outputs["mouth_closed"], mouth_names=mouth_closed)
+        _save_variant(psd_path, outputs["mouth_closed"], mouth_names=mouth_closed, normalize_arms=normalize_arms)
     if not os.path.exists(outputs["mouth_half"]):
-        _save_variant(psd_path, outputs["mouth_half"], mouth_names=mouth_half)
+        _save_variant(psd_path, outputs["mouth_half"], mouth_names=mouth_half, normalize_arms=normalize_arms)
     if not os.path.exists(outputs["mouth_open"]):
-        _save_variant(psd_path, outputs["mouth_open"], mouth_names=mouth_open)
+        _save_variant(psd_path, outputs["mouth_open"], mouth_names=mouth_open, normalize_arms=normalize_arms)
     if not os.path.exists(outputs["eye_closed"]):
-        _save_variant(psd_path, outputs["eye_closed"], eye_names=eye_closed, hide_markers=["!黒目"])
+        _save_variant(psd_path, outputs["eye_closed"], eye_names=eye_closed, hide_markers=["!黒目"], normalize_arms=normalize_arms)
     if os.path.exists(outputs["base"]) and not os.path.exists(outputs["eye_closed_manual"]):
         _save_manual_blink_overlay(name, outputs["base"], outputs["eye_closed_manual"])
     if os.path.exists(outputs["base"]) and os.path.exists(outputs["eye_closed"]):

@@ -1,5 +1,6 @@
 import ast
 import os
+import logging
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -8,6 +9,8 @@ from core.runtime_env import app_base_dir as _app_base_dir, resource_base_dir as
 # .env の非認証設定を DB へ移行し、DB の設定を環境変数に反映する
 from core.settings_store import initialize as _init_settings
 _init_settings()
+
+_logger = logging.getLogger(__name__)
 
 _ENV_VALUE_QUOTES = "\"'`´‘’“”＇＂"
 
@@ -28,6 +31,7 @@ def _split_env_choices(value: str) -> tuple[str, ...]:
         try:
             parsed = ast.literal_eval(text)
         except (ValueError, SyntaxError):
+            _logger.debug("環境変数の選択肢リスト解析に失敗したためカンマ区切りで扱います: text=%r", text, exc_info=True)
             parsed = None
         if isinstance(parsed, (list, tuple)):
             return tuple(choice for raw in parsed if (choice := _clean_env_choice(raw)))
@@ -250,6 +254,7 @@ NATIVE_FFPROBE_TIMEOUT_SEC = float(os.environ.get("NATIVE_FFPROBE_TIMEOUT_SEC", 
 try:
     _thumbnail_hold_raw = int(os.environ.get("THUMBNAIL_HOLD_FRAMES_SHORTS", "3"))
 except (ValueError, TypeError):
+    _logger.debug("THUMBNAIL_HOLD_FRAMES_SHORTS の解析に失敗したため既定値3にフォールバックします: value=%r", os.environ.get("THUMBNAIL_HOLD_FRAMES_SHORTS"), exc_info=True)
     _thumbnail_hold_raw = 3
 THUMBNAIL_HOLD_FRAMES_SHORTS: int = max(1, min(5, _thumbnail_hold_raw))  # Shorts先頭サムネ保持フレーム数
 ASSETS_DIR        = os.path.join(_resource_base_dir(), "assets")  # 同梱リソースの assets ディレクトリ
