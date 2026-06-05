@@ -35,6 +35,20 @@ def test_urban_genre_enables_standard_metan():
     assert by_key["metan_food_toxic"]["enabled"] is False
 
 
+def test_food_toxic_genres_are_configurable(monkeypatch):
+    """辛口相方めたんを既定有効にするジャンルは設定から差し替えられる。"""
+    import core.character_profiles_seed as cps
+
+    monkeypatch.setattr(cps, "CHARACTER_FOOD_TOXIC_GENRE_PROFILES", ("custom_food",))
+    custom = {c["character_key"]: c for c in cps._seed_set_for_genre("custom_food")}
+    default = {c["character_key"]: c for c in cps._seed_set_for_genre("zunkami")}
+
+    assert custom["metan_food_toxic"]["enabled"] is True
+    assert custom["metan_standard_toxic"]["enabled"] is False
+    assert default["metan_food_toxic"]["enabled"] is False
+    assert default["metan_standard_toxic"]["enabled"] is True
+
+
 # ── 合成（compose） ────────────────────────────────────────────────────────────
 
 def _fake_char(**kw):

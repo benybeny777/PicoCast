@@ -3,7 +3,7 @@
 台本テンプレートからキャラ設定（役割・口調・禁止台詞・掛け合い）を分離し、
 生成時に有効なキャラクター設定を合成する。
 
-- 食べ物雑学堂（FOOD_GENRE_PROFILES）: 四国めたんを「辛口相方ツッコミ（ずんだハウス風）」にする。
+- `CHARACTER_FOOD_TOXIC_GENRE_PROFILES`: 四国めたんを「辛口相方ツッコミ（ずんだハウス風）」にする。
 - 都市伝説など他ジャンル: 従来の「お嬢様毒舌めたん」を使う。
 - 自動フォールバック禁止: 有効なキャラ設定が無いチャンネルは compose 側でエラーにする。
 """
@@ -23,9 +23,10 @@ from config import (
     AQUESTALK_REIMU_SPEAKER_KEY,
     AQUESTALK_REIMU_VOICE_TYPE,
     CHARACTERS,
+    CHARACTER_FOOD_TOXIC_GENRE_PROFILES,
 )
 from core.path_refs import asset_ref
-from core.script_prompts import FOOD_GENRE_PROFILES, METAN_TSUNDERE_RULES
+from core.script_prompts import METAN_TSUNDERE_RULES
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -172,7 +173,7 @@ def _seed_set_for_genre(genre_profile: str) -> list[dict]:
     ジャンル既定のめたんだけ enabled=True、もう一方は enabled=False。
     （compose は enabled のみ合成するため、同名キャラは原則1つだけ有効にする）
     """
-    is_food = (genre_profile or "") in FOOD_GENRE_PROFILES
+    is_food = (genre_profile or "") in CHARACTER_FOOD_TOXIC_GENRE_PROFILES
     return [
         {**_ZUNDAMON, "sort_order": 10, "enabled": True},
         {**_METAN_FOOD_TOXIC, "sort_order": 20, "enabled": is_food},

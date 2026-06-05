@@ -6,6 +6,10 @@
 
 ## 2026-06-05
 
+### キャラクターseedのジャンル判定を設定化
+
+- `script_prompts.py` に置かれていた食べ物系 genre_profile 判定を `config/config.py` の `CHARACTER_FOOD_TOXIC_GENRE_PROFILES` へ移し、辛口相方めたんを既定有効にするジャンルを環境変数で調整できるようにした。
+
 ### profile 解決の無言 default 降格を縮小
 
 - Google / OpenAI / Hugging Face など profile 単位の認証情報を参照する処理で、active profile 未設定時に `"default"` へ落ちる経路を廃止した。`core.secret_store.require_current_profile_id()` を追加し、未設定時は `NoActiveProfileError` で停止する。

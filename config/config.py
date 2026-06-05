@@ -46,6 +46,7 @@ CHANNEL_HANDLE       = os.environ.get("CHANNEL_HANDLE", "").strip()        # @�
 CHANNEL_THEME        = os.environ.get("CHANNEL_THEME", "").strip()         # テーマ説明（任意）
 CHANNEL_ACCENT_COLOR = os.environ.get("CHANNEL_ACCENT_COLOR", "").strip()  # UIアクセント色（#RRGGBB / 未設定可）
 DEFAULT_HASHTAGS     = os.environ.get("DEFAULT_HASHTAGS", "").strip()      # デフォルトハッシュタグ（任意）
+CHARACTER_FOOD_TOXIC_GENRE_PROFILES = _split_env_choices(os.environ.get("CHARACTER_FOOD_TOXIC_GENRE_PROFILES", "zunkami,food_trivia"))  # 辛口相方めたんを既定有効にする genre_profile
 
 # ───────────────────────────────────────────────
 # VOICEVOX
