@@ -20,6 +20,7 @@ from web_app.services.secrets_service import (
     get_legacy_file_status,
     delete_legacy_file,
 )
+from web_app.routes.errors import raise_api_error
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -68,7 +69,7 @@ def api_aquestalk_test():
         )
         return {"ok": True, "path": out_path}
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise_api_error(exc, status_code=422, action="AquesTalkテスト音声生成")
 
 
 @router.get("/config")
@@ -450,7 +451,7 @@ def api_restore_backup(req: RestoreBackupRequest):
         from web_app.services.backup_service import restore_backup
         return restore_backup(req.backup_path, confirmed=req.confirmed, passphrase=req.passphrase)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise_api_error(exc, status_code=422, action="バックアップ復元")
 
 
 class ApplyDetectedRequest(BaseModel):
