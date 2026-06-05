@@ -76,30 +76,9 @@ from core.cta_policy import (
     check_shorts_navigation_ng,
     write_policy_file,
 )
+from workers.output_locks import OutputDirectoryLockedError, find_locking_process
 
 _logger = logging.getLogger("yj.pipeline")
-
-
-class OutputDirectoryLockedError(Exception):
-    """既存の出力フォルダが開かれていて退避できない場合の再試行用エラー。"""
-
-
-def _find_locking_process(path):
-    """ファイルをロックしているプロセスの 'Name (PID)' を返す。ロックなしは None。"""
-    try:
-        import psutil
-        target = os.path.abspath(path).lower()
-        for proc in psutil.process_iter(['pid', 'name', 'open_files']):
-            try:
-                for f in proc.open_files():
-                    if f.path.lower() == target:
-                        return f"{proc.info['name']} (PID {proc.info['pid']})"
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                continue
-    except Exception:
-        _logger.warning("プロセスロック情報の確認に失敗しました", exc_info=True)
-        return None  # フォールバック許可: プロセスロック確認は補助情報のため失敗しても継続
-    return None
 
 
 def _cleanup_old_theme_backups(backup_base: str, safe_topic: str, keep: str | None = None, keep_count: int = 1) -> int:
@@ -976,7 +955,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
 
             if not _replace_result["done"]:
                 # タイムアウト: フォルダがエクスプローラー等で開かれている可能性が高い
-                locker = _find_locking_process(theme_dir)
+                locker = find_locking_process(theme_dir)
                 locker_info = f" (ロック: {locker})" if locker else ""
                 update_status(
                     f"⚠️ 退避が {_BACKUP_TIMEOUT_SEC}秒 でタイムアウトしました{locker_info}。\n"
@@ -993,7 +972,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                 if removed_old_backups:
                     update_status(f"🧹 古い同一テーマのバックアップを削除しました: {removed_old_backups}件")
         except (PermissionError, Exception) as e:
-            locker = _find_locking_process(theme_dir) if isinstance(e, PermissionError) else None
+            locker = find_locking_process(theme_dir) if isinstance(e, PermissionError) else None
             locker_info = f" (ロック: {locker})" if locker else ""
             update_status(
                 f"⚠️ 退避に失敗しました{locker_info}。バックアップをスキップして上書き生成します。",
