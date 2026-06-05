@@ -94,11 +94,13 @@ class ImageRegenerateRequest(BaseModel):
 class UploadRequest(BaseModel):
     history_name: str
     confirmed: bool = False
+    playlist_existing_mode: str = "reuse"  # reuse / recreate
 
 
 class BatchUploadRequest(BaseModel):
     history_names: list[str]
     confirmed: bool = False
+    playlist_existing_mode: str = "reuse"  # reuse / recreate
 
 
 # ── スケジュール ──────────────────────────────────────
@@ -125,6 +127,10 @@ class FixedCommentRequest(BaseModel):
 
 class FixedCommentMarkPostedRequest(BaseModel):
     history_name: str
+    confirmed: bool = False
+
+
+class FixedCommentMarkAllPostedRequest(BaseModel):
     confirmed: bool = False
 
 

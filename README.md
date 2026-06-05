@@ -179,13 +179,14 @@ Native Video Factory はローカルPC上で動作する Web UI アプリです�
 | ffmpeg | 必須 | native MP4 の動画出力 |
 | Google APIキー | Google AI画像生成・Gemini台本生成で必要 | 台本生成・背景画像生成・サムネイル生成 |
 | OpenAI APIキー | 任意 | ChatGPT生成前レビュー |
-| Ollama | 任意 / 一部機能で必要 | 冒頭レビュー、リライト、Stable Diffusion WebUI用プロンプト翻訳 |
+| Ollama | 任意 / 一部機能で必要 | 冒頭レビュー、リライト、Stable Diffusion WebUI用プロンプト翻訳、ジャンル別再生リスト判定 |
 | Stable Diffusion WebUI | 任意 | ローカル画像生成 |
 | YouTube API連携 | 任意 | YouTubeアップロード、予約投稿、Analytics取得 |
 
 ### 注意事項
 
 - 生成速度はPC性能、画像枚数、API混雑、VOICEVOXやOllamaの状態によって変わります。
+- 台本に再生リスト指定がないアップロードでは、Ollama が起動していればジャンル別再生リストを自動判定して作成・登録します。
 - Google AI画像生成モードではAPI利用料金が発生する場合があります。
 - YouTube連携を使う場合は、利用者自身のGoogle Cloud設定とOAuth認証が必要です。
 - Stable Diffusion WebUI を利用する場合は、別途セットアップとモデルの準備が必要です。

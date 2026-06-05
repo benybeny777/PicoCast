@@ -667,6 +667,8 @@ POST /api/upload/batch                  # 複数動画を一括アップロー�
 
 GET  /api/fixed-comment/candidates       # 固定コメント未投稿の公開済み動画候補
 POST /api/fixed-comment                  # 公開済み動画へ固定コメントを投稿（confirmed=true 必須）
+POST /api/fixed-comment/mark-posted      # 指定動画をローカル記録上で投稿済みにする（confirmed=true 必須）
+POST /api/fixed-comment/mark-all-posted  # 未投稿候補をすべてローカル記録上で投稿済みにする（confirmed=true 必須）
 
 GET  /api/prompt/script                  # 台本生成プロンプトを取得（実績ベース）
 GET  /api/prompt/title                   # タイトル生成プロンプトを取得
@@ -1018,6 +1020,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
 | `OLLAMA_TRANSLATE_MODEL` | `qwen3:8b` | Stable Diffusion WebUI プロンプト日→英翻訳モデル |
+| `OLLAMA_PLAYLIST_MODEL` | `qwen3:8b` | 再生リストジャンル判定モデル |
+| `OLLAMA_PLAYLIST_TIMEOUT_SEC` | 60 | 再生リストジャンル判定タイムアウト秒数 |
 | `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.2` | ChatGPT生成前レビューモデル |
 | `OPENING_SCORE_ABORT_THRESHOLD` | 80 | pass / warning 表示の目安 |
 | `OPENING_SCORE_HARD_ABORT_THRESHOLD` | 70 | 処理中止スコア閾値 |
@@ -1042,6 +1046,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_FFMPEG_TIMEOUT_SEC` | 900 | nativeレンダーのffmpeg 1コマンド最大実行秒数 |
 | `NATIVE_FFPROBE_TIMEOUT_SEC` | 30 | nativeレンダーのffprobe 最大実行秒数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
+| `AUTO_GENRE_PLAYLIST_ENABLED` | `true` | 台本に `再生リスト:` がない場合にOllamaでジャンル別再生リストを自動判定する |
+| `AUTO_GENRE_PLAYLIST_SCRIPT_CHARS` | 1600 | 再生リスト判定でOllamaへ渡す台本本文の最大文字数 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
 | `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`metadata.db` の `jobs` テーブルに保存し、超過分は `delete_old_jobs` で古い順に削除する |
@@ -1408,7 +1414,7 @@ AI編集者向けルール:
 
 YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タグの先頭は常に `ずんだもん,ゆっくり解説,VOICEVOX` とし、続いて `雑学`/`雑学 ショート`/`食べ物 雑学`/`食べ物 雑学 ショート`/`食べ物雑学`/`食べ物の歴史`/`ゆっくり解説 食べ物`/`ずんだもん解説`/`四国めたん`/`VOICEVOX解説`/`トリビア`/`ショート`/`Shorts` を固定タグとして入れます。題材別タグとして、寿司系・アイス系・飲み物系・お菓子系・調味料系などをタイトルや台本本文（`metadata.db` の `videos.script_content`）から自動追加します。`食べ物 豆知識` / `食べ物豆知識` やアニメ・ゲーム・都市伝説系タグは除外します。タグ欄は500文字以内に調整します。タイトルにはSEOキーワードを無理に詰め込まず、タグ欄と説明文で補完します。
 
-アップロード成功後の再生リスト自動登録フローは2系統あります。
+アップロード成功後の再生リスト自動登録フローは2系統あります。アップロード画面では同名の既存再生リストを「既存を活かす」または「既存を削除して作り直す」から選べます。削除して作り直す場合は YouTube 上の再生リスト自体を削除して新規作成するため、既存動画の並びは失われます（動画本体は削除しない）。
 
 **① 台本に `再生リスト:` が指定されている場合（新方式）**
 
@@ -1423,11 +1429,13 @@ YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タ
 
 **② 台本に `再生リスト:` がない場合**
 
-Long動画のみ、`LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リストへ動画を追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。Shortsには適用しません。
+`AUTO_GENRE_PLAYLIST_ENABLED=1` の場合、アップロード前に Ollama（`OLLAMA_PLAYLIST_MODEL`）で動画タイトル・説明文・`metadata.db` の `videos.script_content` から、active profile の `playlist_categories.md` にあるカテゴリを1件だけ判定します。Ollama に接続できない場合は `E-OLLAMA-DOWN`、候補外カテゴリや JSON 不正は `E-PLAYLIST-CLASSIFY` で停止し、YouTubeアップロードは開始しません。判定したカテゴリは①と同じ形式別名へ解決して登録します。
 
-いずれの場合も、既に同じ動画が登録済みなら重複追加しません。再生リスト操作に失敗した場合、アップロード自体は成功扱いのまま警告ログを出します。
+`AUTO_GENRE_PLAYLIST_ENABLED=0` の場合のみ、後方互換として Long動画を `LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リストへ追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。Shortsには適用しません。
 
-`💬 固定コメント` は、`output/{profile_id}/000_uploaded/` 配下のアップロード済み履歴から、`youtube_status` テーブルに `video_id` がある公開済み動画を選んでコメント投稿します。候補の最終判定は YouTube Data API の現在状態を正とし、ローカルDBの `publish_status` が `scheduled` / `reserved` のまま残っていても YouTube 側が `public` なら候補に表示します。YouTube Data API で状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は `youtube_status` テーブルの `fixed_comment_id` に保存します。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted_at` を記録できます。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
+いずれの場合も、既に同じ動画が登録済みなら重複追加しません。Ollama判定はアップロード前に実行し、再生リスト作成・動画追加はアップロード成功後に実行します。再生リスト作成・追加に失敗した場合、アップロード自体は成功扱いのまま警告ログを出します。
+
+`💬 固定コメント` は、`output/{profile_id}/000_uploaded/` 配下のアップロード済み履歴から、`youtube_status` テーブルに `video_id` がある公開済み動画を選んでコメント投稿します。候補の最終判定は YouTube Data API の現在状態を正とし、ローカルDBの `publish_status` が `scheduled` / `reserved` のまま残っていても YouTube 側が `public` なら候補に表示します。YouTube Data API で状態取得できる場合は、存在しない動画・公開済み以外の動画を一覧から除外し、公開日を表示します。投稿成功後は `youtube_status` テーブルの `fixed_comment_id` に保存します。対象一覧は「未投稿だけ」「公開済みだけ」をデフォルトにし、非公開・存在しない動画・子ども向け設定の動画は投稿前にスキップします。投稿成功時は確認用の一覧画面を表示し、通常動画URLを開けます。手動投稿後は「投稿済みにする」で `fixed_comment_posted` を記録できます。画面の「未投稿をすべて投稿済みにする」は、候補一覧の未投稿分をYouTube APIで実投稿せずローカル記録だけ一括更新します。ピン留め後は手動で「ピン留め済み」として記録できます。APIで投稿はできますが、ピン留めはYouTube Studio側で確認してください。
 
 固定コメントは **Web UI 内では手動投稿のみ**（アプリ内に自動投稿ウォッチャーは持たない）。手動画面は active profile のみを対象にします。
 

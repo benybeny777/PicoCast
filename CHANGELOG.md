@@ -6,6 +6,12 @@
 
 ## 2026-06-05
 
+### Ollamaによるジャンル別再生リスト自動登録と固定コメント一括記録を追加
+
+- 台本に `再生リスト:` がないアップロードでも、アップロード前に Ollama（`OLLAMA_PLAYLIST_MODEL`）で active profile の `playlist_categories.md` からカテゴリを1件判定し、動画形式別のYouTube再生リストを自動作成・登録するようにした。候補外カテゴリは採用せず `E-PLAYLIST-CLASSIFY` で停止する。
+- アップロード画面で、同名の既存再生リストを「活かす」か「削除して作り直す」か選べるようにした。作り直しは確認ダイアログで明示し、バッチ内で同じ再生リストを何度も削除しない。
+- 固定コメント画面に「未投稿をすべて投稿済みにする」を追加し、YouTube APIで実投稿せず `youtube_status.fixed_comment_posted` を一括更新できるようにした（`confirmed=true` 必須）。
+
 ### 台本方針を「説明優先」へ刷新（都市伝説・食べ物雑学 共通）
 
 - ずんだもんとめたんを無理に交互に喋らせず、会話量より情報密度を優先する方針へ変更。意味のない押し問答・情報が増えない掛け合い・抽象返し・リアクションだけの会話・テンポのためだけの短文連打を禁止（全形式共通）。`config/prompt_profiles/genres/{zundamon_kowai,zunkami,food_trivia}/script_context.md`。

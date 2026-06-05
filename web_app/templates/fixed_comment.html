@@ -16,6 +16,7 @@
       <option value="status_asc">投稿状態順</option>
     </select>
   </label>
+  <button class="btn btn-secondary" onclick="markAllPosted()">未投稿をすべて投稿済みにする</button>
 </div>
 
 <div id="post-status" class="log-box mt" style="display:none"></div>
@@ -191,5 +192,33 @@ document.querySelectorAll('.js-mark-posted').forEach(btn => {
     markPosted(btn.dataset.historyName, btn.dataset.title);
   });
 });
+
+async function markAllPosted() {
+  const count = Array.from(document.querySelectorAll('tr.comment-row'))
+    .filter(row => row.dataset.posted !== 'true').length;
+  if (!count) return;
+  if (!confirm(`未投稿の固定コメント ${count} 件をすべて投稿済みとして記録しますか？\n\nYouTube APIで投稿は行わず、ローカル記録だけ更新します。`)) return;
+
+  const statusBox = document.getElementById('post-status');
+  statusBox.style.display = 'block';
+  statusBox.textContent = '一括更新中...';
+
+  try {
+    const res = await fetch('/api/fixed-comment/mark-all-posted', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({confirmed: true}),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data));
+      return;
+    }
+    statusBox.textContent = `投稿済みとして記録しました: ${data.marked}件 / 失敗: ${data.failed}件`;
+    setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
+  } catch(e) {
+    statusBox.textContent = '通信エラー: ' + e;
+  }
+}
 </script>
 {% endblock %}
