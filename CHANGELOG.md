@@ -15,6 +15,7 @@
 - プロンプトテンプレートAPIの作成・更新・複製・削除・インポート失敗も `raise_api_error()` 経由にし、HTTPエラーへ変換する前に debug log へ原因を残すようにした。
 - 履歴削除と履歴フォルダを開く操作の失敗も `raise_api_error()` 経由にし、ユーザー向けメッセージを維持しながら debug log に原因を残すようにした。
 - Analytics API のライセンス確認失敗と YouTube Analytics 維持率取得失敗も `raise_api_error()` 経由にし、HTTPエラー変換前に debug log へ原因を残すようにした。
+- チャンネルプロファイルAPIの作成・更新・有効化・削除失敗も `raise_api_error()` 経由にし、HTTPエラー変換前に debug log へ原因を残すようにした。
 
 ### profile 解決の無言 default 降格を縮小
 
