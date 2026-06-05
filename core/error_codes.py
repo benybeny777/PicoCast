@@ -71,6 +71,8 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
                                   "設定画面または初回セットアップでチャンネルを作成し、アクティブに選択してください。"),
     "E-PLAYLIST-CONFIG": ErrorDef("E-PLAYLIST-CONFIG", "再生リスト設定が取得できません。", "config", False,
                                   "active channel profile の genre_profile と playlist_categories.md を確認してください。"),
+    "E-PLAYLIST-CLASSIFY": ErrorDef("E-PLAYLIST-CLASSIFY", "Ollama による再生リスト判定に失敗しました。", "pipeline", True,
+                                    "Ollama が起動しているか、OLLAMA_PLAYLIST_MODEL が pull 済みか、playlist_categories.md のカテゴリ名が適切か確認してください。"),
     "E-METADATA-CONFIG": ErrorDef("E-METADATA-CONFIG", "YouTubeメタデータ用のチャンネル設定が取得できません。", "config", False,
                                   "active channel profile の genre_profile と profile.yaml を確認してください。"),
     "E-LICENSE-LIMIT": ErrorDef("E-LICENSE-LIMIT", "現在のライセンスエディションの利用上限に達しました。", "license", False,

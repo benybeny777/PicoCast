@@ -17,6 +17,13 @@ def _require_channel() -> None:
         )
 
 
+def _require_playlist_mode(mode: str) -> str:
+    normalized = str(mode or "reuse").strip().lower()
+    if normalized not in ("reuse", "recreate"):
+        raise HTTPException(status_code=400, detail="playlist_existing_mode は reuse / recreate のどちらかです")
+    return normalized
+
+
 @router.get("/candidates")
 def api_upload_candidates():
     return list_upload_candidates()
@@ -27,7 +34,7 @@ def api_upload(req: UploadRequest):
     if not req.confirmed:
         raise HTTPException(status_code=400, detail="confirmed=trueが必要です")
     _require_channel()
-    job_id = submit_upload_job(req.history_name)
+    job_id = submit_upload_job(req.history_name, playlist_existing_mode=_require_playlist_mode(req.playlist_existing_mode))
     return {"job_id": job_id, "status": "queued"}
 
 
@@ -38,5 +45,9 @@ def api_batch_upload(req: BatchUploadRequest):
     if not req.history_names:
         raise HTTPException(status_code=400, detail="history_namesが空です")
     _require_channel()
-    job_ids = [submit_upload_job(name) for name in req.history_names]
+    playlist_mode = _require_playlist_mode(req.playlist_existing_mode)
+    job_ids = [
+        submit_upload_job(name, playlist_existing_mode=playlist_mode)
+        for name in req.history_names
+    ]
     return {"job_ids": job_ids, "count": len(job_ids)}

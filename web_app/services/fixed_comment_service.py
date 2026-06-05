@@ -132,6 +132,26 @@ def mark_fixed_comment_posted(history_name: str, profile_id: str | None = None) 
     }
 
 
+def mark_all_fixed_comments_posted(profile_id: str | None = None) -> dict[str, Any]:
+    """固定コメント候補の未投稿分をすべてローカルDB上で投稿済みにする。"""
+    candidates = list_fixed_comment_candidates(only_unposted=True, profile_id=profile_id)
+    marked: list[dict[str, Any]] = []
+    failed: list[dict[str, str]] = []
+    for item in candidates:
+        history_name = str(item.get("name") or "")
+        try:
+            marked.append(mark_fixed_comment_posted(history_name, profile_id=profile_id))
+        except Exception as exc:
+            _logger.error("固定コメントの一括投稿済み記録に失敗しました: history_name=%s", history_name, exc_info=True)
+            failed.append({"history_name": history_name, "reason": str(exc)})
+    return {
+        "marked": len(marked),
+        "failed": len(failed),
+        "items": marked,
+        "failures": failed,
+    }
+
+
 def _run_fixed_comment(job: Job, history_name: str, auto_posted: bool = False, profile_id: str | None = None) -> dict[str, Any]:
     """job_manager 経由（Web/runner 上）の固定コメント投稿。中核は post_fixed_comment_now と共有。"""
     return post_fixed_comment_now(

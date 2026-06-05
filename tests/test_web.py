@@ -902,6 +902,11 @@ def test_api_fixed_comment_mark_posted_requires_confirmation(client):
     assert res.status_code == 400
 
 
+def test_api_fixed_comment_mark_all_posted_requires_confirmation(client):
+    res = client.post("/api/fixed-comment/mark-all-posted", json={"confirmed": False})
+    assert res.status_code == 400
+
+
 def test_fixed_comment_candidates_include_uploaded_metadata(tmp_path, monkeypatch):
     import web_app.services.fixed_comment_service as fcs
 
@@ -1046,6 +1051,40 @@ def test_fixed_comment_mark_posted_writes_record(tmp_path, monkeypatch):
         ).fetchone()
     assert row["fixed_comment_posted"] == 1
     assert fcs.list_fixed_comment_candidates() == []
+
+
+def test_fixed_comment_mark_all_posted_writes_records(tmp_path, monkeypatch):
+    import web_app.services.fixed_comment_service as fcs
+
+    fake_output = tmp_path / "output"
+    (fake_output / "000_uploaded" / "Shorts_一括1").mkdir(parents=True)
+    (fake_output / "000_uploaded" / "Shorts_一括2").mkdir(parents=True)
+
+    _patch_service_output_dirs(monkeypatch, fcs, fake_output)
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    _seed_fixed_comment_db(m, "Shorts_一括1", "vid1", "コメント1")
+    _seed_fixed_comment_db(m, "Shorts_一括2", "vid2", "コメント2")
+    monkeypatch.setattr(
+        fcs,
+        "_fetch_youtube_statuses",
+        lambda _ids: {
+            "vid1": {"privacyStatus": "public"},
+            "vid2": {"privacyStatus": "public"},
+        },
+    )
+
+    result = fcs.mark_all_fixed_comments_posted()
+
+    assert result["marked"] == 2
+    assert result["failed"] == 0
+    with m.ManagedConnection() as conn:
+        rows = conn.execute(
+            "SELECT local_id, fixed_comment_posted FROM youtube_status ORDER BY local_id"
+        ).fetchall()
+    assert {row["local_id"]: row["fixed_comment_posted"] for row in rows} == {
+        "Shorts_一括1": 1,
+        "Shorts_一括2": 1,
+    }
 
 
 def test_fixed_comment_candidates_treat_pinned_as_posted(tmp_path, monkeypatch):

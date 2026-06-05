@@ -16,6 +16,8 @@ from web_app.security import is_video_folder, safe_output_path
 _logger = logging.getLogger(__name__)
 _JST = timezone(timedelta(hours=9))
 _slot_lock = threading.Lock()  # スロット割り当ての同時実行を防ぐ
+_playlist_prepare_lock = threading.Lock()  # バッチ時に同じ再生リストを何度も再作成しない
+_recreated_playlists: set[str] = set()
 
 
 def list_upload_candidates() -> list[dict[str, Any]]:
@@ -76,7 +78,7 @@ def list_upload_candidates() -> list[dict[str, Any]]:
     return candidates
 
 
-def submit_upload_job(history_name: str) -> str:
+def submit_upload_job(history_name: str, playlist_existing_mode: str = "reuse") -> str:
     from core.setup_state import require_setup_completed_for
     from core.license_manager import assert_can_upload
     require_setup_completed_for("YouTubeアップロード")
@@ -92,11 +94,11 @@ def submit_upload_job(history_name: str) -> str:
     mgr = get_job_manager()
     job = mgr.create_job("upload")
     _log(job, f"アップロードジョブを登録: {history_name}", "info")
-    mgr.submit(job, _run_upload, history_name)
+    mgr.submit(job, _run_upload, history_name, playlist_existing_mode)
     return job.job_id
 
 
-def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
+def _run_upload(job: Job, history_name: str, playlist_existing_mode: str = "reuse") -> dict[str, Any]:
     from core.channel_info import get_channel_info, log_channel_info
     from core.youtube_uploader import upload_video
 
@@ -121,6 +123,10 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
     from core.metadata_db import get_render_info
     local_id = os.path.basename(theme_dir)
     render_info = get_render_info(local_id)
+    playlist_existing_mode = _normalize_playlist_existing_mode(playlist_existing_mode)
+    playlist_categories: list[str] = render_info.get("playlist_categories") or []
+    if not playlist_categories:
+        playlist_categories = _infer_playlist_categories(job, local_id, render_info)
     _log(job, f"アップロード開始: {mp4_path}", "info")
 
     if job.cancel_event.is_set():
@@ -178,12 +184,11 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
             _log(job, f"スロット設定エラー（非公開のまま続行）: {e}", "warning")
 
     # 再生リストへ追加
-    playlist_categories: list[str] = render_info.get("playlist_categories") or []
     playlist_assignments: list[dict] = []
     if playlist_categories:
         # 新仕様: 台本の「再生リスト:」に従い形式別名へ解決して登録
         from core.playlist_resolver import resolve_playlist_title
-        from core.youtube_uploader import create_playlist, add_video_to_playlist_by_name
+        from core.youtube_uploader import add_video_to_playlist_by_name
         video_format = render_info.get("video_format", "")
         screen_format = render_info.get("screen_format", "")
         for cat in playlist_categories:
@@ -194,12 +199,18 @@ def _run_upload(job: Job, history_name: str) -> dict[str, Any]:
                 _log(job, f"再生リスト解決不能: {entry['reason']}", "warning")
                 playlist_assignments.append(entry)
                 continue
-            create_result = create_playlist(resolved)
+            create_result = _prepare_upload_playlist(resolved, playlist_existing_mode)
             if not create_result["ok"]:
                 entry["reason"] = f"再生リスト作成失敗: {create_result['reason']}"
                 _log(job, f"再生リスト作成失敗: {resolved} — {create_result['reason']}", "error")
                 playlist_assignments.append(entry)
                 continue
+            if create_result.get("deleted"):
+                _log(job, f"既存再生リストを削除して作り直しました: {resolved}", "warning")
+            elif create_result.get("created"):
+                _log(job, f"再生リストを作成しました: {resolved}", "success")
+            else:
+                _log(job, f"既存再生リストを使用します: {resolved}", "info")
             add_result = add_video_to_playlist_by_name(
                 video_id, resolved,
                 progress_callback=lambda msg: _log(job, msg, "info"),
@@ -312,4 +323,50 @@ def _find_mp4(theme_dir: str) -> str | None:
     except OSError:
         _logger.warning("MP4ファイル検索に失敗しました: dir=%s", theme_dir, exc_info=True)
     return None
+
+
+def _normalize_playlist_existing_mode(mode: str) -> str:
+    normalized = str(mode or "reuse").strip().lower()
+    if normalized in ("reuse", "recreate"):
+        return normalized
+    _logger.error("不正な再生リスト既存モードです: mode=%s", mode)
+    raise ValueError(f"不正な再生リスト既存モードです: {mode}")
+
+
+def _infer_playlist_categories(job: Job, local_id: str, render_info: dict[str, Any]) -> list[str]:
+    from config import config as _cfg
+    if not _cfg.AUTO_GENRE_PLAYLIST_ENABLED:
+        return []
+    try:
+        from core.genre_playlist_classifier import classify_playlist_category
+        from core.metadata_db import get_script_content
+        from core.playlist_resolver import get_standard_categories
+
+        script_text = get_script_content(local_id) or ""
+        result = classify_playlist_category(
+            title=render_info.get("video_title", local_id),
+            description=render_info.get("description", ""),
+            script_text=script_text,
+            categories=get_standard_categories(),
+        )
+        category = result["category"]
+        reason = result.get("reason") or ""
+        _log(job, f"Ollama再生リスト判定: {category}" + (f"（{reason}）" if reason else ""), "info")
+        return [category]
+    except Exception:
+        _logger.error("Ollama再生リスト自動判定に失敗しました: local_id=%s", local_id, exc_info=True)
+        raise
+
+
+def _prepare_upload_playlist(playlist_name: str, mode: str) -> dict:
+    from core.youtube_uploader import prepare_playlist
+    if mode != "recreate":
+        return prepare_playlist(playlist_name, mode="reuse")
+    with _playlist_prepare_lock:
+        if playlist_name in _recreated_playlists:
+            return prepare_playlist(playlist_name, mode="reuse")
+        result = prepare_playlist(playlist_name, mode="recreate")
+        if result.get("ok"):
+            _recreated_playlists.add(playlist_name)
+        return result
 

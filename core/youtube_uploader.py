@@ -341,6 +341,32 @@ def _find_playlist_id_by_name(youtube, playlist_name: str) -> str | None:
             return None
 
 
+def delete_playlist_by_name(playlist_name: str) -> dict:
+    """再生リスト名の完全一致で既存再生リストを削除する。"""
+    playlist_name = str(playlist_name or "").strip()
+    result = {"ok": False, "deleted": False, "playlist_name": playlist_name, "playlist_id": None, "reason": ""}
+    if not playlist_name:
+        result["reason"] = "再生リスト名が未設定です"
+        return result
+
+    youtube = None
+    try:
+        youtube = get_youtube_client()
+        playlist_id = _find_playlist_id_by_name(youtube, playlist_name)
+        if not playlist_id:
+            result.update({"ok": True, "reason": "削除対象の再生リストはありません"})
+            return result
+        youtube.playlists().delete(id=playlist_id).execute()
+        result.update({"ok": True, "deleted": True, "playlist_id": playlist_id, "reason": "削除しました"})
+        return result
+    except Exception as e:
+        _logger.error("YouTube再生リスト削除に失敗しました: name=%s", playlist_name, exc_info=True)
+        result["reason"] = str(e)
+        return result
+    finally:
+        _close_youtube_client(youtube)
+
+
 def _playlist_contains_video(youtube, playlist_id: str, video_id: str) -> bool:
     page_token = None
     while True:
@@ -453,6 +479,24 @@ def create_playlist(name: str, description: str = "", privacy: str = "public") -
         return {"ok": False, "created": False, "id": None, "name": name, "reason": str(e)}
     finally:
         _close_youtube_client(youtube)
+
+
+def prepare_playlist(name: str, description: str = "", privacy: str = "public", mode: str = "reuse") -> dict:
+    """再生リストを追加前に準備する。mode=reuse は既存活用、mode=recreate は同名を削除して再作成。"""
+    mode = str(mode or "reuse").strip().lower()
+    if mode not in ("reuse", "recreate"):
+        _logger.error("不正な再生リスト準備モードです: mode=%s name=%s", mode, name)
+        return {"ok": False, "created": False, "deleted": False, "id": None, "name": name, "reason": f"不正なモードです: {mode}"}
+    if mode == "recreate":
+        deleted = delete_playlist_by_name(name)
+        if not deleted["ok"]:
+            return {"ok": False, "created": False, "deleted": False, "id": None, "name": name, "reason": f"削除失敗: {deleted['reason']}"}
+        created = create_playlist(name, description=description, privacy=privacy)
+        created["deleted"] = bool(deleted.get("deleted"))
+        return created
+    result = create_playlist(name, description=description, privacy=privacy)
+    result["deleted"] = False
+    return result
 
 
 def _read_script_text_for_tags(mp4_path: str) -> str:

@@ -13,8 +13,15 @@
     <button id="upload-btn" class="btn btn-primary" onclick="confirmBatchUpload()" disabled>アップロード（0件選択中）</button>
     <button class="btn btn-secondary" onclick="selectAll(true)">全選択</button>
     <button class="btn btn-secondary" onclick="selectAll(false)">全解除</button>
+    <label style="display:flex; align-items:center; gap:6px">
+      再生リスト:
+      <select id="playlist-existing-mode" style="padding:2px 6px">
+        <option value="reuse">既存を活かす</option>
+        <option value="recreate">既存を削除して作り直す</option>
+      </select>
+    </label>
   </div>
-  <p class="hint mt-sm">MP4がある動画を選択してアップロードできます。</p>
+  <p class="hint mt-sm">台本に再生リスト指定がない場合はOllamaでジャンル判定し、該当再生リストを作成・登録します。</p>
 </div>
 
 <div class="card mt">
@@ -127,7 +134,11 @@ function toggleAll(checked) {
 async function confirmBatchUpload() {
   const names = getChecked();
   if (!names.length) return;
-  if (!confirm(`選択した ${names.length} 件をYouTubeにアップロードしますか？\n\nこの操作は取り消せません。`)) return;
+  const playlistMode = document.getElementById('playlist-existing-mode')?.value || 'reuse';
+  const playlistNote = playlistMode === 'recreate'
+    ? '\n\n再生リストは同名の既存リストを削除して作り直します。リスト内の既存動画並びは失われます。'
+    : '\n\n同名の既存再生リストがあれば、そのまま活かして追加します。';
+  if (!confirm(`選択した ${names.length} 件をYouTubeにアップロードしますか？\n\nこの操作は取り消せません。${playlistNote}`)) return;
 
   document.getElementById('upload-btn').disabled = true;
   document.querySelectorAll('.upload-check').forEach(c => c.disabled = true);
@@ -141,7 +152,7 @@ async function confirmBatchUpload() {
     const res = await fetch('/api/upload/batch', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({history_names: names, confirmed: true}),
+      body: JSON.stringify({history_names: names, confirmed: true, playlist_existing_mode: playlistMode}),
     });
     const data = await res.json();
     if (!res.ok) { appendLog('エラー: ' + (data.detail || JSON.stringify(data)), 'error'); return; }
