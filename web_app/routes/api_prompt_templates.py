@@ -26,6 +26,7 @@ from core.prompt_template_store import (
     set_default,
     update_template,
 )
+from web_app.routes.errors import raise_api_error
 
 router = APIRouter(prefix="/api/prompt-templates", tags=["prompt-templates"])
 
@@ -107,7 +108,7 @@ def api_create_template(req: CreateTemplateRequest):
         from core.license_manager import assert_template_limit
         assert_template_limit(profile_id, adding=1)
     except RuntimeError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise_api_error(e, status_code=403, action="プロンプトテンプレート上限確認")
     if req.template_kind not in TEMPLATE_KINDS:
         raise HTTPException(status_code=422, detail=f"template_kind は {TEMPLATE_KINDS} のいずれかで指定してください")
     if not req.template_name.strip():
@@ -129,7 +130,7 @@ def api_create_template(req: CreateTemplateRequest):
         )
         return _tmpl_to_dict(tmpl)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="プロンプトテンプレート作成")
 
 
 @router.post("/seed")
@@ -161,7 +162,7 @@ def api_import_templates(req: ImportPackRequest):
     try:
         return import_template_pack(profile_id, req.pack_json)
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="プロンプトテンプレートインポート")
 
 
 @router.get("/{template_id}")
@@ -198,9 +199,9 @@ def api_update_template(template_id: str, req: UpdateTemplateRequest):
             tmpl = get_template(template_id)
         return _tmpl_to_dict(tmpl)
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise_api_error(e, status_code=403, action="プロンプトテンプレート更新権限確認")
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="プロンプトテンプレート更新")
 
 
 @router.post("/{template_id}/set-default")
@@ -212,7 +213,7 @@ def api_set_default(template_id: str):
         set_default(template_id, profile_id)
         return {"ok": True, "template_id": template_id}
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise_api_error(e, status_code=403, action="プロンプトテンプレート既定設定")
 
 
 @router.post("/{template_id}/clone")
@@ -233,7 +234,7 @@ def api_clone_template(template_id: str, req: CloneRequest):
             "warning": "複製後はチャンネル固有の文言・ハッシュタグ・再生リストカテゴリを必ず見直してください",
         }
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="プロンプトテンプレート複製")
 
 
 @router.delete("/{template_id}")
@@ -245,9 +246,9 @@ def api_delete_template(template_id: str):
         delete_template(template_id, profile_id)
         return {"ok": True, "deleted": template_id}
     except PermissionError as e:
-        raise HTTPException(status_code=403, detail=str(e))
+        raise_api_error(e, status_code=403, action="プロンプトテンプレート削除権限確認")
     except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        raise_api_error(e, status_code=422, action="プロンプトテンプレート削除")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

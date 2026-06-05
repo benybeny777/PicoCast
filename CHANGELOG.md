@@ -10,6 +10,10 @@
 
 - `script_prompts.py` に置かれていた食べ物系 genre_profile 判定を `config/config.py` の `CHARACTER_FOOD_TOXIC_GENRE_PROFILES` へ移し、辛口相方めたんを既定有効にするジャンルを環境変数で調整できるようにした。
 
+### Web API例外ログの共通化を拡張
+
+- プロンプトテンプレートAPIの作成・更新・複製・削除・インポート失敗も `raise_api_error()` 経由にし、HTTPエラーへ変換する前に debug log へ原因を残すようにした。
+
 ### profile 解決の無言 default 降格を縮小
 
 - Google / OpenAI / Hugging Face など profile 単位の認証情報を参照する処理で、active profile 未設定時に `"default"` へ落ちる経路を廃止した。`core.secret_store.require_current_profile_id()` を追加し、未設定時は `NoActiveProfileError` で停止する。
