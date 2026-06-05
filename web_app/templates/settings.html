@@ -73,6 +73,37 @@
     padding: 18px;
     color: var(--text-muted);
   }
+  /* ── キャラごとのサブタブ ── */
+  .char-subtab-bar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border, #64748b);
+    padding-bottom: 10px;
+  }
+  .char-subtab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border, #64748b);
+    border-radius: 16px;
+    color: var(--text-dim);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .char-subtab-btn:hover { color: var(--text); }
+  .char-subtab-btn.active {
+    background: var(--surface);
+    color: var(--accent);
+    border-color: var(--accent);
+    font-weight: 700;
+  }
+  .char-subtab-panel { display: none; }
+  .char-subtab-panel.active { display: block; }
   @media (max-width: 760px) {
     .character-grid,
     .character-fields {
@@ -725,8 +756,51 @@ async function loadCharacters() {
       box.innerHTML = '<div class="character-empty">このチャンネルにキャラクター設定がありません。</div>';
       return;
     }
-    box.innerHTML = `<div class="character-grid">${chars.map(characterCardHtml).join('')}</div>`;
+    renderCharacterTabs(chars);
   } catch(e) { box.textContent = '通信エラー: ' + e; }
+}
+
+let _activeCharTab = null;
+
+// キャラ名でグルーピングし、キャラごとのサブタブとして描画する。
+// 同じキャラ名のバリアント（有効化1件のみ使用）は同じタブ内にまとめる。
+function renderCharacterTabs(chars) {
+  const box = document.getElementById('characters-list');
+  const groups = [];
+  const indexByName = {};
+  chars.forEach(c => {
+    const key = c.character_name || '(未設定)';
+    if (!(key in indexByName)) { indexByName[key] = groups.length; groups.push({ name: key, items: [] }); }
+    groups[indexByName[key]].items.push(c);
+  });
+
+  // 保存・切替後も同じキャラのタブを保つ。無くなっていたら先頭へ。
+  const active = (_activeCharTab && groups.some(g => g.name === _activeCharTab)) ? _activeCharTab : groups[0].name;
+  _activeCharTab = active;
+
+  const tabs = groups.map(g => {
+    const enabledCount = g.items.filter(c => c.enabled).length;
+    const statusBadge = enabledCount ? '<span class="badge badge-ok">有効</span>' : '<span class="badge badge-ng">無効</span>';
+    const countBadge = g.items.length > 1 ? `<span class="badge">${g.items.length}件</span>` : '';
+    const isActive = g.name === active ? ' active' : '';
+    return `<button type="button" class="char-subtab-btn${isActive}" data-chartab="${esc(g.name)}" onclick="switchCharTab(this.dataset.chartab)">${esc(g.name)} ${statusBadge}${countBadge}</button>`;
+  }).join('');
+
+  const panels = groups.map(g => {
+    const isActive = g.name === active ? ' active' : '';
+    return `<div class="char-subtab-panel${isActive}" data-chartab-panel="${esc(g.name)}">`
+      + `<div class="character-grid">${g.items.map(characterCardHtml).join('')}</div></div>`;
+  }).join('');
+
+  box.innerHTML = `<div class="char-subtab-bar">${tabs}</div>${panels}`;
+}
+
+function switchCharTab(name) {
+  _activeCharTab = name;
+  document.querySelectorAll('#characters-list .char-subtab-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.chartab === name));
+  document.querySelectorAll('#characters-list .char-subtab-panel').forEach(p =>
+    p.classList.toggle('active', p.dataset.chartabPanel === name));
 }
 
 function characterCardHtml(c) {
