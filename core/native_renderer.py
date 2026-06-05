@@ -40,7 +40,6 @@ from config import (
     NATIVE_FFMPEG_ENCODER,
     NATIVE_FFMPEG_PRESET,
     NATIVE_FFMPEG_TIMEOUT_SEC,
-    NATIVE_FFPROBE_TIMEOUT_SEC,
     NATIVE_MAX_ICON_COUNT_SHORTS,
     TRIAL_WATERMARK_TEXT,
     TRIAL_WATERMARK_FONT_SCALE,
@@ -77,6 +76,7 @@ from config import (
     NATIVE_TELOP_POP_MAX_SEC,
 )
 from core.bgm_store import resolve_bgm_selection
+from core.media_probe import media_duration_sec
 from core.native_character_assets import CharacterVariantSet, character_variant_key, load_character_variants
 from core.parser import ScriptParser
 
@@ -229,46 +229,6 @@ def _subprocess_tail(output: str | bytes | None) -> str:
     if isinstance(output, bytes):
         output = output.decode("utf-8", errors="replace")
     return "\n".join(str(output).splitlines()[-20:])
-
-
-def _ffprobe_bin() -> str:
-    base = os.path.basename(str(FFMPEG_BIN or "ffmpeg")).lower()
-    if base in {"ffmpeg", "ffmpeg.exe"}:
-        return os.path.join(os.path.dirname(FFMPEG_BIN), "ffprobe.exe" if base.endswith(".exe") else "ffprobe") if os.path.dirname(FFMPEG_BIN) else ("ffprobe.exe" if base.endswith(".exe") else "ffprobe")
-    return "ffprobe"
-
-
-def media_duration_sec(path: str) -> float | None:
-    if not path or not os.path.exists(path):
-        return None
-    startupinfo = None
-    if os.name == "nt":
-        startupinfo = subprocess.STARTUPINFO()
-        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    try:
-        proc = subprocess.run(
-            [
-                _ffprobe_bin(),
-                "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
-                path,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            startupinfo=startupinfo,
-            timeout=NATIVE_FFPROBE_TIMEOUT_SEC,
-        )
-        if proc.returncode != 0:
-            _logger.warning("ffprobeによるメディア尺取得に失敗しました: path=%s returncode=%s", path, proc.returncode)
-            return None
-        return float((proc.stdout or "").strip())
-    except Exception:
-        _logger.warning("メディア尺取得に失敗しました: path=%s", path, exc_info=True)
-        return None
 
 
 def _wav_duration(path: str) -> float:
