@@ -5,6 +5,7 @@ active profile のキャラクター設定を一覧・編集・有効/無効切�
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from web_app.routes.errors import raise_api_error
 
 router = APIRouter(prefix="/api/character-profiles", tags=["character-profiles"])
 
@@ -119,7 +120,7 @@ def update_character_profile(character_id: str, req: CharacterUpdateRequest):
         else:
             update_character(character_id, **fields)
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise_api_error(exc, status_code=422, action="キャラクター設定更新")
     return {"updated": character_id, "fields": list(fields.keys())}
 
 
@@ -154,7 +155,7 @@ def create_character_profile(req: CharacterCreateRequest):
             sort_order=req.sort_order,
         )
     except Exception as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise_api_error(exc, status_code=422, action="キャラクター設定作成")
     return {"created": character_id}
 
 

@@ -3,6 +3,7 @@ import os
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from web_app.routes.errors import raise_api_error
 from web_app.schemas import ImageRegenerateRequest
 from web_app.services.image_service import list_images, submit_regenerate_job, save_bg_prompts
 from web_app.services.image_replace_service import list_replacements, replace_image, restore_image
@@ -46,7 +47,7 @@ async def api_replace_image(
         content = await image_file.read()
         return replace_image(history_name, target_key, content, image_file.filename or "", confirmed)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_api_error(e, action="画像差し替え")
     finally:
         await image_file.close()
 
@@ -56,7 +57,7 @@ def api_replacements(history_name: str):
     try:
         return list_replacements(history_name)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_api_error(e, action="画像差し替え履歴取得")
 
 
 class RestoreImageRequest(BaseModel):
@@ -69,7 +70,7 @@ def api_restore_image(history_name: str, req: RestoreImageRequest):
     try:
         return restore_image(history_name, req.replacement_id, req.confirmed)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        raise_api_error(e, action="画像復元")
 
 
 @router.get("/{history_name}/file/{file_path:path}")
