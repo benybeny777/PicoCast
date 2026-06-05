@@ -246,13 +246,25 @@ def _profile_id(profile_id: str | None) -> str:
     return profile_id or "default"
 
 
+def active_profile_id() -> str | None:
+    """active profile があれば profile_id、未設定なら None を返す。想定外エラーは伝播する。"""
+    from core.channel_profile import get_active_profile
+    profile = get_active_profile()
+    return profile.profile_id if profile is not None else None
+
+
+def require_current_profile_id() -> str:
+    """認証情報を参照する処理用に active profile の profile_id を必須取得する。"""
+    from core.channel_profile import require_active_profile
+    return require_active_profile().profile_id
+
+
 def current_profile_id_or_default() -> str:
-    """active profile があればその profile_id、未設定なら default を返す。"""
+    """active profile があればその profile_id、未設定なら default を返す旧互換関数。"""
     try:
-        from core.channel_profile import get_active_profile
-        profile = get_active_profile()
-        if profile is not None:
-            return profile.profile_id
+        profile_id = active_profile_id()
+        if profile_id is not None:
+            return profile_id
     except Exception as e:
         _logger.warning("[SecretStore] active profile 取得失敗: %s", e)
     return "default"

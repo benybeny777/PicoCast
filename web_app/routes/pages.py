@@ -256,14 +256,14 @@ def page_logs(request: Request):
 @router.get("/sd-models", response_class=HTMLResponse)
 def page_sd_models(request: Request):
     from config import config as _cfg
-    from core.secret_store import current_profile_id_or_default, has_secret
-    profile_id = current_profile_id_or_default()
+    from core.secret_store import active_profile_id, has_secret
+    profile_id = active_profile_id()
     return _render(request, "sd_models.html", {
         "sd_webui_root": _cfg.SD_WEBUI_ROOT,
         "sd_webui_model": _cfg.SD_WEBUI_MODEL,
         "auto_download_sd_models": _cfg.AUTO_DOWNLOAD_SD_MODELS,
         "sd_webui_base_url": _cfg.SD_WEBUI_BASE_URL,
-        "hf_token_set": has_secret("hf_token", profile_id=profile_id),
+        "hf_token_set": has_secret("hf_token", profile_id=profile_id) if profile_id else False,
     })
 
 

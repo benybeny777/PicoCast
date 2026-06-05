@@ -809,10 +809,10 @@ def _filter_obsolete_dialogue_must_fix(must_fix: list[str], dialogue_count: int)
 
 
 def check_openai_final_review_connection(timeout: int = 10) -> dict[str, Any]:
-    from core.secret_store import current_profile_id_or_default, has_secret, load_secret
-    profile_id = current_profile_id_or_default()
+    from core.secret_store import require_current_profile_id, has_secret, load_secret
     if not OPENAI_FINAL_REVIEW_ENABLED:
         return {"ok": True, "skipped": True, "reason": "OPENAI_FINAL_REVIEW_ENABLED is false"}
+    profile_id = require_current_profile_id()
     if not has_secret("openai_api_key", profile_id=profile_id):
         return {
             "ok": False,
@@ -850,14 +850,14 @@ def final_chatgpt_review(
     duration_result: dict[str, Any],
     render_engine: str = "native",
 ) -> dict[str, Any] | None:
-    from core.secret_store import current_profile_id_or_default, has_secret, load_secret
-    profile_id = current_profile_id_or_default()
+    from core.secret_store import require_current_profile_id, has_secret, load_secret
     if not OPENAI_FINAL_REVIEW_ENABLED:
         return {
             "skipped": True,
             "reason": "OPENAI_FINAL_REVIEW_ENABLED is false",
             "model": OPENAI_FINAL_REVIEW_MODEL,
         }
+    profile_id = require_current_profile_id()
     if not has_secret("openai_api_key", profile_id=profile_id):
         return {
             "skipped": True,

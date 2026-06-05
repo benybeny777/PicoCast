@@ -138,6 +138,12 @@ def test_get_playlist_categories_urban_legend(fake_genres):
     assert "食べ物カテゴリA" not in cats
 
 
+def test_get_playlist_categories_missing_genre_raises(fake_genres):
+    ppl, *_ = fake_genres
+    with pytest.raises(ppl.GenreProfileNotFoundError):
+        ppl.get_playlist_categories("nonexistent_genre")
+
+
 # ── default_hashtags ──────────────────────────────────────────────────────────
 
 def test_get_default_hashtags_food_trivia(fake_genres):
@@ -150,3 +156,9 @@ def test_get_default_hashtags_urban_legend(fake_genres):
     ppl, *_ = fake_genres
     ht = ppl.get_default_hashtags("urban_legend")
     assert "#都市伝説" in ht
+
+
+def test_get_default_hashtags_missing_genre_raises(fake_genres):
+    ppl, *_ = fake_genres
+    with pytest.raises(ppl.GenreProfileNotFoundError):
+        ppl.get_default_hashtags("nonexistent_genre")

@@ -4,6 +4,18 @@
 
 ---
 
+## 2026-06-05
+
+### profile 解決の無言 default 降格を縮小
+
+- Google / OpenAI / Hugging Face など profile 単位の認証情報を参照する処理で、active profile 未設定時に `"default"` へ落ちる経路を廃止した。`core.secret_store.require_current_profile_id()` を追加し、未設定時は `NoActiveProfileError` で停止する。
+- SDモデル画面の表示用 HF_TOKEN 状態は active profile 未設定時に `False` として扱い、画面表示だけで default profile の認証状態を参照しないようにした。
+- 投稿スケジュール取得も active profile 未設定時に default スケジュールを返さず、profile 設定エラーとして停止するようにした。
+- `prompt_profile_loader` の genre profile 設定読み込みでも、未知ジャンル時に空値へ落ちず `GenreProfileNotFoundError` で停止するようにした。
+- `AIGenerator.generate_script()` は Google API キー未設定時に `"Error: ..."` 文字列を返さず、エラーコード付き例外で停止するようにした。
+
+---
+
 ## 2026-06-04
 
 ### エラーコード管理とデバッグログ運用を強化
