@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, Query
+from web_app.routes.errors import raise_api_error
 from web_app.services.analytics_service import (
     load_latest_analytics,
     submit_refresh_job,
@@ -44,7 +45,7 @@ def api_analytics_refresh():
         from core.license_manager import assert_can_use_analytics
         assert_can_use_analytics()
     except RuntimeError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        raise_api_error(exc, status_code=403, action="Analytics利用権限確認")
     job_id = submit_refresh_job()
     return {"job_id": job_id, "status": "queued"}
 
@@ -59,7 +60,7 @@ def api_analytics_retention(
         from core.license_manager import assert_can_use_analytics
         assert_can_use_analytics()
     except RuntimeError as exc:
-        raise HTTPException(status_code=403, detail=str(exc))
+        raise_api_error(exc, status_code=403, action="Analytics維持率利用権限確認")
     from datetime import datetime, timedelta, timezone
     from core.youtube_analytics import fetch_audience_retention
     from core.retention_analysis import analyze_retention
@@ -71,7 +72,7 @@ def api_analytics_retention(
     try:
         rows = fetch_audience_retention(video_id, start_date, end_date, duration)
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"YouTube Analytics APIエラー: {e}")
+        raise_api_error(e, status_code=502, action="YouTube Analytics維持率取得", detail=f"YouTube Analytics APIエラー: {e}")
 
     if not rows:
         return {"ok": False, "message": "維持率データ未取得またはデータ待ちです。", "rows": [], "analysis": None}
