@@ -17,6 +17,7 @@ data/settings.db
 data/settings.db-wal
 data/settings.db-shm
 data/secret_master.key
+data/native_character_cache/
 .venv/
 
 # Nuitka / exe ビルド成果物
