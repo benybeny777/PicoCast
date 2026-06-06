@@ -15,7 +15,6 @@ from core.reading_normalizer import ReadingNormalizer
 from core.parser import ScriptParser
 from core.ai_generator import AIGenerator
 from core.ng_words import apply_ng_word_replacements
-from core.youtube_metadata import optimize_description, optimize_tags
 from core.image_generator import ImageGenerator, ImageGenerationError
 from core.opening_quality import (
     apply_opening_rewrite_to_script,
@@ -82,6 +81,13 @@ from workers.pipeline_models import (
     LONG_THUMBNAIL_VARIANTS,
     fallback_title_variants as _fallback_title_variants,
 )
+from workers.pipeline_metadata import (
+    build_audio_credit_block as _build_audio_credit_block,
+    build_channel_footer as _build_channel_footer,
+    character_names_for_credits as _character_names_for_credits,
+    normalize_metadata as _normalize_meta,
+    strip_voicevox_credit as _strip_voicevox_credit,
+)
 from workers.pipeline_helpers import (
     background_filename as _background_filename,
     cleanup_orphan_audio as _cleanup_orphan_audio,
@@ -147,41 +153,6 @@ def _thumbnail_variant_filename(theme_dir, variant):
     return f"{_safe_thumbnail_prefix(theme_dir)}_thumbnail_{variant}.png"
 
 
-def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
-    lines = text.splitlines()
-    cleaned = [l for l in lines if "VOICEVOX:" not in l and "使用音声合成" not in l]
-    return "\n".join(cleaned).strip(), len(cleaned) != len(lines)
-
-
-def _character_names_for_credits(script_items=None) -> list[str]:
-    if not script_items:
-        return []
-    names: list[str] = []
-    seen: set[str] = set()
-    for item in script_items:
-        if item.get("type") != "dialogue":
-            continue
-        name = str(item.get("character") or "").strip()
-        if name and name not in seen:
-            seen.add(name)
-            names.append(name)
-    return names
-
-
-def _build_audio_credit_block(script_items=None) -> str:
-    try:
-        from core.channel_profile import get_active_profile
-        from core.character_profile_store import build_character_credit_block
-        profile = get_active_profile()
-        return build_character_credit_block(
-            profile.profile_id if profile else None,
-            _character_names_for_credits(script_items),
-        )
-    except Exception:
-        _logger.error("音声クレジット表記の生成に失敗しました", exc_info=True)
-        raise
-
-
 def _format_review_list(items) -> str:
     if not items:
         return "なし"
@@ -210,44 +181,6 @@ def _log_ollama_review_detail(update_status, review: dict) -> None:
     update_status(f"    must_fix: {_format_review_list(review.get('must_fix'))}")
     update_status(f"    warnings: {_format_review_list(review.get('warnings'))}")
     update_status(f"    fix_target: {review.get('fix_target') or 'なし'}")
-
-
-def _build_channel_footer() -> str:
-    from core.channel_info import get_channel_info
-
-    info = get_channel_info()
-    handle = info["handle"]
-    channel_url = f"https://www.youtube.com/{handle}"
-    hashtags = (info.get("hashtags") or "").strip()
-    footer = (
-        "\n\n"
-        "👍 いいね＆チャンネル登録お願いします！\n"
-        "💬 感想はコメントで！\n"
-        "🔔 通知オンで見逃しなし！\n"
-        f"\n▶ チャンネル登録はこちら → {channel_url}\n"
-    )
-    if hashtags:
-        footer += f"\n{hashtags}"
-    return footer
-
-
-
-
-def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status, script_items=None) -> None:
-    """説明文・タグをNG語置換・最適化して meta をインプレース更新する。"""
-    if "description" in meta:
-        _desc, _stripped = _strip_voicevox_credit(meta["description"].rstrip())
-        if _stripped:
-            update_status("  説明文の手書きVOICEVOXクレジットを自動除去しました")
-        _desc = re.sub(r'#\S+', '', _desc).strip()
-        _desc = optimize_description(apply_ng_word_replacements(_desc), is_shorts=is_shorts, keep_hashtags=False)
-        meta["description"] = _desc + _build_audio_credit_block(script_items) + _build_channel_footer()
-    if "tags" in meta:
-        meta["tags"] = optimize_tags(
-            meta["tags"],
-            title=meta.get("video_title", topic),
-            description=meta.get("description", ""),
-        )
 
 
 def _estimate_script_duration(items, is_shorts: bool):

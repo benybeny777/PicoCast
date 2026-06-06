@@ -11,6 +11,7 @@
 - `workers/main.py` に混在していた台本形式判定、ネタ会議画面形式判定、背景ファイル名生成、孤児音声整理、句読点分割、解像度表示を `workers/pipeline_helpers.py` へ分離した。
 - `workers.main` では従来の内部関数名を互換公開し、既存の生成フローを変えずにパイプライン本体の責務を縮小した。
 - 生成件数・失敗件数・所要時間を保持する `GenerationReport` をdataclass化し、Longサムネ構成・タイトル代替案とともに `workers/pipeline_models.py` へ分離した。
+- 説明文・タグ・VOICEVOXクレジット・チャンネルフッターの整形を `workers/pipeline_metadata.py` へ分離した。
 - 分離した処理を直接検証する回帰テストを追加した。
 
 ### LongタイトルA/B/C案の保存漏れを修正
