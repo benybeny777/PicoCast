@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -162,3 +163,24 @@ def test_get_default_hashtags_missing_genre_raises(fake_genres):
     ppl, *_ = fake_genres
     with pytest.raises(ppl.GenreProfileNotFoundError):
         ppl.get_default_hashtags("nonexistent_genre")
+
+
+@pytest.mark.parametrize(
+    ("genre_profile", "required_text"),
+    [
+        ("zunkami", "食べ物雑学専用の具体性"),
+        ("food_trivia", "食べ物雑学専用の具体性"),
+        ("zundamon_kowai", "都市伝説専用の具体性"),
+        ("urban_legend", "都市伝説専用の具体性"),
+    ],
+)
+def test_real_genre_context_prioritizes_explanation_density(genre_profile, required_text, monkeypatch):
+    import core.prompt_profile_loader as ppl
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    genres_dir = Path(root) / "config" / "prompt_profiles" / "genres"
+    monkeypatch.setattr(ppl, "_GENRES_DIR", genres_dir)
+
+    context = ppl.build_script_prompt_context(genre_profile)
+    assert "掛け合いより具体的な説明を優先" in context
+    assert required_text in context

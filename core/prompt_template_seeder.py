@@ -53,6 +53,7 @@ def _load_common_script_rules(genre_profile: str | None = None) -> str:
     try:
         from core.script_prompts import (
             COMMON_SCRIPT_RULES,
+            EXPLANATION_DENSITY_RULES,
             HIGH_TEMPO_RULES,
             SHORTS_QUANTITY_RULES,
             METADATA_FORMAT,
@@ -64,6 +65,8 @@ def _load_common_script_rules(genre_profile: str | None = None) -> str:
             SCRIPT_BODY_FORMAT,
             "## 共通ルール",
             COMMON_SCRIPT_RULES,
+            "## 説明密度ルール",
+            EXPLANATION_DENSITY_RULES,
             "## 高テンポルール",
             HIGH_TEMPO_RULES,
             "## Shorts 分量ルール（最優先）",
@@ -222,6 +225,8 @@ def seed_all_profiles() -> dict[str, int]:
     for profile in profiles:
         try:
             count = seed_templates_for_profile(profile.profile_id, profile.genre_profile)
+            if profile.genre_profile in {"zunkami", "food_trivia", "zundamon_kowai", "urban_legend"}:
+                sync_quality_rules_for_profile(profile.profile_id, profile.genre_profile)
             results[profile.profile_id] = count
         except Exception as e:
             _logger.error(
@@ -230,3 +235,49 @@ def seed_all_profiles() -> dict[str, int]:
             results[profile.profile_id] = -1
 
     return results
+
+
+def sync_quality_rules_for_profile(profile_id: str, genre_profile: str) -> int:
+    """未移行のデフォルト台本・ネタ会議テンプレートへ現行品質ルールを同期する。"""
+    from core.prompt_template_store import get_default_template, update_template
+
+    updated = 0
+    script_template = get_default_template(profile_id, "script")
+    needs_script_sync = script_template is not None and (
+        "説明密度・掛け合い品質ルール" not in script_template.script_rules
+        or (
+            genre_profile in {"zunkami", "food_trivia"}
+            and "食べ物雑学専用の具体性" not in script_template.system_rules
+        )
+        or (
+            genre_profile in {"zundamon_kowai", "urban_legend"}
+            and "都市伝説専用の具体性" not in script_template.system_rules
+        )
+    )
+    if needs_script_sync:
+        update_template(
+            script_template.template_id,
+            profile_id,
+            system_rules=_read_genre_file(genre_profile, "script_context.md"),
+            script_rules=_load_common_script_rules(genre_profile),
+        )
+        updated += 1
+
+    meeting_template = get_default_template(profile_id, "meeting")
+    meeting_context = _read_genre_file(genre_profile, "meeting_context.md")
+    if (
+        meeting_template is not None
+        and meeting_context
+        and "説明密度の査定" not in meeting_template.system_rules
+    ):
+        update_template(
+            meeting_template.template_id,
+            profile_id,
+            system_rules=meeting_context,
+            meeting_rules=_load_common_meeting_rules(),
+        )
+        updated += 1
+
+    if updated:
+        _logger.info("[Seeder] %s の説明密度ルールを %d テンプレートへ同期しました", profile_id, updated)
+    return updated

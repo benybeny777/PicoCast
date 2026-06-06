@@ -41,6 +41,41 @@ def test_normalize_review_result_legacy_score_fallback():
     assert r["overall_score"] == 85
 
 
+def test_opening_review_prompt_checks_explanation_density():
+    from core.opening_quality import _build_opening_review_prompt
+
+    prompt = _build_opening_review_prompt(
+        {"opening_lines": [], "issues": [], "scores": {}},
+        "テストタイトル",
+        "テスト",
+        "Shorts",
+        "45秒",
+    )
+    assert "無意味な相槌・復唱・同意" in prompt
+    assert "めたんが説明役・補足役" in prompt
+    assert "ずんだもんの連続説明は減点しない" in prompt
+
+
+def test_final_review_prompt_rejects_thin_dialogue():
+    from core.opening_quality import _build_final_review_prompt
+
+    prompt = _build_final_review_prompt(
+        title="テスト",
+        thumbnail_text="テスト",
+        fixed_comment="",
+        script_content="",
+        items=[],
+        is_shorts=True,
+        estimated_duration=45.0,
+        local_review={"opening_lines": [], "scores": {}, "checks": {}},
+        ollama_review=None,
+        duration_result={},
+    )
+    assert "めたんの台詞の半分以上が相槌・復唱・同意" in prompt
+    assert "3往復以上、具体情報が増えない押し問答" in prompt
+    assert "same speaker 4 times" not in prompt
+
+
 # ── 70〜79点 warning の人間向け表示 ───────────────────────────────────────────
 
 def test_warning_text_for_70s_without_must_fix():
