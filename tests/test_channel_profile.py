@@ -266,7 +266,7 @@ def test_profile_schedule_is_created_with_default_slots(profile_db):
 
     schedule = cs.get_schedule("zunkami")
     assert schedule.timezone_name == "Asia/Tokyo"
-    assert schedule.shorts_times == ["07:00", "12:00", "21:00"]
+    assert schedule.shorts_times == ["12:00", "21:00"]
     assert schedule.long_times == ["22:00"]
 
 
@@ -317,7 +317,7 @@ def test_existing_profile_schedule_is_updated_to_current_default(profile_db):
     cs.initialize()
     schedule = cs.get_schedule("zunkami")
 
-    assert schedule.shorts_times == ["07:00", "12:00", "21:00"]
+    assert schedule.shorts_times == ["12:00", "21:00"]
     assert schedule.long_times == ["22:00"]
 
 

@@ -16,6 +16,10 @@ def test_default_image_style_strips_env_quotes():
     assert config._clean_env_choice("’通常’") == "通常"
 
 
+def test_default_shorts_upload_slots_are_noon_and_nine_pm():
+    assert config.SHORTS_UPLOAD_SLOT_HOURS == (12, 21)
+
+
 def test_libx264_default_preset_is_x264_compatible(monkeypatch):
     monkeypatch.setenv("NATIVE_FFMPEG_ENCODER", "libx264")
     monkeypatch.delenv("NATIVE_FFMPEG_PRESET", raising=False)

@@ -55,10 +55,15 @@ class UploadSchedulerTests(unittest.TestCase):
 
     def test_new_slots_use_channel_schedule_defaults(self):
         now = datetime(2026, 5, 21, 6, 0, tzinfo=upload_scheduler.JST)
-        with patch.object(upload_scheduler, "_active_schedule", return_value=self._default_schedule()):
-            shorts = upload_scheduler._assign_slots_from_used(3, "shorts", set(), now)
+        current_default = SimpleNamespace(
+            timezone_name="Asia/Tokyo",
+            shorts_slot_hours=(12, 21),
+            long_slot_hours=(22,),
+        )
+        with patch.object(upload_scheduler, "_active_schedule", return_value=current_default):
+            shorts = upload_scheduler._assign_slots_from_used(2, "shorts", set(), now)
             long = upload_scheduler._assign_slots_from_used(1, "long", set(), now)
-        self.assertEqual([s.strftime("%H:%M") for s in shorts], ["07:00", "12:00", "21:00"])
+        self.assertEqual([s.strftime("%H:%M") for s in shorts], ["12:00", "21:00"])
         self.assertEqual([s.strftime("%H:%M") for s in long], ["22:00"])
 
     def test_rebalance_reads_records_without_writing_schedule_json(self):

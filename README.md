@@ -220,7 +220,7 @@ pip install --upgrade -r config/requirements.txt
 情報は active channel profile ごとにデータベースへ暗号化保存されるため、チャンネルを切り替えて個別に管理できます。
 チャンネルの `profile_id` / `genre_profile` / `output_root` はチャンネルハンドル（`@` なし）で統一されます。
 チャンネル詳細画面から、そのチャンネル専用の APIキー・YouTube Client Secrets を登録できます。
-投稿予約スロットもチャンネル別に管理されます。既定値は全チャンネル共通で、Shorts が 07:00 / 12:00 / 21:00、Long が 22:00、タイムゾーンは Asia/Tokyo です。
+投稿予約スロットもチャンネル別に管理されます。既定値は全チャンネル共通で、Shorts が 12:00 / 21:00、Long が 22:00、タイムゾーンは Asia/Tokyo です。
 
 | 項目 | 用途 |
 |:---|:---|
