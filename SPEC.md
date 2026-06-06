@@ -789,6 +789,8 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 
 `/generate` と `/history/{name}` の再生成フォームには **画像エンジン**（Google AI / Stable Diffusion WebUI）の選択が含まれる。`/images` 再生成にも同様のエンジン選択がある。
 
+`/generate` の通常・ネタ会議タブは、画像・BGM設定と生成ボタンを先に表示し、その下に台本入力欄を配置する。
+
 `/settings` のAPIキー設定タブ（「APIキー設定」）は画面最下部に置く。通常の設定変更欄には秘密値を含めない。APIキー設定欄には `GOOGLE_API_KEY`・`OPENAI_API_KEY`・`HF_TOKEN`（Hugging Face アクセストークン）が含まれ、いずれも active profile ごとの有無（bool）のみ画面に表示する。保存した値は active profile の `encrypted_secrets` に紐づき、チャンネル切替後は切替先 profile の登録状態を表示・使用する。設定保存後の値はアプリ再起動なしで即時反映される（`WEB_UI_PORT` など起動時固定パラメータを除く）。保存時はトースト通知で確認できる。
 
 `/settings` のチャンネル管理タブには、各 channel profile の `GOOGLE_API_KEY` / `OPENAI_API_KEY` / `HF_TOKEN` / YouTube client_secrets / Upload OAuth / Analytics OAuth の登録状態を bool バッジで表示する。値そのものは表示しない。
