@@ -41,7 +41,7 @@ _INITIALIZED_PATHS: set[str] = set()
 _connections: list[sqlite3.Connection] = []
 _conn_lock = threading.Lock()
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 # ── パス ────────────────────────────────────────────────────────────────────
@@ -263,6 +263,7 @@ CREATE TABLE IF NOT EXISTS render_info (
     video_format                  TEXT,
     screen_format                 TEXT,
     playlist_categories           TEXT,
+    title_variants                TEXT,
     native_renderer_json          TEXT,
     estimated_duration_sec        REAL,
     actual_duration_sec           REAL,
@@ -417,6 +418,7 @@ def _migrate(conn: sqlite3.Connection, current_ver: int) -> None:
 
     # render_info / jobs テーブルは DDL の CREATE TABLE IF NOT EXISTS で作成済み
     for col, typedef in [
+        ("title_variants",   "TEXT"),
         ("bgm_mode",         "TEXT"),
         ("bgm_id",           "TEXT"),
         ("bgm_display_name", "TEXT"),
@@ -896,18 +898,19 @@ def upsert_render_info(local_id: str, data: dict) -> None:
     import json as _json
     tags = data.get("tags")
     cats = data.get("playlist_categories")
+    title_variants = data.get("title_variants")
     nr   = data.get("native_renderer")
     with ManagedConnection() as conn:
         conn.execute("""
             INSERT INTO render_info(
                 local_id, render_engine, video_title, description,
                 tags, video_format, screen_format, playlist_categories,
-                native_renderer_json,
+                title_variants, native_renderer_json,
                 estimated_duration_sec, actual_duration_sec, actual_duration_status,
                 loudnorm_enabled, loudnorm_i, loudnorm_tp, loudnorm_lra,
                 motion_effects_enabled, motion_effects_fallback_count,
                 bgm_mode, bgm_id, bgm_display_name, bgm_file_path, bgm_volume_db, bgm_loop_enabled)
-            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             ON CONFLICT(local_id) DO UPDATE SET
                 render_engine=COALESCE(excluded.render_engine, render_engine),
                 video_title=COALESCE(excluded.video_title, video_title),
@@ -916,6 +919,7 @@ def upsert_render_info(local_id: str, data: dict) -> None:
                 video_format=COALESCE(excluded.video_format, video_format),
                 screen_format=COALESCE(excluded.screen_format, screen_format),
                 playlist_categories=COALESCE(excluded.playlist_categories, playlist_categories),
+                title_variants=COALESCE(excluded.title_variants, title_variants),
                 native_renderer_json=COALESCE(excluded.native_renderer_json, native_renderer_json),
                 estimated_duration_sec=COALESCE(excluded.estimated_duration_sec, estimated_duration_sec),
                 actual_duration_sec=COALESCE(excluded.actual_duration_sec, actual_duration_sec),
@@ -941,6 +945,7 @@ def upsert_render_info(local_id: str, data: dict) -> None:
             data.get("video_format"),
             data.get("screen_format"),
             _json.dumps(cats, ensure_ascii=False) if isinstance(cats, (list, dict)) else cats,
+            _json.dumps(title_variants, ensure_ascii=False) if isinstance(title_variants, list) else title_variants,
             _json.dumps(nr, ensure_ascii=False) if isinstance(nr, dict) else None,
             data.get("estimated_duration_sec"),
             data.get("actual_duration_sec"),
@@ -971,7 +976,7 @@ def get_render_info(local_id: str) -> dict:
     if row is None:
         return {}
     d = dict(row)
-    for key in ("tags", "playlist_categories"):
+    for key in ("tags", "playlist_categories", "title_variants"):
         val = d.get(key)
         if val:
             try:

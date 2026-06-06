@@ -81,6 +81,22 @@
 </div>
 {% endif %}
 
+{% if detail.render_info.get('title_variants') %}
+<div class="card mt">
+  <h2>Long タイトル A/B/C</h2>
+  <table class="status-table">
+    <tr><th>案</th><th>タイトル</th><th>切り口</th></tr>
+    {% for item in detail.render_info.get('title_variants', []) %}
+    <tr>
+      <td>{{ item.get('variant', '—') }}</td>
+      <td>{{ item.get('title', '—') }}</td>
+      <td>{{ item.get('concept', '—') }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
 <!-- 再生成設定と実行 -->
 <div class="card mt">
   <h2>動画・全工程の再生成</h2>

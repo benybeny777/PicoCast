@@ -147,18 +147,6 @@ def _thumbnail_variant_filename(theme_dir, variant):
     return f"{_safe_thumbnail_prefix(theme_dir)}_thumbnail_{variant}.png"
 
 
-def _write_long_thumbnail_manifest(theme_dir, topic, variants, video_id=None):
-    return None
-
-
-def _write_long_title_manifest(theme_dir, topic, title_variants, default_variant="A"):
-    return None
-
-
-def record_uploaded_video_id_for_thumbnail_ab_test(output_dir, video_id):
-    """LongサムネA/Bのローカルマニフェスト管理は廃止済み。"""
-    return None
-
 def _strip_voicevox_credit(text: str) -> tuple[str, bool]:
     lines = text.splitlines()
     cleaned = [l for l in lines if "VOICEVOX:" not in l and "使用音声合成" not in l]
@@ -477,9 +465,6 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     if os.path.exists(thumb_path):
         os.remove(thumb_path)
     shutil.copy2(first_variant_path, thumb_path)
-    if ab_test:
-        manifest_path = _write_long_thumbnail_manifest(theme_dir, topic, manifest_variants)
-        _log(f"  サムネイルA/B管理ファイル保存: {manifest_path}")
     _log(f"  アップロード用サムネイル保存: {thumb_path}")
     return _finish_thumbnail(thumb_path)
 
@@ -621,6 +606,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                  background_engine=None, bgm_mode="profile_default",
                  bgm_id=None, bgm_volume_db=None, reuse_audio=False):
     report = GenerationReport()
+    long_title_variants: list[dict[str, str]] = []
     pipeline_start = time.time()
     img_gen = None
 
@@ -1278,12 +1264,11 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         title_variants = ai.generate_title_variants(script_content, base_title, thumbnail_text)
         variants_by_id = {item.get("variant"): item for item in title_variants}
         fallback_by_id = {item["variant"]: item for item in _fallback_title_variants(base_title)}
-        merged_title_variants = [
+        long_title_variants = [
             variants_by_id.get(variant) or fallback_by_id[variant]
             for variant in ("A", "B", "C")
         ]
-        _write_long_title_manifest(theme_dir, base_title, merged_title_variants)
-        update_status("  ✅ タイトルA/B/C案を生成しました")
+        update_status("  ✅ タイトルA/B/C案を生成しました（履歴へ保存）")
 
     if meta:
         if "meeting_candidates" in meta:
@@ -1913,6 +1898,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             "video_format": meta.get("video_format", ""),
             "screen_format": meta.get("screen_format", ""),
             "playlist_categories": _parse_playlist_categories_meta(meta.get("playlist_categories", "")),
+            "title_variants": long_title_variants or None,
             "actual_duration_sec": round(_actual_sec, 2) if _actual_sec > 0 else None,
             "actual_duration_status": _actual_duration_status or None,
             "bgm_mode": bgm_mode,

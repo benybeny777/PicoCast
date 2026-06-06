@@ -48,6 +48,33 @@ def test_initialize_idempotent(tmp_db):
     tmp_db.initialize_db()  # 2回目
 
 
+def test_initialize_migrates_v7_render_info(tmp_path, monkeypatch):
+    """v7 DBのrender_infoへLongタイトル候補列を追加できること。"""
+    import sqlite3
+    import core.metadata_db as m
+
+    db_path = tmp_path / "metadata_v7.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE schema_version(version INTEGER NOT NULL)")
+        conn.execute("INSERT INTO schema_version(version) VALUES(7)")
+        conn.execute("CREATE TABLE render_info(local_id TEXT PRIMARY KEY)")
+        conn.commit()
+
+    monkeypatch.setattr(m, "get_db_path", lambda: str(db_path))
+    m._INITIALIZED_PATHS.discard(str(db_path))
+    m.initialize_db()
+
+    with sqlite3.connect(db_path) as conn:
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(render_info)").fetchall()
+        }
+        version = conn.execute("SELECT version FROM schema_version").fetchone()[0]
+    assert "title_variants" in columns
+    assert version == 8
+    m.close_all_connections()
+
+
 def test_get_db_path_without_active_profile_raises(tmp_path, monkeypatch):
     """active profile 未設定時は互換 metadata.db パスへ戻さず停止する。"""
     import core.channel_profile as cp
@@ -144,6 +171,18 @@ def test_sync_stores_script_content_without_file(tmp_db, tmp_path):
 def test_get_script_content_missing_returns_none(tmp_db):
     """未登録 local_id では get_script_content が None を返すこと。"""
     assert tmp_db.get_script_content("存在しないID") is None
+
+
+def test_render_info_preserves_long_title_variants(tmp_db):
+    """LongタイトルA/B/C案をJSON列へ保存し、同じ構造で取得できること。"""
+    variants = [
+        {"variant": "A", "title": "案A", "concept": "closeup"},
+        {"variant": "B", "title": "案B", "concept": "history"},
+        {"variant": "C", "title": "案C", "concept": "comparison"},
+    ]
+    tmp_db.upsert_render_info("long_test", {"title_variants": variants})
+
+    assert tmp_db.get_render_info("long_test")["title_variants"] == variants
 
 
 # ── analytics_snapshot ───────────────────────────────────────────────────────
