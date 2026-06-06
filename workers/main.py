@@ -77,6 +77,11 @@ from core.cta_policy import (
     write_policy_file,
 )
 from workers.output_locks import OutputDirectoryLockedError, find_locking_process
+from workers.pipeline_models import (
+    GenerationReport,
+    LONG_THUMBNAIL_VARIANTS,
+    fallback_title_variants as _fallback_title_variants,
+)
 from workers.pipeline_helpers import (
     background_filename as _background_filename,
     cleanup_orphan_audio as _cleanup_orphan_audio,
@@ -120,39 +125,6 @@ def _cleanup_old_theme_backups(backup_base: str, safe_topic: str, keep: str | No
 
 INTER_DIALOGUE_GAP_SEC = 0.2
 
-LONG_THUMBNAIL_VARIANTS = [
-    {
-        "variant": "A",
-        "concept": "food_closeup_click",
-        "text": "default thumbnail candidate",
-        "prompt": (
-            "Variant A: food close-up, click-focused composition. "
-            "Make the food very large in the center, bright, high contrast, glossy and appetizing. "
-            "The viewer should instantly understand this is food trivia."
-        ),
-    },
-    {
-        "variant": "B",
-        "concept": "old_history_surprise",
-        "text": "history/surprise candidate",
-        "prompt": (
-            "Variant B: old history and surprise composition. "
-            "Use an old dining table, vintage shop, old document, or historical atmosphere. "
-            "Prioritize unexpected food history and curiosity."
-        ),
-    },
-    {
-        "variant": "C",
-        "concept": "before_after_gap",
-        "text": "comparison/gap candidate",
-        "prompt": (
-            "Variant C: comparison gap composition. "
-            "Split the image left and right to compare past and present. "
-            "Show a clear contrast between old treatment and the modern food appearance."
-        ),
-    },
-]
-
 
 def _meta_dir(theme_dir: str) -> str:
     p = os.path.join(theme_dir, "_meta")
@@ -177,21 +149,6 @@ def _thumbnail_variant_filename(theme_dir, variant):
 
 def _write_long_thumbnail_manifest(theme_dir, topic, variants, video_id=None):
     return None
-
-
-def _fallback_title_variants(base_title):
-    base = (base_title or "").strip() or "食べ物の意外な話"
-    fallback = [
-        ("A", base, "food_closeup_click"),
-        ("B", f"{base}に隠れた意外な歴史", "old_history_surprise"),
-        ("C", f"{base}は昔と今で何が違うのか", "before_after_gap"),
-    ]
-    result = []
-    for variant, title, concept in fallback:
-        if len(title) > 45:
-            title = title[:44] + "…"
-        result.append({"variant": variant, "title": title, "concept": concept})
-    return result
 
 
 def _write_long_title_manifest(theme_dir, topic, title_variants, default_variant="A"):
@@ -302,26 +259,6 @@ def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status, scri
             meta["tags"],
             title=meta.get("video_title", topic),
             description=meta.get("description", ""),
-        )
-
-
-class GenerationReport:
-    def __init__(self):
-        self.voices_generated = 0
-        self.voices_failed = 0
-        self.backgrounds_generated = 0
-        self.backgrounds_failed = 0
-        self.elapsed_sec = 0.0
-        self.native_render_used = False  # True when ffmpeg/native MP4 is used
-        self.theme_dir: str = ""  # 実際に作成された出力フォルダのパス
-
-    def summary(self):
-        m, s = divmod(int(self.elapsed_sec), 60)
-        elapsed = f"{m}分{s}秒" if m else f"{s}秒"
-        return (
-            f"⏱  所要時間: {elapsed}\n"
-            f"🎤 音声: 生成={self.voices_generated} / 失敗={self.voices_failed}\n"
-            f"🖼  背景: 生成={self.backgrounds_generated} / 失敗={self.backgrounds_failed}"
         )
 
 
