@@ -123,6 +123,12 @@ def test_generate_page(client):
     assert "高画質（FHD）生成" not in res.text
     assert "const imageStyle" in res.text
     assert "’通常’" not in res.text
+    assert res.text.index('id="generate-btn-normal"') < res.text.index(
+        'id="script-input-normal"'
+    )
+    assert res.text.index('id="generate-btn-meeting"') < res.text.index(
+        'id="script-input-meeting"'
+    )
 
 
 # 5. /history ページが 200 を返す

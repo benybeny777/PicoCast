@@ -39,13 +39,7 @@
     </div>
   </div>
 
-  <p class="hint mt">台本を貼り付けて「生成開始」を押してください。複数台本は <code>---</code> で区切ってください。</p>
-
   <div class="card">
-    <div class="form-group">
-      <label for="script-input-normal">台本</label>
-      <textarea id="script-input-normal" rows="20" placeholder="動画タイトル: タイトルを入力&#10;動画形式: Shorts&#10;&#10;ずんだもん(ノーマル): セリフ&#10;四国めたん(ノーマル): セリフ&#10;..."></textarea>
-    </div>
     <div class="form-row">
       <div class="form-group">
         <label for="background-engine-normal">画像エンジン</label>
@@ -89,6 +83,11 @@
     <div class="action-row">
       <button id="generate-btn-normal" class="btn btn-primary" onclick="startGenerate('normal')">生成開始</button>
     </div>
+    <div class="form-group mt">
+      <label for="script-input-normal">台本</label>
+      <p class="hint">台本を貼り付けて「生成開始」を押してください。複数台本は <code>---</code> で区切ってください。</p>
+      <textarea id="script-input-normal" rows="20" placeholder="動画タイトル: タイトルを入力&#10;動画形式: Shorts&#10;&#10;ずんだもん(ノーマル): セリフ&#10;四国めたん(ノーマル): セリフ&#10;..."></textarea>
+    </div>
   </div>
 
 </div><!-- /tab-normal -->
@@ -113,14 +112,7 @@
     </div>
   </div>
 
-  <p class="hint mt">AIが生成したネタ会議台本を貼り付けて「生成開始」を押してください。</p>
-  <p class="hint" style="color:var(--warning)">候補一覧・固定コメント・アンケート手動設定用ブロックは自動的に本編から分離されます。</p>
-
   <div class="card">
-    <div class="form-group">
-      <label for="script-input-meeting">ネタ会議台本</label>
-      <textarea id="script-input-meeting" rows="24" placeholder="動画形式: ネタ会議&#10;画面形式: 縦&#10;動画タイトル: 次に作る食べ物雑学ネタ会議&#10;...&#10;&#10;候補番号: 1&#10;候補タイトル: ○○&#10;...&#10;&#10;背景: 漫画風会議室。「ネタ会議」&#10;テロップ: ネタ会議スタート&#10;ずんだもん(あまあま): 今日こそ勝てるネタを持ってきたのだ！&#10;...&#10;&#10;固定コメント:&#10;次に見たい食べ物雑学ネタを番号で教えてね！&#10;...&#10;&#10;アンケート手動設定用:&#10;質問:&#10;次にShorts化してほしい食べ物雑学はどれ？&#10;..."></textarea>
-    </div>
     <div class="form-row">
       <div class="form-group">
         <label for="background-engine-meeting">画像エンジン</label>
@@ -157,6 +149,12 @@
     </div>
     <div class="action-row">
       <button id="generate-btn-meeting" class="btn btn-primary" onclick="startGenerate('meeting')">生成開始</button>
+    </div>
+    <div class="form-group mt">
+      <label for="script-input-meeting">ネタ会議台本</label>
+      <p class="hint">AIが生成したネタ会議台本を貼り付けて「生成開始」を押してください。</p>
+      <p class="hint" style="color:var(--warning)">候補一覧・固定コメント・アンケート手動設定用ブロックは自動的に本編から分離されます。</p>
+      <textarea id="script-input-meeting" rows="24" placeholder="動画形式: ネタ会議&#10;画面形式: 縦&#10;動画タイトル: 次に作る食べ物雑学ネタ会議&#10;...&#10;&#10;候補番号: 1&#10;候補タイトル: ○○&#10;...&#10;&#10;背景: 漫画風会議室。「ネタ会議」&#10;テロップ: ネタ会議スタート&#10;ずんだもん(あまあま): 今日こそ勝てるネタを持ってきたのだ！&#10;...&#10;&#10;固定コメント:&#10;次に見たい食べ物雑学ネタを番号で教えてね！&#10;...&#10;&#10;アンケート手動設定用:&#10;質問:&#10;次にShorts化してほしい食べ物雑学はどれ？&#10;..."></textarea>
     </div>
   </div>
 
