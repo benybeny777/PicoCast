@@ -125,8 +125,6 @@ def _run_upload(job: Job, history_name: str, playlist_existing_mode: str = "reus
     render_info = get_render_info(local_id)
     playlist_existing_mode = _normalize_playlist_existing_mode(playlist_existing_mode)
     playlist_categories: list[str] = render_info.get("playlist_categories") or []
-    if not playlist_categories:
-        playlist_categories = _infer_playlist_categories(job, local_id, render_info)
     _log(job, f"アップロード開始: {mp4_path}", "info")
 
     if job.cancel_event.is_set():
@@ -331,31 +329,6 @@ def _normalize_playlist_existing_mode(mode: str) -> str:
         return normalized
     _logger.error("不正な再生リスト既存モードです: mode=%s", mode)
     raise ValueError(f"不正な再生リスト既存モードです: {mode}")
-
-
-def _infer_playlist_categories(job: Job, local_id: str, render_info: dict[str, Any]) -> list[str]:
-    from config import config as _cfg
-    if not _cfg.AUTO_GENRE_PLAYLIST_ENABLED:
-        return []
-    try:
-        from core.genre_playlist_classifier import classify_playlist_category
-        from core.metadata_db import get_script_content
-        from core.playlist_resolver import get_standard_categories
-
-        script_text = get_script_content(local_id) or ""
-        result = classify_playlist_category(
-            title=render_info.get("video_title", local_id),
-            description=render_info.get("description", ""),
-            script_text=script_text,
-            categories=get_standard_categories(),
-        )
-        category = result["category"]
-        reason = result.get("reason") or ""
-        _log(job, f"Ollama再生リスト判定: {category}" + (f"（{reason}）" if reason else ""), "info")
-        return [category]
-    except Exception:
-        _logger.error("Ollama再生リスト自動判定に失敗しました: local_id=%s", local_id, exc_info=True)
-        raise
 
 
 def _prepare_upload_playlist(playlist_name: str, mode: str) -> dict:

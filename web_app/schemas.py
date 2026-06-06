@@ -103,6 +103,13 @@ class BatchUploadRequest(BaseModel):
     playlist_existing_mode: str = "reuse"  # reuse / recreate
 
 
+# ── 単体再生リスト振り分け ────────────────────────────
+class PlaylistClassifierRequest(BaseModel):
+    history_names: list[str]
+    only_unregistered: bool = True
+    confirmed: bool = False
+
+
 # ── スケジュール ──────────────────────────────────────
 class ScheduleUpdateRequest(BaseModel):
     video_id: str

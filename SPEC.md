@@ -1050,8 +1050,9 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
 | `OLLAMA_TRANSLATE_MODEL` | `qwen3:8b` | Stable Diffusion WebUI プロンプト日→英翻訳モデル |
-| `OLLAMA_PLAYLIST_MODEL` | `qwen3:8b` | 再生リストジャンル判定モデル |
-| `OLLAMA_PLAYLIST_TIMEOUT_SEC` | 60 | 再生リストジャンル判定タイムアウト秒数 |
+| `OLLAMA_PLAYLIST_MODEL` | `qwen3:8b` | 単体再生リスト振り分けの判定モデル |
+| `OLLAMA_PLAYLIST_TIMEOUT_SEC` | 60 | 単体再生リスト振り分けのタイムアウト秒数 |
+| `OLLAMA_PLAYLIST_NUM_PREDICT` | 128 | 単体再生リスト振り分けの最大生成トークン数 |
 | `OPENAI_FINAL_REVIEW_MODEL` | `gpt-5.2` | ChatGPT生成前レビューモデル |
 | `OPENING_SCORE_ABORT_THRESHOLD` | 80 | pass / warning 表示の目安 |
 | `OPENING_SCORE_HARD_ABORT_THRESHOLD` | 70 | 処理中止スコア閾値 |
@@ -1076,8 +1077,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_FFMPEG_TIMEOUT_SEC` | 900 | nativeレンダーのffmpeg 1コマンド最大実行秒数 |
 | `NATIVE_FFPROBE_TIMEOUT_SEC` | 30 | nativeレンダーのffprobe 最大実行秒数 |
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
-| `AUTO_GENRE_PLAYLIST_ENABLED` | `true` | 台本に `再生リスト:` がない場合にOllamaでジャンル別再生リストを自動判定する |
-| `AUTO_GENRE_PLAYLIST_SCRIPT_CHARS` | 1600 | 再生リスト判定でOllamaへ渡す台本本文の最大文字数 |
+| `PLAYLIST_CLASSIFIER_SCRIPT_CHARS` | 1600 | 単体再生リスト振り分けでOllamaへ渡す台本本文の最大文字数 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
 | `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`metadata.db` の `jobs` テーブルに保存し、超過分は `delete_old_jobs` で古い順に削除する |
@@ -1459,9 +1459,11 @@ YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タ
 
 **② 台本に `再生リスト:` がない場合**
 
-`AUTO_GENRE_PLAYLIST_ENABLED=1` の場合、アップロード前に Ollama（`OLLAMA_PLAYLIST_MODEL`）で動画タイトル・説明文・`metadata.db` の `videos.script_content` から、active profile の `playlist_categories.md` にあるカテゴリを1件だけ判定します。Ollama に接続できない場合は `E-OLLAMA-DOWN`、候補外カテゴリや JSON 不正は `E-PLAYLIST-CLASSIFY` で停止し、YouTubeアップロードは開始しません。判定したカテゴリは①と同じ形式別名へ解決して登録します。
+アップロード処理はOllama判定を実行しません。Long動画のみ、後方互換として `LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リストへ追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。Shortsには適用しません。
 
-`AUTO_GENRE_PLAYLIST_ENABLED=0` の場合のみ、後方互換として Long動画を `LONG_UPLOAD_PLAYLIST_NAME` と完全一致する再生リストへ追加します。未設定時の既定値は `ロング動画` です。空にすると無効です。Shortsには適用しません。
+Ollamaによるカテゴリ判定は独立した「再生リスト振り分け」画面からユーザーが明示実行した場合だけ動作します。対象動画を選択し、「再生リスト未登録のみ実行」を有効にすると、既に `playlist_categories` が保存されている動画をスキップします。判定結果は `render_info.playlist_categories` と `video_metadata.playlist_categories` に保存します。この機能は生成・レンダー・アップロード・YouTube再生リスト登録を開始しません。
+
+ユーザー向けの処理ログ・jobログにはスタックトレースを保存しません。処理ログにはエラーコード、失敗した処理、対象、対処手順を表示し、スタックトレースは `logging` の `exc_info=True` により role 別の `app_debug_*.log` だけへ記録します。Webプロセス、常駐runner、DB保存直前の各ログ入口でスタックトレースを除去します。
 
 いずれの場合も、既に同じ動画が登録済みなら重複追加しません。Ollama判定はアップロード前に実行し、再生リスト作成・動画追加はアップロード成功後に実行します。再生リスト作成・追加に失敗した場合、アップロード自体は成功扱いのまま警告ログを出します。
 

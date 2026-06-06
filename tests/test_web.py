@@ -838,6 +838,29 @@ def test_upload_requires_confirmation(client):
     assert res.status_code == 400
 
 
+# ── 単体再生リスト振り分け ──────────────────────────────────────────────────
+def test_playlist_classifier_page(client, monkeypatch):
+    import web_app.services.playlist_classifier_service as service
+
+    monkeypatch.setattr(service, "list_classifier_candidates", lambda: [])
+    res = client.get("/playlist-classifier")
+
+    assert res.status_code == 200
+    assert "この画面で手動実行した場合だけOllamaを使用します" in res.text
+
+
+def test_playlist_classifier_requires_confirmation(client):
+    res = client.post(
+        "/api/playlist-classifier",
+        json={
+            "history_names": ["Long_テスト"],
+            "only_unregistered": True,
+            "confirmed": False,
+        },
+    )
+    assert res.status_code == 400
+
+
 # ── /fixed-comment ページおよびAPIの最低限テスト ──────────────────────────────
 def test_fixed_comment_page(client):
     res = client.get("/fixed-comment")

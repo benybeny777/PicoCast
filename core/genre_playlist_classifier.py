@@ -1,7 +1,7 @@
 """
 Ollama を使って動画内容から再生リストカテゴリを判定する。
 
-台本で明示された「再生リスト:」がない場合にだけ使う補助機能。
+独立した手動ツールから明示実行された場合にだけ使う。
 候補カテゴリは active profile の playlist_categories.md を正本にし、
 Ollama の出力は候補名と完全一致したものだけ採用する。
 """
@@ -30,7 +30,7 @@ def classify_playlist_category(
     """動画内容から playlist_categories.md 内のカテゴリを1つ選ぶ。"""
     choices = [str(c).strip() for c in categories if str(c).strip()]
     if not choices:
-        _logger.error("再生リスト自動判定の候補カテゴリが空です")
+        _logger.error("単体再生リスト判定の候補カテゴリが空です")
         raise AppError("E-PLAYLIST-CONFIG", detail="playlist_categories.md にカテゴリを追加してください。")
 
     prompt = _build_prompt(
@@ -57,7 +57,11 @@ def classify_playlist_category(
             "prompt": prompt,
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0.0},
+            "think": False,
+            "options": {
+                "temperature": 0.0,
+                "num_predict": cfg.OLLAMA_PLAYLIST_NUM_PREDICT,
+            },
         }
         with requests.post(
             f"{cfg.OLLAMA_BASE_URL.rstrip('/')}/api/generate",
@@ -74,6 +78,20 @@ def classify_playlist_category(
             exc_info=True,
         )
         raise AppError("E-OLLAMA-DOWN", detail="再生リスト判定でOllamaが必要です。", cause=exc) from exc
+    except requests.exceptions.Timeout as exc:
+        _logger.error(
+            "Ollama再生リスト判定がタイムアウトしました: model=%s url=%s timeout_sec=%s num_predict=%s",
+            cfg.OLLAMA_PLAYLIST_MODEL,
+            cfg.OLLAMA_BASE_URL,
+            cfg.OLLAMA_PLAYLIST_TIMEOUT_SEC,
+            cfg.OLLAMA_PLAYLIST_NUM_PREDICT,
+            exc_info=True,
+        )
+        raise AppError(
+            "E-PLAYLIST-CLASSIFY",
+            detail=f"Ollama の応答が {cfg.OLLAMA_PLAYLIST_TIMEOUT_SEC:g} 秒以内に完了しませんでした。",
+            cause=exc,
+        ) from exc
     except AppError:
         raise
     except Exception as exc:
@@ -108,7 +126,7 @@ def _build_prompt(
     categories: list[str],
 ) -> str:
     script = str(script_text or "").strip()
-    max_chars = max(0, int(cfg.AUTO_GENRE_PLAYLIST_SCRIPT_CHARS))
+    max_chars = max(0, int(cfg.PLAYLIST_CLASSIFIER_SCRIPT_CHARS))
     if max_chars and len(script) > max_chars:
         script = script[:max_chars] + "\n..."
     return "\n".join([

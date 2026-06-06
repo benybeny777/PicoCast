@@ -245,6 +245,7 @@ from web_app.routes.api_bgm import router as bgm_router
 from web_app.routes.api_analytics import router as analytics_router
 from web_app.routes.api_schedule import router as schedule_router
 from web_app.routes.api_upload import router as upload_router
+from web_app.routes.api_playlist_classifier import router as playlist_classifier_router
 from web_app.routes.api_fixed_comment import router as fixed_comment_router
 from web_app.routes.api_settings import router as settings_router
 from web_app.routes.api_prompt import router as prompt_router
@@ -267,6 +268,7 @@ app.include_router(bgm_router)
 app.include_router(analytics_router)
 app.include_router(schedule_router)
 app.include_router(upload_router)
+app.include_router(playlist_classifier_router)
 app.include_router(fixed_comment_router)
 app.include_router(settings_router)
 app.include_router(prompt_router)

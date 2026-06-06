@@ -6,7 +6,6 @@ import os
 import sys
 import threading
 import time
-import traceback
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -25,6 +24,7 @@ from config import (  # noqa: E402
 )
 from core.channel_profile import list_profiles, profile_context  # noqa: E402
 from core.debug_logging import setup_debug_logging  # noqa: E402
+from core.user_log import sanitize_process_log_message, user_facing_error_message  # noqa: E402
 
 _JST = timezone(timedelta(hours=9))
 _logger = logging.getLogger("yj.runner")
@@ -78,7 +78,7 @@ class _BufferedJobLog:
 
     def add(self, message: str, tag: str = "info", force: bool = False) -> None:
         normalized_tag = tag or "info"
-        normalized_message = str(message)
+        normalized_message = sanitize_process_log_message(message)
         entry = {"time": _now_iso(), "tag": normalized_tag, "message": normalized_message}
         with self._lock:
             self._entries.append(entry)
@@ -251,9 +251,8 @@ def _run_job(job: dict) -> None:
             status = "success"
     except Exception as exc:
         status = "failed"
-        error = str(exc)
-        log.add(f"エラー: {exc}", "error", force=True)
-        log.add(traceback.format_exc(), "error", force=True)
+        error = user_facing_error_message(exc)
+        log.add(f"エラー: {error}", "error", force=True)
         # ジョブ失敗は job ログだけでなく debug ログにもスタックつきで必ず残す（例外経路）。
         _logger.error(
             "job失敗(例外): job=%s type=%s profile=%s: %s",

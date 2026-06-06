@@ -115,13 +115,21 @@ def load_genre_profile_config(genre_profile: str) -> dict[str, str]:
 def get_playlist_categories(genre_profile: str) -> tuple[str, ...]:
     """
     genres/{genre_profile}/playlist_categories.md からカテゴリ名のタプルを返す。
-    「## 」で始まるヘッダーと空行・コメントを除いた行を返す。
+    「標準カテゴリ」見出しがある場合は、その見出しより後のカテゴリ行だけを返す。
+    見出しがない簡易ファイルでは、空行・見出しを除いた全行をカテゴリとして扱う。
     """
     raw = _read_genre_file_optional(genre_profile, "playlist_categories.md")
     if not raw:
         return ()
+    lines = raw.splitlines()
+    standard_index = next(
+        (index for index, line in enumerate(lines) if "標準カテゴリ" in line and line.lstrip().startswith("#")),
+        None,
+    )
+    if standard_index is not None:
+        lines = lines[standard_index + 1:]
     categories = []
-    for line in raw.splitlines():
+    for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue

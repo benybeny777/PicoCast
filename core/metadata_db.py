@@ -989,6 +989,32 @@ def get_render_info(local_id: str) -> dict:
     return d
 
 
+def update_playlist_categories(local_id: str, categories: list[str]) -> None:
+    """単体振り分けツールの判定結果を関連メタデータへ保存する。"""
+    import json as _json
+    payload = _json.dumps(categories, ensure_ascii=False)
+    with ManagedConnection() as conn:
+        render_exists = conn.execute(
+            "SELECT 1 FROM render_info WHERE local_id=?",
+            (local_id,),
+        ).fetchone()
+        if render_exists:
+            conn.execute(
+                "UPDATE render_info SET playlist_categories=? WHERE local_id=?",
+                (payload, local_id),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO render_info(local_id, playlist_categories) VALUES(?,?)",
+                (local_id, payload),
+            )
+        conn.execute(
+            "UPDATE video_metadata SET playlist_categories=? WHERE local_id=?",
+            (payload, local_id),
+        )
+        conn.commit()
+
+
 def get_script_content(local_id: str) -> str | None:
     """videos.script_content を DB から取得する（metadata.db 正本）。
 
@@ -1452,6 +1478,14 @@ def append_job_logs(job_id: str, entries: list[dict]) -> None:
     """ジョブログを jobs.logs_json へ追記する。"""
     if not entries:
         return
+    from core.user_log import sanitize_process_log_message
+    sanitized_entries = [
+        {
+            **entry,
+            "message": sanitize_process_log_message(entry.get("message", "")),
+        }
+        for entry in entries
+    ]
     initialize_db()
     with ManagedConnection() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -1464,12 +1498,12 @@ def append_job_logs(job_id: str, entries: list[dict]) -> None:
         except Exception:
             _logger.warning("追記前の jobs.logs_json パースに失敗しました: job_id=%s", job_id, exc_info=True)
             logs = []
-        logs.extend(entries)
+        logs.extend(sanitized_entries)
         # logs_json 肥大と flush 毎の再シリアライズコストを抑えるため上限で切り詰める
         from config import JOB_LOG_MAX_ENTRIES
         if JOB_LOG_MAX_ENTRIES > 0 and len(logs) > JOB_LOG_MAX_ENTRIES:
             logs = logs[-JOB_LOG_MAX_ENTRIES:]
-        progress_text = entries[-1].get("message", "") if entries else ""
+        progress_text = sanitized_entries[-1].get("message", "") if sanitized_entries else ""
         conn.execute(
             "UPDATE jobs SET logs_json=?, progress_text=? WHERE job_id=?",
             (json.dumps(logs, ensure_ascii=False), progress_text, job_id),

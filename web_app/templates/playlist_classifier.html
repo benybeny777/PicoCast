@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}再生リスト振り分け{% endblock %}
+{% block content %}
+<h1>Ollama 再生リスト振り分け</h1>
+
+<div class="card">
+  <p>この画面で手動実行した場合だけOllamaを使用します。生成・レンダー・アップロード処理からは呼び出されません。</p>
+  <div class="action-row mt-sm">
+    <button id="classify-btn" class="btn btn-primary" onclick="runClassifier()" disabled>選択した動画を判定</button>
+    <button class="btn btn-secondary" onclick="selectAll(true)">全選択</button>
+    <button class="btn btn-secondary" onclick="selectAll(false)">全解除</button>
+    <label>
+      <input type="checkbox" id="only-unregistered" checked>
+      再生リスト未登録のみ実行
+    </label>
+  </div>
+</div>
+
+<div class="card mt">
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th style="width:32px"><input type="checkbox" id="check-all" onchange="selectAll(this.checked)"></th>
+        <th>動画</th>
+        <th>形式</th>
+        <th>現在のカテゴリ</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in candidates %}
+      <tr>
+        <td><input type="checkbox" class="classifier-check" value="{{ c.name }}" onchange="updateButton()"></td>
+        <td>{{ c.title }}</td>
+        <td>{{ c.video_format or "—" }}</td>
+        <td>
+          {% if c.playlist_categories %}
+            {{ c.playlist_categories | join(", ") }}
+          {% else %}
+            <span class="badge badge-warn">未登録</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty-msg">判定対象の動画がありません。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div id="classifier-log" class="card mt" style="display:none">
+  <h2>判定ログ</h2>
+  <div id="log-box" class="log-box"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function selectedNames() {
+  return Array.from(document.querySelectorAll('.classifier-check:checked')).map(el => el.value);
+}
+
+function updateButton() {
+  const count = selectedNames().length;
+  const button = document.getElementById('classify-btn');
+  button.textContent = `選択した動画を判定（${count}件）`;
+  button.disabled = count === 0;
+}
+
+function selectAll(checked) {
+  document.querySelectorAll('.classifier-check').forEach(el => { el.checked = checked; });
+  const all = document.getElementById('check-all');
+  if (all) all.checked = checked;
+  updateButton();
+}
+
+function appendClassifierLog(message, tag = 'info') {
+  const box = document.getElementById('log-box');
+  const line = document.createElement('div');
+  line.className = `log-line log-${tag}`;
+  line.textContent = message;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function runClassifier() {
+  const historyNames = selectedNames();
+  if (!historyNames.length) return;
+  const onlyUnregistered = document.getElementById('only-unregistered').checked;
+  const action = onlyUnregistered ? '未登録の動画だけを判定' : '登録済みカテゴリも上書き判定';
+  if (!confirm(`${historyNames.length}件を対象に、${action}しますか？\n\nこの操作ではYouTubeへのアップロードや再生リスト登録は行いません。`)) return;
+
+  document.getElementById('classify-btn').disabled = true;
+  document.getElementById('classifier-log').style.display = 'block';
+  document.getElementById('log-box').innerHTML = '';
+  const response = await fetch('/api/playlist-classifier', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      history_names: historyNames,
+      only_unregistered: onlyUnregistered,
+      confirmed: true,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    appendClassifierLog(data.detail || '判定ジョブを登録できませんでした。', 'error');
+    updateButton();
+    return;
+  }
+  appendClassifierLog('判定ジョブを登録しました。', 'info');
+  pollClassifierJob(data.job_id);
+}
+
+function pollClassifierJob(jobId) {
+  const timer = setInterval(async () => {
+    const response = await fetch(`/api/jobs/${jobId}`);
+    const job = await response.json();
+    const latest = job.logs?.length ? job.logs[job.logs.length - 1].message : job.progress_text;
+    document.getElementById('log-box').innerHTML = '';
+    appendClassifierLog(`${job.status}: ${latest || ''}`, job.status);
+    if (['success', 'failed', 'cancelled'].includes(job.status)) {
+      clearInterval(timer);
+      if (job.status === 'success') {
+        setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
+      } else {
+        updateButton();
+      }
+    }
+  }, window.WEB_JOB_POLL_INTERVAL_MS);
+}
+
+updateButton();
+</script>
+{% endblock %}

@@ -196,6 +196,14 @@ def page_upload(request: Request):
     return _render(request, "upload.html", {"candidates": candidates})
 
 
+@router.get("/playlist-classifier", response_class=HTMLResponse)
+def page_playlist_classifier(request: Request):
+    from web_app.services.playlist_classifier_service import list_classifier_candidates
+    return _render(request, "playlist_classifier.html", {
+        "candidates": list_classifier_candidates(),
+    })
+
+
 @router.get("/fixed-comment", response_class=HTMLResponse)
 def page_fixed_comment(request: Request):
     candidates = fixed_comment_service.list_fixed_comment_candidates(only_unposted=False)

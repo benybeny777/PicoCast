@@ -10,7 +10,6 @@ from __future__ import annotations
 import atexit
 import logging
 import threading
-import traceback
 import uuid
 from contextlib import nullcontext
 from concurrent.futures import ThreadPoolExecutor
@@ -217,14 +216,13 @@ class JobManager:
                     job.status = JobStatus.SUCCESS
                     job.result = result
             except Exception as e:
+                from core.user_log import user_facing_error_message
                 _job_logger.error("[%s job=%s] ジョブ実行に失敗しました", job.type, job.job_id[:8], exc_info=True)
                 job.status = JobStatus.FAILED
-                job.error = str(e)
-                job.progress_text = f"エラー: {e}"
-                _log(job, f"エラー: {e}", "error")
-                tb = traceback.format_exc()
-                if tb and tb.strip() != "NoneType: None":
-                    _log(job, tb, "error")
+                safe_error = user_facing_error_message(e)
+                job.error = safe_error
+                job.progress_text = f"エラー: {safe_error}"
+                _log(job, f"エラー: {safe_error}", "error")
             finally:
                 stop_heartbeat.set()
                 heartbeat_thread.join(timeout=1.0)
@@ -241,11 +239,13 @@ class JobManager:
 
 def _log(job: Job, message: str, tag: str = "info") -> None:
     from core.metadata_db import append_job_logs
+    from core.user_log import sanitize_process_log_message
 
     tag = tag or "info"
-    entry = {"time": _now_iso(), "tag": tag, "message": message}
+    safe_message = sanitize_process_log_message(message)
+    entry = {"time": _now_iso(), "tag": tag, "message": safe_message}
     job.logs.append(entry)
-    job.progress_text = message
+    job.progress_text = safe_message
     with _profile_scope(job.profile_id):
         append_job_logs(job.job_id, [entry])
     try:

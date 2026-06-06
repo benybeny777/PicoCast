@@ -53,8 +53,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "MAX_BACKGROUNDS_LONG_BUDGET",     "type": "int",   "label": "最大背景枚数 (Long節約)",     "default": str(cfg.MAX_BACKGROUNDS_LONG_BUDGET),     "min": 1, "max": 50,   "group": "エフェクト"},
     # ── YouTube ──
     {"key": "LONG_UPLOAD_PLAYLIST_NAME",       "type": "str",  "label": "Long追加先再生リスト名",      "default": str(cfg.LONG_UPLOAD_PLAYLIST_NAME), "allow_empty": True,           "group": "YouTube"},
-    {"key": "AUTO_GENRE_PLAYLIST_ENABLED",     "type": "bool", "label": "Ollama再生リスト自動判定",     "default": "1" if cfg.AUTO_GENRE_PLAYLIST_ENABLED else "0",                         "group": "YouTube"},
-    {"key": "AUTO_GENRE_PLAYLIST_SCRIPT_CHARS","type": "int",  "label": "再生リスト判定 台本文字数",    "default": str(cfg.AUTO_GENRE_PLAYLIST_SCRIPT_CHARS), "min": 0, "max": 10000, "group": "YouTube"},
+    {"key": "PLAYLIST_CLASSIFIER_SCRIPT_CHARS","type": "int",  "label": "単体再生リスト判定 台本文字数", "default": str(cfg.PLAYLIST_CLASSIFIER_SCRIPT_CHARS), "min": 0, "max": 10000, "group": "YouTube"},
     {"key": "TOPIC_REQUEST_CTA_EVERY_N",       "type": "int",  "label": "ネタ募集CTA間隔 (0=OFF)",     "default": str(cfg.TOPIC_REQUEST_CTA_EVERY_N), "min": 0, "max": 100,         "group": "YouTube"},
     {"key": "AUTO_FIXED_COMMENT_PROFILE_SCOPE","type": "select","label": "固定コメント 自動投稿対象（OSタスク）",    "default": str(cfg.AUTO_FIXED_COMMENT_PROFILE_SCOPE), "choices": [("all", "全チャンネル"), ("active", "アクティブのみ")], "group": "YouTube"},
     # ── AI / 画像生成 ──
@@ -67,6 +66,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "OLLAMA_REVIEW_MODEL",             "type": "ollama_model", "label": "Ollama レビューモデル",           "default": str(cfg.OLLAMA_REVIEW_MODEL),                                                                                                              "group": "AI / 画像生成"},
     {"key": "OLLAMA_REWRITE_MODEL",            "type": "ollama_model", "label": "Ollama リライトモデル",           "default": str(cfg.OLLAMA_REWRITE_MODEL),                                                                                                             "group": "AI / 画像生成"},
     {"key": "OLLAMA_PLAYLIST_MODEL",           "type": "ollama_model", "label": "Ollama 再生リスト判定モデル",     "default": str(cfg.OLLAMA_PLAYLIST_MODEL),                                                                                                            "group": "AI / 画像生成"},
+    {"key": "OLLAMA_PLAYLIST_NUM_PREDICT",     "type": "int",          "label": "Ollama 再生リスト判定 最大生成トークン数", "default": str(cfg.OLLAMA_PLAYLIST_NUM_PREDICT), "min": 32, "max": 1024, "group": "AI / 画像生成", "admin": True},
     {"key": "OLLAMA_PLAYLIST_TIMEOUT_SEC",     "type": "float",        "label": "Ollama 再生リスト判定タイムアウト(秒)", "default": str(cfg.OLLAMA_PLAYLIST_TIMEOUT_SEC), "min": 5.0, "max": 300.0, "group": "タイムアウト", "admin": True},
     {"key": "OLLAMA_REWRITE_FALLBACK_MODEL",   "type": "ollama_model", "label": "Ollama リライト fallback モデル", "default": str(cfg.OLLAMA_REWRITE_FALLBACK_MODEL),                                                                                                    "group": "AI / 画像生成"},
     {"key": "OPENAI_FINAL_REVIEW_ENABLED",     "type": "bool",         "label": "ChatGPT 最終レビュー有効",        "default": "1" if cfg.OPENAI_FINAL_REVIEW_ENABLED else "0",                                                                                           "group": "AI / 画像生成"},

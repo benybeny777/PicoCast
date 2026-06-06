@@ -161,6 +161,7 @@ OLLAMA_REWRITE_MODEL         = os.environ.get("OLLAMA_REWRITE_MODEL",         "q
 OLLAMA_TRANSLATE_MODEL       = os.environ.get("OLLAMA_TRANSLATE_MODEL",       "qwen3:8b")               # Stable Diffusion WebUI プロンプト日→英翻訳モデル
 OLLAMA_PLAYLIST_MODEL        = os.environ.get("OLLAMA_PLAYLIST_MODEL",        "qwen3:8b")               # 再生リストジャンル判定モデル
 OLLAMA_PLAYLIST_TIMEOUT_SEC  = float(os.environ.get("OLLAMA_PLAYLIST_TIMEOUT_SEC", "60"))               # 再生リストジャンル判定タイムアウト秒数
+OLLAMA_PLAYLIST_NUM_PREDICT  = int(os.environ.get("OLLAMA_PLAYLIST_NUM_PREDICT", "128"))                 # 再生リストジャンル判定の最大生成トークン数
 
 # ───────────────────────────────────────────────
 # 画像生成バックエンド統合設定
@@ -441,8 +442,7 @@ _LEGACY_FOLDER_PREFIXES = ("Shorts_", "shorts_", "short_", "Long_", "long_", "�
 # ───────────────────────────────────────────────
 LONG_THUMBNAIL_AB_TEST     = os.environ.get("LONG_THUMBNAIL_AB_TEST",     "0").strip().lower() in ("1", "true", "yes", "on")  # Long サムネ A/B テスト（OFF: A のみ生成）
 LONG_UPLOAD_PLAYLIST_NAME  = os.environ.get("LONG_UPLOAD_PLAYLIST_NAME",  "ロング動画").strip()  # Long アップロード後に自動追加する再生リスト名（空で無効）
-AUTO_GENRE_PLAYLIST_ENABLED = os.environ.get("AUTO_GENRE_PLAYLIST_ENABLED", "1").strip().lower() in ("1", "true", "yes", "on")  # 台本に再生リスト指定がない場合にOllamaでジャンル別再生リストを自動判定する
-AUTO_GENRE_PLAYLIST_SCRIPT_CHARS = int(os.environ.get("AUTO_GENRE_PLAYLIST_SCRIPT_CHARS", "1600"))  # 再生リスト判定でOllamaへ渡す台本本文の最大文字数
+PLAYLIST_CLASSIFIER_SCRIPT_CHARS = int(os.environ.get("PLAYLIST_CLASSIFIER_SCRIPT_CHARS", "1600"))  # 単体再生リスト判定でOllamaへ渡す台本本文の最大文字数
 TOPIC_REQUEST_CTA_EVERY_N  = int(os.environ.get("TOPIC_REQUEST_CTA_EVERY_N", "5"))  # Shorts新規/横展開のネタ募集CTAを許可する間隔（N本に1本、0で自動付与なし）
 UPLOAD_TIMEZONE            = os.environ.get("UPLOAD_TIMEZONE", "Asia/Tokyo").strip()  # 投稿予約スロットのタイムゾーン
 SHORTS_UPLOAD_SLOT_HOURS   = _split_env_ints(os.environ.get("SHORTS_UPLOAD_SLOT_HOURS", "12,21"))  # Shorts投稿予約スロット時刻（時）
