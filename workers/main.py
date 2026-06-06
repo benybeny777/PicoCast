@@ -77,6 +77,16 @@ from core.cta_policy import (
     write_policy_file,
 )
 from workers.output_locks import OutputDirectoryLockedError, find_locking_process
+from workers.pipeline_helpers import (
+    background_filename as _background_filename,
+    cleanup_orphan_audio as _cleanup_orphan_audio,
+    detect_is_netakaigi as _detect_is_netakaigi,
+    detect_is_shorts as _detect_is_shorts,
+    detect_netakaigi_variant as _detect_netakaigi_variant,
+    parse_playlist_categories_meta as _parse_playlist_categories_meta,
+    resolution_label as _resolution_label,
+    split_at_punctuation as _split_at_punctuation,
+)
 
 _logger = logging.getLogger("yj.pipeline")
 
@@ -227,10 +237,6 @@ def _build_audio_credit_block(script_items=None) -> str:
         raise
 
 
-def _resolution_label(width: int, height: int) -> str:
-    return f"{width}x{height}"
-
-
 def _format_review_list(items) -> str:
     if not items:
         return "なし"
@@ -297,113 +303,6 @@ def _normalize_meta(meta: dict, is_shorts: bool, topic: str, update_status, scri
             title=meta.get("video_title", topic),
             description=meta.get("description", ""),
         )
-
-
-_PUNCT = set("。！？")
-
-def _background_filename(bg_num: int) -> str:
-    """背景画像の標準ファイル名。生成時と再利用判定で必ず同じ名前を使う
-    （以前は再利用が並び順インデックス基準で、欠番があると番号がズレていた）。"""
-    return f"bg_{bg_num:03d}_001.png"
-
-
-def _cleanup_orphan_audio(audio_dir: str, expected_filenames: set[str]) -> int:
-    """audio_dir 内の .wav のうち expected_filenames に無いもの（台本変更で不要に
-    なった旧音声＝孤児）を削除し、削除件数を返す。reuse_audio 時の WAV/字幕数の
-    不一致を防ぐ。expected が空のときは安全側に倒して何も削除しない。"""
-    if not expected_filenames or not os.path.isdir(audio_dir):
-        return 0
-    removed = 0
-    for f in os.listdir(audio_dir):
-        if f.lower().endswith(".wav") and f not in expected_filenames:
-            try:
-                os.remove(os.path.join(audio_dir, f))
-                removed += 1
-            except OSError:
-                _logger.debug("余剰WAVの削除に失敗しました（掃除は継続）: file=%s", f, exc_info=True)
-                pass  # フォールバック許可: 個別削除失敗は掃除全体を止めない
-    return removed
-
-
-def _split_at_punctuation(text):
-    """Shorts用: 句読点(。！？)でセリフを文節に分割する。
-    「！？」など連続句読点は前チャンクに結合して単体句読点チャンクを作らない。"""
-    chunks = []
-    current = ""
-    for ch in text:
-        current += ch
-        if ch in _PUNCT and current.strip():
-            chunks.append(current)
-            current = ""
-    if current.strip():
-        chunks.append(current)
-    # 句読点のみのチャンクを直前チャンクに結合
-    merged = []
-    for chunk in chunks:
-        if merged and not chunk.strip("".join(_PUNCT) + "　 "):
-            merged[-1] += chunk
-        else:
-            merged.append(chunk)
-    return merged if merged else [text]
-
-
-def _detect_is_shorts(script_content):
-    """台本テキストから動画形式を検出する。Shorts/ショート のみ True。Long/ロング/ネタ会議 は False。"""
-    for line in script_content.splitlines():
-        line = line.strip().replace("**", "")
-        m = re.match(r'^(?:動画形式|Format)[:：]\s*(.+)$', line, re.IGNORECASE)
-        if m:
-            val = m.group(1).strip().lower()
-            return "shorts" in val or "ショート" in val
-    return False
-
-
-def _detect_is_netakaigi(script_content):
-    """台本テキストからネタ会議モードを検出する。動画形式: ネタ会議* のみ True。"""
-    for line in script_content.splitlines():
-        line = line.strip().replace("**", "")
-        m = re.match(r'^(?:動画形式|Format)[:：]\s*(.+)$', line, re.IGNORECASE)
-        if m:
-            return "ネタ会議" in m.group(1)
-    return False
-
-
-def _parse_playlist_categories_meta(raw: str | list) -> list[str]:
-    """meta["playlist_categories"] を list[str] に変換する。"""
-    if isinstance(raw, list):
-        return raw
-    from core.playlist_resolver import parse_playlist_categories
-    return parse_playlist_categories(str(raw or ""))
-
-
-def _detect_netakaigi_variant(script_content: str) -> str:
-    """ネタ会議の画面形式バリアントを返す。'Long'（横） または 'Shorts'（縦・デフォルト）。
-
-    判定優先順位:
-      1. 動画形式: ネタ会議Long  → "Long"
-      2. 動画形式: ネタ会議Shorts → "Shorts"
-      3. 画面形式: 横            → "Long"
-      4. その他（動画形式: ネタ会議 等） → "Shorts"（縦デフォルト）
-    """
-    format_val = ""
-    screen_format = ""
-    for line in script_content.splitlines():
-        s = line.strip().replace("**", "")
-        m = re.match(r'^(?:動画形式|Format)[:：]\s*(.+)$', s, re.IGNORECASE)
-        if m:
-            format_val = m.group(1).strip()
-        m2 = re.match(r'^(?:画面形式|ScreenFormat)[:：]\s*(.+)$', s, re.IGNORECASE)
-        if m2:
-            screen_format = m2.group(1).strip()
-        if format_val and screen_format:
-            break
-    if "Long" in format_val or "ロング" in format_val:
-        return "Long"
-    if "Shorts" in format_val or "ショート" in format_val:
-        return "Shorts"
-    if screen_format and ("横" in screen_format or "wide" in screen_format.lower()):
-        return "Long"
-    return "Shorts"  # デフォルトは縦（Shorts相当）
 
 
 class GenerationReport:

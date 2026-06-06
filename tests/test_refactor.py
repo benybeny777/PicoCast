@@ -4,6 +4,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.opening_quality import opening_score_tag, review_human_status, review_warning_text
 from workers import main
+from workers import pipeline_helpers
 
 
 def test_opening_score_tag():
@@ -67,8 +68,8 @@ def test_strip_video_folder_prefix_accepts_legacy_short_prefixes():
 
 
 def test_background_filename_format():
-    assert main._background_filename(4) == "bg_004_001.png"
-    assert main._background_filename(12) == "bg_012_001.png"
+    assert pipeline_helpers.background_filename(4) == "bg_004_001.png"
+    assert pipeline_helpers.background_filename(12) == "bg_012_001.png"
 
 
 def test_background_reuse_is_filename_based_not_index(tmp_path):
@@ -76,10 +77,10 @@ def test_background_reuse_is_filename_based_not_index(tmp_path):
     # 欠番は「存在しない」と判定される（=再生成対象になる）こと。
     import os
     for n in (1, 2, 3, 5, 6, 7, 8):  # bg_004 が欠番
-        (tmp_path / main._background_filename(n)).write_bytes(b"x")
+        (tmp_path / pipeline_helpers.background_filename(n)).write_bytes(b"x")
     reuse, regen = [], []
     for n in range(1, 9):
-        if os.path.isfile(os.path.join(str(tmp_path), main._background_filename(n))):
+        if os.path.isfile(os.path.join(str(tmp_path), pipeline_helpers.background_filename(n))):
             reuse.append(n)
         else:
             regen.append(n)
@@ -92,13 +93,13 @@ def test_cleanup_orphan_audio(tmp_path):
     for name in ("001_001_a.wav", "001_002_b.wav", "099_009_old.wav", "memo.txt"):
         (tmp_path / name).write_bytes(b"x")
     expected = {"001_001_a.wav", "001_002_b.wav"}
-    removed = main._cleanup_orphan_audio(str(tmp_path), expected)
+    removed = pipeline_helpers.cleanup_orphan_audio(str(tmp_path), expected)
     assert removed == 1
     assert not (tmp_path / "099_009_old.wav").exists()
     assert (tmp_path / "001_001_a.wav").exists()
     assert (tmp_path / "memo.txt").exists()  # 非WAVは触らない
     # expected が空なら安全側に倒して何も消さない
-    assert main._cleanup_orphan_audio(str(tmp_path), set()) == 0
+    assert pipeline_helpers.cleanup_orphan_audio(str(tmp_path), set()) == 0
     assert (tmp_path / "001_001_a.wav").exists()
 
 
@@ -110,8 +111,28 @@ def test_sd_webui_error_carries_code():
 
 
 def test_resolution_label_shows_final_size():
-    assert main._resolution_label(1080, 1920) == "1080x1920"
-    assert main._resolution_label(1920, 1080) == "1920x1080"
+    assert pipeline_helpers.resolution_label(1080, 1920) == "1080x1920"
+    assert pipeline_helpers.resolution_label(1920, 1080) == "1920x1080"
+
+
+def test_script_format_detection():
+    assert pipeline_helpers.detect_is_shorts("動画形式: Shorts")
+    assert pipeline_helpers.detect_is_shorts("Format: ショート")
+    assert not pipeline_helpers.detect_is_shorts("動画形式: Long")
+    assert pipeline_helpers.detect_is_netakaigi("動画形式: ネタ会議Long")
+    assert pipeline_helpers.detect_netakaigi_variant(
+        "動画形式: ネタ会議\n画面形式: 横"
+    ) == "Long"
+    assert pipeline_helpers.detect_netakaigi_variant(
+        "動画形式: ネタ会議"
+    ) == "Shorts"
+
+
+def test_split_at_punctuation_keeps_consecutive_marks():
+    assert pipeline_helpers.split_at_punctuation("本当！？次なのだ。") == [
+        "本当！？",
+        "次なのだ。",
+    ]
 
 
 def test_nanobanana_summary_shows_final_size():
