@@ -1187,7 +1187,7 @@ YouTube Data APIでは公式A/Bテストを開始できないため、A/B/C案�
 
 ### タイトルA/Bテスト
 
-Long ではタイトル候補（A/B/C案）を生成し、アップロード時は A 案を既定タイトルとして使う（B/C 案は YouTube Studio で手動テスト）。旧仕様の `_meta/title_ab_test.json` によるローカルマニフェスト管理は廃止済み。
+Long ではタイトル候補（A/B/C案）を生成し、`metadata.db:render_info.title_variants` にJSONで保存して履歴詳細へ表示する。アップロード時は A 案を既定タイトルとして使い、B/C 案は YouTube Studio で手動テストする。旧仕様の `_meta/title_ab_test.json` によるローカルマニフェスト管理は廃止済み。
 
 ### 画像生成解像度
 
