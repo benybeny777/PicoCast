@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from core.opening_quality import opening_score_tag, review_human_status, review_warning_text
 from workers import main
 from workers import pipeline_helpers
+from workers.pipeline_models import GenerationReport, fallback_title_variants
 
 
 def test_opening_score_tag():
@@ -133,6 +134,27 @@ def test_split_at_punctuation_keeps_consecutive_marks():
         "本当！？",
         "次なのだ。",
     ]
+
+
+def test_generation_report_summary():
+    report = GenerationReport(
+        voices_generated=3,
+        voices_failed=1,
+        backgrounds_generated=2,
+        backgrounds_failed=0,
+        elapsed_sec=65,
+    )
+    assert report.summary() == (
+        "⏱  所要時間: 1分5秒\n"
+        "🎤 音声: 生成=3 / 失敗=1\n"
+        "🖼  背景: 生成=2 / 失敗=0"
+    )
+
+
+def test_fallback_title_variants_are_complete_and_bounded():
+    variants = fallback_title_variants("長" * 50)
+    assert [item["variant"] for item in variants] == ["A", "B", "C"]
+    assert all(len(item["title"]) <= 45 for item in variants)
 
 
 def test_nanobanana_summary_shows_final_size():
