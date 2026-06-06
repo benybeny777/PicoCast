@@ -445,11 +445,11 @@ Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook`
 
 | 種別 | スロット | 日程 |
 |---|---|---|
-| Shorts | 7:00 / 12:00 / 21:00 | 毎日 |
+| Shorts | 12:00 / 21:00 | 毎日 |
 | Long | 22:00 | 毎日 |
 
 - スロット設定は `data/settings.db` の `channel_schedule_settings` テーブルで profile_id ごとに管理する。既定値は全チャンネル共通。タイムゾーンは `Asia/Tokyo`。
-- チャンネル詳細フォームで Shorts / Long の投稿予約スロットとタイムゾーンを編集できる。既存チャンネルに設定がない場合は自動作成する。2026-06-01 の既定値変更では既存の個別設定も Shorts 7:00 / 12:00 / 21:00、Long 22:00 へ更新する。
+- チャンネル詳細フォームで Shorts / Long の投稿予約スロットとタイムゾーンを編集できる。既存チャンネルに設定がない場合は自動作成する。2026-06-06 の既定値変更では既存の個別設定も Shorts 12:00 / 21:00、Long 22:00 へ更新する。
 - スロット割当範囲: 最大90日先まで探索
 - アップロード実行後:
   1. `assign_slots_from_youtube()` で YouTube 予約済み一覧を正として次の空きスロットを取得
@@ -1799,13 +1799,13 @@ active profile によってすべての出力パス・DB・プロンプト・Ana
 
 ### `channel_schedule_settings` テーブル（`data/settings.db`）
 
-チャンネル別の投稿予約スロットを管理する。新規予約・公開予定変更候補・スロット詰め直しは active profile のこの設定を使う。既定値は全チャンネル共通で Shorts が 07:00 / 12:00 / 21:00、Long が 22:00、タイムゾーンは Asia/Tokyo。
+チャンネル別の投稿予約スロットを管理する。新規予約・公開予定変更候補・スロット詰め直しは active profile のこの設定を使う。既定値は全チャンネル共通で Shorts が 12:00 / 21:00、Long が 22:00、タイムゾーンは Asia/Tokyo。
 
 | カラム | 型 | 説明 |
 |---|---|---|
 | `profile_id` | TEXT PK | channel_profiles.profile_id |
 | `timezone_name` | TEXT | IANA タイムゾーン名（既定 `Asia/Tokyo`） |
-| `shorts_slot_hours` | TEXT | Shorts の時刻リスト（例 `07:00,12:00,21:00`） |
+| `shorts_slot_hours` | TEXT | Shorts の時刻リスト（例 `12:00,21:00`） |
 | `long_slot_hours` | TEXT | Long の時刻リスト（例 `22:00`） |
 | `created_at` / `updated_at` | TEXT | ISO8601 UTC |
 
@@ -1844,7 +1844,7 @@ Analytics データは `metadata.db` の `analytics_snapshots` テーブルに�
 
 既存 DB で `profile_id` / `genre_profile` / `output_root` がチャンネルハンドルと異なる場合は、`channel_handle` を正として `@` なしのハンドル名へ移行する。関連する `encrypted_secrets` / `prompt_templates` / `bgm_assets` の `profile_id` も同時に移行し、既存の genre_profile フォルダはハンドル名へコピーする。
 旧仕様で `default` に保存されていた `google_api_key` / `openai_api_key` / `hf_token` / `youtube_client_secrets` は、未登録の各 channel profile へ暗号化済みのままコピーする。YouTube OAuth token はチャンネル固有のためコピーしない。
-既存チャンネルに `channel_schedule_settings` がない場合は起動・保存時に自動作成する。2026-06-01 のスロット変更では、既存チャンネルの設定も新既定値へ更新する。
+既存チャンネルに `channel_schedule_settings` がない場合は起動・保存時に自動作成する。2026-06-06 のスロット変更では、既存チャンネルの設定も Shorts 12:00 / 21:00、Long 22:00 へ更新する。
 
 ### `prompt_templates` テーブル（`data/settings.db`）
 

@@ -48,7 +48,7 @@ class ChannelProfileRequest(BaseModel):
     channel_theme: str = ""
     channel_accent_color: str = ""
     schedule_timezone: str = "Asia/Tokyo"
-    shorts_schedule_times: str = "07:00,12:00,21:00"
+    shorts_schedule_times: str = "12:00,21:00"
     long_schedule_times: str = "22:00"
 
 
@@ -94,7 +94,7 @@ def _profile_to_dict(p: ChannelProfile) -> dict:
         }
         d["schedule"] = {
             "timezone": "Asia/Tokyo",
-            "shorts_times": ["07:00", "12:00", "21:00"],
+            "shorts_times": ["12:00", "21:00"],
             "long_times": ["22:00"],
         }
     return d

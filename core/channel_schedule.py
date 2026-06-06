@@ -20,7 +20,7 @@ _ROOT = _app_base_dir()  # 永続データ(settings.db)の基準。exe(onefile)�
 _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _lock = threading.Lock()
 
-_MIGRATION_KEY = "upload_slots_20260601_071221_22"
+_MIGRATION_KEY = "upload_slots_20260606_1221_22"
 
 
 @dataclass

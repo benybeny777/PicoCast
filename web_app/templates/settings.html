@@ -545,8 +545,8 @@
       </tr>
       <tr>
         <td><label for="chf-shorts_schedule_times"><strong>Shorts スロット</strong></label><br>
-          <small style="color:var(--text-muted)">カンマ区切り。例: 07:00,12:00,21:00</small></td>
-        <td><input id="chf-shorts_schedule_times" type="text" class="form-input" style="width:300px" value="07:00,12:00,21:00"></td>
+          <small style="color:var(--text-muted)">カンマ区切り。例: 12:00,21:00</small></td>
+        <td><input id="chf-shorts_schedule_times" type="text" class="form-input" style="width:300px" value="12:00,21:00"></td>
       </tr>
       <tr>
         <td><label for="chf-long_schedule_times"><strong>Long スロット</strong></label><br>
@@ -1949,7 +1949,7 @@ function chShowForm(profileId) {
   document.getElementById('chf-channel_accent_color').value = col;
   const sched = (p && p.schedule) ? p.schedule : {};
   document.getElementById('chf-schedule_timezone').value = sched.timezone || 'Asia/Tokyo';
-  document.getElementById('chf-shorts_schedule_times').value = (sched.shorts_times || ['07:00', '12:00', '21:00']).join(',');
+  document.getElementById('chf-shorts_schedule_times').value = (sched.shorts_times || ['12:00', '21:00']).join(',');
   document.getElementById('chf-long_schedule_times').value = (sched.long_times || ['22:00']).join(',');
   document.getElementById('chf-google_api_key').value = '';
   document.getElementById('chf-openai_api_key').value = '';

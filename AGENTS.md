@@ -142,7 +142,7 @@ profile 別出力と共通DBの扱いは「チャンネルプロファイル・D
 
 ### アップロードスロット
 
-- Shorts: 毎日 7/12/21時
+- Shorts: 毎日 12/21時
 - Long: 毎日 22時
 - 投稿予約スロットは `data/settings.db` の `channel_schedule_settings` で profile_id ごとに管理し、既定値は全チャンネル共通（タイムゾーン Asia/Tokyo）
 - 予約枠の空き判断と詰め直しはYouTube側の予約状態を正として扱う

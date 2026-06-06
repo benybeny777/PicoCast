@@ -142,10 +142,22 @@ def test_setup_page_renders_without_active_profile(client, monkeypatch):
     assert "setupDetectServices" in res.text
 
 
-def test_schedule_page_uses_new_default_slot_candidates(client):
+def test_schedule_page_uses_new_default_slot_candidates(client, monkeypatch):
+    import core.channel_schedule as channel_schedule
+
+    monkeypatch.setattr(
+        channel_schedule,
+        "get_schedule",
+        lambda: channel_schedule.ChannelSchedule(
+            profile_id="test_profile",
+            timezone_name="Asia/Tokyo",
+            shorts_slot_hours=(12, 21),
+            long_slot_hours=(22,),
+        ),
+    )
     res = client.get("/schedule")
     assert res.status_code == 200
-    assert 'value="07:00"' in res.text
+    assert 'value="07:00"' not in res.text
     assert 'value="12:00"' in res.text
     assert 'value="21:00"' in res.text
     assert 'value="22:00"' in res.text
