@@ -17,6 +17,7 @@ import logging
 import os
 import platform
 import re
+import shutil
 import subprocess
 import sys
 
@@ -63,6 +64,34 @@ def _command() -> tuple[str, list[str], str]:
     if is_frozen():
         return sys.executable, ["--post-fixed-comments"], base
     return sys.executable, ["-m", "web_app.app", "--post-fixed-comments"], base
+
+
+def _powershell_literal(value: str) -> str:
+    """PowerShell の単一引用符文字列として安全に埋め込める形へ変換する。"""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def _windows_action() -> tuple[str, list[str], str]:
+    """コンソールを表示せず本体を実行するWindowsタスク用アクションを返す。"""
+    target_exe, target_args, workdir = _command()
+    powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+    if not powershell:
+        _logger.error("固定コメント自動投稿用のPowerShellが見つかりません")
+        raise RuntimeError("PowerShell が見つからないため固定コメント自動投稿タスクを登録できません")
+    arg_array = ", ".join(_powershell_literal(arg) for arg in target_args)
+    command = (
+        f"$p = Start-Process -FilePath {_powershell_literal(target_exe)} "
+        f"-ArgumentList @({arg_array}) "
+        f"-WorkingDirectory {_powershell_literal(workdir)} "
+        "-WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode"
+    )
+    return powershell, [
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle", "Hidden",
+        "-ExecutionPolicy", "Bypass",
+        "-Command", command,
+    ], workdir
 
 
 def _slot_hours() -> list[int]:
@@ -158,8 +187,12 @@ def inspect() -> dict:
     if not info["supported"]:
         return info
 
-    exe, args, workdir = _command()
-    expected_arg = " ".join(args).strip()
+    if info["os"] == "Windows":
+        exe, args, workdir = _windows_action()
+        expected_arg = subprocess.list2cmdline(args).strip()
+    else:
+        exe, args, workdir = _command()
+        expected_arg = " ".join(args).strip()
     cur_name = info["task_name"]
     try:
         tasks = _windows_list_prefix() if info["os"] == "Windows" else _mac_list_prefix()
@@ -245,17 +278,20 @@ def _windows_exists() -> bool:
 
 
 def _register_windows(times: list[str]) -> None:
-    exe, args, workdir = _command()
-    arg_str = " ".join(args)
+    exe, args, workdir = _windows_action()
+    arg_str = subprocess.list2cmdline(args)
     name = task_name()
     desc = f"Native Video Factory 固定コメント自動投稿 ({app_base_dir()})"
     triggers = ", ".join(f'(New-ScheduledTaskTrigger -Daily -At "{t}")' for t in times)
     script = (
         f'$ErrorActionPreference="Stop";'
-        f'$a = New-ScheduledTaskAction -Execute "{exe}" -Argument "{arg_str}" -WorkingDirectory "{workdir}";'
+        f'$a = New-ScheduledTaskAction -Execute {_powershell_literal(exe)} '
+        f'-Argument {_powershell_literal(arg_str)} '
+        f'-WorkingDirectory {_powershell_literal(workdir)};'
         f'$t = @({triggers});'
         f'$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries;'
-        f'Register-ScheduledTask -TaskName "{name}" -Action $a -Trigger $t -Settings $s -Description "{desc}" -Force | Out-Null'
+        f'Register-ScheduledTask -TaskName {_powershell_literal(name)} -Action $a -Trigger $t -Settings $s '
+        f'-Description {_powershell_literal(desc)} -Force | Out-Null'
     )
     _run_powershell(script)
 

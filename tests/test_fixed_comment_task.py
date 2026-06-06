@@ -43,6 +43,52 @@ def test_slot_times_format():
         assert s.endswith(f":{t._BUFFER_MINUTE:02d}")
 
 
+def test_windows_action_hides_console(monkeypatch):
+    import core.fixed_comment_task as t
+
+    monkeypatch.setattr(
+        t,
+        "_command",
+        lambda: (r"C:\Program Files\Native Video Factory\app.exe", ["--post-fixed-comments"], r"C:\Program Files\Native Video Factory"),
+    )
+    monkeypatch.setattr(t.shutil, "which", lambda _name: r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
+
+    exe, args, workdir = t._windows_action()
+
+    assert exe.endswith("powershell.exe")
+    assert "-WindowStyle" in args
+    assert "Hidden" in args
+    command = args[-1]
+    assert "Start-Process" in command
+    assert "-WindowStyle Hidden" in command
+    assert "--post-fixed-comments" in command
+    assert workdir == r"C:\Program Files\Native Video Factory"
+
+
+def test_register_windows_uses_hidden_action(monkeypatch):
+    import core.fixed_comment_task as t
+
+    captured = {}
+    monkeypatch.setattr(
+        t,
+        "_windows_action",
+        lambda: (
+            r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            ["-WindowStyle", "Hidden", "-Command", "Start-Process app.exe -WindowStyle Hidden"],
+            r"C:\app",
+        ),
+    )
+    monkeypatch.setattr(t, "_run_powershell", lambda script: captured.setdefault("script", script))
+
+    t._register_windows(["07:05"])
+
+    script = captured["script"]
+    assert "New-ScheduledTaskAction" in script
+    assert "powershell.exe" in script
+    assert "WindowStyle" in script
+    assert "Hidden" in script
+
+
 # ── status / register / unregister のOS分岐 ───────────────────────────────────
 
 def test_status_windows_registered(monkeypatch):
