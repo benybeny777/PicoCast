@@ -1443,7 +1443,7 @@ YouTubeタグは `core/youtube_metadata.py` で一元管理します。共通タ
 - 投稿の中核は `fixed_comment_service.post_fixed_comment_now()`（job_manager / runner を介さず YouTube へ直接投稿）。手動投稿（job 経由）もこの関数を共有する。
 - 二重投稿防止: YouTube API を呼ぶ**前**に `youtube_status.fixed_comment_posted` を `0→1` へ条件付き原子 UPDATE して投稿権を確保（claim）する。SQLite は書き込みを直列化するため、手動投稿とOSタスク・複数タスクが完全同時に走っても UPDATE が成立する1プロセスだけが投稿する。投稿失敗時は claim を戻して再試行可能にする。
 - CLI エントリ `<exe> --post-fixed-comments`（開発時 `python -m web_app.app --post-fixed-comments`）が `auto_fixed_comment_service.post_all_pending()` を1回実行し、対象プロファイルの未投稿固定コメントを直接投稿して終了する。対象は `AUTO_FIXED_COMMENT_PROFILE_SCOPE`（`all`=全 channel profile の metadata.db と profile_id 別 YouTube OAuth token を巡回 / `active`=アクティブのみ）。
-- `core/fixed_comment_task.py` が OS スケジューラへ登録/解除/検査/修復する。Windows=タスクスケジューラ（`Register-ScheduledTask`、ユーザータスク・管理者権限不要）、macOS=launchd LaunchAgent（`~/Library/LaunchAgents`）。実行時刻は予約スロット時刻＋5分。
+- `core/fixed_comment_task.py` が OS スケジューラへ登録/解除/検査/修復する。Windows=タスクスケジューラ（`Register-ScheduledTask`、ユーザータスク・管理者権限不要）で、非表示PowerShellからアプリを `WindowStyle Hidden` で起動し、定期実行時にコンソールを表示しない。macOS=launchd LaunchAgent（`~/Library/LaunchAgents`）。実行時刻は予約スロット時刻＋5分。
 - **タスク名/ラベルにはインストールディレクトリの識別子（リーフ名＋パスのSHA1先頭8桁）を含める**ため、同一PCで複数のインストール/テストディレクトリを使い分けても区別できる。
 - exe を移動すると登録済みタスクが旧パスを指したまま（迷子）になるため、`inspect()` でズレ(stale)・迷子(orphans)を検出し、アプリ起動時に `repair()` で自動修正（現在のパスで再登録＋実行ファイルが消えた迷子タスクの削除）する。設定画面の「見つけて修正」でも手動修正できる。
 - 設定画面（設定 → 製品管理タブ「固定コメント自動投稿」）でON/OFF。API は `GET /api/settings/fixed-comment-task`（状態＋stale/orphans）/ `POST /api/settings/fixed-comment-task`（`{enabled}` で登録/解除）/ `POST /api/settings/fixed-comment-task/repair`（修復）。認証は `secret_store`（DB）から読むのでアプリ非起動でも投稿できる。Windows / macOS 以外は未対応。
