@@ -26,7 +26,7 @@ from config import (
     LONG_FULL_SCRIPT_REVIEW,
 )
 
-OLLAMA_OPENING_REVIEW_PROMPT_VERSION = "ollama_opening_review_v2"
+OLLAMA_OPENING_REVIEW_PROMPT_VERSION = "ollama_opening_review_v3"
 
 
 SURPRISE_WORDS = (
@@ -370,6 +370,11 @@ def _build_opening_review_prompt(local_review: dict[str, Any], title: str, thumb
 - Longの場合、冒頭30秒以内に「衝撃事実」「視聴者の疑問」「昔と今のギャップ」「答えの予告」が入っているか
 - 会話テンポが落ちていないか
 - 同じ情報を繰り返していないか
+- 無意味な相槌・復唱・同意がないか
+- めたんが説明役・補足役になっていないか
+- ずんだもんが具体的な事実・背景・理由を出しているか
+- 話者を機械的に交互にしていないか。ずんだもんの連続説明は減点しない
+- 「〇〇の理由」構文へ寄りすぎず、自然な結論・違和感から始まっているか
 - ラストが冒頭へ自然に戻るか（ループ構成か）
 - CTAが長すぎないか
 - 1セリフ15文字以内か
@@ -736,8 +741,8 @@ def _build_final_review_prompt(
         script_block = f"full_script:\n{script_content}"
     else:
         script_block = "scene_summaries:\n" + json.dumps(_scene_summaries(items), ensure_ascii=False)
-    return f"""You are the pre-generation reviewer for a Japanese YouTube food trivia script.
-Return JSON only. No markdown. No explanation outside JSON. Do not rewrite the script.
+    return f"""あなたは日本語YouTube解説台本の生成前レビュー担当です。
+JSONのみを返してください。markdown、JSON外の説明、台本の書き直しは禁止です。
 
 title: {title}
 thumbnail_text: {thumbnail_text}
@@ -754,36 +759,40 @@ opening_lines:
 
 {script_block}
 
-Check:
-- opening hook
-- title/thumbnail consistency
-- pacing
-- estimated duration risk
-- serious mismatch only
+確認項目:
+- 冒頭フック、タイトル・サムネ整合、テンポ、推定尺リスク
+- 無意味な相槌・復唱・同意がないか
+- めたんが説明役・補足役になっていないか
+- ずんだもんが具体情報・背景・理由を担当しているか
+- 機械的な交互会話になっていないか。ずんだもんが2〜5行続けて説明すること自体は減点しない
+- Shortsでも中盤に最低3つの具体情報があるか
+- Longが短い押し問答の連続ではなく、章ごとの説明ブロックを持つか
+- 「〇〇の理由」構文へ寄りすぎていないか
+- 食べ物なら昔の扱い・製法・包装・商品開発・海外差・変化の理由があるか
+- 都市伝説なら時代・場所・目撃談の型・噂の広まり方・怪談構造があるか
 
-Stop the pipeline only for must_fix-level problems:
-- estimated Shorts duration under 39 seconds or over 52 seconds (53s or more is error-level)
-- native Shorts dialogue count 31 or more (29-30 is warning only; 22-28 is acceptable; 24-27 is ideal — do NOT flag must_fix for dialogue_count 28 or under)
-- first dialogue lacks the food name (drinks like coffee/cola/milk also count as food for this channel)
-- first dialogue is incomplete or split mid-phrase
-- factual error or risky unsupported assertion
-- unhandled YouTube NG wording
-- same speaker 4 times in a row
+must_fixにする条件:
+- Shorts推定尺が39秒未満または52秒超（53秒以上はエラー級）
+- native Shortsのセリフ数が31行以上（29〜30行はwarning、22〜28行は許容、24〜27行が理想）
+- 冒頭が文の途中、重大な事実誤認、危険な断定、未処理のYouTube NG表現
+- めたんの台詞の半分以上が相槌・復唱・同意
+- 3往復以上、具体情報が増えない押し問答が続く
+- ずんだもんの説明が抽象語だけで、具体例・背景・理由が不足
+- Shortsが驚きだけで、具体説明が2〜3行しかない
+- Longに章ごとの説明ブロックがなく、会話だけで進む
+- 都市伝説が「怖い」「ゾッとする」だけを繰り返す
+- 食べ物雑学が「実は違った」だけで、なぜそうなったかを説明しない
 
-Use nice_to_fix only for minor issues:
-- weak title
-- weak thumbnail connection
-- weak surprise wording
-- slightly weak CTA
-- slightly abstract telop
+nice_to_fixだけにする軽微な問題:
+- タイトル、サムネ接続、驚き表現、CTA、テロップがやや弱い
 
-Scoring policy:
-- 80 or higher: publish_ok should usually be true unless must_fix exists.
-- 70-79: publish_ok can be true if must_fix is empty.
-- 69 or lower: publish_ok should be false.
-- Do not fail a script only because the title/thumbnail/telop are not exact matches if the meaning is aligned.
+採点:
+- 80以上: must_fixがなければ通常publish_ok=true
+- 70〜79: must_fixが空ならpublish_ok=true可
+- 69以下: publish_ok=false
+- タイトル・サムネ・テロップの文言が完全一致しないだけでは不合格にしない
 
-Return:
+返答:
 {{"final_score":86,"publish_ok":true,"risk":"low","must_fix":[],"nice_to_fix":[]}}
 """
 

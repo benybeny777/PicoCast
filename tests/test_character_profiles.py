@@ -93,6 +93,9 @@ def test_common_script_rules_excludes_character_block():
     assert "四国めたん 役割固定ルール" not in rules
     # 構成・分量ルールは維持
     assert "native Shorts 台本量" in rules or "分量ルール" in rules
+    assert "説明密度・掛け合い品質ルール" in rules
+    assert "機械的な交互会話" in rules
+    assert "ずんだもんが事実・理由・背景" in rules
 
 
 # ── ストア CRUD（tmp DB） ──────────────────────────────────────────────────────
