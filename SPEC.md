@@ -102,6 +102,7 @@ yukkurijidou/
 │   └── static/             # CSS/JS (app.css, app.js)
 ├── workers/
 │   ├── main.py             # 動画生成パイプライン
+│   ├── pipeline_helpers.py # 台本形式判定・素材ファイル整理などの共通補助処理
 │   └── runner.py           # DB queue から生成・レンダージョブを実行する常駐 runner
 ├── core/
 │   ├── ai_generator.py     # Gemini台本生成
