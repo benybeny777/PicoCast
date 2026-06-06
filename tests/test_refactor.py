@@ -5,6 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from core.opening_quality import opening_score_tag, review_human_status, review_warning_text
 from workers import main
 from workers import pipeline_helpers
+from workers import pipeline_metadata
 from workers.pipeline_models import GenerationReport, fallback_title_variants
 
 
@@ -23,7 +24,12 @@ def test_opening_score_tag():
 
 def test_normalize_meta_empty():
     meta = {}
-    main._normalize_meta(meta, True, "test", lambda m, t="info": None)
+    pipeline_metadata.normalize_metadata(
+        meta,
+        True,
+        "test",
+        lambda m, t="info": None,
+    )
     assert meta == {}
     print("_normalize_meta empty: OK")
 
@@ -34,7 +40,7 @@ def test_normalize_meta_description():
         if "自動除去" in m:
             stripped_flag.append(True)
     meta = {"description": "テスト\nVOICEVOX:ずんだもん"}
-    main._normalize_meta(meta, True, "test", log)
+    pipeline_metadata.normalize_metadata(meta, True, "test", log)
     # 手書きクレジットが除去されたことをログで確認
     assert stripped_flag, "should have logged credit removal"
     # 標準VOICEVOXフッターが自動付与されること
@@ -45,7 +51,12 @@ def test_normalize_meta_description():
 
 def test_normalize_meta_tags():
     meta = {"tags": "食べ物,雑学,ずんだもん", "video_title": "テスト動画"}
-    main._normalize_meta(meta, True, "テスト動画", lambda m, t="info": None)
+    pipeline_metadata.normalize_metadata(
+        meta,
+        True,
+        "テスト動画",
+        lambda m, t="info": None,
+    )
     assert "tags" in meta
     print("_normalize_meta tags: OK")
 
@@ -60,6 +71,19 @@ def test_effective_background_count_ignores_reuse_markers():
     ]
     assert main._effective_background_count(items, max_backgrounds=10) == 2
     assert main._effective_background_count(items, max_backgrounds=1) == 1
+
+
+def test_character_names_for_credits_preserves_dialogue_order():
+    items = [
+        {"type": "background", "text": "背景"},
+        {"type": "dialogue", "character": "ずんだもん"},
+        {"type": "dialogue", "character": "四国めたん"},
+        {"type": "dialogue", "character": "ずんだもん"},
+    ]
+    assert pipeline_metadata.character_names_for_credits(items) == [
+        "ずんだもん",
+        "四国めたん",
+    ]
 
 
 def test_strip_video_folder_prefix_accepts_legacy_short_prefixes():

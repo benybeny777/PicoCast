@@ -103,6 +103,7 @@ yukkurijidou/
 ├── workers/
 │   ├── main.py             # 動画生成パイプライン
 │   ├── pipeline_helpers.py # 台本形式判定・素材ファイル整理などの共通補助処理
+│   ├── pipeline_metadata.py # 説明文・タグ・音声クレジット整形
 │   ├── pipeline_models.py  # 生成結果モデル・Long用バリアント定義
 │   └── runner.py           # DB queue から生成・レンダージョブを実行する常駐 runner
 ├── core/
