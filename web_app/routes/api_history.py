@@ -123,4 +123,4 @@ def api_regenerate_histories(req: HistoryRegenerateRequest):
     if not job_ids:
         from core.error_codes import format_error
         raise HTTPException(status_code=404, detail=format_error("E-SCRIPT-MISSING", "再生成できる台本がDBにありません"))
-    return {"job_ids": job_ids, "count": len(job_ids)}
+    return {"job_ids": job_ids, "count": len(req.history_names)}

@@ -616,6 +616,14 @@ def test_config_rejects_newline_injection():
     assert "改行" in errors[0]
 
 
+def test_config_sanitizes_windows_path_control_escape():
+    from web_app.services.config_service import sanitize_path_value
+
+    broken = "C:\\Users\benyb\\AppData\\Local\\Programs\\VOICEVOX\\VOICEVOX.exe"
+
+    assert sanitize_path_value(broken) == r"C:\Users\benyb\AppData\Local\Programs\VOICEVOX\VOICEVOX.exe"
+
+
 def test_config_image_style_choices_current_is_csv(monkeypatch):
     from config import config
     from web_app.services.config_service import get_editable_config
@@ -1287,6 +1295,30 @@ def test_submit_generate_logs_queue_wait_note(tmp_path, monkeypatch):
     row = next(r for r in m.load_jobs_from_db(max_n=10) if r["job_id"] == job_id)
 
     assert any("キュー待機中" in log["message"] for log in row["logs"])
+
+
+def test_batch_generate_registers_parent_before_child_jobs(tmp_path, monkeypatch):
+    """複数生成は全子ジョブを即時投入せず、親ジョブだけを先に登録する。"""
+    import web_app.services.generation_service as gs
+    import core.metadata_db as m
+
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+    monkeypatch.setattr("web_app.job_manager.JobManager._active_profile_id", lambda _self: "test_profile")
+    monkeypatch.setattr(
+        "web_app.job_manager.JobManager.submit",
+        lambda self, job, fn, *args, **kwargs: None,
+    )
+
+    job_ids = gs.submit_batch_generate_jobs([
+        "動画形式: Shorts\n動画タイトル: a\n",
+        "動画形式: Shorts\n動画タイトル: b\n",
+        "動画形式: Shorts\n動画タイトル: c\n",
+    ])
+    rows = m.load_jobs_from_db(max_n=10)
+
+    assert len(job_ids) == 1
+    assert [row["type"] for row in rows] == ["generate_batch"]
+    assert rows[0]["params"]["count"] == 3
 
 
 def test_cancel_job_searches_all_profiles(tmp_path, monkeypatch):

@@ -565,6 +565,7 @@ runner は `generate` / `render` ジョブの `heartbeat_at` を定期更新し�
 Web UI は生成・レンダーを直接実行しない。`app.py` が起動時に `workers.runner` を別プロセスとして起動・監視し、runner が DB queue から `generate` / `render` を取得して処理する。
 
 - 同時実行数は `JOB_MAX_CONCURRENT_WORKERS`（既定 `1` = 直列）。設定画面の「管理者設定」タブから変更でき、runner は設定DBを定期的に読み直して次のジョブ取得から反映する。2以上にすると runner 内で生成・レンダーを並列実行する。
+- 複数台本生成は、全件を一度に `generate` キューへ投入しない。Web側の軽量な親ジョブ `generate_batch` が `JOB_MAX_CONCURRENT_WORKERS` の枠数ぶんだけ子 `generate` ジョブを投入し、子ジョブが終了して枠が空いたら次を投入する。大量生成時でもDBキューを先に膨らませず、同時実行数に合わせて順次進める。
 - Web は queued 登録と DB 参照だけを行うため、重い生成中でもジョブ一覧・履歴・設定画面の応答を維持する。
 - runner は起動時に、前回セッションで残っていた `queued` の `generate` / `render` を `cancelled`（`起動時に破棄（前回の未実行ジョブ）`）へ破棄する（`discard_pending_jobs`）。前回の未実行ジョブを再起動だけで自動実行しない。起動後に新規登録されたジョブは通常どおり実行する。
 
@@ -584,6 +585,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - APIキーの必要条件: Google API キー＝AI台本生成（Gemini）と Gemini 画像生成に必要（手書き台本＋Stable Diffusion WebUI 画像なら不要）、YouTube 認証＝アップロード時のみ必要、OpenAI / HF Token＝任意。
 - サンプル生成だけは `setup_test=true` により未完了状態でも登録できる。
 - 「プロセスを走査して自動設定」で外部依存サービスを検出できる（`core/service_detector.py`）。起動中プロセスと既定ポート（VOICEVOX 50021 / Ollama 11434 / Stable Diffusion WebUI 7860）、PATH 上の ffmpeg を走査し、`VOICEVOX_PATH` / `VOICEVOX_URL` / `OLLAMA_BASE_URL` / `SD_WEBUI_BASE_URL` / `FFMPEG_BIN` を `POST /api/settings/detect-services` で検出、`POST /api/settings/detect-services/apply` で EDITABLE_CONFIG 経由保存・即時反映する。秘密情報は扱わない。
+- 設定画面から保存するパス系設定（`VOICEVOX_PATH` / `AQUESTALK_ENGINE_PATH` / `SD_MODEL_MANIFEST_PATH` / `SD_WEBUI_ROOT` / `FFMPEG_BIN`）は `config_service.sanitize_path_value()` で保存前に正規化する。引用符を除去し、環境変数・`~` を展開し、Windowsパスが `\b` などの制御文字に化けた場合はバックスラッシュ表記へ修復する。修復できない制御文字は保存エラーにする。
 - 未検出のサービスには `core/service_detector.py:_INSTALL_GUIDE` のダウンロードURL（`config.py` の `VOICEVOX_DOWNLOAD_URL` / `FFMPEG_DOWNLOAD_URL` / `OLLAMA_DOWNLOAD_URL` / `SD_WEBUI_DOWNLOAD_URL`）とインストール手順、必須/任意（VOICEVOX・ffmpeg が必須、Ollama・Stable Diffusion WebUI が任意）を `detect_services()` の各 service に付与し、`/setup` でダウンロードリンクとして表示する。外部依存は同梱せず個別に入手させる方針。
 
 ### ライセンス管理

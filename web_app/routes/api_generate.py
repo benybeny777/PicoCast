@@ -64,7 +64,7 @@ def api_generate(req: GenerateRequest):
             req.bgm_volume_db,
             req.reuse_audio,
         )
-        return {"job_ids": job_ids, "count": len(job_ids)}
+        return {"job_ids": job_ids, "count": len(scripts)}
 
 
 @router.post("/batch")
@@ -101,4 +101,4 @@ def api_batch_generate(req: BatchGenerateRequest):
         req.bgm_volume_db,
         req.reuse_audio,
     )
-    return {"job_ids": job_ids, "count": len(job_ids)}
+    return {"job_ids": job_ids, "count": len(req.scripts)}

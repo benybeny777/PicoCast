@@ -365,6 +365,15 @@ function pollJobs(tab) {
               const rid = job.result.render_job_id;
               if (!activeJobIds.includes(rid)) {
                 activeJobIds.push(rid);
+                allDone = false;
+              }
+            }
+            if (job.status === 'success' && Array.isArray(job.result?.job_ids)) {
+              for (const childId of job.result.job_ids) {
+                if (!activeJobIds.includes(childId)) {
+                  activeJobIds.push(childId);
+                  allDone = false;
+                }
               }
             }
           } else {

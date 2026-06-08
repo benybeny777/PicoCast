@@ -5,6 +5,7 @@ APIキー・トークンなど認証情報は対象外（encrypted_secrets で�
 """
 import os
 import logging
+from pathlib import Path
 from typing import Any
 from config import config as cfg
 
@@ -114,6 +115,22 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
 
 _ALLOWED_KEYS = {item["key"] for item in EDITABLE_CONFIG}
 _ADMIN_KEYS = {item["key"] for item in EDITABLE_CONFIG if item.get("admin")}
+_PATH_KEYS = {
+    "VOICEVOX_PATH",
+    "AQUESTALK_ENGINE_PATH",
+    "SD_MODEL_MANIFEST_PATH",
+    "SD_WEBUI_ROOT",
+    "FFMPEG_BIN",
+}
+_CONTROL_ESCAPE_REPAIRS = {
+    "\a": r"\a",
+    "\b": r"\b",
+    "\f": r"\f",
+    "\n": r"\n",
+    "\r": r"\r",
+    "\t": r"\t",
+    "\v": r"\v",
+}
 
 
 def developer_tools_enabled() -> bool:
@@ -164,12 +181,38 @@ def save_config(updates: dict[str, str]) -> list[str]:
     return []
 
 
+def sanitize_path_value(value: object, *, allow_command_name: bool = False) -> str:
+    """設定画面で受け取るパス文字列を保存用に正規化する。
+
+    Windowsパスが Python 文字列エスケープのように扱われて ``\\b`` などの
+    制御文字へ化けた値は、対応するバックスラッシュ表記へ戻す。
+    """
+    text = str(value or "").strip().strip('"').strip("'")
+    if not text:
+        return ""
+    for control, replacement in _CONTROL_ESCAPE_REPAIRS.items():
+        text = text.replace(control, replacement)
+    remaining_controls = [
+        f"0x{ord(ch):02x}"
+        for ch in text
+        if ord(ch) < 32
+    ]
+    if remaining_controls:
+        raise ValueError(f"パスに制御文字が含まれています: {', '.join(remaining_controls)}")
+    normalized = os.path.normpath(os.path.expandvars(os.path.expanduser(text)))
+    if allow_command_name and not any(sep in normalized for sep in (os.sep, "/", "\\")):
+        return normalized
+    return str(Path(normalized))
+
+
 def _normalize_update_value(key: str, value: str) -> str:
     if key == "WEB_IMAGE_STYLE_CHOICES":
         return ",".join(cfg._split_env_choices(value))
     if key == "WEB_DEFAULT_IMAGE_STYLE":
         return cfg._clean_env_choice(value)
-    if key in {"AQUESTALK_ENGINE_PATH", "SD_MODEL_MANIFEST_PATH"}:
+    if key in _PATH_KEYS:
+        value = sanitize_path_value(value, allow_command_name=(key == "FFMPEG_BIN"))
+    if key in {"AQUESTALK_ENGINE_PATH", "SD_MODEL_MANIFEST_PATH", "SD_WEBUI_ROOT"}:
         from core.path_refs import to_storable_path_ref
         return to_storable_path_ref(value)
     return str(value)
@@ -210,6 +253,11 @@ def _validate(updates: dict[str, str]) -> list[str]:
             elif spec["type"] in ("str", "ollama_model", "bgm_file"):
                 if not raw_val.strip() and not spec.get("allow_empty"):
                     errors.append(f"{key}: 空文字は不正です")
+                if key in _PATH_KEYS and raw_val.strip():
+                    try:
+                        sanitize_path_value(raw_val, allow_command_name=(key == "FFMPEG_BIN"))
+                    except ValueError as exc:
+                        errors.append(f"{key}: {exc}")
                 if spec["type"] == "bgm_file" and raw_val.strip():
                     if os.path.sep in raw_val or "/" in raw_val or "\\" in raw_val:
                         errors.append(f"{key}: ファイル名のみ指定してください（パス区切り文字不可）")
