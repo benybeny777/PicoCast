@@ -1131,6 +1131,23 @@ class RenderCancelled(Exception):
     """レンダーがキャンセル要求により中断されたことを表す。"""
 
 
+def _native_motion_config_lines(is_shorts: bool) -> list[str]:
+    screen = "Shorts" if is_shorts else "Long"
+    if is_shorts:
+        side = NATIVE_CHARACTER_SIDE_MARGIN_SHORTS
+        y_offset = CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET
+        char_scale = CHARACTER_UPPER_BODY_SHORTS_SCALE if CHARACTER_UPPER_BODY_MODE else NATIVE_SHORTS_CHARACTER_SCALE
+    else:
+        side = NATIVE_CHARACTER_SIDE_MARGIN_LONG
+        y_offset = CHARACTER_UPPER_BODY_LONG_Y_OFFSET
+        char_scale = CHARACTER_UPPER_BODY_SCALE if CHARACTER_UPPER_BODY_MODE else 1.0
+    wiggle_status = "enabled" if (NATIVE_ENABLE_MOTION_EFFECTS and NATIVE_ENABLE_TALK_WIGGLE and is_shorts) else "disabled"
+    return [
+        f"🧍 native立ち絵配置({screen}): side={side}px / y_offset={y_offset}px / scale={char_scale:g}",
+        f"〰️ 発話中揺れ: {wiggle_status} / x={NATIVE_TALK_WIGGLE_X_PX:g}px / y={NATIVE_TALK_WIGGLE_Y_PX:g}px / hz={NATIVE_TALK_WIGGLE_HZ:g}",
+    ]
+
+
 def render_native(
     output_dir: str,
     progress_callback=None,
@@ -1200,6 +1217,9 @@ def render_native(
     captions = _captions_for_audio_files(script_text, audio_files)
     is_shorts = height > width
     effects = _effects_for_audio_files(script_text, audio_files, is_shorts)
+    if progress_callback:
+        for config_line in _native_motion_config_lines(is_shorts):
+            progress_callback(config_line)
 
     segment_paths: list[str] = []
     if is_shorts:

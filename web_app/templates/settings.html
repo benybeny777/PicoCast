@@ -79,6 +79,16 @@
     gap: 12px;
     margin: 10px 0 18px;
   }
+  .layout-preset-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 10px 0;
+  }
+  .layout-preset-bar .btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
   .layout-preview-card {
     min-width: 0;
   }
@@ -117,6 +127,18 @@
   }
   .layout-preview-character.right {
     background: linear-gradient(180deg, #b9ff8a, #59b96e);
+  }
+  .layout-preview-frame.is-animating .layout-preview-character {
+    animation: layoutPreviewWiggle var(--wiggle-sec, .25s) linear infinite;
+  }
+  .layout-preview-frame.is-animating .layout-preview-character.right {
+    animation-delay: calc(var(--wiggle-sec, .25s) * -0.42);
+  }
+  @keyframes layoutPreviewWiggle {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(var(--wiggle-x, 1px), calc(var(--wiggle-y, 2px) * -1)); }
+    50% { transform: translate(0, var(--wiggle-y, 2px)); }
+    75% { transform: translate(calc(var(--wiggle-x, 1px) * -1), calc(var(--wiggle-y, 2px) * -1)); }
   }
   /* ── キャラごとのサブタブ ── */
   .char-subtab-bar {
@@ -1423,23 +1445,96 @@ async function loadConfig() {
 
 function buildCharacterLayoutPreview() {
   const wrap = document.createElement('div');
-  wrap.className = 'layout-preview-grid';
+  wrap.className = 'layout-preview-wrap';
   wrap.innerHTML = `
-    <div class="layout-preview-card">
-      <div class="layout-preview-title">Shorts</div>
-      <div class="layout-preview-frame short" data-layout-preview="shorts">
-        <div class="layout-preview-character left" data-preview-char="left"></div>
-        <div class="layout-preview-character right" data-preview-char="right"></div>
-      </div>
+    <div class="layout-preset-bar">
+      <button type="button" class="btn btn-secondary" onclick="applyLayoutPreset('default')">配置: 標準</button>
+      <button type="button" class="btn btn-secondary" onclick="applyLayoutPreset('outside')">配置: 少し外</button>
+      <button type="button" class="btn btn-secondary" onclick="applyLayoutPreset('low')">配置: 低め</button>
+      <button type="button" class="btn btn-secondary" onclick="applyWigglePreset('natural')">揺れ: 自然</button>
+      <button type="button" class="btn btn-secondary" onclick="applyWigglePreset('eating')">揺れ: 食べてる</button>
+      <button type="button" class="btn btn-secondary" onclick="applyWigglePreset('off')">揺れ: OFF</button>
     </div>
-    <div class="layout-preview-card">
-      <div class="layout-preview-title">Long</div>
-      <div class="layout-preview-frame long" data-layout-preview="long">
-        <div class="layout-preview-character left" data-preview-char="left"></div>
-        <div class="layout-preview-character right" data-preview-char="right"></div>
+    <div class="layout-preview-grid">
+      <div class="layout-preview-card">
+        <div class="layout-preview-title">Shorts</div>
+        <div class="layout-preview-frame short" data-layout-preview="shorts">
+          <div class="layout-preview-character left" data-preview-char="left"></div>
+          <div class="layout-preview-character right" data-preview-char="right"></div>
+        </div>
+      </div>
+      <div class="layout-preview-card">
+        <div class="layout-preview-title">Long</div>
+        <div class="layout-preview-frame long" data-layout-preview="long">
+          <div class="layout-preview-character left" data-preview-char="left"></div>
+          <div class="layout-preview-character right" data-preview-char="right"></div>
+        </div>
       </div>
     </div>`;
   return wrap;
+}
+
+const LAYOUT_PRESETS = {
+  default: {
+    CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET: 310,
+    CHARACTER_UPPER_BODY_LONG_Y_OFFSET: 460,
+    NATIVE_CHARACTER_SIDE_MARGIN_SHORTS: -120,
+    NATIVE_CHARACTER_SIDE_MARGIN_LONG: -90,
+  },
+  outside: {
+    CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET: 310,
+    CHARACTER_UPPER_BODY_LONG_Y_OFFSET: 460,
+    NATIVE_CHARACTER_SIDE_MARGIN_SHORTS: -170,
+    NATIVE_CHARACTER_SIDE_MARGIN_LONG: -130,
+  },
+  low: {
+    CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET: 360,
+    CHARACTER_UPPER_BODY_LONG_Y_OFFSET: 510,
+    NATIVE_CHARACTER_SIDE_MARGIN_SHORTS: -150,
+    NATIVE_CHARACTER_SIDE_MARGIN_LONG: -110,
+  },
+};
+
+const WIGGLE_PRESETS = {
+  natural: {
+    NATIVE_ENABLE_TALK_WIGGLE: '1',
+    NATIVE_TALK_WIGGLE_X_PX: 1.5,
+    NATIVE_TALK_WIGGLE_Y_PX: 4,
+    NATIVE_TALK_WIGGLE_HZ: 3,
+  },
+  eating: {
+    NATIVE_ENABLE_TALK_WIGGLE: '1',
+    NATIVE_TALK_WIGGLE_X_PX: 2,
+    NATIVE_TALK_WIGGLE_Y_PX: 5,
+    NATIVE_TALK_WIGGLE_HZ: 2.8,
+  },
+  off: {
+    NATIVE_ENABLE_TALK_WIGGLE: '0',
+    NATIVE_TALK_WIGGLE_X_PX: 0,
+    NATIVE_TALK_WIGGLE_Y_PX: 0,
+    NATIVE_TALK_WIGGLE_HZ: 3,
+  },
+};
+
+function setConfigInputValue(key, value) {
+  const el = document.getElementById('cfg-' + key);
+  if (!el) return;
+  el.value = String(value);
+  el.dispatchEvent(new Event('input', {bubbles: true}));
+}
+
+function applyLayoutPreset(name) {
+  const preset = LAYOUT_PRESETS[name];
+  if (!preset) return;
+  Object.entries(preset).forEach(([key, value]) => setConfigInputValue(key, value));
+  updateCharacterLayoutPreview();
+}
+
+function applyWigglePreset(name) {
+  const preset = WIGGLE_PRESETS[name];
+  if (!preset) return;
+  Object.entries(preset).forEach(([key, value]) => setConfigInputValue(key, value));
+  updateCharacterLayoutPreview();
 }
 
 function cfgNumber(key, fallback) {
@@ -1454,6 +1549,10 @@ function placePreviewCharacters(frame, opts) {
   if (!rect.width || !rect.height) return;
   const scaleX = rect.width / opts.videoW;
   const scaleY = rect.height / opts.videoH;
+  const wiggleEnabled = cfgNumber('NATIVE_ENABLE_TALK_WIGGLE', 1) === 1;
+  const wiggleHz = Math.max(0.1, cfgNumber('NATIVE_TALK_WIGGLE_HZ', 3));
+  const wiggleX = cfgNumber('NATIVE_TALK_WIGGLE_X_PX', 2) * scaleX;
+  const wiggleY = cfgNumber('NATIVE_TALK_WIGGLE_Y_PX', 5) * scaleY;
   const charH = opts.charH * opts.charScale * scaleY;
   const charW = charH * 0.54;
   const side = opts.sideMargin * scaleX;
@@ -1462,6 +1561,10 @@ function placePreviewCharacters(frame, opts) {
   const leftX = side;
   const rightX = rect.width - charW - side;
   const chars = frame.querySelectorAll('.layout-preview-character');
+  frame.classList.toggle('is-animating', Boolean(wiggleEnabled && (wiggleX > 0 || wiggleY > 0)));
+  frame.style.setProperty('--wiggle-sec', `${1 / wiggleHz}s`);
+  frame.style.setProperty('--wiggle-x', `${wiggleX}px`);
+  frame.style.setProperty('--wiggle-y', `${wiggleY}px`);
   chars.forEach(ch => {
     const x = ch.dataset.previewChar === 'right' ? rightX : leftX;
     ch.style.width = `${charW}px`;
@@ -1498,6 +1601,10 @@ function bindCharacterLayoutPreview() {
     'CHARACTER_UPPER_BODY_LONG_Y_OFFSET',
     'NATIVE_CHARACTER_SIDE_MARGIN_SHORTS',
     'NATIVE_CHARACTER_SIDE_MARGIN_LONG',
+    'NATIVE_ENABLE_TALK_WIGGLE',
+    'NATIVE_TALK_WIGGLE_X_PX',
+    'NATIVE_TALK_WIGGLE_Y_PX',
+    'NATIVE_TALK_WIGGLE_HZ',
   ];
   keys.forEach(key => {
     const el = document.getElementById('cfg-' + key);

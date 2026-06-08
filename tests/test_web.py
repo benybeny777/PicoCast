@@ -180,6 +180,8 @@ def test_settings_page(client):
     assert "管理者設定" in res.text
     assert "admin-config-form" in res.text
     assert "layout-preview-frame" in res.text
+    assert "applyLayoutPreset" in res.text
+    assert "applyWigglePreset" in res.text
 
 
 def test_settings_hides_admin_when_developer_tools_disabled(client, monkeypatch):

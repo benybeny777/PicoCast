@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.native_character_assets import CharacterVariantSet
-from core.native_renderer import _character_base_path, _character_overlay_position, _character_position, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _run_ffmpeg, _save_render_info, _subtitles_filter_path, _write_subtitles
+from core.native_renderer import _character_base_path, _character_overlay_position, _character_position, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _native_motion_config_lines, _run_ffmpeg, _save_render_info, _subtitles_filter_path, _write_subtitles
 
 
 class TestDurationStatus(unittest.TestCase):
@@ -165,6 +165,18 @@ class TestCharacterMotionPosition(unittest.TestCase):
         self.assertIn("*t", position)
         self.assertIn(":", position)
         self.assertNotEqual(position, _character_position("metan", portrait=True, index=1, total=2))
+
+
+class TestNativeMotionConfigLog(unittest.TestCase):
+    def test_config_log_includes_layout_and_wiggle(self):
+        lines = _native_motion_config_lines(True)
+        joined = "\n".join(lines)
+
+        self.assertIn("native立ち絵配置(Shorts)", joined)
+        self.assertIn("side=", joined)
+        self.assertIn("y_offset=", joined)
+        self.assertIn("発話中揺れ", joined)
+        self.assertIn("hz=", joined)
 
 
 class TestWriteSubtitles(unittest.TestCase):
