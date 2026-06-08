@@ -117,8 +117,8 @@ NATIVE_BGM_VOLUME_DB = float(os.environ.get("NATIVE_BGM_VOLUME_DB", "-20"))  # n
 CHARACTER_UPPER_BODY_MODE              = os.environ.get("CHARACTER_UPPER_BODY_MODE", "1").strip().lower() in ("1", "true", "yes", "on")  # 有効で腰から上表示
 CHARACTER_UPPER_BODY_SCALE             = float(os.environ.get("CHARACTER_UPPER_BODY_SCALE",             "1.55"))  # Long: キャラ拡大倍率
 CHARACTER_UPPER_BODY_SHORTS_SCALE      = float(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_SCALE",      "1.15"))  # Shorts: キャラ拡大倍率（縦画面は幅が狭いため Long より小さく）
-CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET   = int(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET",   "250"))    # Shorts: 下方向シフト量 (px)
-CHARACTER_UPPER_BODY_LONG_Y_OFFSET     = int(os.environ.get("CHARACTER_UPPER_BODY_LONG_Y_OFFSET",     "400"))    # Long: 下方向シフト量 (px)
+CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET   = int(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET",   "310"))    # Shorts: 下方向シフト量 (px)
+CHARACTER_UPPER_BODY_LONG_Y_OFFSET     = int(os.environ.get("CHARACTER_UPPER_BODY_LONG_Y_OFFSET",     "460"))    # Long: 下方向シフト量 (px)
 
 # キャラクター表示 — native Shorts 非腰上モード時の倍率（CHARACTER_UPPER_BODY_MODE=0 のときのみ使用）
 NATIVE_SHORTS_CHARACTER_SCALE = float(os.environ.get("NATIVE_SHORTS_CHARACTER_SCALE", "1.05"))
@@ -342,9 +342,9 @@ NATIVE_ENABLE_BLINK      = os.environ.get("NATIVE_ENABLE_BLINK",      "1").strip
 NATIVE_CHARACTER_HEIGHT_SHORTS       = int(os.environ.get("NATIVE_CHARACTER_HEIGHT_SHORTS",       "1000"))  # Shorts: キャラ基本高さ (px)
 NATIVE_CHARACTER_HEIGHT_LONG         = int(os.environ.get("NATIVE_CHARACTER_HEIGHT_LONG",         "598"))   # Long: キャラ基本高さ (px)
 NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS = int(os.environ.get("NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS", "-360"))  # Shorts: 下マージン (px, 負=画面外下)
-NATIVE_CHARACTER_SIDE_MARGIN_SHORTS   = int(os.environ.get("NATIVE_CHARACTER_SIDE_MARGIN_SHORTS",   "-80"))   # Shorts: 左右マージン (px, 負=画面外)
+NATIVE_CHARACTER_SIDE_MARGIN_SHORTS   = int(os.environ.get("NATIVE_CHARACTER_SIDE_MARGIN_SHORTS",   "-120"))  # Shorts: 左右マージン (px, 負=画面外)
 NATIVE_CHARACTER_BOTTOM_MARGIN_LONG   = int(os.environ.get("NATIVE_CHARACTER_BOTTOM_MARGIN_LONG",   "40"))    # Long: 下マージン (px)
-NATIVE_CHARACTER_SIDE_MARGIN_LONG     = int(os.environ.get("NATIVE_CHARACTER_SIDE_MARGIN_LONG",     "-40"))   # Long: 左右マージン (px, 負=画面外)
+NATIVE_CHARACTER_SIDE_MARGIN_LONG     = int(os.environ.get("NATIVE_CHARACTER_SIDE_MARGIN_LONG",     "-90"))   # Long: 左右マージン (px, 負=画面外)
 
 # ───────────────────────────────────────────────
 # native 背景トランジション

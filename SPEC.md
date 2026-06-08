@@ -1054,8 +1054,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_TALK_WIGGLE_HZ` | 5.5 | 発話中キャラ揺れの周波数(Hz) |
 | `CHARACTER_UPPER_BODY_SCALE` | 1.55 | 腰から上モード時のキャラ拡大倍率（Long用） |
 | `CHARACTER_UPPER_BODY_SHORTS_SCALE` | 1.15 | 腰から上モード時のキャラ拡大倍率（Shorts用。縦画面は幅が狭いため Long より小さく） |
-| `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
-| `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 400 | 腰から上モード: Long の下方向シフト量(px) |
+| `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 310 | 腰から上モード: Shorts の下方向シフト量(px) |
+| `CHARACTER_UPPER_BODY_LONG_Y_OFFSET` | 460 | 腰から上モード: Long の下方向シフト量(px) |
 | `VOICE_READING_MODE` | `safe_auto` | よみがな補正モード（`off` / `dictionary` / `safe_auto`）。`safe_auto` は SudachiPy + 自前辞書。Ollama は使わない |
 | `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
@@ -1114,7 +1114,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - 出力後に ffmpeg `ebur128=peak=true` で最終MP4の音量解析を行い、Integrated loudness / LRA / True peak の要約をログに出す。
 - MP4生成後、ffprobe で実尺を取得し `📏 native実尺評価: Xs [理想/やや短い/OKだけど長め/警告/要確認]` をログ表示する。評価基準はShortsと同じ（38〜50s=理想 / 35〜37s=やや短い / 51〜55s=OKだけど長め / 32〜34s or 56〜58s=警告）。
 - `estimated_duration_sec` を渡すと `📏 native実尺: Xs / 推定尺: Ys / 差分: ±Zs` も出力する。
-- **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。
+- **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=460` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=310` px 下方向にシフトする。左右マージンは Long `NATIVE_CHARACTER_SIDE_MARGIN_LONG=-90` / Shorts `NATIVE_CHARACTER_SIDE_MARGIN_SHORTS=-120` を既定とし、画面端から少し外へ出す。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。
 - 字幕フチ幅は `NATIVE_SUBTITLE_STROKE_WIDTH`(内フチ, デフォルト 9) / `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(外フチ, デフォルト 13) で調整可能。字幕帯のパディングは `NATIVE_SUBTITLE_PADDING_Y` で調整。
 - **字幕自動折り返し**: セリフが `NATIVE_SUBTITLE_WRAP_CHARS_SHORTS`（Shorts 縦画面: 13文字）または `NATIVE_SUBTITLE_WRAP_CHARS_LONG`（Long 横画面: 24文字）を超えると `_wrap_subtitle()` が自動折り返しを行う。句読点（、。！？…）が直前にある場合は句読点位置を優先し、折り返し後2行目が `max(2, max_chars // 3)` 文字未満になる場合は句読点折り返しを適用しない。折り返し行数に応じて SubtitleBox の高さを自動拡張する。
 - **Shorts軽量エフェクト**: `NATIVE_ENABLE_MOTION_EFFECTS=1` のとき、背景に最大 `NATIVE_BG_ZOOM_MAX` までのKen Burns風ズーム/パン、話者キャラの0.2秒前後の軽いバウンス、発話中の小刻みな上下左右揺れ、`テロップ:` 行の0.8〜1.5秒ポップ表示、短いツッコミ/疑問場面の軽いシェイクと疑問/驚きアイコンを追加する。シェイクとアイコンは各 `NATIVE_MAX_SHAKE_COUNT_SHORTS` / `NATIVE_MAX_ICON_COUNT_SHORTS` 回までに制限する。発話中揺れは `NATIVE_TALK_WIGGLE_X_PX` / `NATIVE_TALK_WIGGLE_Y_PX` / `NATIVE_TALK_WIGGLE_HZ` で調整できる。感情タグ (`expression`) が付与されている場合、タグ優先でシェイク判定とアイコン選択を行う（驚き/ドン引き → "!?" or "！"、困惑/疑問 → "？"、焦り/怒り → "!" or "！"、呆れ → 揺れのみ・アイコンなし）。
@@ -1605,7 +1605,7 @@ YouTube Studio 側で予約動画を手動公開した場合:
 
 未来の予約枠は、最も早い空きスロットから前詰めできる。`rebalance_slots_detailed()` は YouTube の `publishAt` / `video_id` を正として読み、`update_video_publish_time()` で YouTube 側の公開予定時刻を更新する。詰め直しを実行した動画の `publish_at` は、実行時点のチャンネル別スケジュール設定に従って変更される。Shorts と Long は同じ `publishAt` を共有してよいが、同じ動画タイプ内で `publishAt` が重複している場合は詰め直し対象にする。
 
-native Shorts の立ち絵は、字幕との重なりを抑えるため小さめ・やや上寄せにする。Shorts通常字幕は中央寄せ、既定1.4倍のフォント倍率、白文字、話者色の内フチ（ずんだもん=濃緑 / めたん=濃い紫ピンク）、黒外フチ、任意の半透明黒帯（`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`）で可読性を優先する。字幕は `NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で少し下げる。調整は `NATIVE_CHARACTER_HEIGHT_SHORTS`、`NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`、`NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`、`NATIVE_SUBTITLE_FONT_SCALE`、`NATIVE_SUBTITLE_ALIGNMENT_SHORTS`、`NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で行う。
+native Shorts の立ち絵は、腰より上が見える程度に下寄せし、左右は画面端から少し外へ出す。Shorts通常字幕は中央寄せ、既定1.4倍のフォント倍率、白文字、話者色の内フチ（ずんだもん=濃緑 / めたん=濃い紫ピンク）、黒外フチ、任意の半透明黒帯（`NATIVE_SUBTITLE_BOX_SHORTS`, `NATIVE_SUBTITLE_BOX_OPACITY_SHORTS`）で可読性を優先する。字幕は `NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で少し下げる。調整は `NATIVE_CHARACTER_HEIGHT_SHORTS`、`NATIVE_CHARACTER_SIDE_MARGIN_SHORTS`、`NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS`、`CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET`、`NATIVE_SUBTITLE_FONT_SCALE`、`NATIVE_SUBTITLE_ALIGNMENT_SHORTS`、`NATIVE_SUBTITLE_Y_OFFSET_SHORTS` で行う。
 
 ---
 
