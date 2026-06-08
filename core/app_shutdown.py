@@ -26,6 +26,7 @@ _logger = logging.getLogger(__name__)
 # ── 状態管理 ────────────────────────────────────────────────────────────────
 _shutdown_lock = threading.Lock()
 _shutdown_requested = False
+_hooks_ran = False
 _hooks: list[tuple[str, Callable]] = []  # (name, callable)
 
 # uvicorn.Server への参照（app.py から設定される）
@@ -60,6 +61,12 @@ def _get_running_jobs() -> list[dict]:
 
 
 def _run_hooks() -> None:
+    global _hooks_ran
+    with _shutdown_lock:
+        if _hooks_ran:
+            _logger.debug("終了フックは実行済みのためスキップします")
+            return
+        _hooks_ran = True
     for name, fn in _hooks:
         try:
             fn()

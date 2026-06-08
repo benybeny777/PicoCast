@@ -22,6 +22,11 @@
 - 複数生成は親ジョブが同時実行数ぶんだけ子生成ジョブを投入し、完了したら次を投入する方式へ変更した。
 - 起動時に、前回残った queued ジョブだけでなく `runner_pid` / `heartbeat_at` の無い running 生成・レンダージョブ残骸も failed へ破棄するようにした。
 
+### Ctrl+C終了時のrunner停止を確実化
+
+- Windowsで Ctrl+C 終了したときに uvicorn の lifespan shutdown が走らない経路でも、同期的に終了フックを実行して job-runner を停止するようにした。
+- 終了フックは二重実行しないようにし、通常shutdownと Ctrl+C 経路が重なっても安全にした。
+
 ---
 
 ## 変更履歴に書く目安

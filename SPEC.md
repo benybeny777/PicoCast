@@ -560,6 +560,8 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 
 runner は `generate` / `render` ジョブの `heartbeat_at` を定期更新し、`runner_pid` を持つ runner 管轄ジョブだけを stale 回収対象にする。heartbeat が `JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC` を超えて途絶えた runner 管轄の `running` ジョブは `failed`（`runner停止により中断`）へ戻す。`check` など Web プロセス内で動く軽量ジョブは Web 側が heartbeat を更新し、runner の stale 回収対象にはしない。キャンセルは `cancel_requested=1` を DB に書き、runner または Web 側ジョブがポーリングして `cancel_event` へ反映する。ジョブログは `append_job_logs` で追記し、runner はバッファ書き込みで頻繁な DB writer 競合を避ける。
 
+Ctrl+C / SIGTERM / `/api/shutdown` の終了時は `core.app_shutdown` の終了フックを通し、job-runner を停止してから metadata DB 接続を閉じる。Ctrl+C が uvicorn の lifespan shutdown へ到達しない場合も、`web_app.app` の `KeyboardInterrupt` 捕捉で `request_shutdown(force=True, async_shutdown=False)` を呼び、runner プロセスを残さない。終了フックは二重実行しない。
+
 ### ジョブの同時実行制御（キュー）
 
 Web UI は生成・レンダーを直接実行しない。`app.py` が起動時に `workers.runner` を別プロセスとして起動・監視し、runner が DB queue から `generate` / `render` を取得して処理する。

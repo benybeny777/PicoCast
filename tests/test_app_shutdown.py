@@ -5,6 +5,7 @@ def _reload_module():
     """テストごとにモジュールの状態をリセットする。"""
     import core.app_shutdown as m
     m._shutdown_requested = False
+    m._hooks_ran = False
     m._hooks.clear()
     m._uvicorn_server = None
 
@@ -43,6 +44,23 @@ def test_hook_exception_continues_next(monkeypatch):
     m.request_shutdown(force=False, async_shutdown=False)
 
     assert "ok" in order, "例外後のフックも実行されること"
+
+
+def test_hooks_run_only_once(monkeypatch):
+    """request_shutdown 後に lifespan shutdown が来てもフックは重複実行しない。"""
+    _reload_module()
+    import core.app_shutdown as m
+
+    called = []
+    m.register_shutdown_hook("test_hook", lambda: called.append(1))
+
+    monkeypatch.setattr(m, "_stop_server", lambda: None)
+    monkeypatch.setattr(m, "_get_running_jobs", lambda: [])
+
+    m.request_shutdown(force=False, async_shutdown=False)
+    m.run_lifespan_shutdown()
+
+    assert called == [1]
 
 
 # ── 通常終了の拒否 ───────────────────────────────────────────────────────────
@@ -113,3 +131,18 @@ def test_is_shutdown_requested_true_after_shutdown(monkeypatch):
     # フラグはリクエスト直後に立つ
     assert m.is_shutdown_requested() is True
     assert stopped
+
+
+def test_keyboard_interrupt_shutdown_calls_request_shutdown(monkeypatch):
+    """app.py の Ctrl+C 経路は force shutdown を同期実行する。"""
+    import web_app.app as app
+
+    calls = []
+    monkeypatch.setattr(
+        "core.app_shutdown.request_shutdown",
+        lambda **kwargs: calls.append(kwargs) or {"ok": True},
+    )
+
+    app._shutdown_on_keyboard_interrupt()
+
+    assert calls == [{"force": True, "async_shutdown": False}]

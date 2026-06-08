@@ -197,6 +197,16 @@ def _kill_process_tree(proc) -> None:
         except Exception:
             _logger.error("runner proc.kill() にも失敗しました: pid=%s", pid, exc_info=True)
 
+
+def _shutdown_on_keyboard_interrupt() -> None:
+    """Ctrl+C で uvicorn の lifespan が走らない場合でも runner を確実に止める。"""
+    try:
+        from core.app_shutdown import request_shutdown
+        request_shutdown(force=True, async_shutdown=False)
+    except Exception:
+        _logger.error("Ctrl+C 終了処理に失敗しました。runner を直接停止します", exc_info=True)
+        _stop_job_runner()
+
 app = FastAPI(
     title=f"{config.WEB_APP_NAME} — Web UI",
     version=build_app_version(),
@@ -520,7 +530,7 @@ def main():
         try:
             _serve_on(port)
         except KeyboardInterrupt:
-            pass
+            _shutdown_on_keyboard_interrupt()
         except OSError as exc:
             _logger.error("Web UI 起動ポートの確保に失敗しました: host=%s port=%s", host, port, exc_info=True)
             # 起動直前のレースでポートを奪われた場合の自己回復: 空きポートで1度だけ再試行する
@@ -532,7 +542,7 @@ def main():
             try:
                 _serve_on(free)
             except KeyboardInterrupt:
-                pass
+                _shutdown_on_keyboard_interrupt()
 
 
 if __name__ == "__main__":
