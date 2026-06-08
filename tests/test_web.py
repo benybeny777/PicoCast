@@ -179,6 +179,7 @@ def test_settings_page(client):
     assert "chf-youtube_client_secrets" in res.text
     assert "管理者設定" in res.text
     assert "admin-config-form" in res.text
+    assert "layout-preview-frame" in res.text
 
 
 def test_settings_hides_admin_when_developer_tools_disabled(client, monkeypatch):
@@ -681,6 +682,47 @@ def test_config_web_app_name_is_admin():
     for key in admin_web_ui_keys:
         assert items[key]["admin"] is True
         assert items[key]["group"] == "Web UI"
+
+
+def test_native_character_layout_settings_are_editable():
+    from web_app.services.config_service import get_editable_config
+
+    items = {row["key"]: row for row in get_editable_config()}
+    layout_keys = [
+        "CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET",
+        "CHARACTER_UPPER_BODY_LONG_Y_OFFSET",
+        "NATIVE_CHARACTER_SIDE_MARGIN_SHORTS",
+        "NATIVE_CHARACTER_SIDE_MARGIN_LONG",
+    ]
+    wiggle_keys = [
+        "NATIVE_ENABLE_TALK_WIGGLE",
+        "NATIVE_TALK_WIGGLE_X_PX",
+        "NATIVE_TALK_WIGGLE_Y_PX",
+        "NATIVE_TALK_WIGGLE_HZ",
+    ]
+
+    for key in layout_keys:
+        assert items[key]["group"] == "native立ち絵配置"
+        assert items[key].get("admin") is not True
+
+    for key in wiggle_keys:
+        assert items[key]["group"] == "エフェクト"
+        assert items[key].get("admin") is not True
+
+
+def test_save_config_does_not_write_environment(tmp_path, monkeypatch):
+    import os
+    import core.settings_store as settings_store
+    import web_app.services.config_service as cs
+
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.delenv("NATIVE_CHARACTER_SIDE_MARGIN_SHORTS", raising=False)
+
+    errors = cs.save_config({"NATIVE_CHARACTER_SIDE_MARGIN_SHORTS": "-140"})
+
+    assert errors == []
+    assert settings_store.get_all()["NATIVE_CHARACTER_SIDE_MARGIN_SHORTS"] == "-140"
+    assert "NATIVE_CHARACTER_SIDE_MARGIN_SHORTS" not in os.environ
 
 
 def test_runner_worker_limit_reads_settings_db(monkeypatch):

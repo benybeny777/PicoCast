@@ -38,7 +38,8 @@
 - `config/SEED/prompt_packs/product/{seed_profile}/` は製品版初期データ置き場。`/setup` のジャンル選択にはここだけを表示する。
 - `config/prompt_profiles/genres/{genre_profile}/` は既存チャンネル互換のテンプレート seed 用ファイル置き場（`prompt_profile_loader.py` 経由）。実行時プロンプトでは参照しない。
 - genre_profile が存在しない場合はエラー停止。別ジャンルへのフォールバックは禁止。
-- 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。必ず `config/config.py` に `os.environ.get(...)` 付きで定数として定義する。ループインデックスや内部カウンタなど実装上の定数は対象外。
+- 数値・座標・倍率・閾値・フラグなど「設定として変えうる値」はソースコードにハードコードしない。正本は `data/settings.db` と Web UI の設定画面に置き、`config/config.py` には既定値つき定数として集約する。新規設定で `.env` / `os.environ` を正本・保存先・通常の上書き手段として使うことは禁止する（プロセス起動用の一時フラグ、OSから渡される実行環境情報、`NVF_MASTER_KEY` は例外）。
+- 新規の設定保存処理は `core.settings_store` / `web_app.services.config_service` 経由で DB に保存し、保存後は `setattr(cfg, key, value)` と必要モジュールへの伝搬で即時反映する。`os.environ[key] = value` で反映したことにしない。
 - `config/config.py` の各定数には必ず末尾コメント（`# 説明`）を付ける。新規追加・変更時もコメントを省略しない。
 - パス設定は、アプリ配下・同梱リソース・出力管理配下のものは原則として相対パスまたは `asset:` 参照で保存する。ただし VOICEVOX / AquesTalk / Stable Diffusion WebUI / ffmpeg / Ollama など外部アプリ本体・別ドライブ・ユーザーが任意に配置した外部ツールのパスは、移動追従より実体指定を優先するため絶対パスを許容する。外部アプリの絶対パスを無理に相対化しない。
 - native立ち絵に表情PNG（`expression` 指定）を使用している場合、口パク・まばたきの差分オーバーレイを同セグメントで無効化する。表情PNGはPSDから合成した専用口・目レイヤーを含むため、base.pngとの差分オーバーレイと重ねると二重口・二重目が生じる。

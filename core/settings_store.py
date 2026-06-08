@@ -5,13 +5,12 @@ DB ファイル: {project_root}/data/settings.db
 
 config.py より先にインポートできるよう、config への依存を持たない。
 起動フロー:
-  1. config.py が load_dotenv() を呼ぶ（.env がなければスキップ）
-  2. config.py が initialize() を呼ぶ
-     a. .env に残っている非認証設定を DB へ移行（初回のみ。.env がなければスキップ）
-     b. DB の設定を os.environ に反映
-  3. config.py の os.environ.get() がDB由来の値を読む
+  1. config.py が initialize() を呼ぶ
+  2. 既存互換として .env に残っている非認証設定を DB へ移行（初回のみ。.env がなければスキップ）
+  3. 既存コード向けに DB の設定を os.environ に反映
+  4. 新規設定は os.environ を経由せず、設定DBを正本として読む
 
-.env は移行元としてのみ参照する。なくても動作する。
+.env は既存設定の移行元としてのみ参照する。新規設定の正本・保存先として使わない。
 認証情報（GOOGLE_API_KEY 等）は encrypted_secrets テーブルで管理（core/secret_store.py）。
 """
 import logging

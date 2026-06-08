@@ -6,9 +6,11 @@ load_dotenv()
 
 from core.runtime_env import app_base_dir as _app_base_dir, resource_base_dir as _resource_base_dir
 
-# .env の非認証設定を DB へ移行し、DB の設定を環境変数に反映する
-from core.settings_store import initialize as _init_settings
+# 既存互換: 起動時に過去の非認証 .env 設定を DB へ移行する。
+# 新規設定は _setting_value() で DB を直接読む。
+from core.settings_store import get_all as _get_settings_all, initialize as _init_settings
 _init_settings()
+_SETTINGS_VALUES = _get_settings_all()
 
 _logger = logging.getLogger(__name__)
 
@@ -21,6 +23,11 @@ def _clean_env_choice(value: str) -> str:
     while len(cleaned) >= 2 and cleaned[0] in _ENV_VALUE_QUOTES and cleaned[-1] in _ENV_VALUE_QUOTES:
         cleaned = cleaned[1:-1].strip()
     return cleaned
+
+
+def _setting_value(key: str, default: str) -> str:
+    """設定DBの値を取得する。新規設定は環境変数ではなくDBを正本にする。"""
+    return str(_SETTINGS_VALUES.get(key, default))
 
 
 def _split_env_choices(value: str) -> tuple[str, ...]:
@@ -117,8 +124,8 @@ NATIVE_BGM_VOLUME_DB = float(os.environ.get("NATIVE_BGM_VOLUME_DB", "-20"))  # n
 CHARACTER_UPPER_BODY_MODE              = os.environ.get("CHARACTER_UPPER_BODY_MODE", "1").strip().lower() in ("1", "true", "yes", "on")  # 有効で腰から上表示
 CHARACTER_UPPER_BODY_SCALE             = float(os.environ.get("CHARACTER_UPPER_BODY_SCALE",             "1.55"))  # Long: キャラ拡大倍率
 CHARACTER_UPPER_BODY_SHORTS_SCALE      = float(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_SCALE",      "1.15"))  # Shorts: キャラ拡大倍率（縦画面は幅が狭いため Long より小さく）
-CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET   = int(os.environ.get("CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET",   "310"))    # Shorts: 下方向シフト量 (px)
-CHARACTER_UPPER_BODY_LONG_Y_OFFSET     = int(os.environ.get("CHARACTER_UPPER_BODY_LONG_Y_OFFSET",     "460"))    # Long: 下方向シフト量 (px)
+CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET   = int(_setting_value("CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET",   "310"))    # Shorts: 下方向シフト量 (px)
+CHARACTER_UPPER_BODY_LONG_Y_OFFSET     = int(_setting_value("CHARACTER_UPPER_BODY_LONG_Y_OFFSET",     "460"))    # Long: 下方向シフト量 (px)
 
 # キャラクター表示 — native Shorts 非腰上モード時の倍率（CHARACTER_UPPER_BODY_MODE=0 のときのみ使用）
 NATIVE_SHORTS_CHARACTER_SCALE = float(os.environ.get("NATIVE_SHORTS_CHARACTER_SCALE", "1.05"))
@@ -342,9 +349,9 @@ NATIVE_ENABLE_BLINK      = os.environ.get("NATIVE_ENABLE_BLINK",      "1").strip
 NATIVE_CHARACTER_HEIGHT_SHORTS       = int(os.environ.get("NATIVE_CHARACTER_HEIGHT_SHORTS",       "1000"))  # Shorts: キャラ基本高さ (px)
 NATIVE_CHARACTER_HEIGHT_LONG         = int(os.environ.get("NATIVE_CHARACTER_HEIGHT_LONG",         "598"))   # Long: キャラ基本高さ (px)
 NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS = int(os.environ.get("NATIVE_CHARACTER_BOTTOM_MARGIN_SHORTS", "-360"))  # Shorts: 下マージン (px, 負=画面外下)
-NATIVE_CHARACTER_SIDE_MARGIN_SHORTS   = int(os.environ.get("NATIVE_CHARACTER_SIDE_MARGIN_SHORTS",   "-120"))  # Shorts: 左右マージン (px, 負=画面外)
+NATIVE_CHARACTER_SIDE_MARGIN_SHORTS   = int(_setting_value("NATIVE_CHARACTER_SIDE_MARGIN_SHORTS",   "-120"))  # Shorts: 左右マージン (px, 負=画面外)
 NATIVE_CHARACTER_BOTTOM_MARGIN_LONG   = int(os.environ.get("NATIVE_CHARACTER_BOTTOM_MARGIN_LONG",   "40"))    # Long: 下マージン (px)
-NATIVE_CHARACTER_SIDE_MARGIN_LONG     = int(os.environ.get("NATIVE_CHARACTER_SIDE_MARGIN_LONG",     "-90"))   # Long: 左右マージン (px, 負=画面外)
+NATIVE_CHARACTER_SIDE_MARGIN_LONG     = int(_setting_value("NATIVE_CHARACTER_SIDE_MARGIN_LONG",     "-90"))   # Long: 左右マージン (px, 負=画面外)
 
 # ───────────────────────────────────────────────
 # native 背景トランジション
@@ -358,7 +365,7 @@ NATIVE_BACKGROUND_TRANSITION_SEC = float(os.environ.get("NATIVE_BACKGROUND_TRANS
 NATIVE_ENABLE_MOTION_EFFECTS = os.environ.get("NATIVE_ENABLE_MOTION_EFFECTS", "1").strip().lower() in ("1", "true", "yes", "on")  # native Shorts の軽量演出全体
 NATIVE_ENABLE_BG_KEN_BURNS = os.environ.get("NATIVE_ENABLE_BG_KEN_BURNS", "1").strip().lower() in ("1", "true", "yes", "on")  # 背景のゆっくりズーム/パン
 NATIVE_ENABLE_CHARACTER_BOUNCE = os.environ.get("NATIVE_ENABLE_CHARACTER_BOUNCE", "1").strip().lower() in ("1", "true", "yes", "on")  # 話者開始時の軽いバウンス
-NATIVE_ENABLE_TALK_WIGGLE = os.environ.get("NATIVE_ENABLE_TALK_WIGGLE", "1").strip().lower() in ("1", "true", "yes", "on")  # 発話中の話者キャラ小刻み揺れ
+NATIVE_ENABLE_TALK_WIGGLE = _setting_value("NATIVE_ENABLE_TALK_WIGGLE", "1").strip().lower() in ("1", "true", "yes", "on")  # 発話中の話者キャラ小刻み揺れ
 NATIVE_ENABLE_POP_TELOP = os.environ.get("NATIVE_ENABLE_POP_TELOP", "1").strip().lower() in ("1", "true", "yes", "on")  # テロップ行のポップ表示
 NATIVE_ENABLE_SHAKE = os.environ.get("NATIVE_ENABLE_SHAKE", "1").strip().lower() in ("1", "true", "yes", "on")  # ツッコミ/驚き時の軽い画面揺れ
 NATIVE_MAX_SHAKE_COUNT_SHORTS = int(os.environ.get("NATIVE_MAX_SHAKE_COUNT_SHORTS", "4"))  # Shorts 1本あたりのシェイク最大回数
@@ -499,9 +506,9 @@ VOICEVOX_SYNTHESIS_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_SYNTHESIS_TIMEOU
 NATIVE_SHAKE_AMP_X = int(os.environ.get("NATIVE_SHAKE_AMP_X", "7"))                                  # 画面シェイクの水平方向振幅(px)
 NATIVE_SHAKE_AMP_Y = int(os.environ.get("NATIVE_SHAKE_AMP_Y", "5"))                                  # 画面シェイクの垂直方向振幅(px)
 NATIVE_CHARACTER_BOUNCE_SEC = float(os.environ.get("NATIVE_CHARACTER_BOUNCE_SEC", "0.22"))          # キャラクターバウンス演出時間(秒)
-NATIVE_TALK_WIGGLE_X_PX = float(os.environ.get("NATIVE_TALK_WIGGLE_X_PX", "2"))                     # 発話中キャラ揺れの左右振幅(px)
-NATIVE_TALK_WIGGLE_Y_PX = float(os.environ.get("NATIVE_TALK_WIGGLE_Y_PX", "6"))                     # 発話中キャラ揺れの上下振幅(px)
-NATIVE_TALK_WIGGLE_HZ = float(os.environ.get("NATIVE_TALK_WIGGLE_HZ", "5.5"))                       # 発話中キャラ揺れの周波数(Hz)
+NATIVE_TALK_WIGGLE_X_PX = float(_setting_value("NATIVE_TALK_WIGGLE_X_PX", "2"))                     # 発話中キャラ揺れの左右振幅(px)
+NATIVE_TALK_WIGGLE_Y_PX = float(_setting_value("NATIVE_TALK_WIGGLE_Y_PX", "6"))                     # 発話中キャラ揺れの上下振幅(px)
+NATIVE_TALK_WIGGLE_HZ = float(_setting_value("NATIVE_TALK_WIGGLE_HZ", "5.5"))                       # 発話中キャラ揺れの周波数(Hz)
 NATIVE_TELOP_POP_START_SEC = float(os.environ.get("NATIVE_TELOP_POP_START_SEC", "0.05"))            # ポップテロップの表示開始ディレイ(秒)
 NATIVE_TELOP_POP_MAX_SEC = float(os.environ.get("NATIVE_TELOP_POP_MAX_SEC", "1.5"))                  # ポップテロップの最大表示持続時間(秒)
 

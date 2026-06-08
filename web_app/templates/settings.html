@@ -73,6 +73,51 @@
     padding: 18px;
     color: var(--text-muted);
   }
+  .layout-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 10px 0 18px;
+  }
+  .layout-preview-card {
+    min-width: 0;
+  }
+  .layout-preview-title {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    margin: 0 0 6px;
+  }
+  .layout-preview-frame {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background:
+      linear-gradient(180deg, rgba(53, 132, 80, .35), rgba(31, 92, 59, .58)),
+      linear-gradient(90deg, rgba(255,255,255,.08), rgba(255,255,255,0));
+  }
+  .layout-preview-frame.short {
+    width: min(150px, 100%);
+    aspect-ratio: 9 / 16;
+  }
+  .layout-preview-frame.long {
+    width: min(320px, 100%);
+    aspect-ratio: 16 / 9;
+  }
+  .layout-preview-character {
+    position: absolute;
+    border: 2px solid rgba(255,255,255,.72);
+    border-bottom-width: 0;
+    border-radius: 48% 48% 8px 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  }
+  .layout-preview-character.left {
+    background: linear-gradient(180deg, #ff9bd6, #a579d8);
+  }
+  .layout-preview-character.right {
+    background: linear-gradient(180deg, #b9ff8a, #59b96e);
+  }
   /* ── キャラごとのサブタブ ── */
   .char-subtab-bar {
     display: flex;
@@ -1353,11 +1398,16 @@ async function loadConfig() {
           table.appendChild(tr);
         }
         target.appendChild(table);
+        if (groupName === 'native立ち絵配置') {
+          target.appendChild(buildCharacterLayoutPreview());
+        }
       }
     }
 
     renderConfigItems(form, _configItems.filter(item => !item.admin), '通常設定はありません。');
     renderConfigItems(adminForm, _configItems.filter(item => item.admin), '管理者設定はありません。');
+    bindCharacterLayoutPreview();
+    updateCharacterLayoutPreview();
 
     if (ollamaAvailable && ollamaModels.length > 0) {
       const note = document.createElement('p');
@@ -1369,6 +1419,92 @@ async function loadConfig() {
     form.innerHTML = `<p class="error-text">読み込みエラー: ${e}</p>`;
     adminForm.innerHTML = `<p class="error-text">読み込みエラー: ${e}</p>`;
   }
+}
+
+function buildCharacterLayoutPreview() {
+  const wrap = document.createElement('div');
+  wrap.className = 'layout-preview-grid';
+  wrap.innerHTML = `
+    <div class="layout-preview-card">
+      <div class="layout-preview-title">Shorts</div>
+      <div class="layout-preview-frame short" data-layout-preview="shorts">
+        <div class="layout-preview-character left" data-preview-char="left"></div>
+        <div class="layout-preview-character right" data-preview-char="right"></div>
+      </div>
+    </div>
+    <div class="layout-preview-card">
+      <div class="layout-preview-title">Long</div>
+      <div class="layout-preview-frame long" data-layout-preview="long">
+        <div class="layout-preview-character left" data-preview-char="left"></div>
+        <div class="layout-preview-character right" data-preview-char="right"></div>
+      </div>
+    </div>`;
+  return wrap;
+}
+
+function cfgNumber(key, fallback) {
+  const el = document.getElementById('cfg-' + key);
+  const value = el ? Number(el.value) : Number(fallback);
+  return Number.isFinite(value) ? value : Number(fallback);
+}
+
+function placePreviewCharacters(frame, opts) {
+  if (!frame) return;
+  const rect = frame.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  const scaleX = rect.width / opts.videoW;
+  const scaleY = rect.height / opts.videoH;
+  const charH = opts.charH * opts.charScale * scaleY;
+  const charW = charH * 0.54;
+  const side = opts.sideMargin * scaleX;
+  const bottom = opts.baseBottom - opts.yOffset;
+  const top = (opts.videoH - opts.charH * opts.charScale - bottom) * scaleY;
+  const leftX = side;
+  const rightX = rect.width - charW - side;
+  const chars = frame.querySelectorAll('.layout-preview-character');
+  chars.forEach(ch => {
+    const x = ch.dataset.previewChar === 'right' ? rightX : leftX;
+    ch.style.width = `${charW}px`;
+    ch.style.height = `${charH}px`;
+    ch.style.left = `${x}px`;
+    ch.style.top = `${top}px`;
+  });
+}
+
+function updateCharacterLayoutPreview() {
+  placePreviewCharacters(document.querySelector('[data-layout-preview="shorts"]'), {
+    videoW: 1080,
+    videoH: 1920,
+    charH: 1000,
+    charScale: 1.15,
+    baseBottom: -360,
+    sideMargin: cfgNumber('NATIVE_CHARACTER_SIDE_MARGIN_SHORTS', -120),
+    yOffset: cfgNumber('CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET', 310),
+  });
+  placePreviewCharacters(document.querySelector('[data-layout-preview="long"]'), {
+    videoW: 1280,
+    videoH: 720,
+    charH: 598,
+    charScale: 1.55,
+    baseBottom: 40,
+    sideMargin: cfgNumber('NATIVE_CHARACTER_SIDE_MARGIN_LONG', -90),
+    yOffset: cfgNumber('CHARACTER_UPPER_BODY_LONG_Y_OFFSET', 460),
+  });
+}
+
+function bindCharacterLayoutPreview() {
+  const keys = [
+    'CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET',
+    'CHARACTER_UPPER_BODY_LONG_Y_OFFSET',
+    'NATIVE_CHARACTER_SIDE_MARGIN_SHORTS',
+    'NATIVE_CHARACTER_SIDE_MARGIN_LONG',
+  ];
+  keys.forEach(key => {
+    const el = document.getElementById('cfg-' + key);
+    if (el) el.addEventListener('input', updateCharacterLayoutPreview);
+  });
+  window.removeEventListener('resize', updateCharacterLayoutPreview);
+  window.addEventListener('resize', updateCharacterLayoutPreview);
 }
 
 async function saveConfig() {

@@ -44,11 +44,20 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "NATIVE_ENABLE_MOTION_EFFECTS",    "type": "bool",  "label": "Shorts軽量エフェクト全体",   "default": "1" if cfg.NATIVE_ENABLE_MOTION_EFFECTS   else "0", "group": "エフェクト"},
     {"key": "NATIVE_ENABLE_BG_KEN_BURNS",      "type": "bool",  "label": "背景ズーム/パン",            "default": "1" if cfg.NATIVE_ENABLE_BG_KEN_BURNS     else "0", "group": "エフェクト"},
     {"key": "NATIVE_ENABLE_CHARACTER_BOUNCE",  "type": "bool",  "label": "キャラバウンス",             "default": "1" if cfg.NATIVE_ENABLE_CHARACTER_BOUNCE else "0", "group": "エフェクト"},
+    {"key": "NATIVE_ENABLE_TALK_WIGGLE",       "type": "bool",  "label": "発話中キャラ小刻み揺れ",     "default": "1" if cfg.NATIVE_ENABLE_TALK_WIGGLE      else "0", "group": "エフェクト"},
+    {"key": "NATIVE_TALK_WIGGLE_X_PX",         "type": "float", "label": "発話中揺れ 左右(px)",         "default": str(cfg.NATIVE_TALK_WIGGLE_X_PX),         "min": 0, "max": 30, "group": "エフェクト"},
+    {"key": "NATIVE_TALK_WIGGLE_Y_PX",         "type": "float", "label": "発話中揺れ 上下(px)",         "default": str(cfg.NATIVE_TALK_WIGGLE_Y_PX),         "min": 0, "max": 40, "group": "エフェクト"},
+    {"key": "NATIVE_TALK_WIGGLE_HZ",           "type": "float", "label": "発話中揺れ 周波数(Hz)",       "default": str(cfg.NATIVE_TALK_WIGGLE_HZ),           "min": 0.1, "max": 20, "group": "エフェクト"},
     {"key": "NATIVE_ENABLE_POP_TELOP",         "type": "bool",  "label": "テロップポップ",             "default": "1" if cfg.NATIVE_ENABLE_POP_TELOP        else "0", "group": "エフェクト"},
     {"key": "NATIVE_ENABLE_SHAKE",             "type": "bool",  "label": "ツッコミ/驚きシェイク",      "default": "1" if cfg.NATIVE_ENABLE_SHAKE            else "0", "group": "エフェクト"},
     {"key": "NATIVE_MAX_SHAKE_COUNT_SHORTS",   "type": "int",   "label": "シェイク上限 (Shorts)",      "default": str(cfg.NATIVE_MAX_SHAKE_COUNT_SHORTS),   "min": 0, "max": 10,  "group": "エフェクト"},
     {"key": "NATIVE_MAX_ICON_COUNT_SHORTS",    "type": "int",   "label": "疑問/驚きアイコン上限",      "default": str(cfg.NATIVE_MAX_ICON_COUNT_SHORTS),    "min": 0, "max": 10,  "group": "エフェクト"},
     {"key": "NATIVE_BG_ZOOM_MAX",              "type": "float", "label": "背景ズーム最大倍率",          "default": str(cfg.NATIVE_BG_ZOOM_MAX),              "min": 1.0, "max": 1.2, "group": "エフェクト"},
+    # ── native 立ち絵配置 ──
+    {"key": "CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET", "type": "int", "label": "Shorts キャラ下方向シフト(px)", "default": str(cfg.CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET), "min": 0, "max": 900, "group": "native立ち絵配置"},
+    {"key": "CHARACTER_UPPER_BODY_LONG_Y_OFFSET",   "type": "int", "label": "Long キャラ下方向シフト(px)",   "default": str(cfg.CHARACTER_UPPER_BODY_LONG_Y_OFFSET),   "min": 0, "max": 900, "group": "native立ち絵配置"},
+    {"key": "NATIVE_CHARACTER_SIDE_MARGIN_SHORTS",   "type": "int", "label": "Shorts キャラ左右マージン(px)", "default": str(cfg.NATIVE_CHARACTER_SIDE_MARGIN_SHORTS),   "min": -600, "max": 600, "group": "native立ち絵配置"},
+    {"key": "NATIVE_CHARACTER_SIDE_MARGIN_LONG",     "type": "int", "label": "Long キャラ左右マージン(px)",   "default": str(cfg.NATIVE_CHARACTER_SIDE_MARGIN_LONG),     "min": -600, "max": 600, "group": "native立ち絵配置"},
     {"key": "MAX_BACKGROUNDS_SHORTS",          "type": "int",   "label": "最大背景枚数 (Shorts)",      "default": str(cfg.MAX_BACKGROUNDS_SHORTS),          "min": 1, "max": 30,   "group": "エフェクト"},
     {"key": "MAX_BACKGROUNDS_LONG",            "type": "int",   "label": "最大背景枚数 (Long)",         "default": str(cfg.MAX_BACKGROUNDS_LONG),            "min": 1, "max": 200,  "group": "エフェクト"},
     {"key": "MAX_BACKGROUNDS_LONG_BUDGET",     "type": "int",   "label": "最大背景枚数 (Long節約)",     "default": str(cfg.MAX_BACKGROUNDS_LONG_BUDGET),     "min": 1, "max": 50,   "group": "エフェクト"},
@@ -274,9 +283,8 @@ def _validate(updates: dict[str, str]) -> list[str]:
 def _apply_runtime_updates(updates: dict[str, str]) -> None:
     """保存した設定を現在のWebプロセスへ即時反映する。
 
-    1. os.environ を更新
-    2. config モジュール属性を更新
-    3. 'from config import X' でキャプチャ済みの全モジュール変数も更新
+    1. config モジュール属性を更新
+    2. 'from config import X' でキャプチャ済みの全モジュール変数も更新
        → native_renderer, voicevox など起動時にインポートしたモジュールにも即反映
     """
     import sys
@@ -285,7 +293,6 @@ def _apply_runtime_updates(updates: dict[str, str]) -> None:
         spec = key_map.get(key)
         if not spec:
             continue
-        os.environ[key] = str(raw_val)
         try:
             if spec["type"] == "int":
                 value: Any = int(raw_val)
