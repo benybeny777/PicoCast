@@ -359,6 +359,9 @@ function pollJobs(tab) {
           const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
           const job = await res.json();
           updateJobCard(container, job);
+          if (job.type === 'generate_batch') {
+            await trackVisibleGenerateChildren();
+          }
           if (['success', 'failed', 'cancelled'].includes(job.status)) {
             // 生成成功後にレンダージョブが登録されている場合は追跡リストに追加
             if (job.status === 'success' && job.result?.render_job_id) {
@@ -385,6 +388,19 @@ function pollJobs(tab) {
       return false;
     } finally { _polling = false; }
   }, window.WEB_JOB_POLL_INTERVAL_MS, 10000);
+}
+
+async function trackVisibleGenerateChildren() {
+  const res = await fetch('/api/jobs', {cache: 'no-store'});
+  if (!res.ok) return;
+  const jobs = await res.json();
+  for (const job of jobs) {
+    if (!['generate', 'render'].includes(job.type)) continue;
+    if (!['queued', 'running'].includes(job.status)) continue;
+    if (!activeJobIds.includes(job.job_id)) {
+      activeJobIds.push(job.job_id);
+    }
+  }
 }
 
 function finishGenerate(tab) {

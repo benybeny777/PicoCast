@@ -724,7 +724,7 @@ def test_run_render_success_includes_message(monkeypatch, tmp_path):
 
 
 def test_discard_pending_jobs_cancels_only_queued_runnable(tmp_path, monkeypatch):
-    """起動時破棄は queued の generate/render だけを cancelled にし、他状態は触らない。"""
+    """起動時破棄は queued の generate/render だけを cancelled にする。"""
     m = _patch_metadata_db(monkeypatch, tmp_path)
 
     base = {"profile_id": "p", "progress_text": "", "logs": [], "params": {}}
@@ -741,6 +741,31 @@ def test_discard_pending_jobs_cancels_only_queued_runnable(tmp_path, monkeypatch
     assert statuses["queued-render"] == "cancelled"
     assert statuses["running-gen"] == "running"
     assert statuses["queued-other"] == "queued"
+
+
+def test_discard_orphan_running_jobs_fails_runnerless_running(tmp_path, monkeypatch):
+    """runner情報のない running generate/render は起動時残骸として failed にする。"""
+    m = _patch_metadata_db(monkeypatch, tmp_path)
+
+    base = {"profile_id": "p", "progress_text": "", "logs": [], "params": {}}
+    m.upsert_job({**base, "job_id": "orphan-gen", "type": "generate", "status": "running"})
+    m.upsert_job({
+        **base,
+        "job_id": "runner-gen",
+        "type": "generate",
+        "status": "running",
+        "runner_pid": 1234,
+        "heartbeat_at": m._now_jst(),
+    })
+    m.upsert_job({**base, "job_id": "running-other", "type": "image_regenerate", "status": "running"})
+
+    discarded = m.discard_orphan_running_jobs(("generate", "render"))
+
+    assert discarded == 1
+    rows = {r["job_id"]: r for r in m.load_jobs_from_db(max_n=10)}
+    assert rows["orphan-gen"]["status"] == "failed"
+    assert rows["runner-gen"]["status"] == "running"
+    assert rows["running-other"]["status"] == "running"
 
 
 def test_config_image_style_choices_save_normalizes_quotes(tmp_path, monkeypatch):
@@ -1289,6 +1314,8 @@ def test_submit_generate_logs_queue_wait_note(tmp_path, monkeypatch):
         "progress_text": "実行中",
         "logs": [],
         "params": {},
+        "runner_pid": 1234,
+        "heartbeat_at": m._now_jst(),
     })
 
     job_id = gs.submit_generate_job("動画形式: Shorts\n動画タイトル: queue-test\n")

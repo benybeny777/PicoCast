@@ -1635,6 +1635,38 @@ def discard_pending_jobs(job_types: list[str] | tuple[str, ...]) -> int:
         return int(cur.rowcount or 0)
 
 
+def discard_orphan_running_jobs(job_types: list[str] | tuple[str, ...]) -> int:
+    """runner管理外のまま残った running ジョブを failed へ破棄する。
+
+    旧実装や異常終了で `running` なのに `runner_pid` / `heartbeat_at` が無い
+    generate/render が残ると、新規バッチ投入時の同時実行数判定を塞ぐため、
+    起動時に前回セッションの残骸として停止する。
+    """
+    initialize_db()
+    if not job_types:
+        return 0
+    placeholders = ",".join("?" for _ in job_types)
+    with ManagedConnection() as conn:
+        cur = conn.execute(
+            f"""
+            UPDATE jobs
+            SET status='failed',
+                progress_text='起動時に破棄（前回の実行中ジョブ残骸）',
+                error='起動時に破棄（前回の実行中ジョブ残骸）',
+                finished_at=?,
+                heartbeat_at=?,
+                runner_pid=NULL
+            WHERE status='running'
+              AND job_type IN ({placeholders})
+              AND runner_pid IS NULL
+              AND heartbeat_at IS NULL
+            """,
+            (_now_jst(), _now_jst(), *job_types),
+        )
+        conn.commit()
+        return int(cur.rowcount or 0)
+
+
 def delete_old_jobs(keep_n: int) -> None:
     """古いジョブを削除して keep_n 件だけ残す。"""
     with ManagedConnection() as conn:

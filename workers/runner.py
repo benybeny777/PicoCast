@@ -272,17 +272,23 @@ def _run_job(job: dict) -> None:
 
 
 def _discard_pending_on_startup() -> None:
-    """起動時に残っていた前回の未実行(queued)ジョブを破棄し、自動実行しないようにする。"""
-    from core.metadata_db import discard_pending_jobs, initialize_db, is_initialized
+    """起動時に残っていた前回の generate/render 残骸を破棄する。"""
+    from core.metadata_db import discard_orphan_running_jobs, discard_pending_jobs, initialize_db, is_initialized
 
-    total = 0
+    queued_total = 0
+    running_total = 0
     for profile in list_profiles():
         with profile_context(profile.profile_id):
             if not is_initialized():
                 initialize_db()
-            total += discard_pending_jobs(_RUNNABLE_TYPES)
-    if total:
-        _logger.info("起動時に前回の未実行ジョブを破棄しました: count=%s", total)
+            queued_total += discard_pending_jobs(_RUNNABLE_TYPES)
+            running_total += discard_orphan_running_jobs(_RUNNABLE_TYPES)
+    if queued_total or running_total:
+        _logger.info(
+            "起動時に前回ジョブ残骸を破棄しました: queued=%s orphan_running=%s",
+            queued_total,
+            running_total,
+        )
 
 
 def _claim_one(pid: int) -> dict | None:

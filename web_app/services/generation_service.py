@@ -36,12 +36,20 @@ def _current_worker_limit() -> int:
 
 def _active_runnable_count() -> int:
     """生成・レンダーの queued/running 件数を返す。"""
-    mgr = get_job_manager()
-    jobs = mgr.list_jobs()
+    from config import JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC
+    from core.metadata_db import discard_orphan_running_jobs, load_jobs_from_db, reap_stale_running_jobs
+
+    discard_orphan_running_jobs(("generate", "render"))
+    reap_stale_running_jobs(JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC)
+    jobs = load_jobs_from_db(max_n=5000)
     return sum(
         1
         for j in jobs
-        if j.get("type") in ("generate", "render") and j.get("status") in ("queued", "running")
+        if j.get("type") in ("generate", "render")
+        and (
+            j.get("status") == "queued"
+            or (j.get("status") == "running" and j.get("runner_pid") is not None)
+        )
     )
 
 
