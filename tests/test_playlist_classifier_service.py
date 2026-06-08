@@ -71,3 +71,25 @@ def test_classifier_skips_registered_when_requested(monkeypatch):
     assert called["classifier"] is False
     assert result["results"] == []
     assert result["skipped"] == 1
+
+
+def test_normalize_history_names_removes_empty_and_duplicates():
+    from web_app.services import playlist_classifier_service as service
+
+    assert service._normalize_history_names([
+        " Long_A ",
+        "",
+        "Long_A",
+        "Long_B",
+    ]) == ["Long_A", "Long_B"]
+
+
+def test_normalize_playlist_categories_handles_db_values():
+    from web_app.services import playlist_classifier_service as service
+
+    assert service._normalize_playlist_categories(" 学校怪談 ") == ["学校怪談"]
+    assert service._normalize_playlist_categories(["学校怪談", "", " 身近な恐怖 "]) == [
+        "学校怪談",
+        "身近な恐怖",
+    ]
+    assert service._normalize_playlist_categories(None) == []

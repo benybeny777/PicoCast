@@ -9,14 +9,17 @@ _TRACE_MARKERS = (
     "The above exception was the direct cause of the following exception:",
 )
 _TRACE_FILE_LINE = re.compile(r'^\s*File "[^"]+", line \d+')
+_FALLBACK_MESSAGE = "処理に失敗しました。詳細はデバッグログを確認してください。"
+
+
+def _before_first_trace_marker(text: str) -> str:
+    positions = [text.find(marker) for marker in _TRACE_MARKERS if marker in text]
+    return text[:min(positions)] if positions else text
 
 
 def sanitize_process_log_message(message: object) -> str:
     """処理ログへ保存可能な、スタックトレースを含まない文字列を返す。"""
-    text = str(message or "")
-    marker_positions = [text.find(marker) for marker in _TRACE_MARKERS if marker in text]
-    if marker_positions:
-        text = text[:min(marker_positions)]
+    text = _before_first_trace_marker(str(message or ""))
 
     safe_lines: list[str] = []
     for line in text.splitlines():
@@ -25,9 +28,7 @@ def sanitize_process_log_message(message: object) -> str:
         safe_lines.append(line)
 
     sanitized = "\n".join(safe_lines).strip()
-    if sanitized:
-        return sanitized
-    return "処理に失敗しました。詳細はデバッグログを確認してください。"
+    return sanitized or _FALLBACK_MESSAGE
 
 
 def user_facing_error_message(exc: Exception) -> str:
