@@ -25,7 +25,11 @@ def _normalize_playlist_categories(raw: Any) -> list[str]:
         value = raw.strip()
         return [value] if value else []
     if isinstance(raw, (list, tuple)):
-        return [value for item in raw if (value := str(item).strip())]
+        return list(dict.fromkeys(
+            value
+            for item in raw
+            if (value := str(item).strip())
+        ))
     return []
 
 
@@ -105,6 +109,7 @@ def submit_playlist_classifier_job(
 
 
 def _raise_classification_failure(
+    job: Job,
     *,
     history_name: str,
     stage: str,
@@ -125,6 +130,7 @@ def _raise_classification_failure(
         history_name,
         exc_info=True,
     )
+    _log(job, f"{history_name}: {error.user_message()}", "error")
     if error is exc:
         raise error
     raise error from exc
@@ -193,6 +199,7 @@ def _classify_history(
         }
     except Exception as exc:
         _raise_classification_failure(
+            job,
             history_name=history_name,
             stage=stage,
             exc=exc,

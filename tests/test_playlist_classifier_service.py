@@ -1,6 +1,8 @@
 import threading
 from types import SimpleNamespace
 
+import pytest
+
 
 def _job():
     return SimpleNamespace(
@@ -88,8 +90,34 @@ def test_normalize_playlist_categories_handles_db_values():
     from web_app.services import playlist_classifier_service as service
 
     assert service._normalize_playlist_categories(" 学校怪談 ") == ["学校怪談"]
-    assert service._normalize_playlist_categories(["学校怪談", "", " 身近な恐怖 "]) == [
+    assert service._normalize_playlist_categories(["学校怪談", "", " 身近な恐怖 ", "学校怪談"]) == [
         "学校怪談",
         "身近な恐怖",
     ]
     assert service._normalize_playlist_categories(None) == []
+
+
+def test_classifier_failure_is_written_to_job_log(monkeypatch):
+    import core.metadata_db as metadata_db
+    import core.playlist_resolver as playlist_resolver
+    import web_app.security as security
+    from core.error_codes import AppError
+    from web_app.services import playlist_classifier_service as service
+
+    logs = []
+    monkeypatch.setattr(security, "find_history_dir", lambda name: None)
+    monkeypatch.setattr(playlist_resolver, "get_standard_categories", lambda: ("学校怪談",))
+    monkeypatch.setattr(metadata_db, "get_render_info", lambda name: {})
+    monkeypatch.setattr(
+        service,
+        "_log",
+        lambda job, message, level="info": logs.append((message, level)),
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        service._run_playlist_classifier(_job(), ["Long_存在しない動画"], True)
+
+    assert exc_info.value.code == "E-PLAYLIST-TARGET"
+    assert logs
+    assert logs[-1][1] == "error"
+    assert "Long_存在しない動画" in logs[-1][0]

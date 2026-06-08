@@ -214,6 +214,12 @@ source .venv/bin/activate
 pip install --upgrade -r config/requirements.txt
 ```
 
+テストを実行する開発環境では、追加で開発用依存を入れます。
+
+```powershell
+pip install --upgrade -r config/requirements-dev.txt
+```
+
 ### Step 2. 認証情報の登録
 
 認証情報はすべて **設定画面の「APIキー」タブ** から登録します。
