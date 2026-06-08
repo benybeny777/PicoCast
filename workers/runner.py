@@ -120,6 +120,9 @@ def _job_topic(script: str) -> str:
 
 
 def _run_generate(job: dict, cancel_event: threading.Event, log: _BufferedJobLog) -> dict[str, Any]:
+    from core.runtime_config import refresh_runtime_settings
+
+    refresh_runtime_settings()
     params = job.get("params") or {}
     script = params.get("script") or params.get("pregenerated_script") or ""
     topic = _job_topic(script)
@@ -163,6 +166,9 @@ def _run_generate(job: dict, cancel_event: threading.Event, log: _BufferedJobLog
 
 
 def _run_render(job: dict, cancel_event: threading.Event, log: _BufferedJobLog) -> dict[str, Any]:
+    from core.runtime_config import refresh_runtime_settings
+
+    refresh_runtime_settings()
     params = job.get("params") or {}
     history_name = params["history_name"]
     theme_dir = params["theme_dir"]

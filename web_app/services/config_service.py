@@ -287,40 +287,6 @@ def _apply_runtime_updates(updates: dict[str, str]) -> None:
     2. 'from config import X' でキャプチャ済みの全モジュール変数も更新
        → native_renderer, voicevox など起動時にインポートしたモジュールにも即反映
     """
-    import sys
-    key_map = {item["key"]: item for item in EDITABLE_CONFIG}
-    for key, raw_val in updates.items():
-        spec = key_map.get(key)
-        if not spec:
-            continue
-        try:
-            if spec["type"] == "int":
-                value: Any = int(raw_val)
-            elif spec["type"] == "float":
-                value = float(raw_val)
-            elif spec["type"] == "bool":
-                value = str(raw_val) == "1"
-            elif key == "WEB_IMAGE_STYLE_CHOICES":
-                value = cfg._split_env_choices(raw_val)
-            elif key == "WEB_DEFAULT_IMAGE_STYLE":
-                value = cfg._clean_env_choice(raw_val)
-            elif spec["type"] == "hex_color":
-                value = str(raw_val).strip()
-            else:
-                value = str(raw_val)
-        except (ValueError, TypeError):
-            _logger.warning("保存済み設定の実行時反映に失敗しました: key=%s value=%r", key, raw_val, exc_info=True)
-            continue
+    from core.runtime_config import apply_runtime_settings
 
-        # config モジュール自身を更新
-        setattr(cfg, key, value)
-
-        # 'from config import KEY' でキャプチャしたモジュールの変数も一括更新
-        for mod in list(sys.modules.values()):
-            if mod is None or mod is cfg:
-                continue
-            if hasattr(mod, key):
-                try:
-                    setattr(mod, key, value)
-                except (AttributeError, TypeError):
-                    _logger.warning("設定値のモジュール反映に失敗しました: key=%s module=%s", key, getattr(mod, "__name__", ""), exc_info=True)
+    apply_runtime_settings(updates)

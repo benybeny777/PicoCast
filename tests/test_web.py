@@ -765,6 +765,40 @@ def test_run_render_success_includes_message(monkeypatch, tmp_path):
     assert runner._result_error_message(result) == ""
 
 
+def test_run_render_refreshes_settings_db_before_render(monkeypatch, tmp_path):
+    """起動済みrunnerでも、再レンダー前にsettings.dbの最新設定をnative_rendererへ反映する。"""
+    import threading
+    from types import SimpleNamespace
+    import core.native_renderer as native_renderer
+    import workers.runner as runner
+
+    monkeypatch.setattr("core.settings_store.get_all", lambda: {
+        "NATIVE_TALK_WIGGLE_HZ": "2.5",
+        "NATIVE_CHARACTER_SIDE_MARGIN_SHORTS": "-180",
+        "CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET": "360",
+    })
+    monkeypatch.setattr(native_renderer, "NATIVE_TALK_WIGGLE_HZ", 5.5)
+    monkeypatch.setattr(native_renderer, "NATIVE_CHARACTER_SIDE_MARGIN_SHORTS", -120)
+    monkeypatch.setattr(native_renderer, "CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET", 310)
+
+    def fake_render(**kw):
+        assert native_renderer.NATIVE_TALK_WIGGLE_HZ == 2.5
+        assert native_renderer.NATIVE_CHARACTER_SIDE_MARGIN_SHORTS == -180
+        assert native_renderer.CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET == 360
+        return SimpleNamespace(output_path=str(tmp_path / "out.mp4"))
+
+    monkeypatch.setattr("core.native_renderer.render_native", fake_render)
+
+    class _StubLog:
+        def add(self, *a, **k):
+            pass
+
+    job = {"params": {"history_name": "h", "theme_dir": str(tmp_path)}}
+    result = runner._run_render(job, threading.Event(), _StubLog())
+
+    assert result["output_path"].endswith("out.mp4")
+
+
 def test_discard_pending_jobs_cancels_only_queued_runnable(tmp_path, monkeypatch):
     """起動時破棄は queued の generate/render だけを cancelled にする。"""
     m = _patch_metadata_db(monkeypatch, tmp_path)
