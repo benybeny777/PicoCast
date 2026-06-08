@@ -698,9 +698,11 @@ def test_native_character_layout_settings_are_editable():
     ]
     wiggle_keys = [
         "NATIVE_ENABLE_TALK_WIGGLE",
+        "NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS",
         "NATIVE_TALK_WIGGLE_X_PX",
         "NATIVE_TALK_WIGGLE_Y_PX",
         "NATIVE_TALK_WIGGLE_HZ",
+        "NATIVE_REACTION_EFFECT_MIN_GAP_SEGMENTS",
     ]
 
     for key in layout_keys:
@@ -776,15 +778,18 @@ def test_run_render_refreshes_settings_db_before_render(monkeypatch, tmp_path):
 
     monkeypatch.setattr("core.settings_store.get_all", lambda: {
         "NATIVE_TALK_WIGGLE_HZ": "2.5",
+        "NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS": "4",
         "NATIVE_CHARACTER_SIDE_MARGIN_SHORTS": "-180",
         "CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET": "360",
     })
     monkeypatch.setattr(native_renderer, "NATIVE_TALK_WIGGLE_HZ", 5.5)
+    monkeypatch.setattr(native_renderer, "NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS", 3)
     monkeypatch.setattr(native_renderer, "NATIVE_CHARACTER_SIDE_MARGIN_SHORTS", -120)
     monkeypatch.setattr(native_renderer, "CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET", 310)
 
     def fake_render(**kw):
         assert native_renderer.NATIVE_TALK_WIGGLE_HZ == 2.5
+        assert native_renderer.NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS == 4
         assert native_renderer.NATIVE_CHARACTER_SIDE_MARGIN_SHORTS == -180
         assert native_renderer.CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET == 360
         return SimpleNamespace(output_path=str(tmp_path / "out.mp4"))

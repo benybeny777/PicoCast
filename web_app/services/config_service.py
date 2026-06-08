@@ -45,6 +45,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "NATIVE_ENABLE_BG_KEN_BURNS",      "type": "bool",  "label": "背景ズーム/パン",            "default": "1" if cfg.NATIVE_ENABLE_BG_KEN_BURNS     else "0", "group": "エフェクト"},
     {"key": "NATIVE_ENABLE_CHARACTER_BOUNCE",  "type": "bool",  "label": "キャラバウンス",             "default": "1" if cfg.NATIVE_ENABLE_CHARACTER_BOUNCE else "0", "group": "エフェクト"},
     {"key": "NATIVE_ENABLE_TALK_WIGGLE",       "type": "bool",  "label": "発話中キャラ小刻み揺れ",     "default": "1" if cfg.NATIVE_ENABLE_TALK_WIGGLE      else "0", "group": "エフェクト"},
+    {"key": "NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS", "type": "int", "label": "発話中揺れ 間隔(セリフ数)", "default": str(cfg.NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS), "min": 1, "max": 20, "group": "エフェクト"},
     {"key": "NATIVE_TALK_WIGGLE_X_PX",         "type": "float", "label": "発話中揺れ 左右(px)",         "default": str(cfg.NATIVE_TALK_WIGGLE_X_PX),         "min": 0, "max": 30, "group": "エフェクト"},
     {"key": "NATIVE_TALK_WIGGLE_Y_PX",         "type": "float", "label": "発話中揺れ 上下(px)",         "default": str(cfg.NATIVE_TALK_WIGGLE_Y_PX),         "min": 0, "max": 40, "group": "エフェクト"},
     {"key": "NATIVE_TALK_WIGGLE_HZ",           "type": "float", "label": "発話中揺れ 周波数(Hz)",       "default": str(cfg.NATIVE_TALK_WIGGLE_HZ),           "min": 0.1, "max": 20, "group": "エフェクト"},
@@ -52,6 +53,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "NATIVE_ENABLE_SHAKE",             "type": "bool",  "label": "ツッコミ/驚きシェイク",      "default": "1" if cfg.NATIVE_ENABLE_SHAKE            else "0", "group": "エフェクト"},
     {"key": "NATIVE_MAX_SHAKE_COUNT_SHORTS",   "type": "int",   "label": "シェイク上限 (Shorts)",      "default": str(cfg.NATIVE_MAX_SHAKE_COUNT_SHORTS),   "min": 0, "max": 10,  "group": "エフェクト"},
     {"key": "NATIVE_MAX_ICON_COUNT_SHORTS",    "type": "int",   "label": "疑問/驚きアイコン上限",      "default": str(cfg.NATIVE_MAX_ICON_COUNT_SHORTS),    "min": 0, "max": 10,  "group": "エフェクト"},
+    {"key": "NATIVE_REACTION_EFFECT_MIN_GAP_SEGMENTS", "type": "int", "label": "シェイク/アイコン間隔(セリフ数)", "default": str(cfg.NATIVE_REACTION_EFFECT_MIN_GAP_SEGMENTS), "min": 0, "max": 20, "group": "エフェクト"},
     {"key": "NATIVE_BG_ZOOM_MAX",              "type": "float", "label": "背景ズーム最大倍率",          "default": str(cfg.NATIVE_BG_ZOOM_MAX),              "min": 1.0, "max": 1.2, "group": "エフェクト"},
     # ── native 立ち絵配置 ──
     {"key": "CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET", "type": "int", "label": "Shorts キャラ下方向シフト(px)", "default": str(cfg.CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET), "min": 0, "max": 900, "group": "native立ち絵配置"},

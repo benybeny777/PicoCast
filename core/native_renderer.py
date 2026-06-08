@@ -74,8 +74,10 @@ from config import (
     NATIVE_SHAKE_AMP_Y,
     NATIVE_CHARACTER_BOUNCE_SEC,
     NATIVE_TALK_WIGGLE_HZ,
+    NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS,
     NATIVE_TALK_WIGGLE_X_PX,
     NATIVE_TALK_WIGGLE_Y_PX,
+    NATIVE_REACTION_EFFECT_MIN_GAP_SEGMENTS,
     NATIVE_TELOP_POP_START_SEC,
     NATIVE_TELOP_POP_MAX_SEC,
 )
@@ -484,7 +486,9 @@ def _effects_for_audio_files(script_text: str, audio_files: list[str], is_shorts
     search_from = 0
     shake_count = 0
     icon_count = 0
+    last_reaction_effect_idx = -10_000
     for audio_path in audio_files:
+        segment_idx = len(result)
         audio_text = _audio_caption(audio_path)
         audio_key = _audio_stem_key(audio_text)
         matched: tuple[CaptionChunk, str | None] | None = None
@@ -500,14 +504,18 @@ def _effects_for_audio_files(script_text: str, audio_files: list[str], is_shorts
             telop = None
         should_shake = bool(is_shorts and _is_reaction_for_motion(text, style, _expression))
         icon = _reaction_icon(text, style, _expression) if is_shorts else None
-        if should_shake and shake_count < max(0, NATIVE_MAX_SHAKE_COUNT_SHORTS):
+        min_gap = max(0, int(NATIVE_REACTION_EFFECT_MIN_GAP_SEGMENTS or 0))
+        gap_ok = segment_idx - last_reaction_effect_idx >= min_gap
+        if should_shake and gap_ok and shake_count < max(0, NATIVE_MAX_SHAKE_COUNT_SHORTS):
             shake_count += 1
         else:
             should_shake = False
-        if icon and icon_count < max(0, NATIVE_MAX_ICON_COUNT_SHORTS):
+        if icon and gap_ok and icon_count < max(0, NATIVE_MAX_ICON_COUNT_SHORTS):
             icon_count += 1
         else:
             icon = None
+        if should_shake or icon:
+            last_reaction_effect_idx = segment_idx
         result.append(SegmentEffect(telop=telop, shake=should_shake, icon=icon))
     return result
 
@@ -726,6 +734,11 @@ def _character_overlay_position(name: str, portrait: bool = False, index: int = 
     )
 
 
+def _talk_wiggle_enabled_for_segment(segment_index: int) -> bool:
+    every_n = max(1, int(NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS or 1))
+    return segment_index % every_n == 0
+
+
 def _speaker_name(style: str) -> str | None:
     if style == "Zundamon":
         return "zundamon"
@@ -903,7 +916,7 @@ def _segment_filter(
     total_characters = len(characters)
     for char_idx, character in enumerate(characters):
         char_bounce = bool(bounce_on and speaking == character.name)
-        char_talk_wiggle = bool(talk_wiggle_on and speaking == character.name)
+        char_talk_wiggle = bool(talk_wiggle_on and speaking == character.name and _talk_wiggle_enabled_for_segment(segment_index))
         position = _character_overlay_position(
             character.name,
             portrait=portrait,
@@ -1144,7 +1157,7 @@ def _native_motion_config_lines(is_shorts: bool) -> list[str]:
     wiggle_status = "enabled" if (NATIVE_ENABLE_MOTION_EFFECTS and NATIVE_ENABLE_TALK_WIGGLE and is_shorts) else "disabled"
     return [
         f"🧍 native立ち絵配置({screen}): side={side}px / y_offset={y_offset}px / scale={char_scale:g}",
-        f"〰️ 発話中揺れ: {wiggle_status} / x={NATIVE_TALK_WIGGLE_X_PX:g}px / y={NATIVE_TALK_WIGGLE_Y_PX:g}px / hz={NATIVE_TALK_WIGGLE_HZ:g}",
+        f"〰️ 発話中揺れ: {wiggle_status} / every={max(1, int(NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS or 1))}セリフ / x={NATIVE_TALK_WIGGLE_X_PX:g}px / y={NATIVE_TALK_WIGGLE_Y_PX:g}px / hz={NATIVE_TALK_WIGGLE_HZ:g}",
     ]
 
 

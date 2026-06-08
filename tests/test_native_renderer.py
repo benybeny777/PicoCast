@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.native_character_assets import CharacterVariantSet
-from core.native_renderer import _character_base_path, _character_overlay_position, _character_position, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _native_motion_config_lines, _run_ffmpeg, _save_render_info, _subtitles_filter_path, _write_subtitles
+from core.native_renderer import _character_base_path, _character_overlay_position, _character_position, _duration_status, _effects_for_audio_files, _expression_fallback_reason, _native_loudnorm_filter, _native_motion_config_lines, _run_ffmpeg, _save_render_info, _subtitles_filter_path, _talk_wiggle_enabled_for_segment, _write_subtitles
 
 
 class TestDurationStatus(unittest.TestCase):
@@ -166,6 +166,10 @@ class TestCharacterMotionPosition(unittest.TestCase):
         self.assertIn(":", position)
         self.assertNotEqual(position, _character_position("metan", portrait=True, index=1, total=2))
 
+    def test_talk_wiggle_is_thinned_by_default(self):
+        enabled = [_talk_wiggle_enabled_for_segment(i) for i in range(6)]
+        self.assertEqual(enabled, [True, False, False, True, False, False])
+
 
 class TestNativeMotionConfigLog(unittest.TestCase):
     def test_config_log_includes_layout_and_wiggle(self):
@@ -177,6 +181,21 @@ class TestNativeMotionConfigLog(unittest.TestCase):
         self.assertIn("y_offset=", joined)
         self.assertIn("発話中揺れ", joined)
         self.assertIn("hz=", joined)
+        self.assertIn("every=", joined)
+
+
+class TestReactionEffects(unittest.TestCase):
+    def test_reaction_effects_are_rate_limited(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            audio_files = []
+            for i in range(6):
+                path = os.path.join(tmpdir, f"{i:04d}_えっ本当なの？.wav")
+                open(path, "wb").close()
+                audio_files.append(path)
+            effects = _effects_for_audio_files("", audio_files, True)
+
+        active_indexes = [i for i, effect in enumerate(effects) if effect.shake or effect.icon]
+        self.assertEqual(active_indexes, [0, 4])
 
 
 class TestWriteSubtitles(unittest.TestCase):
