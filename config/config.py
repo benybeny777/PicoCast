@@ -365,7 +365,7 @@ NATIVE_BACKGROUND_TRANSITION_SEC = float(os.environ.get("NATIVE_BACKGROUND_TRANS
 NATIVE_ENABLE_MOTION_EFFECTS = os.environ.get("NATIVE_ENABLE_MOTION_EFFECTS", "1").strip().lower() in ("1", "true", "yes", "on")  # native Shorts の軽量演出全体
 NATIVE_ENABLE_BG_KEN_BURNS = os.environ.get("NATIVE_ENABLE_BG_KEN_BURNS", "1").strip().lower() in ("1", "true", "yes", "on")  # 背景のゆっくりズーム/パン
 NATIVE_ENABLE_CHARACTER_BOUNCE = os.environ.get("NATIVE_ENABLE_CHARACTER_BOUNCE", "1").strip().lower() in ("1", "true", "yes", "on")  # 話者開始時の軽いバウンス
-NATIVE_ENABLE_TALK_WIGGLE = _setting_value("NATIVE_ENABLE_TALK_WIGGLE", "1").strip().lower() in ("1", "true", "yes", "on")  # 発話中の話者キャラ小刻み揺れ
+NATIVE_ENABLE_TALK_WIGGLE = _setting_value("NATIVE_ENABLE_TALK_WIGGLE", "0").strip().lower() in ("1", "true", "yes", "on")  # 発話中の話者キャラ小刻み揺れ
 NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS = int(_setting_value("NATIVE_TALK_WIGGLE_EVERY_N_SEGMENTS", "3"))  # 発話中小刻み揺れを何セリフに1回出すか（1=毎回）
 NATIVE_ENABLE_POP_TELOP = os.environ.get("NATIVE_ENABLE_POP_TELOP", "1").strip().lower() in ("1", "true", "yes", "on")  # テロップ行のポップ表示
 NATIVE_ENABLE_SHAKE = os.environ.get("NATIVE_ENABLE_SHAKE", "1").strip().lower() in ("1", "true", "yes", "on")  # ツッコミ/驚き時の軽い画面揺れ

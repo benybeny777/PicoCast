@@ -712,6 +712,7 @@ def test_native_character_layout_settings_are_editable():
     for key in wiggle_keys:
         assert items[key]["group"] == "エフェクト"
         assert items[key].get("admin") is not True
+    assert items["NATIVE_ENABLE_TALK_WIGGLE"]["default"] == "0"
 
 
 def test_save_config_does_not_write_environment(tmp_path, monkeypatch):

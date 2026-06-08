@@ -1552,7 +1552,7 @@ function placePreviewCharacters(frame, opts) {
   if (!rect.width || !rect.height) return;
   const scaleX = rect.width / opts.videoW;
   const scaleY = rect.height / opts.videoH;
-  const wiggleEnabled = cfgNumber('NATIVE_ENABLE_TALK_WIGGLE', 1) === 1;
+  const wiggleEnabled = cfgNumber('NATIVE_ENABLE_TALK_WIGGLE', 0) === 1;
   const wiggleHz = Math.max(0.1, cfgNumber('NATIVE_TALK_WIGGLE_HZ', 3));
   const wiggleX = cfgNumber('NATIVE_TALK_WIGGLE_X_PX', 2) * scaleX;
   const wiggleY = cfgNumber('NATIVE_TALK_WIGGLE_Y_PX', 5) * scaleY;
