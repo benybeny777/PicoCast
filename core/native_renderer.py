@@ -35,6 +35,7 @@ from config import (
     NATIVE_ENABLE_MOTION_EFFECTS,
     NATIVE_ENABLE_POP_TELOP,
     NATIVE_ENABLE_SHAKE,
+    NATIVE_ENABLE_TALK_WIGGLE,
     NATIVE_FFMPEG_CQ,
     NATIVE_FFMPEG_CRF,
     NATIVE_FFMPEG_ENCODER,
@@ -72,6 +73,9 @@ from config import (
     NATIVE_SHAKE_AMP_X,
     NATIVE_SHAKE_AMP_Y,
     NATIVE_CHARACTER_BOUNCE_SEC,
+    NATIVE_TALK_WIGGLE_HZ,
+    NATIVE_TALK_WIGGLE_X_PX,
+    NATIVE_TALK_WIGGLE_Y_PX,
     NATIVE_TELOP_POP_START_SEC,
     NATIVE_TELOP_POP_MAX_SEC,
 )
@@ -708,6 +712,20 @@ def _character_position(name: str, portrait: bool = False, index: int = 0, total
     return f"{x_zunda}:{y}" if index == 0 or name == "zundamon" else f"{x_metan}:{y}"
 
 
+def _character_overlay_position(name: str, portrait: bool = False, index: int = 0, total: int = 2, talk_wiggle: bool = False) -> str:
+    position = _character_position(name, portrait=portrait, index=index, total=total)
+    if not talk_wiggle:
+        return position
+    x_expr, y_expr = position.split(":", 1)
+    x_amp = max(0.0, float(NATIVE_TALK_WIGGLE_X_PX or 0.0))
+    y_amp = max(0.0, float(NATIVE_TALK_WIGGLE_Y_PX or 0.0))
+    hz = max(0.1, float(NATIVE_TALK_WIGGLE_HZ or 0.1))
+    return (
+        f"({x_expr})+{x_amp:.3f}*sin(2*PI*{hz:.3f}*t):"
+        f"({y_expr})+{y_amp:.3f}*sin(2*PI*{hz * 1.37:.3f}*t)"
+    )
+
+
 def _speaker_name(style: str) -> str | None:
     if style == "Zundamon":
         return "zundamon"
@@ -860,6 +878,7 @@ def _segment_filter(
     effects_on = bool(enable_motion_effects and NATIVE_ENABLE_MOTION_EFFECTS and portrait)
     bg_motion = bool(effects_on and NATIVE_ENABLE_BG_KEN_BURNS)
     bounce_on = bool(effects_on and NATIVE_ENABLE_CHARACTER_BOUNCE)
+    talk_wiggle_on = bool(effects_on and NATIVE_ENABLE_TALK_WIGGLE)
     shake_on = bool(effects_on and NATIVE_ENABLE_SHAKE and effect and effect.shake)
     bg_filter = _background_motion_filter("[0:v]", "[bg_current]", width, height, duration, segment_index) if bg_motion else _background_fill_filter("[0:v]", "[bg_current]", width, height)
     chains = [bg_filter]
@@ -883,9 +902,16 @@ def _segment_filter(
     scaled_char_h = int(round(char_h * char_scale))
     total_characters = len(characters)
     for char_idx, character in enumerate(characters):
-        position = _character_position(character.name, portrait=portrait, index=char_idx, total=total_characters)
         char_bounce = bool(bounce_on and speaking == character.name)
-        overlay_suffix = ":eval=frame" if char_bounce else ""
+        char_talk_wiggle = bool(talk_wiggle_on and speaking == character.name)
+        position = _character_overlay_position(
+            character.name,
+            portrait=portrait,
+            index=char_idx,
+            total=total_characters,
+            talk_wiggle=char_talk_wiggle,
+        )
+        overlay_suffix = ":eval=frame" if (char_bounce or char_talk_wiggle) else ""
         chains.append(_character_scale_filter(input_index, f"[{character.name}_base]", scaled_char_h, char_bounce))
         chains.append(f"[{current}][{character.name}_base]overlay={position}{overlay_suffix}[base{overlay_num}]")
         current = f"base{overlay_num}"

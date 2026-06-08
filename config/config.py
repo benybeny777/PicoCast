@@ -358,6 +358,7 @@ NATIVE_BACKGROUND_TRANSITION_SEC = float(os.environ.get("NATIVE_BACKGROUND_TRANS
 NATIVE_ENABLE_MOTION_EFFECTS = os.environ.get("NATIVE_ENABLE_MOTION_EFFECTS", "1").strip().lower() in ("1", "true", "yes", "on")  # native Shorts の軽量演出全体
 NATIVE_ENABLE_BG_KEN_BURNS = os.environ.get("NATIVE_ENABLE_BG_KEN_BURNS", "1").strip().lower() in ("1", "true", "yes", "on")  # 背景のゆっくりズーム/パン
 NATIVE_ENABLE_CHARACTER_BOUNCE = os.environ.get("NATIVE_ENABLE_CHARACTER_BOUNCE", "1").strip().lower() in ("1", "true", "yes", "on")  # 話者開始時の軽いバウンス
+NATIVE_ENABLE_TALK_WIGGLE = os.environ.get("NATIVE_ENABLE_TALK_WIGGLE", "1").strip().lower() in ("1", "true", "yes", "on")  # 発話中の話者キャラ小刻み揺れ
 NATIVE_ENABLE_POP_TELOP = os.environ.get("NATIVE_ENABLE_POP_TELOP", "1").strip().lower() in ("1", "true", "yes", "on")  # テロップ行のポップ表示
 NATIVE_ENABLE_SHAKE = os.environ.get("NATIVE_ENABLE_SHAKE", "1").strip().lower() in ("1", "true", "yes", "on")  # ツッコミ/驚き時の軽い画面揺れ
 NATIVE_MAX_SHAKE_COUNT_SHORTS = int(os.environ.get("NATIVE_MAX_SHAKE_COUNT_SHORTS", "4"))  # Shorts 1本あたりのシェイク最大回数
@@ -498,6 +499,9 @@ VOICEVOX_SYNTHESIS_TIMEOUT_SEC = float(os.environ.get("VOICEVOX_SYNTHESIS_TIMEOU
 NATIVE_SHAKE_AMP_X = int(os.environ.get("NATIVE_SHAKE_AMP_X", "7"))                                  # 画面シェイクの水平方向振幅(px)
 NATIVE_SHAKE_AMP_Y = int(os.environ.get("NATIVE_SHAKE_AMP_Y", "5"))                                  # 画面シェイクの垂直方向振幅(px)
 NATIVE_CHARACTER_BOUNCE_SEC = float(os.environ.get("NATIVE_CHARACTER_BOUNCE_SEC", "0.22"))          # キャラクターバウンス演出時間(秒)
+NATIVE_TALK_WIGGLE_X_PX = float(os.environ.get("NATIVE_TALK_WIGGLE_X_PX", "2"))                     # 発話中キャラ揺れの左右振幅(px)
+NATIVE_TALK_WIGGLE_Y_PX = float(os.environ.get("NATIVE_TALK_WIGGLE_Y_PX", "6"))                     # 発話中キャラ揺れの上下振幅(px)
+NATIVE_TALK_WIGGLE_HZ = float(os.environ.get("NATIVE_TALK_WIGGLE_HZ", "5.5"))                       # 発話中キャラ揺れの周波数(Hz)
 NATIVE_TELOP_POP_START_SEC = float(os.environ.get("NATIVE_TELOP_POP_START_SEC", "0.05"))            # ポップテロップの表示開始ディレイ(秒)
 NATIVE_TELOP_POP_MAX_SEC = float(os.environ.get("NATIVE_TELOP_POP_MAX_SEC", "1.5"))                  # ポップテロップの最大表示持続時間(秒)
 

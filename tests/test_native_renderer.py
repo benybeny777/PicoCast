@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.native_character_assets import CharacterVariantSet
-from core.native_renderer import _character_base_path, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _run_ffmpeg, _save_render_info, _subtitles_filter_path, _write_subtitles
+from core.native_renderer import _character_base_path, _character_overlay_position, _character_position, _duration_status, _expression_fallback_reason, _native_loudnorm_filter, _run_ffmpeg, _save_render_info, _subtitles_filter_path, _write_subtitles
 
 
 class TestDurationStatus(unittest.TestCase):
@@ -150,6 +150,21 @@ class TestCharacterExpressionFallback(unittest.TestCase):
             expressions={},
         )
         self.assertEqual(_expression_fallback_reason([character], "metan", "未知顔"), "unknown")
+
+
+class TestCharacterMotionPosition(unittest.TestCase):
+    def test_talk_wiggle_disabled_keeps_base_position(self):
+        self.assertEqual(
+            _character_overlay_position("zundamon", portrait=True, index=0, total=2, talk_wiggle=False),
+            _character_position("zundamon", portrait=True, index=0, total=2),
+        )
+
+    def test_talk_wiggle_adds_frame_time_expression(self):
+        position = _character_overlay_position("metan", portrait=True, index=1, total=2, talk_wiggle=True)
+        self.assertIn("sin(2*PI*", position)
+        self.assertIn("*t", position)
+        self.assertIn(":", position)
+        self.assertNotEqual(position, _character_position("metan", portrait=True, index=1, total=2))
 
 
 class TestWriteSubtitles(unittest.TestCase):

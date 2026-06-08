@@ -7,6 +7,11 @@
 
 ## 2026-06-08
 
+### 発話中キャラの小刻み揺れを追加
+
+- native Shortsで発話中の話者キャラだけを小刻みに上下左右へ揺らす `NATIVE_ENABLE_TALK_WIGGLE` を追加した。
+- 揺れ幅と周波数は `NATIVE_TALK_WIGGLE_X_PX` / `NATIVE_TALK_WIGGLE_Y_PX` / `NATIVE_TALK_WIGGLE_HZ` で調整できる。
+
 ### pytest をテスト依存に追加
 
 - `.venv` に pytest をインストールし、`config/requirements-dev.txt` にテスト実行用依存として追記した。

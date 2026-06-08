@@ -1043,11 +1043,15 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_ENABLE_MOTION_EFFECTS` | `true` | native Shorts軽量エフェクト全体を有効化 |
 | `NATIVE_ENABLE_BG_KEN_BURNS` | `true` | 背景画像を各セグメント内でゆっくりズーム/パン |
 | `NATIVE_ENABLE_CHARACTER_BOUNCE` | `true` | セリフ開始時に話者キャラだけ軽く拡大縮小 |
+| `NATIVE_ENABLE_TALK_WIGGLE` | `true` | 発話中の話者キャラを小刻みに上下左右へ揺らす |
 | `NATIVE_ENABLE_POP_TELOP` | `true` | 台本の `テロップ:` 行を短時間ポップ表示 |
 | `NATIVE_ENABLE_SHAKE` | `true` | ツッコミ/驚き系の短い反応で軽いシェイク |
 | `NATIVE_MAX_SHAKE_COUNT_SHORTS` | 4 | Shorts 1本あたりのシェイク最大回数 |
 | `NATIVE_MAX_ICON_COUNT_SHORTS` | 4 | Shorts 1本あたりの疑問/驚きアイコン最大回数 |
 | `NATIVE_BG_ZOOM_MAX` | 1.06 | 背景Ken Burnsの最大拡大倍率 |
+| `NATIVE_TALK_WIGGLE_X_PX` | 2 | 発話中キャラ揺れの左右振幅(px) |
+| `NATIVE_TALK_WIGGLE_Y_PX` | 6 | 発話中キャラ揺れの上下振幅(px) |
+| `NATIVE_TALK_WIGGLE_HZ` | 5.5 | 発話中キャラ揺れの周波数(Hz) |
 | `CHARACTER_UPPER_BODY_SCALE` | 1.55 | 腰から上モード時のキャラ拡大倍率（Long用） |
 | `CHARACTER_UPPER_BODY_SHORTS_SCALE` | 1.15 | 腰から上モード時のキャラ拡大倍率（Shorts用。縦画面は幅が狭いため Long より小さく） |
 | `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET` | 250 | 腰から上モード: Shorts の下方向シフト量(px) |
@@ -1113,7 +1117,7 @@ Shorts / Long の本番レンダラー。通常の「生成」ボタンで nativ
 - **キャラ拡大**: `CHARACTER_UPPER_BODY_MODE=1`(デフォルト) のとき native Shorts/Long は腰から上表示モードになる。Long は `CHARACTER_UPPER_BODY_SCALE=1.55`、Shorts（縦画面1080px幅）は `CHARACTER_UPPER_BODY_SHORTS_SCALE=1.15` で拡大し、それぞれ `CHARACTER_UPPER_BODY_LONG_Y_OFFSET=400` / `CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET=250` px 下方向にシフトする。`CHARACTER_UPPER_BODY_MODE=0` のときは Shorts のみ `NATIVE_SHORTS_CHARACTER_SCALE`(1.05)を使う。
 - 字幕フチ幅は `NATIVE_SUBTITLE_STROKE_WIDTH`(内フチ, デフォルト 9) / `NATIVE_SUBTITLE_OUTER_STROKE_WIDTH`(外フチ, デフォルト 13) で調整可能。字幕帯のパディングは `NATIVE_SUBTITLE_PADDING_Y` で調整。
 - **字幕自動折り返し**: セリフが `NATIVE_SUBTITLE_WRAP_CHARS_SHORTS`（Shorts 縦画面: 13文字）または `NATIVE_SUBTITLE_WRAP_CHARS_LONG`（Long 横画面: 24文字）を超えると `_wrap_subtitle()` が自動折り返しを行う。句読点（、。！？…）が直前にある場合は句読点位置を優先し、折り返し後2行目が `max(2, max_chars // 3)` 文字未満になる場合は句読点折り返しを適用しない。折り返し行数に応じて SubtitleBox の高さを自動拡張する。
-- **Shorts軽量エフェクト**: `NATIVE_ENABLE_MOTION_EFFECTS=1` のとき、背景に最大 `NATIVE_BG_ZOOM_MAX` までのKen Burns風ズーム/パン、話者キャラの0.2秒前後の軽いバウンス、`テロップ:` 行の0.8〜1.5秒ポップ表示、短いツッコミ/疑問場面の軽いシェイクと疑問/驚きアイコンを追加する。シェイクとアイコンは各 `NATIVE_MAX_SHAKE_COUNT_SHORTS` / `NATIVE_MAX_ICON_COUNT_SHORTS` 回までに制限する。感情タグ (`expression`) が付与されている場合、タグ優先でシェイク判定とアイコン選択を行う（驚き/ドン引き → "!?" or "！"、困惑/疑問 → "？"、焦り/怒り → "!" or "！"、呆れ → 揺れのみ・アイコンなし）。
+- **Shorts軽量エフェクト**: `NATIVE_ENABLE_MOTION_EFFECTS=1` のとき、背景に最大 `NATIVE_BG_ZOOM_MAX` までのKen Burns風ズーム/パン、話者キャラの0.2秒前後の軽いバウンス、発話中の小刻みな上下左右揺れ、`テロップ:` 行の0.8〜1.5秒ポップ表示、短いツッコミ/疑問場面の軽いシェイクと疑問/驚きアイコンを追加する。シェイクとアイコンは各 `NATIVE_MAX_SHAKE_COUNT_SHORTS` / `NATIVE_MAX_ICON_COUNT_SHORTS` 回までに制限する。発話中揺れは `NATIVE_TALK_WIGGLE_X_PX` / `NATIVE_TALK_WIGGLE_Y_PX` / `NATIVE_TALK_WIGGLE_HZ` で調整できる。感情タグ (`expression`) が付与されている場合、タグ優先でシェイク判定とアイコン選択を行う（驚き/ドン引き → "!?" or "！"、困惑/疑問 → "？"、焦り/怒り → "!" or "！"、呆れ → 揺れのみ・アイコンなし）。
 - エフェクトはセグメント単位で付与し、BGM・音声タイミングは変更しない。ffmpegフィルタが失敗したセグメントはエフェクトなしで再レンダーして生成を継続する。
 - YouTubeアップロード時は履歴フォルダ内の最新MP4を優先して選択する。
 - **Shorts のみ**: `thumbnails/thumbnail.png` がある場合、native MP4 の先頭に `THUMBNAIL_HOLD_FRAMES_SHORTS`（デフォルト3フレーム≒0.1秒）だけサムネイル画像を挿入する（Long は挿入しない）。保持フレーム数は `.env` の `THUMBNAIL_HOLD_FRAMES_SHORTS` で変更可。1秒以上の静止サムネは設定値に関係なく生じない（上限5フレーム≒0.17秒）。
@@ -1780,11 +1784,15 @@ YouTube OAuth:
 | `NATIVE_ENABLE_MOTION_EFFECTS` | `.env` / `config.py` | native Shorts軽量エフェクト全体の有効/無効 |
 | `NATIVE_ENABLE_BG_KEN_BURNS` | `.env` / `config.py` | 背景画像のゆっくりズーム/パン |
 | `NATIVE_ENABLE_CHARACTER_BOUNCE` | `.env` / `config.py` | セリフ開始時の話者キャラバウンス |
+| `NATIVE_ENABLE_TALK_WIGGLE` | `.env` / `config.py` | 発話中の話者キャラ小刻み揺れ |
 | `NATIVE_ENABLE_POP_TELOP` | `.env` / `config.py` | `テロップ:` 行のポップ表示 |
 | `NATIVE_ENABLE_SHAKE` | `.env` / `config.py` | 短いツッコミ/驚き場面のシェイク |
 | `NATIVE_MAX_SHAKE_COUNT_SHORTS` | `.env` / `config.py` | Shorts 1本あたりのシェイク最大回数 |
 | `NATIVE_MAX_ICON_COUNT_SHORTS` | `.env` / `config.py` | Shorts 1本あたりの疑問/驚きアイコン最大回数 |
 | `NATIVE_BG_ZOOM_MAX` | `.env` / `config.py` | 背景Ken Burnsの最大拡大倍率 |
+| `NATIVE_TALK_WIGGLE_X_PX` | `.env` / `config.py` | 発話中キャラ揺れの左右振幅(px) |
+| `NATIVE_TALK_WIGGLE_Y_PX` | `.env` / `config.py` | 発話中キャラ揺れの上下振幅(px) |
+| `NATIVE_TALK_WIGGLE_HZ` | `.env` / `config.py` | 発話中キャラ揺れの周波数(Hz) |
 | `WEB_APP_NAME` | `.env` / `config.py` | Web UIの表示アプリ名 |
 | `WEB_UI_HOST` | `.env` / `config.py` | Web UIのバインドホスト。既定は `127.0.0.1` |
 | `WEB_UI_PORT` | `.env` / `config.py` | Web UIのポート番号 |
