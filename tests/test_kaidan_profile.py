@@ -42,17 +42,68 @@ def test_food_description_behavior_is_unchanged(monkeypatch):
     assert "真偽不明" not in result
 
 
-def test_kowai_default_tags_include_kaidan_candidates(monkeypatch):
+def test_kowai_default_tags_use_kaidan_policy(monkeypatch):
     import core.channel_profile as channel_profile
     from core.youtube_metadata import build_youtube_tags
 
     monkeypatch.setattr(channel_profile, "require_active_profile", lambda: _profile("zundamon_kowai"))
     tags = build_youtube_tags("東北の山間部で語られる呼ぶ声")
 
-    assert tags[:3] == ["ずんだもん", "四国めたん", "VOICEVOX"]
-    assert "実話怪談" in tags
-    assert "地域怪談" in tags
-    assert "怪談 ショート" in tags
+    assert tags[:3] == ["ずんだもん", "ゆっくり解説", "VOICEVOX"]
+    assert 10 <= len(tags) <= 15
+    for required in ("都市伝説・怖い話", "怖い話", "怪談", "実話怪談", "真偽不明"):
+        assert required in tags
+    assert "聞こえるはずのない音" in tags
+
+
+def test_kowai_tags_remove_trivia_and_food_tags(monkeypatch):
+    import core.channel_profile as channel_profile
+    from core.youtube_metadata import optimize_tags
+
+    monkeypatch.setattr(channel_profile, "require_active_profile", lambda: _profile("zundamon_kowai"))
+    tags = optimize_tags(
+        "雑学ショート,都市伝説 雑学,豆知識,トリビア,怖い雑学,食べ物雑学,食べ物の歴史,無人駅",
+        title="ネットで実話扱いされたきさらぎ駅",
+    ).split(",")
+
+    assert tags[:3] == ["ずんだもん", "ゆっくり解説", "VOICEVOX"]
+    assert "無人駅" in tags
+    assert 10 <= len(tags) <= 15
+    for forbidden in ("雑学ショート", "都市伝説 雑学", "豆知識", "トリビア", "怖い雑学", "食べ物雑学", "食べ物の歴史"):
+        assert forbidden not in tags
+
+
+def test_kowai_upload_metadata_reapplies_tag_policy(monkeypatch):
+    import core.channel_profile as channel_profile
+    from core.youtube_metadata import optimize_upload_metadata
+
+    monkeypatch.setattr(channel_profile, "require_active_profile", lambda: _profile("zundamon_kowai"))
+    _title, _description, tags = optimize_upload_metadata(
+        "団地の空き部屋",
+        "真偽不明の怪談です。",
+        "ずんだもん,雑学ショート,食べ物雑学,トリビア",
+        is_shorts=True,
+        script_text="関西の団地にある空き部屋で語られた噂",
+    )
+    tag_list = tags.split(",")
+
+    assert tag_list[:3] == ["ずんだもん", "ゆっくり解説", "VOICEVOX"]
+    assert "団地怪談" in tag_list
+    assert "雑学ショート" not in tag_list
+    assert "食べ物雑学" not in tag_list
+    assert "トリビア" not in tag_list
+
+
+def test_food_tags_are_unchanged_by_kaidan_policy(monkeypatch):
+    import core.channel_profile as channel_profile
+    from core.youtube_metadata import optimize_tags
+
+    monkeypatch.setattr(channel_profile, "require_active_profile", lambda: _profile("zunkami"))
+    tags = optimize_tags("食べ物雑学,食べ物の歴史", title="プリンの歴史").split(",")
+
+    assert tags[:3] == ["ずんだもん", "ゆっくり解説", "VOICEVOX"]
+    assert "食べ物雑学" in tags
+    assert "食べ物の歴史" in tags
 
 
 def test_kaidan_safety_check_rejects_assertion(monkeypatch):

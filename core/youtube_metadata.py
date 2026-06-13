@@ -79,6 +79,55 @@ TAG_POLICY = {
     "low_priority_tags": LOW_PRIORITY_TAGS,
 }
 
+KAIDAN_GENRE_PROFILE = "zundamon_kowai"
+KAIDAN_DEFAULT_TAGS = [
+    "ずんだもん",
+    "ゆっくり解説",
+    "VOICEVOX",
+    "都市伝説・怖い話",
+    "怖い話",
+    "怪談",
+    "実話怪談",
+    "真偽不明",
+    "怖い噂",
+    "地域怪談",
+    "場所怪談",
+    "ネット怪談",
+    "ずんだもん解説",
+    "四国めたん",
+]
+KAIDAN_FORBIDDEN_TAGS = {
+    "雑学 ショート",
+    "雑学ショート",
+    "都市伝説 雑学",
+    "都市伝説 豆知識",
+    "都市伝説豆知識",
+    "豆知識",
+    "トリビア",
+    "怖い雑学",
+    "食べ物雑学",
+    "食べ物の歴史",
+}
+KAIDAN_TOPIC_TAG_RULES = [
+    (("学校", "七不思議"), "学校怪談"),
+    (("昭和", "口裂け女", "赤い紙", "青い紙", "紫の鏡"), "昭和の噂"),
+    (("平成",), "平成の噂"),
+    (("実話として", "実話風", "体験談"), "実話風怪談"),
+    (("無人駅", "きさらぎ駅"), "無人駅"),
+    (("団地", "空き部屋"), "団地怪談"),
+    (("山道", "峠"), "山道"),
+    (("踏切",), "踏切"),
+    (("公衆電話",), "公衆電話"),
+    (("トンネル",), "トンネル"),
+    (("廃線",), "廃線"),
+    (("海沿い", "海辺", "船"), "海沿い"),
+    (("祠",), "祠"),
+    (("空き部屋",), "空き部屋"),
+    (("白い人影", "白い着物"), "白い人影"),
+    (("聞こえるはずのない", "終電の音", "呼ぶ声"), "聞こえるはずのない音"),
+    (("地域", "地方", "東北", "関西", "九州", "北海道", "四国", "北陸", "中国地方", "沖縄", "関東", "東海"), "地域の噂"),
+]
+
 
 def split_tags(tags) -> list[str]:
     if isinstance(tags, (list, tuple, set)):
@@ -193,6 +242,20 @@ def build_topic_tags(title: str, script_text: str = "") -> list[str]:
     return tags
 
 
+def build_kaidan_tags(title: str, script_text: str = "", extra_tags: list[str] | None = None) -> list[str]:
+    """怪談チャンネル専用タグを10〜15件へ正規化する。"""
+    text = f"{title}\n{script_text}"
+    candidates = list(KAIDAN_DEFAULT_TAGS)
+    for keywords, topic_tag in KAIDAN_TOPIC_TAG_RULES:
+        if any(keyword in text for keyword in keywords):
+            candidates.append(topic_tag)
+    if extra_tags:
+        allowed_topic_tags = {tag for _keywords, tag in KAIDAN_TOPIC_TAG_RULES}
+        candidates.extend(tag for tag in extra_tags if tag in allowed_topic_tags)
+    normalized = normalize_tags(candidates, excluded=list(KAIDAN_FORBIDDEN_TAGS))
+    return trim_tags_to_500_chars(normalized[:15])
+
+
 def _active_genre_config() -> dict:
     """active profile の genre profile.yaml 設定を返す。
 
@@ -206,6 +269,7 @@ def _active_genre_config() -> dict:
         from core.prompt_profile_loader import load_genre_profile_config
         prof = require_active_profile()
         cfg = dict(load_genre_profile_config(prof.genre_profile) or {})
+        cfg["__genre_profile__"] = prof.genre_profile
         cfg["__channel_default_hashtags__"] = prof.default_hashtags or ""
         return cfg
     except Exception as exc:
@@ -219,6 +283,12 @@ def build_youtube_tags(
     extra_tags: list[str] | None = None,
 ) -> list[str]:
     cfg = _active_genre_config()
+    if cfg.get("__genre_profile__") == KAIDAN_GENRE_PROFILE:
+        return build_kaidan_tags(
+            title,
+            script_text,
+            extra_tags=split_tags(extra_tags or []),
+        )
     genre_tags = split_tags(cfg.get("default_tags", ""))
     if genre_tags:
         # ジャンル設定チャンネル: ジャンル既定タグ＋台本由来タグのみ（食べ物タグ・食べ物除外を使わない）
