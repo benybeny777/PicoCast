@@ -744,6 +744,73 @@ def test_save_config_does_not_write_environment(tmp_path, monkeypatch):
     assert "NATIVE_CHARACTER_SIDE_MARGIN_SHORTS" not in os.environ
 
 
+def test_voicevox_worker_limits_reject_unstable_parallelism():
+    import web_app.services.config_service as cs
+
+    assert cs.save_config({"VOICEVOX_QUERY_WORKERS": "5"})
+    assert cs.save_config({"VOICEVOX_SYNTH_WORKERS": "2"})
+
+
+def test_voicevox_worker_limits_accept_safe_values(tmp_path, monkeypatch):
+    import core.settings_store as settings_store
+    import web_app.services.config_service as cs
+
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+
+    errors = cs.save_config({
+        "VOICEVOX_QUERY_WORKERS": "4",
+        "VOICEVOX_SYNTH_WORKERS": "1",
+    })
+
+    assert errors == []
+    assert settings_store.get_all()["VOICEVOX_QUERY_WORKERS"] == "4"
+    assert settings_store.get_all()["VOICEVOX_SYNTH_WORKERS"] == "1"
+
+
+def test_refresh_runtime_settings_normalizes_legacy_voicevox_workers(tmp_path, monkeypatch):
+    import config.config as cfg
+    import core.settings_store as settings_store
+    from core.runtime_config import refresh_runtime_settings
+
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cfg, "VOICEVOX_QUERY_WORKERS", cfg.VOICEVOX_QUERY_WORKERS)
+    monkeypatch.setattr(cfg, "VOICEVOX_SYNTH_WORKERS", cfg.VOICEVOX_SYNTH_WORKERS)
+    settings_store.set_many({
+        "VOICEVOX_QUERY_WORKERS": "8",
+        "VOICEVOX_SYNTH_WORKERS": "4",
+    })
+
+    refresh_runtime_settings()
+
+    saved = settings_store.get_all()
+    assert saved["VOICEVOX_QUERY_WORKERS"] == "4"
+    assert saved["VOICEVOX_SYNTH_WORKERS"] == "1"
+    assert cfg.VOICEVOX_QUERY_WORKERS == 4
+    assert cfg.VOICEVOX_SYNTH_WORKERS == 1
+
+
+def test_refresh_runtime_settings_normalizes_zero_voicevox_workers(tmp_path, monkeypatch):
+    import config.config as cfg
+    import core.settings_store as settings_store
+    from core.runtime_config import refresh_runtime_settings
+
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cfg, "VOICEVOX_QUERY_WORKERS", cfg.VOICEVOX_QUERY_WORKERS)
+    monkeypatch.setattr(cfg, "VOICEVOX_SYNTH_WORKERS", cfg.VOICEVOX_SYNTH_WORKERS)
+    settings_store.set_many({
+        "VOICEVOX_QUERY_WORKERS": "0",
+        "VOICEVOX_SYNTH_WORKERS": "0",
+    })
+
+    refresh_runtime_settings()
+
+    saved = settings_store.get_all()
+    assert saved["VOICEVOX_QUERY_WORKERS"] == "1"
+    assert saved["VOICEVOX_SYNTH_WORKERS"] == "1"
+    assert cfg.VOICEVOX_QUERY_WORKERS == 1
+    assert cfg.VOICEVOX_SYNTH_WORKERS == 1
+
+
 def test_runner_worker_limit_reads_settings_db(monkeypatch):
     import workers.runner as runner
     import core.settings_store as settings_store

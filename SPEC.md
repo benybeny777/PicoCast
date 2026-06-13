@@ -1011,8 +1011,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 |---|---|---|
 | `VOICEVOX_URL` | `http://localhost:50021` | VOICEVOX API URL |
 | `VOICEVOX_PATH` | 空 | VOICEVOX自動起動用パス（空の場合は手動起動） |
-| `VOICEVOX_QUERY_WORKERS` | 4 | audio_query 並列リクエスト数 |
-| `VOICEVOX_SYNTH_WORKERS` | 2 | synthesis 並列リクエスト数（並列数を増やすと VOICEVOX 側の負荷が上がるため注意） |
+| `VOICEVOX_QUERY_WORKERS` | 4 | audio_query 並列リクエスト数（安全上限4。既存DBの超過値はジョブ開始時に4へ補正） |
+| `VOICEVOX_SYNTH_WORKERS` | 1 | synthesis リクエスト数（VOICEVOX 0.25系のプロセス停止を避けるため1固定。既存DBの超過値も1へ補正） |
 | `NANOBANANA_BG_WORKERS` | 3 | Nano Banana 背景生成の並列数 |
 | `NATIVE_SHORTS_BODY_VOICE_SPEED` | 1.25 | Shorts本編再生速度（native） |
 | `NATIVE_SHORTS_INTRO_VOICE_SPEED` | 1.40 | Shortsイントロ再生速度（native） |

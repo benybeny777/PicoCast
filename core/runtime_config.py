@@ -53,6 +53,6 @@ def apply_runtime_settings(updates: dict[str, object]) -> None:
 
 def refresh_runtime_settings() -> None:
     """settings.db の保存済み設定を現在プロセスへ読み直す。"""
-    from core.settings_store import get_all
+    from core.settings_store import get_all, normalize_runtime_safety_settings
 
-    apply_runtime_settings(get_all())
+    apply_runtime_settings(normalize_runtime_safety_settings(get_all()))

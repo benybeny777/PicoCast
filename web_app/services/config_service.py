@@ -19,8 +19,8 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "VOICEVOX_CONNECTION_TIMEOUT_SEC", "type": "float", "label": "VOICEVOX 接続タイムアウト(秒)",          "default": str(cfg.VOICEVOX_CONNECTION_TIMEOUT_SEC), "min": 0.5, "max": 30.0,  "group": "タイムアウト", "admin": True},
     {"key": "VOICEVOX_QUERY_TIMEOUT_SEC",      "type": "float", "label": "VOICEVOX クエリタイムアウト(秒)",        "default": str(cfg.VOICEVOX_QUERY_TIMEOUT_SEC),      "min": 1.0, "max": 60.0,  "group": "タイムアウト", "admin": True},
     {"key": "VOICEVOX_SYNTHESIS_TIMEOUT_SEC",  "type": "float", "label": "VOICEVOX 合成タイムアウト(秒)",          "default": str(cfg.VOICEVOX_SYNTHESIS_TIMEOUT_SEC),  "min": 5.0, "max": 300.0, "group": "タイムアウト", "admin": True},
-    {"key": "VOICEVOX_QUERY_WORKERS",         "type": "int",   "label": "VOICEVOX クエリ並列数",                   "default": str(cfg.VOICEVOX_QUERY_WORKERS),          "min": 1,   "max": 16,             "group": "VOICEVOX"},
-    {"key": "VOICEVOX_SYNTH_WORKERS",         "type": "int",   "label": "VOICEVOX 合成並列数",                     "default": str(cfg.VOICEVOX_SYNTH_WORKERS),          "min": 1,   "max": 16,             "group": "VOICEVOX"},
+    {"key": "VOICEVOX_QUERY_WORKERS",         "type": "int",   "label": "VOICEVOX クエリ並列数",                   "default": str(cfg.VOICEVOX_QUERY_WORKERS),          "min": 1,   "max": cfg.VOICEVOX_QUERY_WORKERS_MAX, "group": "VOICEVOX"},
+    {"key": "VOICEVOX_SYNTH_WORKERS",         "type": "int",   "label": "VOICEVOX 合成並列数（安定性優先で1固定）", "default": str(cfg.VOICEVOX_SYNTH_WORKERS),          "min": 1,   "max": cfg.VOICEVOX_SYNTH_WORKERS_MAX, "group": "VOICEVOX"},
     # ── AquesTalk ──
     {"key": "AQUESTALK_ENABLED",              "type": "bool",  "label": "AquesTalk有効",                           "default": "1" if cfg.AQUESTALK_ENABLED else "0",                                                "group": "AquesTalk"},
     {"key": "AQUESTALK_ENGINE_PATH",          "type": "str",   "label": "AquesTalkエンジン/ラッパーCLIパス",        "default": str(cfg.AQUESTALK_ENGINE_PATH),                    "allow_empty": True,             "group": "AquesTalk"},

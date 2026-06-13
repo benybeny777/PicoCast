@@ -73,8 +73,10 @@ AQUESTALK_DEFAULT_PITCH = int(os.environ.get("AQUESTALK_DEFAULT_PITCH", "100")) 
 AQUESTALK_DEFAULT_VOLUME = int(os.environ.get("AQUESTALK_DEFAULT_VOLUME", "100"))  # AquesTalk既定音量
 AQUESTALK_TIMEOUT_SEC = float(os.environ.get("AQUESTALK_TIMEOUT_SEC", "60"))  # AquesTalk音声生成タイムアウト秒数
 AQUESTALK_TEST_TEXT = os.environ.get("AQUESTALK_TEST_TEXT", "ゆっくりしていってね")  # AquesTalk疎通テスト用テキスト
-VOICEVOX_QUERY_WORKERS  = int(os.environ.get("VOICEVOX_QUERY_WORKERS",  "4"))  # audio_query 並列数
-VOICEVOX_SYNTH_WORKERS  = int(os.environ.get("VOICEVOX_SYNTH_WORKERS",  "2"))  # synthesis 並列数
+VOICEVOX_QUERY_WORKERS  = int(os.environ.get("VOICEVOX_QUERY_WORKERS",  "4"))  # audio_query 並列数（上限4）
+VOICEVOX_SYNTH_WORKERS  = int(os.environ.get("VOICEVOX_SYNTH_WORKERS",  "1"))  # synthesis 並列数（安定性優先で1）
+VOICEVOX_QUERY_WORKERS_MAX = 4  # audio_query の安全上限
+VOICEVOX_SYNTH_WORKERS_MAX = 1  # synthesis の安全上限
 NANOBANANA_BG_WORKERS   = int(os.environ.get("NANOBANANA_BG_WORKERS",   "3"))  # Nano Banana 背景生成並列数
 
 # ───────────────────────────────────────────────

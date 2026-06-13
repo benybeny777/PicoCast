@@ -28,6 +28,12 @@ _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _ENV_PATH = os.path.join(_ROOT, ".env")
 _lock = threading.Lock()
 
+# VOICEVOX 0.25系でエンジン停止が再現した過大な並列値を安全値へ移行する。
+_RUNTIME_SAFETY_RANGES: dict[str, tuple[int, int]] = {
+    "VOICEVOX_QUERY_WORKERS": (1, 4),
+    "VOICEVOX_SYNTH_WORKERS": (1, 1),
+}
+
 # .env に残す認証情報キー（これらは DB に移行しない）
 AUTH_KEYS: frozenset[str] = frozenset({
     "GOOGLE_API_KEY",
@@ -58,12 +64,14 @@ def get_all() -> dict[str, str]:
     try:
         with _lock:
             conn = _open()
-            rows = conn.execute("SELECT key, value FROM settings").fetchall()
-            conn.close()
+            try:
+                rows = conn.execute("SELECT key, value FROM settings").fetchall()
+            finally:
+                conn.close()
         return {r[0]: r[1] for r in rows}
     except Exception as e:
-        _logger.warning("[SettingsDB] 読み込み失敗: %s", e)
-        return {}
+        _logger.error("[SettingsDB] 読み込み失敗", exc_info=True)
+        raise RuntimeError("設定DBの読み込みに失敗しました") from e
 
 
 def set_many(updates: dict[str, str]) -> None:
@@ -90,6 +98,39 @@ def apply_to_env() -> None:
         os.environ[key] = value
     if settings:
         _logger.debug("[SettingsDB] %d 件の設定を環境変数に反映しました", len(settings))
+
+
+def normalize_runtime_safety_settings(settings: dict[str, str] | None = None) -> dict[str, str]:
+    """既存DBに残る危険な並列値を安全上限へ補正し、補正後の全設定を返す。"""
+    normalized = dict(get_all() if settings is None else settings)
+    updates: dict[str, str] = {}
+    for key, (min_value, max_value) in _RUNTIME_SAFETY_RANGES.items():
+        if key not in normalized:
+            continue
+        raw_value = normalized[key]
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError) as exc:
+            _logger.error(
+                "[SettingsDB] VOICEVOX並列設定が不正です: key=%s value=%r",
+                key,
+                raw_value,
+                exc_info=True,
+            )
+            raise RuntimeError(f"{key} の設定値が不正です: {raw_value}") from exc
+        safe_value = min(max(value, min_value), max_value)
+        if value != safe_value:
+            updates[key] = str(safe_value)
+            normalized[key] = str(safe_value)
+            _logger.warning(
+                "[SettingsDB] VOICEVOX安定性のため並列数を補正します: key=%s old=%s new=%s",
+                key,
+                value,
+                safe_value,
+            )
+    if updates:
+        set_many(updates)
+    return normalized
 
 
 def bootstrap_from_env() -> int:
@@ -140,6 +181,7 @@ def initialize() -> None:
     """
     try:
         migrated = bootstrap_from_env()
+        normalize_runtime_safety_settings()
         apply_to_env()
         count = len(get_all())
         if migrated:
@@ -147,4 +189,5 @@ def initialize() -> None:
         else:
             _logger.debug("[SettingsDB] 起動: %d 件ロード", count)
     except Exception as e:
-        _logger.error("[SettingsDB] 初期化失敗（デフォルト値で続行）: %s", e)
+        _logger.error("[SettingsDB] 初期化失敗", exc_info=True)
+        raise RuntimeError("設定DBの初期化に失敗しました") from e
