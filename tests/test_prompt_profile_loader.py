@@ -170,7 +170,7 @@ def test_get_default_hashtags_missing_genre_raises(fake_genres):
     [
         ("zunkami", "食べ物雑学専用の具体性"),
         ("food_trivia", "食べ物雑学専用の具体性"),
-        ("zundamon_kowai", "都市伝説専用の具体性"),
+        ("zundamon_kowai", "怪談専用の具体性"),
         ("urban_legend", "都市伝説専用の具体性"),
     ],
 )

@@ -15,6 +15,46 @@ _logger = logging.getLogger(__name__)
 
 INTER_DIALOGUE_GAP_SEC = 0.2
 
+_KAIDAN_ASSERTION_NG = (
+    "これは実際に起きた",
+    "本当に起きた事件",
+    "本当に死んだ",
+    "実在する呪われた場所",
+    "この場所は呪われている",
+    "ここに行くと死ぬ",
+    "ここに行くと危険",
+    "この地域では本当に出る",
+    "犯人は",
+)
+
+_KAIDAN_UNCERTAINTY_MARKERS = (
+    "実話として語ら",
+    "真偽は不明",
+    "真偽不明",
+    "怪談として",
+    "噂として",
+    "そう信じられて",
+    "記録と噂",
+)
+
+
+def _check_kaidan_safety(meta: dict[str, str], dialogue_items: list[dict]) -> list[str]:
+    """怪談チャンネルだけに断定表現と真偽不明表現を検査する。"""
+    from core.channel_profile import get_active_profile
+
+    profile = get_active_profile()
+    if profile is None or profile.genre_profile != "zundamon_kowai":
+        return []
+    text = "\n".join([*meta.values(), *(it.get("text", "") for it in dialogue_items)])
+    errors = [
+        f"怪談の断定表現は禁止です。「真偽不明」「噂として語られている」へ修正してください: {phrase}"
+        for phrase in _KAIDAN_ASSERTION_NG
+        if phrase in text
+    ]
+    if not any(marker in text for marker in _KAIDAN_UNCERTAINTY_MARKERS):
+        errors.append("怪談台本に真偽不明・噂・怪談としての語り方がありません")
+    return errors
+
 
 def pre_generate_check(items: list[dict], is_shorts: bool) -> tuple[list[str], list[str]]:
     errors: list[str] = []
@@ -47,6 +87,8 @@ def pre_generate_check(items: list[dict], is_shorts: bool) -> tuple[list[str], l
 
         if not meta.get("video_title"):
             errors.append("video_titleがありません")
+
+        errors.extend(_check_kaidan_safety(meta, dialogue_items))
 
         thumb_text = meta.get("thumbnail_text", "")
         if thumb_text and len(thumb_text) > 15:

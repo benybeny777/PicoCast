@@ -27,12 +27,14 @@ def test_food_genre_enables_toxic_metan():
     assert by_key["marisa"]["enabled"] is False
 
 
-def test_urban_genre_enables_standard_metan():
-    """都市伝説: 両めたんを投入するが、enabled はお嬢様毒舌のみ。"""
+def test_kaidan_genre_enables_viewer_metan():
+    """怪談チャンネル: 視聴者目線めたんだけを有効にする。"""
     from core.character_profiles_seed import _seed_set_for_genre
     by_key = {c["character_key"]: c for c in _seed_set_for_genre("zundamon_kowai")}
-    assert by_key["metan_standard_toxic"]["enabled"] is True
+    assert by_key["metan_kaidan_viewer"]["enabled"] is True
+    assert by_key["metan_standard_toxic"]["enabled"] is False
     assert by_key["metan_food_toxic"]["enabled"] is False
+    assert "説明しない" in by_key["metan_kaidan_viewer"]["role"]
 
 
 def test_food_toxic_genres_are_configurable(monkeypatch):

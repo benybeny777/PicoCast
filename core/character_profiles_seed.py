@@ -126,6 +126,22 @@ _METAN_STANDARD_TOXIC = {
     "credit_text": "VOICEVOX:四国めたん",
 }
 
+_METAN_KAIDAN_VIEWER = {
+    **_METAN_STANDARD_TOXIC,
+    "character_key": "metan_kaidan_viewer",
+    "display_name": "怪談めたん（視聴者目線）",
+    "role": "視聴者目線の疑問・怖がり・違和感・現実的なツッコミ役。怪談の情報や答えは説明しない。",
+    "tone_style": "落ち着いた自然な口調。怖さや違和感を短く示す。お嬢様語尾や強い毒舌を連発しない。",
+    "speaking_rules": (
+        "必要な場面だけ話し、原則11〜15文字。疑問・怖がり・現実的な違和感で次の説明を引き出す。"
+        "説明、補足、復唱、相槌だけの台詞は禁止する。"
+    ),
+    "dialogue_rules": (
+        "ずんだもんの説明を奪わない。めたんの直後は、ずんだもんが怪談の内容、背景、広まった理由、"
+        "真偽不明点のいずれかを具体的に答える。意味のない押し問答や機械的な交互会話を作らない。"
+    ),
+}
+
 _REIMU = {
     "character_key": "reimu",
     "display_name": "ゆっくり霊夢風（司会）",
@@ -175,10 +191,12 @@ def _seed_set_for_genre(genre_profile: str) -> list[dict]:
     （compose は enabled のみ合成するため、同名キャラは原則1つだけ有効にする）
     """
     is_food = (genre_profile or "") in CHARACTER_FOOD_TOXIC_GENRE_PROFILES
+    is_kaidan = (genre_profile or "") == "zundamon_kowai"
     return [
         {**_ZUNDAMON, "sort_order": 10, "enabled": True},
         {**_METAN_FOOD_TOXIC, "sort_order": 20, "enabled": is_food},
-        {**_METAN_STANDARD_TOXIC, "sort_order": 21, "enabled": not is_food},
+        {**_METAN_STANDARD_TOXIC, "sort_order": 21, "enabled": not is_food and not is_kaidan},
+        {**_METAN_KAIDAN_VIEWER, "sort_order": 22, "enabled": is_kaidan},
         {**_REIMU, "sort_order": 30, "enabled": False},
         {**_MARISA, "sort_order": 31, "enabled": False},
     ]

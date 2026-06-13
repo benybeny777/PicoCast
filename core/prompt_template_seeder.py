@@ -118,15 +118,12 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
     script_context = _read_genre_file(genre_profile, "script_context.md")
     title_context  = _read_genre_file(genre_profile, "title_context.md")
     meeting_context = _read_genre_file(genre_profile, "meeting_context.md")
-    playlist_cats_raw = _read_genre_file(genre_profile, "playlist_categories.md")
+    ng_rules = _read_genre_file(genre_profile, "ng_rules.md")
 
-    # 再生リストカテゴリの先頭行をデフォルトに使う
-    default_playlist = ""
-    for line in playlist_cats_raw.splitlines():
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#"):
-            default_playlist = stripped
-            break
+    # 説明行ではなく「標準カテゴリ」の先頭をデフォルトに使う。
+    from core.prompt_profile_loader import get_playlist_categories
+    playlist_categories = get_playlist_categories(genre_profile)
+    default_playlist = playlist_categories[0] if playlist_categories else ""
 
     common_script_rules = _load_common_script_rules()
     common_meeting_rules = _load_common_meeting_rules()
@@ -141,6 +138,7 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
         genre_profile=genre_profile,
         system_rules=script_context,
         script_rules=common_script_rules,
+        ng_rules=ng_rules or None,
         description=f"{display_name}チャンネル向けShorts台本生成テンプレート",
         default_hashtags=default_hashtags,
         default_playlist_category=default_playlist,
@@ -159,6 +157,7 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
         genre_profile=genre_profile,
         system_rules=title_context,
         script_rules="",
+        ng_rules=ng_rules or None,
         description=f"{display_name}チャンネル向けタイトル案生成テンプレート",
         default_hashtags=default_hashtags,
         default_playlist_category=default_playlist,
@@ -179,6 +178,7 @@ def seed_templates_for_profile(profile_id: str, genre_profile: str) -> int:
             system_rules=meeting_context,
             script_rules="",
             meeting_rules=common_meeting_rules,
+            ng_rules=ng_rules or None,
             description=f"{display_name}チャンネル向けネタ会議テンプレート",
             default_hashtags=default_hashtags,
             default_playlist_category=default_playlist,
@@ -227,6 +227,8 @@ def seed_all_profiles() -> dict[str, int]:
             count = seed_templates_for_profile(profile.profile_id, profile.genre_profile)
             if profile.genre_profile in {"zunkami", "food_trivia", "zundamon_kowai", "urban_legend"}:
                 sync_quality_rules_for_profile(profile.profile_id, profile.genre_profile)
+            if profile.genre_profile == "zundamon_kowai":
+                _sync_kowai_channel_master(profile)
             results[profile.profile_id] = count
         except Exception as e:
             _logger.error(
@@ -239,6 +241,9 @@ def seed_all_profiles() -> dict[str, int]:
 
 def sync_quality_rules_for_profile(profile_id: str, genre_profile: str) -> int:
     """未移行のデフォルト台本・ネタ会議テンプレートへ現行品質ルールを同期する。"""
+    if genre_profile == "zundamon_kowai":
+        return _sync_kaidan_templates(profile_id)
+
     from core.prompt_template_store import get_default_template, update_template
 
     updated = 0
@@ -281,3 +286,138 @@ def sync_quality_rules_for_profile(profile_id: str, genre_profile: str) -> int:
     if updated:
         _logger.info("[Seeder] %s の説明密度ルールを %d テンプレートへ同期しました", profile_id, updated)
     return updated
+
+
+def _sync_kaidan_templates(profile_id: str) -> int:
+    """旧都市伝説seedを残し、怪談寄りデフォルトテンプレートを追加・更新する。"""
+    from core.prompt_profile_loader import get_playlist_categories, load_genre_profile_config
+    from core.prompt_template_store import (
+        create_template,
+        get_default_template,
+        list_templates,
+        set_default,
+        update_template,
+    )
+
+    genre_profile = "zundamon_kowai"
+    cfg = load_genre_profile_config(genre_profile)
+    hashtags = cfg.get("default_hashtags", "")
+    categories = get_playlist_categories(genre_profile)
+    default_playlist = categories[0] if categories else ""
+    ng_rules = _read_genre_file(genre_profile, "ng_rules.md")
+    existing = {template.template_name: template for template in list_templates(profile_id)}
+    current_defaults = {
+        kind: get_default_template(profile_id, kind)
+        for kind in ("script", "title", "meeting")
+    }
+    definitions = (
+        (
+            "script",
+            "怪談・都市伝説 怪談寄りShorts台本",
+            _read_genre_file(genre_profile, "script_context.md"),
+            _load_common_script_rules(genre_profile),
+            None,
+        ),
+        (
+            "title",
+            "怪談・都市伝説 怪談寄りタイトル案",
+            _read_genre_file(genre_profile, "title_context.md"),
+            "",
+            None,
+        ),
+        (
+            "meeting",
+            "怪談・都市伝説 怪談寄りネタ会議",
+            _read_genre_file(genre_profile, "meeting_context.md"),
+            "",
+            _load_common_meeting_rules(),
+        ),
+    )
+
+    legacy_markers = {
+        "script": "都市伝説専用の具体性",
+        "title": "都市伝説・怖い話専門",
+        "meeting": "都市伝説ネタ会議の評価軸",
+    }
+    updated = 0
+    for kind, name, system_rules, script_rules, meeting_rules in definitions:
+        target = existing.get(name)
+        current = current_defaults[kind]
+        if target is None:
+            if current is None or legacy_markers[kind] not in current.system_rules:
+                continue
+            target = create_template(
+                profile_id=profile_id,
+                template_name=name,
+                template_kind=kind,
+                genre_profile=genre_profile,
+                system_rules=system_rules,
+                script_rules=script_rules,
+                meeting_rules=meeting_rules,
+                ng_rules=ng_rules,
+                description=f"怪談寄りへ移行した{kind}テンプレート",
+                default_hashtags=hashtags,
+                default_playlist_category=default_playlist,
+                template_pack="genre/zundamon_kowai/kaidan-v1",
+                visibility="private",
+                is_default=True,
+            )
+            updated += 1
+            continue
+
+        description = f"怪談寄りへ移行した{kind}テンプレート"
+        needs_update = any((
+            target.system_rules != system_rules,
+            target.script_rules != script_rules,
+            (target.meeting_rules or None) != meeting_rules,
+            (target.ng_rules or "") != ng_rules,
+            (target.description or "") != description,
+            (target.default_hashtags or "") != hashtags,
+            (target.default_playlist_category or "") != default_playlist,
+            target.template_pack != "genre/zundamon_kowai/kaidan-v1",
+        ))
+        if needs_update:
+            update_template(
+                target.template_id,
+                profile_id,
+                system_rules=system_rules,
+                script_rules=script_rules,
+                meeting_rules=meeting_rules,
+                ng_rules=ng_rules,
+                description=description,
+                default_hashtags=hashtags,
+                default_playlist_category=default_playlist,
+                template_pack="genre/zundamon_kowai/kaidan-v1",
+            )
+            updated += 1
+        if current is None or current.template_id != target.template_id:
+            set_default(target.template_id, profile_id)
+            updated += 1
+
+    if updated:
+        _logger.info("[Seeder] %s の怪談寄りテンプレートを %d 件同期しました", profile_id, updated)
+    return updated
+
+
+def _sync_kowai_channel_master(profile) -> None:
+    """旧seed値のままの怪談チャンネル設定だけを新方針へ移行する。"""
+    old_themes = {
+        "",
+        "日本の都市伝説・怖い話・学校怪談を、ずんだもんとめたんが会話形式で紹介します。",
+        "ゾッとする都市伝説・怖い話",
+    }
+    old_hashtags = {
+        "",
+        "#ずんだもん #ゆっくり解説 #都市伝説 #怖い話 #VOICEVOX",
+    }
+    changed = False
+    if profile.channel_theme in old_themes:
+        profile.channel_theme = "怪談・実話として語られた怖い話・真偽不明の噂・都市伝説を、断定を避けて紹介します。"
+        changed = True
+    if profile.default_hashtags in old_hashtags:
+        profile.default_hashtags = "#ずんだもん #四国めたん #VOICEVOX #怪談 #都市伝説 #怖い話 #ゆっくり解説"
+        changed = True
+    if changed:
+        from core.channel_profile import save_profile
+        save_profile(profile)
+        _logger.info("[Seeder] %s のチャンネル設定を怪談寄りへ同期しました", profile.profile_id)

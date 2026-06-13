@@ -293,6 +293,17 @@ def ensure_fixed_hashtags(description: str) -> str:
 
 
 def optimize_description(description: str, is_shorts: bool | None = None, keep_hashtags: bool = True) -> str:
+    from core.channel_profile import require_active_profile
+    from core.prompt_profile_loader import get_default_video_description
+
+    profile = require_active_profile()
+    default_description = get_default_video_description(
+        profile.genre_profile,
+        is_shorts=is_shorts is not False,
+    ).strip()
+    if default_description:
+        return default_description
+
     desc = ensure_seo_description_sentence(description, is_shorts=is_shorts)
     if keep_hashtags:
         return ensure_fixed_hashtags(desc)

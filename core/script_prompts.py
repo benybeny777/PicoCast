@@ -484,6 +484,8 @@ def build_script_generation_prompt(existing_titles=None) -> str:
     base = tmpl.system_rules
     if tmpl.script_rules:
         base += "\n\n" + tmpl.script_rules
+    if tmpl.ng_rules:
+        base += "\n\n" + tmpl.ng_rules
     base += "\n\n" + _compose_character_section_for_active()
     if existing_titles:
         lines = "\n".join(f"・{t}" for t in existing_titles)
@@ -507,6 +509,8 @@ def build_meeting_script_prompt(
     base = tmpl.system_rules
     if tmpl.meeting_rules:
         base += "\n\n" + tmpl.meeting_rules
+    if tmpl.ng_rules:
+        base += "\n\n" + tmpl.ng_rules
 
     existing_titles = existing_titles or []
     existing_title_lines = _format_existing_title_lines(existing_titles)
@@ -551,6 +555,8 @@ def build_title_prompt(
 
     tmpl = _get_default_template("title")
     base = tmpl.system_rules
+    if tmpl.ng_rules:
+        base += "\n\n" + tmpl.ng_rules
 
     dynamic_block = (
         f"""
@@ -580,6 +586,8 @@ def build_gemini_system_prompt(
     base = tmpl.system_rules
     if tmpl.script_rules:
         base += "\n\n" + tmpl.script_rules
+    if tmpl.ng_rules:
+        base += "\n\n" + tmpl.ng_rules
     base += "\n\n" + _compose_character_section_for_active()
 
     existing_block = (

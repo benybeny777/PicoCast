@@ -148,6 +148,12 @@ def get_used_topics_text(genre_profile: str) -> str:
     return _read_genre_file_optional(genre_profile, "used_topics.txt")
 
 
+def get_default_video_description(genre_profile: str, *, is_shorts: bool) -> str:
+    """ジャンル専用の投稿時既定説明文を返す。未定義なら空文字。"""
+    filename = "shorts_description.md" if is_shorts else "long_description.md"
+    return _read_genre_file_optional(genre_profile, filename)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # seed 用ファイル読み込み（prompt_template_seeder.py から呼ばれる）
 # ─────────────────────────────────────────────────────────────────────────────
