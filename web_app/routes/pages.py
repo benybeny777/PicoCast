@@ -18,7 +18,6 @@ from config import (
     WEB_DEFAULT_REUSE_BACKGROUNDS,
     WEB_IMAGE_STYLE_CHOICES,
     WEB_JOB_POLL_INTERVAL_MS,
-    WEB_LOG_POLL_INTERVAL_MS,
     WEB_SUCCESS_RELOAD_DELAY_MS,
     WEB_TOAST_HIDE_DELAY_MS,
     WEB_TOAST_VISIBLE_MS,
@@ -56,7 +55,7 @@ def _render(request: Request, name: str, ctx: dict):
     ctx["web_app_name"] = WEB_APP_NAME
     ctx["app_version"] = _APP_VERSION
     ctx["web_job_poll_interval_ms"] = WEB_JOB_POLL_INTERVAL_MS
-    ctx["web_log_poll_interval_ms"] = WEB_LOG_POLL_INTERVAL_MS
+    ctx["web_log_poll_interval_ms"] = _cfg.WEB_LOG_POLL_INTERVAL_MS
     ctx["web_success_reload_delay_ms"] = WEB_SUCCESS_RELOAD_DELAY_MS
     ctx["web_toast_visible_ms"] = WEB_TOAST_VISIBLE_MS
     ctx["web_toast_hide_delay_ms"] = WEB_TOAST_HIDE_DELAY_MS

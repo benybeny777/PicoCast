@@ -78,6 +78,13 @@ def api_get_config():
     return get_editable_config()
 
 
+@router.get("/runtime/log-poll-interval")
+def api_get_log_poll_interval():
+    """ログ画面が再起動・再読み込みなしで現在の更新間隔を取得する。"""
+    from config import config
+    return {"interval_ms": int(config.WEB_LOG_POLL_INTERVAL_MS)}
+
+
 @router.post("/config")
 def api_save_config(updates: dict[str, str]):
     """設定を DB に保存し、可能なものは現在プロセスへ反映する。"""

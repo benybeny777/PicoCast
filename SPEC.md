@@ -1083,7 +1083,7 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `WEB_DEFAULT_LONG_BUDGET_MODE` | `false` | Web UI生成画面のLong節約既定値 |
 | `AUTO_FIXED_COMMENT_PROFILE_SCOPE` | `"all"` | 固定コメント自動投稿の対象。`all`=全チャンネル、`active`=アクティブのみ |
 | `WEB_JOB_POLL_INTERVAL_MS` | 2000 | Web UIジョブ状態更新間隔(ms) |
-| `WEB_LOG_POLL_INTERVAL_MS` | 8000 | ログ画面(/logs)のポーリング間隔(ms)。長いほどログをコピペしやすい。テキスト選択中はその回の再描画を自動スキップする |
+| `WEB_LOG_POLL_INTERVAL_MS` | 30000 | ログ画面(/logs)のポーリング間隔(ms)。設定保存後は開いているログ画面も値を再取得してタイマーを組み直すため、アプリ再起動・ページ再読み込みは不要。テキスト選択中は再描画をスキップし、デバッグログを上へスクロール中は表示位置を維持する |
 | `WEB_SUCCESS_RELOAD_DELAY_MS` | 1500 | Web UIジョブ成功後再読み込み待ち時間(ms) |
 | `WEB_TOAST_VISIBLE_MS` | 2000 | Web UIトースト表示時間(ms) |
 | `WEB_TOAST_HIDE_DELAY_MS` | 420 | Web UIトースト非表示待ち時間(ms) |

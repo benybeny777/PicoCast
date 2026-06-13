@@ -278,7 +278,11 @@ def test_logs_page_uses_common_job_card_and_debug_polling(client):
     assert "buildJobCardHtml(job)" in res.text
     assert "_startDebugPolling" in res.text
     assert "setInterval(() =>" in res.text
-    assert "_LOG_POLL_INTERVAL_MS" in res.text
+    assert "_logPollIntervalMs" in res.text
+    assert "ログ選択中のため自動更新を一時停止しています" in res.text
+    assert "wasAtBottom ? box.scrollHeight : previousScrollTop" in res.text
+    assert "/api/settings/runtime/log-poll-interval" in res.text
+    assert "_restartLogPolling()" in res.text
     assert '<button class="btn btn-secondary" onclick="location.reload()">更新</button>' not in res.text
     assert "読み込み / 更新" not in res.text
 
@@ -295,6 +299,16 @@ def test_logs_running_job_cancel_button_is_action_label(client):
     assert "running" in res.text
     assert "中止する" in res.text
     assert ">中止</button>" not in res.text
+
+
+def test_log_poll_interval_runtime_endpoint(client, monkeypatch):
+    from config import config
+
+    monkeypatch.setattr(config, "WEB_LOG_POLL_INTERVAL_MS", 30000)
+    res = client.get("/api/settings/runtime/log-poll-interval")
+
+    assert res.status_code == 200
+    assert res.json() == {"interval_ms": 30000}
 
 
 # ── job_manager の状態遷移 ───────────────────────────────────────────────────

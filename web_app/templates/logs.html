@@ -129,19 +129,24 @@ function _buildJobCard(job) {
 }
 
 // 常時ポーリング: 新しいジョブが登録されても自動反映。
-// 間隔は WEB_LOG_POLL_INTERVAL_MS（既定8秒）。頻繁な再描画でログのコピペが
+// 間隔は WEB_LOG_POLL_INTERVAL_MS（既定30秒）。頻繁な再描画でログのコピペが
 // 途切れないよう長めにし、さらにテキスト選択中はこの回の更新をスキップする。
-const _LOG_POLL_INTERVAL_MS = {{ web_log_poll_interval_ms | default(8000) }};
+let _logPollIntervalMs = {{ web_log_poll_interval_ms | default(30000) }};
 function _hasTextSelection() {
   const sel = window.getSelection && window.getSelection();
   return !!(sel && sel.toString().trim().length > 0);
 }
 let _pollTimer = null;
 let _debugPollTimer = null;
+let _intervalWatchTimer = null;
 function _startPolling() {
   if (_pollTimer) return;
   _pollTimer = setInterval(async () => {
     const pollMsg = document.getElementById('job-poll-message');
+    if (_hasTextSelection()) {
+      if (pollMsg) pollMsg.textContent = 'ログ選択中のため自動更新を一時停止しています';
+      return;
+    }
     try {
       const res = await fetch('/api/jobs', {cache: 'no-store'});
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -167,7 +172,7 @@ function _startPolling() {
         pollMsg.style.color = 'var(--err)';
       }
     }
-  }, _LOG_POLL_INTERVAL_MS);
+  }, _logPollIntervalMs);
 }
 _startPolling();
 
@@ -176,7 +181,7 @@ function _startDebugPolling() {
   _debugPollTimer = setInterval(() => {
     if (_hasTextSelection()) return;
     loadDebugLog();
-  }, _LOG_POLL_INTERVAL_MS);
+  }, _logPollIntervalMs);
 }
 
 function _stopDebugPolling() {
@@ -184,6 +189,35 @@ function _stopDebugPolling() {
   clearInterval(_debugPollTimer);
   _debugPollTimer = null;
 }
+
+function _restartLogPolling() {
+  if (_pollTimer) {
+    clearInterval(_pollTimer);
+    _pollTimer = null;
+  }
+  const debugVisible = document.getElementById('tab-debug').style.display !== 'none';
+  _stopDebugPolling();
+  _startPolling();
+  if (debugVisible) _startDebugPolling();
+}
+
+async function _syncLogPollInterval() {
+  try {
+    const res = await fetch('/api/settings/runtime/log-poll-interval', {cache: 'no-store'});
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const nextInterval = Number(data.interval_ms);
+    if (!Number.isFinite(nextInterval) || nextInterval < 1000 || nextInterval === _logPollIntervalMs) return;
+    _logPollIntervalMs = nextInterval;
+    _restartLogPolling();
+    const pollMsg = document.getElementById('job-poll-message');
+    if (pollMsg) pollMsg.textContent = `更新間隔を${Math.round(nextInterval / 1000)}秒へ反映しました`;
+  } catch (e) {
+    console.warn('ログ更新間隔の同期に失敗しました', e);
+  }
+}
+
+_intervalWatchTimer = setInterval(_syncLogPollInterval, 3000);
 
 function filterJobs() {
   const status = document.getElementById('status-filter').value;
@@ -209,6 +243,8 @@ async function loadDebugLog() {
   const box = document.getElementById('debug-log-content');
   const msg = document.getElementById('debug-log-message');
   const pathEl = document.getElementById('debug-log-path');
+  const previousScrollTop = box.scrollTop;
+  const wasAtBottom = box.scrollHeight - box.clientHeight - box.scrollTop <= 24;
   try {
     const res = await fetch('/api/settings/debug-log');
     const data = await res.json();
@@ -217,7 +253,7 @@ async function loadDebugLog() {
       box.textContent = data.lines.join('\n');
       box.style.display = 'block';
       msg.textContent = '';
-      box.scrollTop = box.scrollHeight;
+      box.scrollTop = wasAtBottom ? box.scrollHeight : previousScrollTop;
     } else {
       box.style.display = 'none';
       msg.textContent = data.message || 'ログがありません。';
