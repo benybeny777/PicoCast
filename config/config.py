@@ -457,7 +457,7 @@ LONG_UPLOAD_PLAYLIST_NAME  = os.environ.get("LONG_UPLOAD_PLAYLIST_NAME",  "ロ�
 PLAYLIST_CLASSIFIER_SCRIPT_CHARS = int(os.environ.get("PLAYLIST_CLASSIFIER_SCRIPT_CHARS", "1600"))  # 単体再生リスト判定でOllamaへ渡す台本本文の最大文字数
 TOPIC_REQUEST_CTA_EVERY_N  = int(os.environ.get("TOPIC_REQUEST_CTA_EVERY_N", "5"))  # Shorts新規/横展開のネタ募集CTAを許可する間隔（N本に1本、0で自動付与なし）
 UPLOAD_TIMEZONE            = os.environ.get("UPLOAD_TIMEZONE", "Asia/Tokyo").strip()  # 投稿予約スロットのタイムゾーン
-SHORTS_UPLOAD_SLOT_HOURS   = _split_env_ints(os.environ.get("SHORTS_UPLOAD_SLOT_HOURS", "12,21"))  # Shorts投稿予約スロット時刻（時）
+SHORTS_UPLOAD_SLOT_HOURS   = _split_env_ints(os.environ.get("SHORTS_UPLOAD_SLOT_HOURS", "21"))  # Shorts投稿予約スロット時刻（時）
 LONG_UPLOAD_SLOT_HOURS     = _split_env_ints(os.environ.get("LONG_UPLOAD_SLOT_HOURS", "22"))  # Long投稿予約スロット時刻（時、曜日共通）
 
 # ───────────────────────────────────────────────
