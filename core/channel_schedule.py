@@ -21,6 +21,8 @@ _DB_PATH = os.path.join(_ROOT, "data", "settings.db")
 _lock = threading.Lock()
 
 _MIGRATION_KEY = "upload_slots_20260606_1221_22"
+# Shorts 既定を 21:00 1枠へ集約（config.SHORTS_UPLOAD_SLOT_HOURS の変更を既存チャンネルへ反映）
+_SHORTS_SLOT_MIGRATION_KEY = "upload_slots_20260623_shorts_21"
 
 
 @dataclass
@@ -120,6 +122,7 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
         )
     """)
     _apply_default_slot_migration(conn)
+    _apply_shorts_slot_migration(conn)
     conn.commit()
 
 
@@ -164,6 +167,30 @@ def _apply_default_slot_migration(conn: sqlite3.Connection) -> None:
     conn.execute(
         "INSERT INTO channel_schedule_migrations(migration_key, applied_at) VALUES(?,?)",
         (_MIGRATION_KEY, now),
+    )
+
+
+def _apply_shorts_slot_migration(conn: sqlite3.Connection) -> None:
+    """既存全チャンネルの Shorts スロットを config 既定（21:00）へ更新する。
+
+    config.SHORTS_UPLOAD_SLOT_HOURS の既定変更は新規チャンネルにしか効かないため、
+    既存の channel_schedule_settings 全行を新既定で上書きする一度きりの移行。
+    """
+    done = conn.execute(
+        "SELECT 1 FROM channel_schedule_migrations WHERE migration_key=?",
+        (_SHORTS_SLOT_MIGRATION_KEY,),
+    ).fetchone()
+    if done:
+        return
+    shorts_text = _hours_to_text(tuple(_cfg.SHORTS_UPLOAD_SLOT_HOURS))
+    now = _now_iso()
+    conn.execute(
+        "UPDATE channel_schedule_settings SET shorts_slot_hours=?, updated_at=?",
+        (shorts_text, now),
+    )
+    conn.execute(
+        "INSERT INTO channel_schedule_migrations(migration_key, applied_at) VALUES(?,?)",
+        (_SHORTS_SLOT_MIGRATION_KEY, now),
     )
 
 

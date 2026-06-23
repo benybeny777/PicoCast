@@ -7,6 +7,15 @@ from core import upload_scheduler
 
 
 class UploadSchedulerTests(unittest.TestCase):
+    def setUp(self):
+        # 実DB(settings.db)依存を排除し、スロット設定を固定してアルゴリズムを検証する。
+        # 個別テストが with patch.object(...) で上書きする場合はそちらが優先される。
+        patcher = patch.object(
+            upload_scheduler, "_active_schedule", return_value=self._default_schedule()
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _default_schedule(self):
         return SimpleNamespace(
             timezone_name="Asia/Tokyo",
