@@ -144,7 +144,11 @@
 - 破壊的操作（アップロード・固定コメント・スケジュール変更）は `confirmed=true` 必須 + 画面確認ダイアログ必須。
 - 画像手動差し替え・復元は `confirmed=true` 必須。元画像は `000_backups/image_replacements/` に退避し、履歴は active profile の `metadata.db:image_replacements` に記録する。
 - 実装が不安定な機能は `[DISABLED]` / `[dry-run]` として画面とコードコメントに明記し、無効ではなくユーザーに理由を提示する。
-- テストは `tests/test_web.py` で行う。外部API実通信が必要なテストはモックまたはskip可能にする。
+- テストは `tests/` 配下に置く（Web UI は `tests/test_web.py`）。外部API実通信が必要なテストはモックまたはskip可能にする。
+- **テストは利用者の実データに触れない。** `tests/conftest.py` が `app_base_dir()` をテスト専用の一時フォルダへ差し替え、active profile を1件用意する。実キーや実DBに依存するテストを書かず、APIキーが要る初期化は `dummy_google_api_key` のようなダミーの fixture を使う。`tests/test_test_isolation.py` が保存先の隔離を検査する。
+- **作業完了前の検証は `python tools/verify.py` にまとめる。** pytest（ルール検査を含む）と `git diff --check` を途中失敗後も最後まで実行し、末尾に結果を表示する。
+- **ルールは `tests/test_rule_guards.py` で機械検査する。** `os.environ` 参照・ログも再送出もしない `except` 節・`script.txt` への言及は、ファイルごとの現在件数を上限として増加だけを止める。違反を直して件数が減ったら、同じ作業で上限表も下げる。`config.py` 公開定数のコメント、日本語を含む `.ps1` のBOM、`.agents/skills` と `.claude/skills` の対応、traceback の文字列化禁止も同じファイルで検査する。新しい恒久ルールを足すときは、機械検査できるならここへ検査も足す。
+- Claude Code on the web などのリモート環境では、`.claude/hooks/session-start.sh` がセッション開始時に `config/requirements-dev.txt` を導入する。利用者のPCでは何もしない。
 - Starlette 1.1.0以降: `TemplateResponse(request, name, context)` の引数順に従う。
 - 設定画面で保存した値はアプリ再起動なしで即時反映する。`config_service._apply_runtime_updates()` で `setattr(cfg, key, value)` と `sys.modules` 全走査による伝搬を行う。`WEB_UI_PORT` など「アプリ起動時に固定されるパラメータ」だけを例外とし、それらは EDITABLE_CONFIG から除外する。UI上に「再起動後に反映」という文言を出さない。
 

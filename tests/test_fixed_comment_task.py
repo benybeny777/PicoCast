@@ -146,6 +146,8 @@ def test_inspect_detects_stale_and_orphans(monkeypatch, tmp_path):
     monkeypatch.setattr(t.platform, "system", lambda: "Windows")
     monkeypatch.setattr(t, "app_base_dir", lambda: str(tmp_path))
     monkeypatch.setattr(t, "_windows_exists", lambda: True)  # 現在タスクは登録済み
+    # 実行環境に PowerShell が無くても Windows の判定を検証できるようにする
+    monkeypatch.setattr(t.shutil, "which", lambda _name: r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
     monkeypatch.setattr(t, "_command", lambda: (str(tmp_path / "cur.exe"), ["--post-fixed-comments"], str(tmp_path)))
 
     cur_name = t.task_name()

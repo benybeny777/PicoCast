@@ -333,6 +333,7 @@ pip install --upgrade -r config/requirements-dev.txt
 ├── assets/        # BGM・効果音・キャラ立ち絵
 ├── output/        # 動画生成物・メタデータDB（自動生成・Git管理外）
 ├── .agents/skills/ # AIエージェント共通の作業スキル正本（`.claude/skills/` は入口のみ）
+├── tools/         # 開発用スクリプト（`verify.py` = 作業完了前の一括検証）
 └── start.ps1      # 起動用スクリプト
 ```
 ※ 詳しいモジュール構成は `SPEC.md` を参照してください。
@@ -403,3 +404,12 @@ pip install --upgrade -r config/requirements-dev.txt
 - Python: 3.11.9
 - ffmpeg: 8.0.1 (NVENC 対応)
 - FastAPI: 0.136.3
+
+### テストと検証
+
+```powershell
+python -m pip install -r config/requirements-dev.txt
+python tools/verify.py   # pytest（ルール検査を含む）と git diff --check をまとめて実行
+```
+
+テストは一時フォルダだけを使い、`data/settings.db` や `output/` など利用者の実データを読み書きしません。

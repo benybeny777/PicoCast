@@ -181,7 +181,7 @@ def test_fallback_title_variants_are_complete_and_bounded():
     assert all(len(item["title"]) <= 45 for item in variants)
 
 
-def test_nanobanana_summary_shows_final_size():
+def test_nanobanana_summary_shows_final_size(dummy_google_api_key):
     from core.image_generator import ImageGenerator
 
     assert ImageGenerator(width=1080, height=1920).nanobanana_request_summary() == (
