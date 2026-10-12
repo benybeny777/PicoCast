@@ -110,6 +110,20 @@ def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
 
     return translated
 
+
+def _next_background_fname(save_dir: str) -> str:
+    """保存先の bg_NNN_001.png の次の番号のファイル名を返す。"""
+    existing_nums = []
+    for f in os.listdir(save_dir):
+        if f.lower().endswith(".png") and f.lower().startswith("bg_"):
+            try:
+                existing_nums.append(int(f[3:6]))
+            except ValueError:
+                _logger.warning("背景画像ファイル名の番号解析に失敗しました: file=%s", f, exc_info=True)
+    next_num = max(existing_nums, default=0) + 1
+    return f"bg_{next_num:03d}_001.png"
+
+
 class ImageGenerator:
     def __init__(
         self,
@@ -134,12 +148,14 @@ class ImageGenerator:
             effective_engine = background_engine.strip().lower()
         elif config.IMAGE_BACKEND == "sd_webui":
             effective_engine = "sd_webui"
+        elif config.IMAGE_BACKEND == "comfyui":
+            effective_engine = "comfyui"
         elif config.IMAGE_BACKEND == "gemini":
             effective_engine = "nanobanana"
         else:
             raise ValueError(
                 f"未対応の IMAGE_BACKEND です: '{config.IMAGE_BACKEND}'。"
-                f"有効な値: 'gemini', 'sd_webui'"
+                f"有効な値: 'gemini', 'sd_webui', 'comfyui'"
             )
         self.background_engine = effective_engine
 
@@ -214,17 +230,7 @@ class ImageGenerator:
     def _save_image_part(self, part, save_dir, fname=None):
         """inline_data part を PNG として保存・リサイズし、ファイル名を返す。"""
         from PIL import Image
-        if fname is None:
-            existing_nums = []
-            for f in os.listdir(save_dir):
-                if f.lower().endswith(".png") and f.lower().startswith("bg_"):
-                    try:
-                        existing_nums.append(int(f[3:6]))
-                    except ValueError:
-                        _logger.warning("背景画像ファイル名の番号解析に失敗しました: file=%s", f, exc_info=True)
-                        pass
-            next_num = max(existing_nums, default=0) + 1
-            fname = f"bg_{next_num:03d}_001.png"
+        fname = fname or _next_background_fname(save_dir)
         path = os.path.join(save_dir, fname)
         with open(path, "wb") as f:
             f.write(part.inline_data.data)
@@ -320,17 +326,7 @@ class ImageGenerator:
             _THUMB_PROMPT_SUFFIX,
         )
 
-        if not fname:
-            existing_nums = []
-            for f in os.listdir(save_dir):
-                if f.lower().endswith(".png") and f.lower().startswith("bg_"):
-                    try:
-                        existing_nums.append(int(f[3:6]))
-                    except ValueError:
-                        _logger.warning("背景画像ファイル名の番号解析に失敗しました: file=%s", f, exc_info=True)
-                        pass
-            next_num = max(existing_nums, default=0) + 1
-            fname = f"bg_{next_num:03d}_001.png"
+        fname = fname or _next_background_fname(save_dir)
         output_path = os.path.join(save_dir, fname)
 
         # SD_WEBUI_MODEL 設定時: インストール確認 → 必要に応じてダウンロード → モデル切り替え
@@ -384,7 +380,68 @@ class ImageGenerator:
             print(f"  [AI] Stable Diffusion WebUI 完了: {fname}")
         return fname
 
-    def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None, is_thumbnail=False):
+    def _build_local_prompt(self, description: str) -> str:
+        """ローカル画像モデル向けのプロンプト。文字は描かせず、生成後に local_image_compose で重ねる。"""
+        from core.local_image_compose import NO_TEXT_INSTRUCTION
+        layout = "縦長の構図。" if self.height > self.width else (
+            "横長の構図。キャラクター立ち絵を右側に置くため、画面の右側には重要な描写を密集させない。"
+        )
+        return f"高品質な漫画風イラスト調の背景画像。{description}。{layout}{NO_TEXT_INSTRUCTION}鮮烈な色彩、劇的な照明、精細なデジタルアート。"
+
+    def _generate_background_comfyui(self, description, save_dir, fname, *, is_thumbnail=False,
+                                     character_paths=None, overlay_text=None):
+        """ComfyUI（ローカル）で文字なしの画像を生成し、文字と（サムネは）立ち絵を重ねて保存する。"""
+        import io
+        from PIL import Image
+        from core import local_image_compose
+        from core.comfyui_generator import ComfyUIGenerator, generation_size
+
+        fname = fname or _next_background_fname(save_dir)
+        if is_thumbnail:
+            prompt, text = description, (overlay_text or "")
+        else:
+            parts = local_image_compose.split_overlay_text(description)
+            prompt, text = self._build_local_prompt(parts.prompt), parts.overlay_text
+        gen_width, gen_height = generation_size(self.width, self.height)
+        if self.debug:
+            print(f"  [AI] ComfyUI ({config.COMFYUI_BASE_URL}) {gen_width}x{gen_height} で生成開始: {prompt[:60]}...")
+        with ComfyUIGenerator() as gen:
+            try:
+                png, seed = gen.generate_png(prompt, width=gen_width, height=gen_height)
+            except Exception as e:
+                # 自動フォールバック禁止。接続失敗・ComfyUI の実行エラーとも理由付きで止める。
+                category, status = classify_image_api_error(e)
+                _logger.error("ComfyUI 画像生成に失敗しました: category=%s status=%s", category, status, exc_info=True)
+                raise ImageGenerationError(
+                    f"ComfyUI が失敗しました: {e}", category=category, status_code=status,
+                    model="comfyui", backend="comfyui",
+                ) from e
+        path = os.path.join(save_dir, fname)
+        with Image.open(io.BytesIO(png)) as img:
+            canvas = img.convert("RGB").resize((self.width, self.height), Image.LANCZOS)
+        try:
+            if is_thumbnail:
+                local_image_compose.paste_characters(canvas, list(character_paths or []))
+            local_image_compose.draw_overlay_text(canvas, text)
+            canvas.save(path)
+        finally:
+            canvas.close()
+        if self.debug:
+            self._save_prompt_log(save_dir, fname, f"{prompt}\n(seed={seed} / 文字入れ={text})")
+            print(f"  [AI] ComfyUI 完了: {fname} (seed={seed})")
+        return fname
+
+    def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None, is_thumbnail=False, overlay_text=None):
+        if self.background_engine == "comfyui":
+            save_dir = target_dir or "output/backgrounds"
+            os.makedirs(save_dir, exist_ok=True)
+            refs = list(reference_image_paths or [])
+            if reference_image_path:
+                refs.insert(0, reference_image_path)
+            return self._generate_background_comfyui(
+                description, save_dir, fname, is_thumbnail=is_thumbnail,
+                character_paths=refs, overlay_text=overlay_text,
+            )
         if self.background_engine == "sd_webui":
             save_dir = target_dir or "output/backgrounds"
             os.makedirs(save_dir, exist_ok=True)

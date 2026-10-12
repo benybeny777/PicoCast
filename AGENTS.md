@@ -181,7 +181,10 @@
 | `workers/runner.py` | DB queue から生成・レンダージョブを取得して実行する常駐 runner |
 | `config/config.py` | 定数・設定（音声速度・モデル名・パスなど） |
 | `core/parser.py` | 台本パーサー `ScriptParser` |
-| `core/ai_generator.py` | Gemini台本生成・画像プロンプト強化 |
+| `core/ai_generator.py` | 台本・タイトルA/B/C案の生成（使う AI は `core/text_llm.py`） |
+| `core/text_llm.py` | 文章生成AIの窓口（Gemini / Claude Code CLI / Codex CLI / Ollama）。CLI は読み取り専用の安全指定で起動し、プロンプトは標準入力で渡す |
+| `core/comfyui_generator.py` | ComfyUI（ローカル・Krea 2 Turbo）画像生成 |
+| `core/local_image_compose.py` | ローカル画像の文字入れ・サムネの立ち絵合成（画像AIに日本語を描かせない） |
 | `core/voicevox.py` | VOICEVOX音声生成 |
 | `core/image_generator.py` | Nano Banana背景・サムネ生成 |
 | `core/native_renderer.py` | ffmpeg/native MP4レンダラー |

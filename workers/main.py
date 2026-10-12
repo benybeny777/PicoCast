@@ -304,7 +304,27 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         thumb_img_gen.close()
         return value
 
-    def _generate_one(one_prompt, final_path, label):
+    # ComfyUI（ローカル）は台本全文から構図を考えられず日本語も描けないため、題材だけの短い指示で
+    # 文字なしの絵を作り、立ち絵とサムネ文字を後から重ねる（core/local_image_compose.py）。
+    is_local = thumb_img_gen.background_engine == "comfyui"
+    thumbnail_text = ""
+    try:
+        thumbnail_text = next(
+            (it["text"] for it in ScriptParser.parse_string(script_content or "") if it["type"] == "thumbnail_text"),
+            "",
+        ).strip()
+    except Exception:
+        _logger.warning("サムネイル用テキストの抽出に失敗しました", exc_info=True)
+        thumbnail_text = ""
+
+    def _local_prompt(extra=""):
+        layout = "縦長の構図" if is_shorts else "横長の構図。左下と右下にキャラクターを重ねるので、主題は中央に大きく"
+        return (
+            f"「{topic}」を象徴する、YouTubeサムネイル向けの迫力ある漫画風イラスト。{layout}。"
+            f"{extra} 文字・ロゴは一切描かない。人物・キャラクターは描かない。鮮烈な色彩、強いコントラスト。"
+        )
+
+    def _generate_one(one_prompt, final_path, label, overlay_text=None):
         _log(f"サムネイル生成中: {label}")
         if thumb_img_gen.background_engine == "nanobanana":
             _log(f"  🖼 {thumb_img_gen.nanobanana_request_summary()}")
@@ -316,6 +336,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             raw=True,
             reference_image_paths=char_refs,
             is_thumbnail=True,
+            overlay_text=overlay_text,
         )
         if not generated_name:
             return None
@@ -329,7 +350,10 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
 
     if is_shorts:
         try:
-            saved_path = _generate_one(prompt, thumb_path, "thumbnail")
+            if is_local:
+                saved_path = _generate_one(_local_prompt(), thumb_path, "thumbnail", overlay_text=thumbnail_text or topic)
+            else:
+                saved_path = _generate_one(prompt, thumb_path, "thumbnail")
             if not saved_path:
                 raise ImageGenerationError(
                     "サムネイル画像が生成されませんでした。",
@@ -345,15 +369,6 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
 
     manifest_variants = []
     first_variant_path = None
-    thumbnail_text = ""
-    try:
-        thumbnail_text = next(
-            (it["text"] for it in ScriptParser.parse_string(script_content or "") if it["type"] == "thumbnail_text"),
-            "",
-        ).strip()
-    except Exception:
-        _logger.warning("サムネイル用テキストの抽出に失敗しました", exc_info=True)
-        thumbnail_text = ""
     common_rules = (
         "\n\nLong video thumbnail A/B test rules: 16:9 landscape. "
         "Put the food large in the center. Place Zundamon at lower left and Shikoku Metan at lower right. "
@@ -369,8 +384,14 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             variant_id = variant["variant"]
             filename = _thumbnail_variant_filename(theme_dir, variant_id)
             variant_path = os.path.join(thumbs, filename)
-            variant_prompt = f"{prompt}{common_rules}\n\n{variant['prompt']}"
-            saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
+            if is_local:
+                saved_path = _generate_one(
+                    _local_prompt(variant["prompt"]), variant_path, f"variant {variant_id}",
+                    overlay_text=thumbnail_text or topic,  # variant["text"] は英語の説明文なので画像に載せない
+                )
+            else:
+                variant_prompt = f"{prompt}{common_rules}\n\n{variant['prompt']}"
+                saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
             if not saved_path:
                 raise ImageGenerationError(
                     "サムネイル画像が生成されませんでした。",

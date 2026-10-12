@@ -26,6 +26,7 @@ ENV_ACCESS_LIMITS = {
     "core/output_paths.py": 1,
     "core/secret_store.py": 1,
     "core/settings_store.py": 1,
+    "core/text_llm.py": 1,  # CODEX_HOME（Codex CLI 自身の設定場所。アプリの設定値ではない）
 }
 
 # ログも再送出もしない except 節の件数の上限（AGENTS.md「エラーはすべて上位に伝播」「失敗時はデバッグログへ出力」）。

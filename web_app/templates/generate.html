@@ -15,6 +15,13 @@
   <div class="card">
     <h2>プロンプト生成</h2>
     <p class="hint">ボタンを押してプロンプトを生成 → コピーして Gemini / ChatGPT に貼り付けてください。</p>
+    <div class="llm-run-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px">
+      <input type="text" id="llm-theme-normal" placeholder="台本のテーマ（例: タイトル案の3番『〇〇の歴史』）" style="flex:1; min-width:260px">
+      <button class="btn btn-primary" onclick="runPrompt('script','normal','script-input-normal')">AIで台本を作る</button>
+      <button class="btn btn-secondary" onclick="runPrompt('title','normal','prompt-text-normal')">AIでShortsタイトル案</button>
+      <button class="btn btn-secondary" onclick="runPrompt('title-long','normal','prompt-text-normal')">AIでLongタイトル案</button>
+      <span class="hint llm-backend-label" style="font-size:12px"></span>
+    </div>
     <div style="display:flex; flex-direction:column; gap:8px">
       <div style="display:flex; align-items:center; gap:12px">
         <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('script','normal')">AI台本作成プロンプト</button>
@@ -44,7 +51,8 @@
       <div class="form-group">
         <label for="background-engine-normal">画像エンジン</label>
         <select id="background-engine-normal">
-          <option value="nanobanana" {% if image_backend != 'sd_webui' %}selected{% endif %}>Gemini AI</option>
+          <option value="nanobanana" {% if image_backend not in ('sd_webui', 'comfyui') %}selected{% endif %}>Gemini AI</option>
+          <option value="comfyui" {% if image_backend == 'comfyui' %}selected{% endif %}>ComfyUI（ローカル）</option>
           <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI</option>
         </select>
       </div>
@@ -98,6 +106,10 @@
   <div class="card">
     <h2>プロンプト生成</h2>
     <p class="hint">ボタンを押してプロンプトを生成 → Gemini / ChatGPT に貼り付け、生成した台本をこのタブに貼ってください。</p>
+    <div class="llm-run-row" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px">
+      <button class="btn btn-primary" onclick="runPrompt('meeting','meeting','script-input-meeting')">AIでネタ会議台本を作る</button>
+      <span class="hint llm-backend-label" style="font-size:12px"></span>
+    </div>
     <div style="display:flex; align-items:center; gap:12px">
       <button class="btn btn-secondary" style="width:220px" onclick="fetchPrompt('meeting','meeting')">ネタ会議台本案プロンプト</button>
       <span class="hint" style="font-size:12px">候補一覧・本編・固定コメント・アンケートをまとめて生成</span>
@@ -117,7 +129,8 @@
       <div class="form-group">
         <label for="background-engine-meeting">画像エンジン</label>
         <select id="background-engine-meeting">
-          <option value="nanobanana" {% if image_backend != 'sd_webui' %}selected{% endif %}>Gemini AI</option>
+          <option value="nanobanana" {% if image_backend not in ('sd_webui', 'comfyui') %}selected{% endif %}>Gemini AI</option>
+          <option value="comfyui" {% if image_backend == 'comfyui' %}selected{% endif %}>ComfyUI（ローカル）</option>
           <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI</option>
         </select>
       </div>
@@ -229,6 +242,64 @@ function showToast() {
     toast.style.opacity = '0';
     setTimeout(() => { toast.style.display = 'none'; toast.style.transition = ''; }, window.WEB_TOAST_HIDE_DELAY_MS);
   }, window.WEB_TOAST_VISIBLE_MS);
+}
+
+// ─── 選択中の文章生成AIで実行（Claude Code / Codex / Ollama / Gemini） ───
+(async function showLlmBackend() {
+  const labels = document.querySelectorAll('.llm-backend-label');
+  try {
+    const res = await fetch('/api/prompt/backends');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.status);
+    const cur = data.backends.find(b => b.backend === data.current);
+    const text = cur.ready
+      ? `使うAI: ${cur.label}（設定画面「AI / 文章生成」で変更）`
+      : `使うAI: ${cur.label} — ${cur.note}`;
+    labels.forEach(el => { el.textContent = text; el.style.color = cur.ready ? '' : 'var(--err)'; });
+  } catch (e) {
+    labels.forEach(el => { el.textContent = '文章生成AIの状態を取得できませんでした: ' + e; });
+  }
+})();
+
+async function runPrompt(kind, tab, targetId) {
+  const meta = document.getElementById(`prompt-meta-${tab}`);
+  document.getElementById(`prompt-result-${tab}`).style.display = 'block';
+  const target = document.getElementById(targetId);
+  if (target.value.trim() && targetId.startsWith('script-input') &&
+      !confirm('台本欄の内容をAIの結果で置き換えます。よろしいですか？')) return;
+  const buttons = document.querySelectorAll('.llm-run-row button');
+  buttons.forEach(b => b.disabled = true);
+  try {
+    const themeInput = document.getElementById(`llm-theme-${tab}`);
+    const theme = kind === 'script' && themeInput ? themeInput.value.trim() : '';
+    const res = await fetch('/api/prompt/run', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({kind, theme}),
+    });
+    const data = await res.json();
+    if (!res.ok) { meta.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
+    const started = Date.now();
+    while (true) {
+      const sec = Math.round((Date.now() - started) / 1000);
+      meta.textContent = `${data.backend_label} で作成中... ${sec}秒`;
+      await new Promise(r => setTimeout(r, 3000));
+      const jr = await fetch(`/api/jobs/${data.job_id}`);
+      const job = await jr.json();
+      if (!jr.ok) { meta.textContent = 'エラー: ' + (job.detail || jr.status); return; }
+      if (job.status === 'success') {
+        target.value = job.result.text;
+        meta.textContent = `${data.backend_label} で作成しました（${sec}秒）。内容を確認してから生成してください。`;
+        return;
+      }
+      if (job.status === 'failed' || job.status === 'cancelled') {
+        meta.textContent = 'エラー: ' + (job.error || job.status);
+        return;
+      }
+    }
+  } catch (e) {
+    meta.textContent = '通信エラー: ' + e;
+  } finally {
+    buttons.forEach(b => b.disabled = false);
+  }
 }
 
 // ─── プロンプト取得 ───

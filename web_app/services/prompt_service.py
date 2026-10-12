@@ -142,3 +142,58 @@ def get_title_prompt(long_only: bool = False) -> dict:
         "long_only": long_only,
         "genre_profile": genre_profile,
     }
+
+
+# ── 選択中の文章生成AIでプロンプトを実行する（コピー＆貼り付けの代わり） ──────────────
+
+def _prompt_builders() -> dict:
+    return {
+        "script": (get_script_generation_prompt, {}),
+        "title": (get_title_prompt, {}),
+        "title-long": (get_title_prompt, {"long_only": True}),
+        "meeting": (get_meeting_prompt, {}),
+    }
+
+
+def submit_prompt_run(kind: str, theme: str = "") -> dict:
+    """プロンプトを組み立て、設定中の文章生成AI（Claude Code / Codex / Ollama / Gemini）で実行するジョブを登録する。
+
+    CLI の応答には数分かかるため HTTP リクエスト内で待たず、ジョブの result に本文を入れる。
+    """
+    from core import text_llm
+    from web_app.job_manager import get_job_manager
+
+    builders = _prompt_builders()
+    if kind not in builders:
+        raise ValueError(f"未対応のプロンプト種別です: {kind}")
+    builder, kwargs = builders[kind]
+    prompt = builder(**kwargs)["prompt"]
+    theme = theme.strip()
+    if theme and kind == "script":
+        # 手作業の流れ（「案3の『〇〇』で台本を作ってください」＋プロンプト）と同じ形で渡す
+        prompt = f"「{theme}」で台本を作ってください。\n\n{prompt}"
+    backend = text_llm.current_backend()
+    mgr = get_job_manager()
+    job = mgr.create_job("prompt_run", params={"kind": kind, "backend": backend})
+    mgr.submit(job, _run_prompt, prompt, kind, backend)
+    return {"job_id": job.job_id, "backend": backend, "backend_label": text_llm.BACKEND_LABELS[backend]}
+
+
+def _run_prompt(job, prompt: str, kind: str, backend: str) -> dict:
+    from config import config as cfg
+    from core import text_llm
+    from web_app.job_manager import _log
+
+    label = text_llm.BACKEND_LABELS[backend]
+    _log(job, f"{label} で{_KIND_LABELS[kind]}を作成中...（数分かかることがあります）", "info")
+    text = text_llm.generate(prompt, web_search=cfg.TEXT_LLM_WEB_SEARCH, backend=backend)
+    _log(job, f"{label} の応答を受け取りました（{len(text)}文字）", "info")
+    return {"kind": kind, "backend": backend, "text": text}
+
+
+_KIND_LABELS = {
+    "script": "台本",
+    "title": "Shortsタイトル案",
+    "title-long": "Longタイトル案",
+    "meeting": "ネタ会議台本",
+}
