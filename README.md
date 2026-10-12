@@ -332,6 +332,7 @@ pip install --upgrade -r config/requirements-dev.txt
 ├── data/          # 設定DB・よみがな辞書
 ├── assets/        # BGM・効果音・キャラ立ち絵
 ├── output/        # 動画生成物・メタデータDB（自動生成・Git管理外）
+├── .agents/skills/ # AIエージェント共通の作業スキル正本（`.claude/skills/` は入口のみ）
 └── start.ps1      # 起動用スクリプト
 ```
 ※ 詳しいモジュール構成は `SPEC.md` を参照してください。

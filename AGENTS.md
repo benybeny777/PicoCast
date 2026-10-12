@@ -1,43 +1,14 @@
-# GPT-6 Astra operating guidance
+# 作業指針（共通）
 
-These instructions tune GPT-6 Astra for day-to-day agent work. Apply them together with the user's request and any repository-local instructions. The user's explicit instructions take priority over general guidance in skills or instruction files.
+- 利用者の依頼、会話、プロジェクトの現状から目的と作業範囲を判断し、必要な修正・検証・引き継ぎまで完了する。
+- 日常的で取り消せる判断は自律的に進める。結果が大きく変わる判断や新しい権限が必要な場合だけ、許可済みの準備を終えてから確認する。
+- 利用者の明示指示を優先し、読み取り専用・編集・テスト・公開・マージ・削除の境界を守る。途中の修正指示は直ちに反映する。
+- 指示やスキルが停止・確認を要求する場合は、対象ファイルと該当規則を具体的に説明する。
+- 結果を先に、根拠と未確認事項を短い日本語で伝える。比較や手順に必要な場合だけ表や箇条書きを使う。
+- 独立した範囲で並行作業が可能かつ許可される場合は子エージェントへ委任し、目的・対象・根拠・報告形式を指定する。統合と最終判断は主担当が行う。
+- 変更の影響に合う検証を行い、同じ確認の繰り返しや実装の言い換えだけのテストを増やさない。追加検証は新しい変更・失敗・未解決の懸念がある場合に限る。
 
-## Initiative and follow-through
-
-- Infer the user's intent and task scope from the request, prior conversation, and available project context.
-- When the user asks for action, do the work and carry it through to a complete, reviewable result. Do not stop after acknowledging the request or merely proposing a plan.
-- Make reasonable assumptions for routine, reversible details. Ask a focused question only when the answer would materially change the outcome or when new authority is required.
-- Before asking for a decision, complete all safe and already-authorized preparation so the user can review a concrete result.
-- Incorporate mid-task corrections immediately while preserving valid completed work.
-
-## Instruction discipline
-
-- Treat user instructions as authoritative for the requested outcome and scope.
-- Inspect skills and instruction files for relevant constraints, but do not let vague or conflicting guidance silently derail the task.
-- If a skill or instruction forces a pause, permission request, or change of direction, identify the exact file and rule and explain briefly how it applies.
-- Respect explicit read-only, editing, testing, deployment, merge, publication, and destructive-action boundaries.
-
-## Communication style
-
-- State the outcome or main point early, then provide only the detail needed to understand or verify it.
-- Prefer concise paragraphs, plain language, active voice, concrete examples, and precise verbs.
-- Use lists or tables only when they genuinely improve comparison, sequence, or scanning. Avoid unnecessary headings, nested lists, canned transitions, repeated conclusions, and invented jargon.
-- Calibrate technical detail to the user's apparent background and keep progress updates short and legible.
-
-## Delegation
-
-- Use subagents when parallel work is available, the tasks are independent and bounded, and delegation is permitted by the active environment and instructions.
-- Give each subagent a clear deliverable, scope, evidence requirements, and output format. Keep inter-agent messages readable.
-- Keep orchestration, integration, conflict resolution, and the final answer with the primary agent.
-
-## Testing and verification
-
-- Match verification effort to the risk and scope of the change.
-- Run the checks that meaningfully prove the requested behavior and any required project checks.
-- Do not add redundant tests for a small reversible change when they only restate the implementation.
-- After relevant checks pass, broaden or repeat testing only when new changes, failures, or unresolved risks justify it.
-
-Source: https://developers.openai.com/api/docs/guides/latest-model#prompting-best-practices
+出典: https://developers.openai.com/api/docs/guides/latest-model#prompting-best-practices
 
 # AGENTS.md — Claude Code / AI エージェント向け作業ガイド（ルール正本）
 
@@ -86,6 +57,64 @@ Source: https://developers.openai.com/api/docs/guides/latest-model#prompting-bes
 - native立ち絵に表情PNG（`expression` 指定）を使用している場合、口パク・まばたきの差分オーバーレイを同セグメントで無効化する。表情PNGはPSDから合成した専用口・目レイヤーを含むため、base.pngとの差分オーバーレイと重ねると二重口・二重目が生じる。
 - 台本・プロンプトを修正するときは、掛け合いの量より説明密度を優先する。ずんだもんが具体的な事実・理由・背景を説明し、四国めたんは説明役・補足役にせず、視聴者目線の疑問・違和感・説明の浅さを突く役にする。機械的な交互会話、相槌、復唱、情報が増えない押し問答を追加しない。
 詳細仕様は [SPEC.md](SPEC.md) を参照。ここには作業上の注意点だけを書く。
+
+## 進め方
+
+- **進行中の作業への質問・指摘・部分的な了承は、中断指示ではない。** 状況は進捗メッセージで回答し、そのまま次の実作業へ戻る。「続けます」と言うだけで最終回答を送らない。最終回答前に残作業を点検し、依頼が完了した場合、利用者が停止を明示した場合、または利用者の判断・新しい権限が不可欠で安全に進められる作業が残っていない場合だけ区切る。
+- **利用者が「読み取り専用」「編集禁止」と明示していない限り、「レビューして」は修正までの依頼である。** 指摘を並べて終わりにせず、見つけた問題はその作業内で直してテストまで済ませる。方針判断が要るものも妥当な既定を選び、採否・理由・代替案・検証境界を作業報告（PRがある場合はPR本文）へ書く。手順は `.agents/skills/review-yukkurijidou-changes/SKILL.md` を正本にする。
+- **画面やログのエラー文を事実確認の代わりにしない。** 未導入・欠損・停止・権限不足などの表示を見ても、迂回・再導入・設定変更を提案または実行する前に、対象実体、DB・設定値、実行中プロセス、探索・分岐の順序を照合する。元の依頼を早く再開する目的で、原因修正より回避策を優先しない。
+- **実装・配布・検証を簡単にする選択で、速度・画質・機能・対応機種・互換性・保守性のいずれかを犠牲にする場合は、採用前または判明した時点で利用者へ具体的に伝える。** 「安全」「簡単」だけを理由に欠点を隠さず、何がどの環境で劣るか、改善に何が要るか、今回実施するか保留するかを報告に残す。簡単な経路を実装しただけで、犠牲にした経路まで対応済みと扱わない。
+- **実害のあるバグは見つけ次第その場で直す。** 別の作業中に見つけた場合も「今回の目的外」で保留にしない。実害とは、利用者のデータが消える・機能が黙って動かなくなる・誤った内容を見せる・費用や時間を無駄にさせる、のいずれか。目的が違うなら別コミット・別PRへ分けてよいが、分けることと後回しにすることは違う。すぐ直せない場合だけ、再現条件・影響範囲・着手条件を報告に残す。
+- **大きなファイルは、肥大化を検知したら責務を棚卸しし、分割するか一体のまま保つかを先に判断する。** 行数だけを理由に分けない。唯一の正本、参照方向、公開する最小インターフェース、テストの境界を決め、その境界で保守・検証が独立する場合だけ分ける。読むファイル・共有状態・相互呼び出しが増える分割、単なる行移動、循環依存になる分割は禁止する。
+- **コピペで類似コードを作ることを禁止する。共通化して最適化する。**
+  - 対象: 既存コードを写して一部だけ変えた手順・判定・変換・定数表・正規表現・テンプレート部品・テストの組み立て、同じ不具合修正を別々の場所へ個別に当てること。
+  - 責務の持ち主を1つに決めて共通化する。既存の共通層（`core/` の共通処理、`web_app/services/`、`web_app/security.py` など）に同じ責務があればそれを使い、持ち主が無い場合だけ新設する。違いは引数・設定・データ（表）で表し、呼び出し側に分岐を増やさない。
+  - 既存の重複を見つけたら、特徴的な文字列・呼び出しの並び・定数で全体を検索して同型をすべて列挙し、同じ作業内で共通化する。
+  - 責務・変更理由・所有者が違い、たまたま似ているだけのものは共通化しない。共通化しない判断をした場合は理由を報告に残す。
+- **状態が壊れていたときに、空データで書き戻さない。** JSON・設定一覧・DB上のJSON文字列などを「読む → 直す → 書き戻す」処理で、読めなかったものを空として扱い次の保存で上書きすると利用者のデータが恒久的に消える。読めなければエラーを返して書き戻しを止めるか、破損元を退避してから扱う。
+
+## 日本語で書く
+
+- **利用者の目に触れるものはすべて日本語で書く。** 最終回答、作業途中の進捗メッセージ、確認の質問、ツール実行時に表示される説明文、コミットメッセージ、PR本文とPRコメント、コード内コメント、テスト名が対象。英語のまま残してよいのは、識別子・型名・コマンド・パス・設定キー・短いコミットプレフィックス・技術用語・外部の固有名詞と、ログやエラーの原文引用だけ。
+- 途中で英語を書いたことに気付いたら、指摘を待たずにその場で日本語へ直して続ける。
+- **日本語など非ASCII文字を含む `.ps1` はUTF-8 BOM付きで保存する。** Windows PowerShell 5.1 はBOMなしUTF-8を誤読するため。新規作成・編集した `.ps1` はBOMの有無を確認する。
+- **容量は十進のMB／GBで書く。** 生のbyte数やMiB／GiBを利用者向け報告・PR本文へ単独表示しない。識別子・実装上のbyte列は対象外。
+
+## ドキュメントの正本
+
+- **現行仕様はコードではなくドキュメントを正本とする。** `SPEC.md`、`README.md`、`MANUAL.md`、`BUILD.md` の担当範囲に書かれた確定仕様とコードが食い違う場合は、原則としてコード側の不具合としてドキュメントへ合わせる。動いているコードを理由に不一致を追認しない。仕様変更が依頼の目的なら、ドキュメントを先に更新し、その仕様へコードとテストを合わせる。
+- 正本ドキュメントに矛盾、実現不能、安全性・互換性・品質の悪化、明らかな誤記があると判断した場合は、黙ってコードへ適用したりコードを正として読み替えたりせず、該当箇所・問題になる条件・影響・推奨する訂正を利用者へ報告する。
+
+## PR本文と引き継ぎ
+
+- **PR本文には、別のエージェントが会話履歴なしで引き継げる改修設計を書く。** クレジットの枯渇、セッション切断、担当交代はいつでも起きる。「続きをやって」と言われた別AIが、PR本文だけを読んで同じ判断へ到達できるかを判定基準にして、次を含める。
+  - **背景と原因**: 何が壊れていて、どの経路で起きるか。再現条件が要るものは条件も書く。
+  - **設計判断と却下案**: 採った方式と、採らなかった方式とその理由。
+  - **未完了の作業**: 終わらなかった部分、次にやること、着手条件。
+  - **検証の状態**: 実行した検証と結果、この環境では確認できなかったこと（実機・GUI・外部サービス・資格情報が要るもの）を分けて書く。
+  - **触ってはいけない前提**: その変更が依存している不変条件（工程順、DB正本、profile分離など）。
+- 作業を途中で終える場合は、PR本文の冒頭へ「未完了。次にやること」を置き、Draftのままにする。ブランチと変更は必ずpushしてから終える。ローカルにしか無い作業は引き継げない。
+- **CodexとClaudeは互いを自動起動しない。相互レビューは利用者の操作だけをトリガーとする。** CodexからClaude CLIを呼ぶことも、ClaudeからCodex CLIを呼ぶことも禁止する。利用者が対象成果物・レビュー担当・範囲を明示した場合だけ実行し、通常の実装・レビューは作業中のエージェント自身が完結させる。
+
+## 後始末
+
+- **一時ファイルは `dev/<作業名>/` の専用ディレクトリにまとめ、そのディレクトリを丸ごと削除すれば片付く構成にする。** スクリーンショット・変換途中のファイル・作業用スクリプト・一時ログを `dev/` 直下やルート、ソースディレクトリへ散らさない。専用ディレクトリ内に共有ファイル・モデル・`output/` へのリンクを作らない。後始末はエージェントが行い、実行基盤が削除を拒否した場合は未削除の対象と理由を報告する。
+- **プロセスを止める前に、必ず親プロセスとコマンドラインで「自分が起動したもの」かを確かめる。** `python.exe` / `node.exe` / `ffmpeg` などは他アプリや利用者の作業も使っており、名前だけで一括終了すると稼働中アプリ（Web UI、`workers.runner`、VOICEVOX、SD WebUI など）を壊す。
+- **子プロセスを起動したら、ハンドルを握っているだけで回収できると考えない。** ブラウザなど起動直後に本体を立て直す常駐物は、専用プロファイル・専用ディレクトリなど自分のものだと分かる起動経路で名指しして回収する。
+
+## 依存の選び方
+
+- **外部依存は原則として公式LTSまたは長期保守安定版を採用し、LTS相当が無ければ安定版latestを採用する。LLM・画像生成モデルはLTS扱いにせず公式の最新安定版へ追従する。** 互換性・ライセンス・対象OSの問題で旧版を維持する場合は理由と確認日を報告に残す。点検手順は `.agents/skills/audit-yukkurijidou-dependencies/SKILL.md` を正本にする。
+
+## 作業スキル（`.agents/skills/`）
+
+- 作業エージェント向けの再利用手順は `.agents/skills/<名前>/SKILL.md` を正本にする。Claude Code用の `.claude/skills/<名前>/SKILL.md` は同名の共通スキルを読むだけの薄い入口とし、手順・スクリプト・参照資料を複製しない。
+- `.agents/skills/` と対応する `.claude/skills/` の入口はすべてGit管理対象にする。
+- **同じ種類の作業が2回以上発生した、工程順を誤ると成果物が壊れる、混入・公開・破壊・課金の危険がある、または複数エージェントへ引き継ぐ作業は、その作業内で共通スキル化する。** 単発の小修正や一般知識だけの手順は無理にスキルへしない。
+- 新規作成前に `.agents/skills/` を検索し、目的が重なるスキルがあれば新設せず既存スキルへ統合する。
+- スキルを使うたびに、記載されたパス・コマンド・成果物を現行コード・文書と照合する。古い情報や不足分を見つけたら、そのスキルを同じ作業で更新してから続ける。
+- `AGENTS.md` に恒久ルールではなく特定作業の工程・コマンド一覧が増えていて、スキルへ分離した方がよい箇所を見つけたら、対象と分離先候補を利用者へ報告する。
+- スキル名は英小文字・数字・ハイフンだけの動詞始まりとし、`SKILL.md` のfrontmatterは `name` と「何をするか・どの依頼で使うか」を含む `description` だけにする。本文は日本語・命令形・500行未満を目安とし、一般論や作業日記を入れない。
 
 ## チャンネルプロファイル・DB正本
 
