@@ -22,11 +22,7 @@ def main() -> int:
     results: list[tuple[str, int]] = []
     for name, cmd in STEPS:
         print(f"\n=== {name} ===", flush=True)
-        try:
-            code = subprocess.run(cmd, cwd=ROOT).returncode
-        except FileNotFoundError as exc:
-            print(f"実行できません: {exc}", flush=True)
-            code = 127
+        code = subprocess.run(cmd, cwd=ROOT).returncode
         results.append((name, code))
 
     print("\n=== 結果 ===")

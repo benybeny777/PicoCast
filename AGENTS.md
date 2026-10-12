@@ -249,6 +249,7 @@ profile 別出力と共通DBの扱いは「チャンネルプロファイル・D
 - `token_analytics.json`
 - `data/secret_master.key` — DPAPI保護マスターキー（個人PC専用）
 - `data/settings.db` / `data/settings.db-wal` / `data/settings.db-shm` — 設定DB（認証情報の暗号化エントリを含む）とSQLite補助ファイル
+- `data/web_ui.lock` / `data/web_ui_instance.json` — Web UI の多重起動防止ロックと起動中URL
 - 認証情報、APIキー、OAuthトークン、秘密鍵、Cookie、個人用設定などのシークレットはファイル名に関わらずコミット禁止。ドキュメントやログにも値を記載しない。
 
 ### テスト用ファイルの置き場所

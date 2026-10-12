@@ -17,6 +17,8 @@ dev/
 data/reading_dictionary_user.json
 data/reading_candidates.json
 data/settings.db
+data/web_ui.lock
+data/web_ui_instance.json
 data/settings.db-wal
 data/settings.db-shm
 data/secret_master.key
