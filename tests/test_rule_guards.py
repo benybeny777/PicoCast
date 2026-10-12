@@ -61,7 +61,10 @@ _LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical", "l
 
 
 def _tracked(pattern: str) -> list[str]:
-    out = subprocess.check_output(["git", "ls-files", pattern], cwd=_ROOT, text=True)
+    """追跡中と、コミット前の新規ファイル（.gitignore 対象を除く）。新規ファイルの違反も検出するため。"""
+    out = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", pattern], cwd=_ROOT, text=True,
+    )
     return [p for p in out.split() if p]
 
 

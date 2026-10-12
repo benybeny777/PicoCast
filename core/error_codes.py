@@ -84,6 +84,9 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
     # ディスク
     "E-DISK": ErrorDef("E-DISK", "ディスクの空き容量が不足している可能性があります。", "system", False,
                        "出力先ドライブの空き容量を確保してから再実行してください。"),
+    # 固定コメント
+    "E-FIXED-COMMENT-AUTO": ErrorDef("E-FIXED-COMMENT-AUTO", "固定コメントの自動投稿に失敗しました。", "youtube", True,
+                                     "固定コメント画面から該当動画を手動投稿して原因を確認してください。YouTube の認証切れなら設定画面「認証情報」で再認証し、詳細は app_debug_fixed_comment.log を確認してください。"),
     # 既定
     "E-UNKNOWN": ErrorDef("E-UNKNOWN", "不明なエラーが発生しました。", "generic", False,
                           "デバッグログ（app_debug_*.log）を確認し、解決しない場合は設定画面「製品管理」から診断パッケージを作成して問い合わせてください。"),

@@ -179,6 +179,27 @@ async function navShutdown() {
   }
 }
 </script>
+<script>
+// ── 裏で動く処理の失敗通知 ───────────────────────────────────────
+// OSタスクから実行される固定コメント自動投稿が前回失敗していたら、どの画面でもヘッダーに出す。
+// 次に成功した実行で表示は消える（core/background_task_status.py）。
+(async function showBackgroundFailures() {
+  const warningsEl = document.getElementById('ch-warnings');
+  try {
+    const res = await fetch('/api/fixed-comment/auto-status');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const run = (await res.json()).last_run;
+    if (!run || !run.failed) return;
+    const link = document.createElement('a');
+    link.href = '/fixed-comment';
+    link.className = 'ch-warning ch-error';
+    link.textContent = `固定コメントの自動投稿で ${run.failed} 件失敗しています（${run.finished_at}）`;
+    warningsEl.appendChild(link);
+  } catch (e) {
+    console.error('固定コメント自動投稿の前回結果を取得できませんでした', e);
+  }
+})();
+</script>
 
 <main class="main-content">
   {% block content %}{% endblock %}

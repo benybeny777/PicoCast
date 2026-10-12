@@ -35,12 +35,14 @@ def _try_lock(handle: IO[bytes]) -> bool:
         try:
             msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
         except OSError:
+            _logger.info("Web UI のロックは別のプロセスが保持しています", exc_info=True)
             return False
         return True
     import fcntl
     try:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
+        _logger.info("Web UI のロックは別のプロセスが保持しています", exc_info=True)
         return False
     return True
 
