@@ -4,6 +4,25 @@
 <h1>固定コメント</h1>
 <p class="hint">アップロード済み動画への固定コメント投稿。二重投稿防止チェック済み。</p>
 
+<div class="card" id="auto-post-status">
+  <strong>自動投稿の前回結果</strong>
+  {% if not auto_last_run %}
+  <span class="hint">まだ自動投稿は実行されていません。</span>
+  {% else %}
+  <span>{{ auto_last_run.finished_at }} — 投稿 {{ auto_last_run.succeeded }} 件 / 失敗 {{ auto_last_run.failed }} 件</span>
+  {% if auto_last_run.failed %}
+  <ul class="ch-error" style="margin:8px 0 0; padding:8px 8px 8px 28px; border-radius:4px">
+    {% for f in auto_last_run.failures %}
+    <li><strong>{{ f.target }}</strong>: {{ f.message }}</li>
+    {% endfor %}
+    {% if auto_last_run.failed > auto_last_run.failures|length %}
+    <li>ほか {{ auto_last_run.failed - auto_last_run.failures|length }} 件</li>
+    {% endif %}
+  </ul>
+  {% endif %}
+  {% endif %}
+</div>
+
 <div class="card" style="display:flex; align-items:center; gap:20px; flex-wrap:wrap">
   <label><input type="checkbox" id="show-posted" onchange="applyFilters()"> 投稿済みも表示</label>
   <label style="display:flex; align-items:center; gap:6px">

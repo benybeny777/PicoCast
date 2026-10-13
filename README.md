@@ -299,7 +299,7 @@ pip install --upgrade -r config/requirements-dev.txt
 - キャラクターの役割・口調・禁止表現・掛け合いは設定画面「キャラクター設定」タブでチャンネル別に管理します。同名キャラのバリアントは、有効化した1件だけが台本生成プロンプトへ使われます。霊夢・魔理沙のseedも用意し、追加キャラごとに音声バックエンド、話者ID/名前、表情別話者ID、立ち絵PNG参照、説明文に必要なクレジット表記を設定できます。対応済みの音声バックエンドは VOICEVOX と AquesTalk 系です。
 - 同梱立ち絵は `asset:assets/characters/reimu.png` のような `asset:` 参照で保存します。アプリ配下の絶対パスは保存時に相対参照へ正規化し、外部ドライブや別アプリの実行ファイルなど固定場所が必要なものだけ絶対パスを使います。
 - 外部サービスのパス/URLは、初回セットアップの「プロセスを走査して自動設定」で起動中の VOICEVOX / Ollama / Stable Diffusion WebUI / ffmpeg から自動検出できます。**未検出のサービスはダウンロードリンクとインストール手順を `/setup` に表示します**（同梱せず個別に入手する方針。VOICEVOX / ffmpeg が必須、Ollama / Stable Diffusion WebUI は任意）。
-- 多重起動やポート競合に自己回復します。既定ポートが他アプリで使用中なら自動で空きポートへ退避し、本アプリが既に同じポートで起動している場合は二重起動せず既存ウィンドウを開きます。
+- 多重起動やポート競合に自己回復します。既定ポートが他アプリで使用中なら自動で空きポートへ退避します。本アプリが既に起動している場合は（退避先のポートで動いていても）二重起動せず既存ウィンドウを開きます。
 - 販売版では環境変数 `DEVELOPER_TOOLS_ENABLED=0` で起動すると、管理者設定タブ・開発者モード・edition切替などの開発者向けUIをサーバー側で非表示にし、管理者向け設定項目のAPI変更も拒否します。
 
 ---
@@ -332,6 +332,8 @@ pip install --upgrade -r config/requirements-dev.txt
 ├── data/          # 設定DB・よみがな辞書
 ├── assets/        # BGM・効果音・キャラ立ち絵
 ├── output/        # 動画生成物・メタデータDB（自動生成・Git管理外）
+├── .agents/skills/ # AIエージェント共通の作業スキル正本（`.claude/skills/` は入口のみ）
+├── tools/         # 開発用スクリプト（`verify.py` = 作業完了前の一括検証）
 └── start.ps1      # 起動用スクリプト
 ```
 ※ 詳しいモジュール構成は `SPEC.md` を参照してください。
@@ -402,3 +404,12 @@ pip install --upgrade -r config/requirements-dev.txt
 - Python: 3.11.9
 - ffmpeg: 8.0.1 (NVENC 対応)
 - FastAPI: 0.136.3
+
+### テストと検証
+
+```powershell
+python -m pip install -r config/requirements-dev.txt
+python tools/verify.py   # pytest（ルール検査を含む）と git diff --check をまとめて実行
+```
+
+テストは一時フォルダだけを使い、`data/settings.db` や `output/` など利用者の実データを読み書きしません。

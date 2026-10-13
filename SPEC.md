@@ -81,7 +81,7 @@ yukkurijidou/
 │   │   ├── schedule_service.py     # スケジュール管理
 │   │   ├── upload_service.py       # YouTubeアップロード
 │   │   ├── fixed_comment_service.py # 固定コメント投稿
-│   │   ├── auto_fixed_comment_service.py # スロット時刻到達時の固定コメント自動投稿デーモン
+│   │   ├── auto_fixed_comment_service.py # OSタスクから実行する固定コメント一括投稿（前回結果を記録）
 │   │   └── sd_model_service.py    # Stable Diffusion WebUI モデル管理 Web UIサービス
 │   ├── routes/             # APIルート層
 │   │   ├── pages.py        # Jinja2ページルート
@@ -618,6 +618,9 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 ### 起動・多重起動の自己回復
 
 - `/health` は `{status, service: "native-video-factory", app}` を返す。`service` マーカーで「ポートを使っているのが本アプリ自身か」を起動時に判別する。
+- 多重起動はポート確認より先に OS のファイルロックで防ぐ（`core/instance_lock.py`）。Web UI は `{app_base_dir}/data/web_ui.lock` を排他ロックしてプロセス終了まで保持し、待ち受けURLを `data/web_ui_instance.json` に記録する。ロックを取れない2つ目の起動は、記録URLの `/health` が本アプリなら既存ウィンドウを開いて終了し、応答が無ければ「起動処理中または終了処理中」としてエラー終了する。ロックは異常終了時も OS が解放する。
+  - 理由: 既定ポートを別アプリが使っていて既存インスタンスが空きポートへ退避していると、ポート確認では検出できない。2つ目の job-runner は起動時の残骸破棄（`discard_pending_jobs`）で既存インスタンスの待機ジョブをキャンセルしてしまう。
+  - `--run-runner` と `--post-fixed-comments` はロックを取らない（Web UI 起動中に実行される前提のため）。
 - `web_app/app.py:main()` の起動時ポート処理:
   - 既定ポートが使用中で、本アプリが既に起動している（`/health` の `service` 一致）場合は**二重起動せず**、`--open-browser` 指定時は既存ウィンドウを開いて終了する。
   - 別アプリが使用中の場合、既定ポート（または `--auto-port`）なら自動で空きポートへ退避する。`--port` を明示指定したポートが別アプリ使用中のときはユーザー意図を尊重してエラー停止する。
@@ -1494,6 +1497,7 @@ Ollamaによるカテゴリ判定は独立した「再生リスト振り分け�
 - `core/fixed_comment_task.py` が OS スケジューラへ登録/解除/検査/修復する。Windows=タスクスケジューラ（`Register-ScheduledTask`、ユーザータスク・管理者権限不要）で、非表示PowerShellからアプリを `WindowStyle Hidden` で起動し、定期実行時にコンソールを表示しない。macOS=launchd LaunchAgent（`~/Library/LaunchAgents`）。実行時刻は予約スロット時刻＋5分。
 - **タスク名/ラベルにはインストールディレクトリの識別子（リーフ名＋パスのSHA1先頭8桁）を含める**ため、同一PCで複数のインストール/テストディレクトリを使い分けても区別できる。
 - exe を移動すると登録済みタスクが旧パスを指したまま（迷子）になるため、`inspect()` でズレ(stale)・迷子(orphans)を検出し、アプリ起動時に `repair()` で自動修正（現在のパスで再登録＋実行ファイルが消えた迷子タスクの削除）する。設定画面の「見つけて修正」でも手動修正できる。
+- **失敗は画面へ出す**: 裏で実行されるため、失敗をデバッグログだけに残すと利用者は「未実行」と「毎回失敗」を区別できない。`post_all_pending()` は実行ごとに前回結果（投稿件数・失敗件数・失敗ごとの対象と利用者向け文言）を `settings.db:background_task_runs`（`core/background_task_status.py`、task=`fixed_comment_auto_post`）へ上書き保存する。失敗が1件以上あれば全画面のヘッダーに警告を出し、固定コメント画面に一覧を表示する。次に失敗0件で実行されると表示は消える。文言は `AppError.user_message()`、投稿前チェックの `ValueError`/`FileNotFoundError` は理由付きの `E-FIXED-COMMENT-AUTO`、それ以外は例外の種類だけを付けた `E-FIXED-COMMENT-AUTO` とし、外部APIの生の応答・スタックトレースは出さない（詳細は `app_debug_fixed_comment.log`）。取得 API は `GET /api/fixed-comment/auto-status`。
 - 設定画面（設定 → 製品管理タブ「固定コメント自動投稿」）でON/OFF。API は `GET /api/settings/fixed-comment-task`（状態＋stale/orphans）/ `POST /api/settings/fixed-comment-task`（`{enabled}` で登録/解除）/ `POST /api/settings/fixed-comment-task/repair`（修復）。認証は `secret_store`（DB）から読むのでアプリ非起動でも投稿できる。Windows / macOS 以外は未対応。
 
 台本メタ情報には任意で `生成区分` / `元動画` / `目的` を書けます。`生成区分` は `新規` / `横展開` / `品質改善版` / `再挑戦` を想定します。`metadata.db` の `render_info` テーブルへ保存し、Analytics 一覧で横展開・品質改善版・再挑戦の成果を追えるようにします。

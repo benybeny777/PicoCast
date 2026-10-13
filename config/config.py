@@ -93,10 +93,10 @@ VOICE_POST_PHONEME_LENGTH = 0.0  # 各音声 WAV 末尾に追加する無音（�
 VOICE_INTRO_FAST_LINES = int(os.environ.get("VOICE_INTRO_FAST_LINES", "3"))                     # line_count モード: 冒頭 N 行をイントロ速度にする
 
 # native Shorts 速度許容範囲（プリフライトチェック用）
-NATIVE_SHORTS_INTRO_VOICE_SPEED_MIN = 1.35
-NATIVE_SHORTS_INTRO_VOICE_SPEED_MAX = 1.45
-NATIVE_SHORTS_BODY_VOICE_SPEED_MIN  = 1.20
-NATIVE_SHORTS_BODY_VOICE_SPEED_MAX  = 1.30
+NATIVE_SHORTS_INTRO_VOICE_SPEED_MIN = 1.35  # Shorts 冒頭音声速度の推奨下限
+NATIVE_SHORTS_INTRO_VOICE_SPEED_MAX = 1.45  # Shorts 冒頭音声速度の推奨上限
+NATIVE_SHORTS_BODY_VOICE_SPEED_MIN  = 1.20  # Shorts 本編音声速度の推奨下限
+NATIVE_SHORTS_BODY_VOICE_SPEED_MAX  = 1.30  # Shorts 本編音声速度の推奨上限
 
 # ───────────────────────────────────────────────
 # native 音声 loudnorm（BGM+ナレーション合成後の最終 MP4 に適用）
@@ -130,7 +130,7 @@ CHARACTER_UPPER_BODY_SHORTS_Y_OFFSET   = int(_setting_value("CHARACTER_UPPER_BOD
 CHARACTER_UPPER_BODY_LONG_Y_OFFSET     = int(_setting_value("CHARACTER_UPPER_BODY_LONG_Y_OFFSET",     "460"))    # Long: 下方向シフト量 (px)
 
 # キャラクター表示 — native Shorts 非腰上モード時の倍率（CHARACTER_UPPER_BODY_MODE=0 のときのみ使用）
-NATIVE_SHORTS_CHARACTER_SCALE = float(os.environ.get("NATIVE_SHORTS_CHARACTER_SCALE", "1.05"))
+NATIVE_SHORTS_CHARACTER_SCALE = float(os.environ.get("NATIVE_SHORTS_CHARACTER_SCALE", "1.05"))  # native Shorts 非腰上モード時のキャラ表示倍率
 
 # ───────────────────────────────────────────────
 # native Shorts スクリプト品質チェック閾値
@@ -235,7 +235,7 @@ AQUESTALK_REIMU_SPEAKER_KEY = os.environ.get("AQUESTALK_REIMU_SPEAKER_KEY", "yuk
 AQUESTALK_MARISA_SPEAKER_KEY = os.environ.get("AQUESTALK_MARISA_SPEAKER_KEY", "yukkuri_marisa")  # ゆっくり魔理沙風の内部speaker_key
 AQUESTALK_REIMU_VOICE_TYPE = os.environ.get("AQUESTALK_REIMU_VOICE_TYPE", "reimu")  # AquesTalk側の霊夢風voice_type/phont指定
 AQUESTALK_MARISA_VOICE_TYPE = os.environ.get("AQUESTALK_MARISA_VOICE_TYPE", "marisa")  # AquesTalk側の魔理沙風voice_type/phont指定
-CHARACTERS = {
+CHARACTERS = {  # キャラ名 → VOICEVOX話者ID・音声パラメータの対応表
     "ずんだもん": {
         "speaker_id": 3,
         "name": "ずんだもん",
@@ -276,13 +276,13 @@ ZUNDAMON_PSD_PATH = os.environ.get("ZUNDAMON_PSD_PATH", os.path.join(CHARACTER_P
 METAN_PSD_PATH    = os.environ.get("METAN_PSD_PATH",    os.path.join(CHARACTER_PSD_DIR, "metan.psd"))  # 四国めたんPSD立ち絵
 REIMU_CHARACTER_PNG_PATH = os.environ.get("REIMU_CHARACTER_PNG_PATH", os.path.join(CHARACTER_PNG_DIR, "reimu.png"))  # 霊夢の立ち絵PNG
 MARISA_CHARACTER_PNG_PATH = os.environ.get("MARISA_CHARACTER_PNG_PATH", os.path.join(CHARACTER_PNG_DIR, "marisa.png"))  # 魔理沙の立ち絵PNG
-CHARACTER_PNGS = {
+CHARACTER_PNGS = {  # キャラ名 → 通常立ち絵PNGパス
     "ずんだもん": os.path.join(CHARACTER_PNG_DIR, "zundamon.png"),
     "四国めたん": os.path.join(CHARACTER_PNG_DIR, "metan.png"),
     "霊夢": REIMU_CHARACTER_PNG_PATH,
     "魔理沙": MARISA_CHARACTER_PNG_PATH,
 }
-CHARACTER_EXPRESSION_PNGS = {
+CHARACTER_EXPRESSION_PNGS = {  # キャラ名 → 表情名 → 表情立ち絵PNGパス
     "ずんだもん": {
         "驚き": os.environ.get("ZUNDAMON_EXPRESSION_SURPRISE_PNG", os.path.join(CHARACTER_PNG_DIR, "zundamon_surprise.png")),
         "焦り": os.environ.get("ZUNDAMON_EXPRESSION_PANIC_PNG", os.path.join(CHARACTER_PNG_DIR, "zundamon_panic.png")),
@@ -430,18 +430,18 @@ NATIVE_INTER_DIALOGUE_GAP_SEC = 0.0  # nativeレンダラーのセリフ間追�
 # ───────────────────────────────────────────────
 # BGM
 # ───────────────────────────────────────────────
-BGM_FILE = os.environ.get("BGM_FILE", "nohohon_long_BPM97.mp3")
-BGM_PATH = os.path.join(ASSETS_DIR, "bgm", BGM_FILE) if BGM_FILE else ""
+BGM_FILE = os.environ.get("BGM_FILE", "nohohon_long_BPM97.mp3")  # 既定BGMのファイル名（assets/bgm 配下）
+BGM_PATH = os.path.join(ASSETS_DIR, "bgm", BGM_FILE) if BGM_FILE else ""  # 既定BGMの絶対パス（BGM_FILE が空なら空）
 
 # ───────────────────────────────────────────────
 # 出力ディレクトリ・ファイルパス
 # ───────────────────────────────────────────────
 _OUTPUT_ANCHOR = _app_base_dir()  # 出力の基準。exe(onefile)では exe と同じフォルダ・開発時はリポジトリルート
 OUTPUT_BASE_DIR       = os.environ.get("OUTPUT_BASE_DIR",       "")          # 全プロファイル共通の出力ベース(各profile_idフォルダの親)。空=既定 output/
-OUTPUT_DIR            = os.environ.get("OUTPUT_DIR",            os.path.join(_OUTPUT_ANCHOR, "output"))
-OUTPUT_DATA_DIR       = os.environ.get("OUTPUT_DATA_DIR",       os.path.join(OUTPUT_DIR, "000_data"))
-OUTPUT_ANALYTICS_DIR  = os.environ.get("OUTPUT_ANALYTICS_DIR",  os.path.join(OUTPUT_DIR, "000_analytics"))
-OUTPUT_LEGACY_DIR     = os.environ.get("OUTPUT_LEGACY_DIR",     os.path.join(OUTPUT_DIR, "000_legacy"))
+OUTPUT_DIR            = os.environ.get("OUTPUT_DIR",            os.path.join(_OUTPUT_ANCHOR, "output"))  # 出力ルート（既定は app_base_dir()/output）
+OUTPUT_DATA_DIR       = os.environ.get("OUTPUT_DATA_DIR",       os.path.join(OUTPUT_DIR, "000_data"))  # 旧来の共通データ置き場（profile別は output_paths.get_data_dir()）
+OUTPUT_ANALYTICS_DIR  = os.environ.get("OUTPUT_ANALYTICS_DIR",  os.path.join(OUTPUT_DIR, "000_analytics"))  # Analytics 出力置き場
+OUTPUT_LEGACY_DIR     = os.environ.get("OUTPUT_LEGACY_DIR",     os.path.join(OUTPUT_DIR, "000_legacy"))  # 旧形式データの退避先
 # 動画フォルダのプレフィックス（Windows/Mac 両対応：[] を使わない）
 FOLDER_PREFIX_SHORTS  = os.environ.get("FOLDER_PREFIX_SHORTS",  "Shorts_")   # 短動画フォルダプレフィックス
 FOLDER_PREFIX_LONG    = os.environ.get("FOLDER_PREFIX_LONG",    "Long_")     # 長動画フォルダプレフィックス

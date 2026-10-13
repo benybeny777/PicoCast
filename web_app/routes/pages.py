@@ -205,8 +205,11 @@ def page_playlist_classifier(request: Request):
 
 @router.get("/fixed-comment", response_class=HTMLResponse)
 def page_fixed_comment(request: Request):
+    from core import background_task_status
+    from web_app.services.auto_fixed_comment_service import TASK_NAME
     candidates = fixed_comment_service.list_fixed_comment_candidates(only_unposted=False)
-    return _render(request, "fixed_comment.html", {"candidates": candidates})
+    auto_last_run = background_task_status.last_run(TASK_NAME)
+    return _render(request, "fixed_comment.html", {"candidates": candidates, "auto_last_run": auto_last_run})
 
 
 @router.get("/settings", response_class=HTMLResponse)

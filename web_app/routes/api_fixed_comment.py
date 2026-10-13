@@ -10,6 +10,14 @@ from web_app.services.fixed_comment_service import (
 router = APIRouter(prefix="/api/fixed-comment", tags=["fixed_comment"])
 
 
+@router.get("/auto-status")
+def api_fixed_comment_auto_status():
+    """OSタスクから実行される自動投稿の前回結果（未実行なら last_run は null）。"""
+    from core import background_task_status
+    from web_app.services.auto_fixed_comment_service import TASK_NAME
+    return {"last_run": background_task_status.last_run(TASK_NAME)}
+
+
 @router.get("/candidates")
 def api_fixed_comment_candidates(only_unposted: bool = Query(True)):
     return list_fixed_comment_candidates(only_unposted=only_unposted)

@@ -2,7 +2,10 @@
 client_secrets.json
 token.json
 token_analytics.json
-.claude/
+.claude/*
+!.claude/skills/
+!.claude/settings.json
+!.claude/hooks/
 config/prompt_parts/local/
 config/prompt_profiles/local/
 assets/characters/_native_cache/
@@ -14,6 +17,8 @@ dev/
 data/reading_dictionary_user.json
 data/reading_candidates.json
 data/settings.db
+data/web_ui.lock
+data/web_ui_instance.json
 data/settings.db-wal
 data/settings.db-shm
 data/secret_master.key

@@ -26,12 +26,14 @@ import uvicorn
 from config import config
 from core.debug_logging import setup_debug_logging
 from core.gui_support import build_app_version
+from core import instance_lock
 
 setup_debug_logging(role="web")
 _logger = logging.getLogger(__name__)
 
 _runner_proc = None
 _runner_stop_event = None
+_instance_lock = None  # Web UI の多重起動防止ロック（プロセス終了まで保持）
 
 # ── アプリ生成 ────────────────────────────────────────────────────────────
 from contextlib import asynccontextmanager
@@ -370,7 +372,12 @@ def _find_free_port(host: str, start: int, limit: int = 20) -> int | None:
 
 
 def _probe_existing_instance(host: str, port: int) -> bool:
-    """指定 host:port で稼働しているのが本アプリ自身かを /health で判定する。
+    """指定 host:port で稼働しているのが本アプリ自身かを /health で判定する。"""
+    return _probe_existing_url(f"http://{host}:{port}")
+
+
+def _probe_existing_url(base_url: str) -> bool:
+    """base_url で稼働しているのが本アプリ自身かを /health で判定する。
 
     多重起動の検出に使う。別アプリが使っているポートと区別するため、
     /health の service マーカーが一致するときだけ True を返す。
@@ -378,7 +385,7 @@ def _probe_existing_instance(host: str, port: int) -> bool:
     import json
     import urllib.error
     import urllib.request
-    url = f"http://{host}:{port}/health"
+    url = f"{base_url}/health"
     try:
         with urllib.request.urlopen(url, timeout=1.0) as res:
             if res.status != 200:
@@ -439,6 +446,26 @@ def main():
     if host not in ("127.0.0.1", "localhost"):
         print(f"警告: ホスト '{host}' を指定しています。外部からのアクセスに注意してください。")
 
+    # 多重起動の防止: 同じデータフォルダを使う Web UI は1つだけにする。
+    # ポート確認だけでは空きポートへ退避した既存インスタンスを検出できず、2つ目の job-runner が
+    # 起動時の残骸破棄で既存の待機ジョブをキャンセルしてしまう（core/instance_lock.py）。
+    global _instance_lock
+    _instance_lock = instance_lock.acquire()
+    if _instance_lock is None:
+        running_url = instance_lock.running_instance_url()
+        if running_url and _probe_existing_url(running_url):
+            print(f"{config.WEB_APP_NAME} は既に起動しています: {running_url}")
+            print("二重起動はせず、既存のウィンドウを開きます。")
+            if args.open_browser:
+                _open_browser_to(running_url)
+            return
+        _logger.error("Web UI のロックを取得できず、起動中インスタンスにも接続できません: url=%s", running_url)
+        print(
+            f"エラー: {config.WEB_APP_NAME} が起動処理中または終了処理中です。\n"
+            "  数秒待ってから起動し直してください。直らない場合は、残っている本アプリのプロセスを終了してください。"
+        )
+        sys.exit(1)
+
     # ポート競合チェック（多重起動の検出 → 自己回復）
     if not _is_port_free(host, port):
         existing_url = f"http://{host}:{port}"
@@ -469,6 +496,7 @@ def main():
         port = free
 
     url = f"http://{host}:{port}"
+    _instance_lock.record_url(url)
     print(f"Web UI を起動しています: {url}")
     print("終了するには Ctrl+C を押してください。")
 
@@ -539,6 +567,7 @@ def main():
                 print(f"エラー: ポート {port} の確保に失敗しました（{exc}）。空きポートも見つかりません。")
                 sys.exit(1)
             print(f"ポート {port} の確保に失敗したため、{free} で起動し直します（{exc}）。")
+            _instance_lock.record_url(f"http://{host}:{free}")
             try:
                 _serve_on(free)
             except KeyboardInterrupt:

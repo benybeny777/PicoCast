@@ -258,7 +258,7 @@ class TestImageGeneratorBackendDispatch:
         finally:
             gen.close()
 
-    def test_image_backend_env_gemini(self, monkeypatch):
+    def test_image_backend_env_gemini(self, monkeypatch, dummy_google_api_key):
         """IMAGE_BACKEND=gemini のとき nanobanana が選ばれる。"""
         from config import config
         monkeypatch.setattr(config, "IMAGE_BACKEND", "gemini")
