@@ -176,7 +176,9 @@ OLLAMA_PLAYLIST_NUM_PREDICT  = int(os.environ.get("OLLAMA_PLAYLIST_NUM_PREDICT",
 # ───────────────────────────────────────────────
 # 画像生成バックエンド統合設定
 # ───────────────────────────────────────────────
-IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "gemini").strip().lower()  # 画像生成バックエンド（gemini / sd_webui / comfyui）
+IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "gemini").strip().lower()  # 画像生成バックエンド（gemini / sd_webui / comfyui / codex_cli）
+THUMBNAIL_IMAGE_BACKEND = _setting_value("THUMBNAIL_IMAGE_BACKEND", "").strip().lower()  # サムネイルの画像生成バックエンド（空=背景と同じ）
+CODEX_IMAGE_TIMEOUT_SEC = int(_setting_value("CODEX_IMAGE_TIMEOUT_SEC", "600"))         # Codex CLI の画像1枚の生成待ち上限(秒)
 SD_WEBUI_BASE_URL = os.environ.get("SD_WEBUI_BASE_URL", "http://127.0.0.1:7860")  # Stable Diffusion WebUI / A1111 API URL
 SD_WEBUI_TIMEOUT_SEC = int(os.environ.get("SD_WEBUI_TIMEOUT_SEC", "180"))          # Stable Diffusion WebUI API タイムアウト(秒)
 SD_WEBUI_MODEL = os.environ.get("SD_WEBUI_MODEL", "")                              # Stable Diffusion WebUI で使用するモデル名（空=起動中モデルをそのまま使用）

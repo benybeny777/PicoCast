@@ -111,6 +111,54 @@ def _translate_to_english_for_sd(description: str, debug: bool = False) -> str:
     return translated
 
 
+# 設定値（IMAGE_BACKEND / THUMBNAIL_IMAGE_BACKEND）→ ImageGenerator の内部エンジン名
+_BACKEND_TO_ENGINE = {
+    "gemini": "nanobanana",
+    "sd_webui": "sd_webui",
+    "comfyui": "comfyui",
+    "codex_cli": "codex_cli",
+}
+
+
+def engine_for_backend(backend: str) -> str:
+    """設定の画像生成バックエンド名を内部エンジン名にする。未対応値は ValueError。"""
+    key = (backend or "").strip().lower()
+    if key not in _BACKEND_TO_ENGINE:
+        raise ValueError(
+            f"未対応の IMAGE_BACKEND です: '{backend}'。"
+            f"有効な値: {', '.join(repr(k) for k in _BACKEND_TO_ENGINE)}"
+        )
+    return _BACKEND_TO_ENGINE[key]
+
+
+def thumbnail_engine(background_engine: str) -> str:
+    """サムネイルのエンジン。THUMBNAIL_IMAGE_BACKEND が空なら背景と同じ。"""
+    backend = (getattr(config, "THUMBNAIL_IMAGE_BACKEND", "") or "").strip()
+    return engine_for_backend(backend) if backend else background_engine
+
+
+def _reference_instruction(is_thumbnail: bool) -> str:
+    """参照画像（立ち絵）を渡すときに本文の前へ置く指示。Nano Banana と Codex で共通。"""
+    if is_thumbnail:
+        return (
+            "上記はキャラクターの参照画像です。"
+            "これらのキャラクターを必ずサムネイルに登場させてください。"
+            "以下の台本と参照画像をもとに、YouTubeサムネイルを生成してください。\n\n"
+        )
+    return (
+        "上記の画像はキャラクターの立ち絵です。これらのキャラクターが自然に映えるよう、"
+        "背景・構図・色調を設計してください。\n\n"
+    )
+
+
+def _merge_refs(reference_image_path, reference_image_paths) -> list:
+    """単体指定と複数指定の参照画像を1つの一覧にする（単体指定が先頭）。"""
+    refs = list(reference_image_paths or [])
+    if reference_image_path:
+        refs.insert(0, reference_image_path)
+    return refs
+
+
 def _next_background_fname(save_dir: str) -> str:
     """保存先の bg_NNN_001.png の次の番号のファイル名を返す。"""
     existing_nums = []
@@ -146,17 +194,8 @@ class ImageGenerator:
         # ※ config.IMAGE_BACKEND は実行時参照（monkeypatch / .env 再ロード対応）
         if background_engine and background_engine.strip():
             effective_engine = background_engine.strip().lower()
-        elif config.IMAGE_BACKEND == "sd_webui":
-            effective_engine = "sd_webui"
-        elif config.IMAGE_BACKEND == "comfyui":
-            effective_engine = "comfyui"
-        elif config.IMAGE_BACKEND == "gemini":
-            effective_engine = "nanobanana"
         else:
-            raise ValueError(
-                f"未対応の IMAGE_BACKEND です: '{config.IMAGE_BACKEND}'。"
-                f"有効な値: 'gemini', 'sd_webui', 'comfyui'"
-            )
+            effective_engine = engine_for_backend(config.IMAGE_BACKEND)
         self.background_engine = effective_engine
 
         self.client = None
@@ -431,16 +470,53 @@ class ImageGenerator:
             print(f"  [AI] ComfyUI 完了: {fname} (seed={seed})")
         return fname
 
+    def _generate_background_codex(self, description, save_dir, fname, *, raw, is_thumbnail, reference_paths):
+        """Codex CLI の画像生成で作る。日本語の文字も Nano Banana と同じく画像AIに描かせる。"""
+        import io
+        from PIL import Image
+        from core import codex_image
+
+        fname = fname or _next_background_fname(save_dir)
+        full_prompt = self._build_full_prompt(description, raw)
+        refs = [p for p in reference_paths if p and os.path.exists(p)]
+        if refs:
+            full_prompt = _reference_instruction(is_thumbnail) + full_prompt
+        if self.debug:
+            print(f"  [AI] Codex CLI 画像生成 {self.width}x{self.height} を開始します: {description[:40]}...")
+        try:
+            png = codex_image.generate_png(full_prompt, width=self.width, height=self.height, reference_paths=refs)
+        except Exception as e:
+            # 自動フォールバック禁止。理由付きで止める。
+            _logger.error("Codex CLI 画像生成に失敗しました", exc_info=True)
+            raise ImageGenerationError(
+                f"Codex CLI の画像生成が失敗しました: {e}", category="generic", model="codex_cli", backend="codex_cli",
+            ) from e
+        path = os.path.join(save_dir, fname)
+        with Image.open(io.BytesIO(png)) as img:
+            resized = img.convert("RGB").resize((self.width, self.height), Image.LANCZOS)
+        try:
+            resized.save(path)
+        finally:
+            resized.close()
+        if self.debug:
+            self._save_prompt_log(save_dir, fname, full_prompt)
+            print(f"  [AI] Codex CLI 画像生成 完了: {fname}")
+        return fname
+
     def generate_background(self, description, target_dir=None, force_nanobanana_pro=False, raw=False, reference_image_path=None, reference_image_paths=None, fname=None, is_thumbnail=False, overlay_text=None):
+        if self.background_engine == "codex_cli":
+            save_dir = target_dir or "output/backgrounds"
+            os.makedirs(save_dir, exist_ok=True)
+            return self._generate_background_codex(
+                description, save_dir, fname, raw=raw, is_thumbnail=is_thumbnail,
+                reference_paths=_merge_refs(reference_image_path, reference_image_paths),
+            )
         if self.background_engine == "comfyui":
             save_dir = target_dir or "output/backgrounds"
             os.makedirs(save_dir, exist_ok=True)
-            refs = list(reference_image_paths or [])
-            if reference_image_path:
-                refs.insert(0, reference_image_path)
             return self._generate_background_comfyui(
                 description, save_dir, fname, is_thumbnail=is_thumbnail,
-                character_paths=refs, overlay_text=overlay_text,
+                character_paths=_merge_refs(reference_image_path, reference_image_paths), overlay_text=overlay_text,
             )
         if self.background_engine == "sd_webui":
             save_dir = target_dir or "output/backgrounds"
@@ -467,11 +543,7 @@ class ImageGenerator:
         try:
             full_prompt = self._build_full_prompt(description, raw)
 
-            # 複数リファレンス画像の統合
-            all_refs = list(reference_image_paths or [])
-            if reference_image_path:
-                all_refs = [reference_image_path] + all_refs
-            all_refs = [p for p in all_refs if p and os.path.exists(p)]
+            all_refs = [p for p in _merge_refs(reference_image_path, reference_image_paths) if p and os.path.exists(p)]
 
             response = None
             parts = None
@@ -481,18 +553,7 @@ class ImageGenerator:
                 for ref_path in all_refs:
                     with open(ref_path, "rb") as f:
                         parts.append(types.Part.from_bytes(data=f.read(), mime_type="image/png"))
-                if is_thumbnail:
-                    char_instruction = (
-                        "上記はキャラクターの参照画像です。"
-                        "これらのキャラクターを必ずサムネイルに登場させてください。"
-                        "以下の台本と参照画像をもとに、YouTubeサムネイルを生成してください。\n\n"
-                    )
-                else:
-                    char_instruction = (
-                        "上記の画像はキャラクターの立ち絵です。これらのキャラクターが自然に映えるよう、"
-                        "背景・構図・色調を設計してください。\n\n"
-                    )
-                parts.append(types.Part.from_text(text=(char_instruction + full_prompt)))
+                parts.append(types.Part.from_text(text=(_reference_instruction(is_thumbnail) + full_prompt)))
                 contents = parts
             else:
                 contents = full_prompt

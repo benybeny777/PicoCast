@@ -86,6 +86,8 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
                        "出力先ドライブの空き容量を確保してから再実行してください。"),
     "E-IMG-FONT": ErrorDef("E-IMG-FONT", "画像の文字入れに使うフォントが見つかりません。", "config", False,
                            "設定画面「AI / 画像生成」の IMAGE_TEXT_FONT_PATH に、太字の日本語フォントファイル（例: C:\\Windows\\Fonts\\YuGothB.ttc）を指定してください。"),
+    "E-CODEX-IMAGE-MISSING": ErrorDef("E-CODEX-IMAGE-MISSING", "Codex が画像を保存しませんでした。", "pipeline", True,
+                                      "ターミナルで codex を起動し、ChatGPT の有料プランでログインしていることと、画像生成の使用枠が残っていることを確認してください。詳細は app_debug_*.log を確認してください。"),
     # 文章生成AI（core/text_llm.py）
     "E-LLM-BACKEND": ErrorDef("E-LLM-BACKEND", "文章生成AIの設定が正しくありません。", "config", False,
                               "設定画面「AI / 文章生成」で文章生成AI（gemini / claude_cli / codex_cli / ollama）とモデル名を確認してください。"),
@@ -124,6 +126,7 @@ _BACKEND_LABELS = {
     "gemini":     "Gemini",
     "sd_webui":   "Stable Diffusion WebUI",
     "comfyui":    "ComfyUI（ローカル）",
+    "codex_cli":  "Codex CLI",
 }
 
 

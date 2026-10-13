@@ -51,8 +51,9 @@
       <div class="form-group">
         <label for="background-engine-normal">画像エンジン</label>
         <select id="background-engine-normal">
-          <option value="nanobanana" {% if image_backend not in ('sd_webui', 'comfyui') %}selected{% endif %}>Gemini AI</option>
+          <option value="nanobanana" {% if image_backend not in ('sd_webui', 'comfyui', 'codex_cli') %}selected{% endif %}>Gemini AI</option>
           <option value="comfyui" {% if image_backend == 'comfyui' %}selected{% endif %}>ComfyUI（ローカル）</option>
+          <option value="codex_cli" {% if image_backend == 'codex_cli' %}selected{% endif %}>Codex（codex コマンド）</option>
           <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI</option>
         </select>
       </div>
@@ -129,8 +130,9 @@
       <div class="form-group">
         <label for="background-engine-meeting">画像エンジン</label>
         <select id="background-engine-meeting">
-          <option value="nanobanana" {% if image_backend not in ('sd_webui', 'comfyui') %}selected{% endif %}>Gemini AI</option>
+          <option value="nanobanana" {% if image_backend not in ('sd_webui', 'comfyui', 'codex_cli') %}selected{% endif %}>Gemini AI</option>
           <option value="comfyui" {% if image_backend == 'comfyui' %}selected{% endif %}>ComfyUI（ローカル）</option>
+          <option value="codex_cli" {% if image_backend == 'codex_cli' %}selected{% endif %}>Codex（codex コマンド）</option>
           <option value="sd_webui" {% if image_backend == 'sd_webui' %}selected{% endif %}>Stable Diffusion WebUI</option>
         </select>
       </div>

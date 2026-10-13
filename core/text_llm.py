@@ -138,7 +138,7 @@ def resolve_cli(backend: str) -> str | None:
     return shutil.which(program)
 
 
-def _model(backend: str) -> str:
+def cli_model(backend: str) -> str:
     model = cfg.CLAUDE_CLI_MODEL if backend == "claude_cli" else cfg.CODEX_CLI_MODEL
     if not model and backend == "codex_cli":
         model = codex_default_model() or ""
@@ -174,7 +174,7 @@ def codex_default_model() -> str | None:
 
 def cli_args(backend: str, *, web_search: bool) -> list[str]:
     """プロンプト以外の引数。プロンプトは標準入力で渡す。"""
-    model = _model(backend)
+    model = cli_model(backend)
     if backend == "claude_cli":
         args = [
             "-p",
@@ -208,7 +208,7 @@ def _generate_cli(backend: str, prompt: str, *, web_search: bool) -> str:
         _logger.error("%s が見つかりません: path=%s", label, _program(backend))
         raise AppError("E-LLM-CLI-MISSING", f"{label}（{_program(backend)}）")
     command = [program, *cli_args(backend, web_search=web_search)]
-    stdout, stderr, returncode = _run(command, prompt, cfg.TEXT_LLM_TIMEOUT_SEC, label)
+    stdout, stderr, returncode = run_cli(command, prompt, cfg.TEXT_LLM_TIMEOUT_SEC, label)
     if returncode != 0:
         _logger.error(
             "%s が失敗しました: exit=%s stderr=%s", label, returncode, stderr.strip()[-2000:],
@@ -217,8 +217,11 @@ def _generate_cli(backend: str, prompt: str, *, web_search: bool) -> str:
     return stdout
 
 
-def _run(command: list[str], stdin_text: str, timeout: int, label: str) -> tuple[str, str, int]:
-    """CLI を起動し、時間切れなら子孫プロセスごと止める。"""
+def run_cli(
+    command: list[str], stdin_text: str, timeout: int, label: str, *,
+    cwd: str | None = None, env: dict[str, str] | None = None,
+) -> tuple[str, str, int]:
+    """CLI を起動して標準入力を渡し、(stdout, stderr, 終了コード) を返す。時間切れなら子孫プロセスごと止める。"""
     import psutil
 
     popen_extra: dict = {}
@@ -228,6 +231,8 @@ def _run(command: list[str], stdin_text: str, timeout: int, label: str) -> tuple
         popen_extra["start_new_session"] = True
     proc = subprocess.Popen(
         command,
+        cwd=cwd,
+        env=env,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

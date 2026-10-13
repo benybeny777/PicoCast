@@ -110,6 +110,7 @@ yukkurijidou/
 │   ├── ai_generator.py     # 台本・タイトルA/B/C案生成（text_llm 経由）
 │   ├── text_llm.py         # 文章生成AIの窓口（Gemini / Claude Code CLI / Codex CLI / Ollama）
 │   ├── comfyui_generator.py # ComfyUI（ローカル・Krea 2 Turbo）画像生成
+│   ├── codex_image.py      # Codex CLI の画像生成（ChatGPT の使用枠）
 │   ├── local_image_compose.py # ローカル画像の文字入れ・サムネの立ち絵合成
 │   ├── voicevox.py         # VOICEVOX音声生成
 │   ├── reading_normalizer.py # よみがな正規化（Ollama）
@@ -298,6 +299,9 @@ for idx, item in enumerate(dialogue_items):
 | `gemini`（デフォルト） | `nanobanana` | Nano Banana / Gemini | Nano Banana / Gemini | ✅ |
 | `sd_webui` | `sd_webui` | Stable Diffusion WebUI | Stable Diffusion WebUI | ❌ |
 | `comfyui` | `comfyui` | ComfyUI（Krea 2 Turbo・ローカル） | ComfyUI＋立ち絵合成＋文字入れ（ローカル） | ❌ |
+| `codex_cli` | `codex_cli` | Codex CLI の画像生成（gpt-image・ChatGPT の使用枠） | Codex CLI（立ち絵を参照画像として添付） | ❌ |
+
+- `THUMBNAIL_IMAGE_BACKEND`（空=背景と同じ）でサムネイルだけ別のバックエンドにできる（例: 枚数の多い背景はローカルの ComfyUI、1本に1〜3枚のサムネは Codex）。決定順は「画像画面・履歴詳細で明示したエンジン → `THUMBNAIL_IMAGE_BACKEND` → 背景と同じ」（`workers/main.py: generate_thumbnail(engine=...)`、`core/image_generator.py: thumbnail_engine()`）。
 
 - `IMAGE_BACKEND=gemini` のとき、背景エンジンは常に `nanobanana` に固定される。
 - `background_engine` を明示的に渡したときは `IMAGE_BACKEND` より優先される（再生成画面からの個別指定用）。
@@ -324,6 +328,15 @@ for idx, item in enumerate(dialogue_items):
 - **文字は画像AIに描かせない。** 背景プロンプトの「」（キャッチコピー）と `merge_telops_into_backgrounds()` が足す【テロップ演出】を `core/local_image_compose.py: split_overlay_text()` で取り除いて文字なしで生成し、生成後に Pillow で上部中央へ重ねる（テロップがあればテロップ、無ければ最初の「」）。見た目は Nano Banana への指示と同じ白文字・極太黒縁・影。フォントは `IMAGE_TEXT_FONT_PATH`（Windows 既定 `C:\Windows\Fonts\YuGothB.ttc`、macOS 既定 ヒラギノ角ゴシック W8）。見つからなければ `E-IMG-FONT` で停止する。位置と大きさは `IMAGE_TEXT_*` 設定。
 - サムネイルは台本全文ではなく題材（サムネタイトル）だけの短い指示で文字なしの絵を作り、`THUMBNAIL_CHARACTER_PNGS` の先頭2体を左下・右下へ合成（高さ `THUMBNAIL_CHARACTER_HEIGHT_RATIO`）し、台本の `サムネ文字` またはタイトルを重ねる。Long の A/B/C では各案の構図指示（英語）をそのまま使う。
 - 接続失敗・ComfyUI の実行エラー・出力なしは `ImageGenerationError(backend="comfyui")` で止める。他エンジンへの自動フォールバックは行わない。
+
+### Codex CLI 画像生成
+
+- `core/codex_image.py: generate_png()` が、ChatGPT のサブスクリプションでログイン済みの `codex exec` に内蔵の画像生成（`image_generation` 機能、codex-cli 0.162.1 で既定有効を確認）で1枚作らせ、作業フォルダの `output.png` を受け取る。API キーは使わない。生成は OpenAI のサーバーで行われ、ローカル生成ではない。
+- 起動: `codex exec --ignore-user-config --sandbox workspace-write --ephemeral --skip-git-repo-check --cd <専用一時フォルダ> [--model M] [--image=<参照画像>...] -`。保存のため書き込みを許可するが、書ける場所は専用一時フォルダ（と Codex 既定の /tmp）だけ。参照画像は一時フォルダへ複製してから `--image=` で1枚ずつ渡す（`--image a b` の形は後ろの `-` まで画像として読まれうるため）。プロンプトは標準入力。
+- **`OPENAI_API_KEY` を外して起動する。** 残っていると API の従量課金に切り替わるため。
+- プロンプトは Nano Banana と同じ `_build_full_prompt()`（日本語の文字も画像AIに描かせる）。参照画像があれば `_reference_instruction()` を前に置く（Nano Banana と共通）。保存時に最終解像度へ合わせる。
+- `output.png` が無ければ `E-CODEX-IMAGE-MISSING`、CLI の失敗は `E-LLM-FAILED`、時間切れ（`CODEX_IMAGE_TIMEOUT_SEC`）は `E-LLM-TIMEOUT`。別の場所を探して代わりに使わない。一時フォルダは成功・失敗とも削除する。
+- 使用枠: 画像1枚で文章の数倍の使用枠を使うという報告があり、5時間・週ごとの上限がある。背景を何十枚も作る用途には向かない。
 
 ### Stable Diffusion WebUI 背景生成
 
@@ -1098,6 +1111,8 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `CODEX_CLI_PATH` / `CODEX_CLI_MODEL` | `codex` / 空 | Codex CLI の実行ファイルとモデル（空=`~/.codex/config.toml` の model） |
 | `OLLAMA_TEXT_MODEL` | `qwen3:8b` | 文章生成AIを `ollama` にしたときのモデル |
 | `COMFYUI_*` | — | ComfyUI（ローカル画像生成）。「ComfyUI 背景・サムネイル生成」節を参照 |
+| `THUMBNAIL_IMAGE_BACKEND` | 空 | サムネイルの画像生成バックエンド（空=背景と同じ / `gemini` / `sd_webui` / `comfyui` / `codex_cli`） |
+| `CODEX_IMAGE_TIMEOUT_SEC` | `600` | Codex CLI の画像1枚の生成待ち上限(秒) |
 | `IMAGE_TEXT_FONT_PATH` / `IMAGE_TEXT_*` | OS 別の太字ゴシック | ローカル画像の文字入れ |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |

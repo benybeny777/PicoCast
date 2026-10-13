@@ -15,7 +15,7 @@ from core.reading_normalizer import ReadingNormalizer
 from core.parser import ScriptParser
 from core.ai_generator import AIGenerator
 from core.ng_words import apply_ng_word_replacements
-from core.image_generator import ImageGenerator, ImageGenerationError
+from core.image_generator import ImageGenerator, ImageGenerationError, thumbnail_engine
 from core.opening_quality import (
     apply_opening_rewrite_to_script,
     check_openai_final_review_connection,
@@ -262,8 +262,11 @@ def _report_thumbnail_failure(err, topic, theme_dir, update_status):
 
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
-                       script_content=None, debug_mode=False, long_thumbnail_ab_test=None):
-    """台本内容をもとにサムネイル画像を生成する（IMAGE_BACKEND に従い Nano Banana または Stable Diffusion WebUI を使用）。"""
+                       script_content=None, debug_mode=False, long_thumbnail_ab_test=None, engine=None):
+    """台本内容をもとにサムネイル画像を生成する。
+
+    使うエンジンは engine（画面で明示指定したとき）→ THUMBNAIL_IMAGE_BACKEND → 背景と同じ、の順に決める。
+    """
     def _log(msg):
         if update_status: update_status(msg)
         else: print(msg, flush=True)
@@ -291,9 +294,8 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     except Exception:
         raise
 
-    # サムネイルは IMAGE_BACKEND に従う（sd_webui の場合は Stable Diffusion WebUI で生成）
-    # background_engine を明示的に渡すことでバックエンドを固定する
-    thumb_engine = img_gen.background_engine
+    # 例: 背景は ComfyUI（ローカル）、サムネは Codex。background_engine を明示して生成器を固定する
+    thumb_engine = engine or thumbnail_engine(img_gen.background_engine)
     thumb_img_gen = ImageGenerator(
         width=img_gen.width, height=img_gen.height,
         debug=img_gen.debug, image_style=img_gen.image_style,
@@ -544,7 +546,8 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     try:
         thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
                                         update_status, script_content=script_content, debug_mode=debug,
-                                        long_thumbnail_ab_test=long_thumbnail_ab_test)
+                                        long_thumbnail_ab_test=long_thumbnail_ab_test,
+                                        engine=(background_engine or "").strip() or None)
         if not thumb_path:
             raise Exception("サムネイル生成に失敗しました")
         return thumb_path
