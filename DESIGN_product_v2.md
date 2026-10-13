@@ -14,9 +14,10 @@
 | エディション | 決定 | 体験版（透かし・1ch・1日3本・投稿可・Analytics/自動運用不可）/ Standard（1ch）/ Pro（ch無制限） |
 | キー発行 | 決定 | 自前 RSA 署名キー。Google スプレッドシート＋Apps Script で自動発行 |
 | キーの端末固定 | **本書で設計** | 端末コードを含む「アクティベーション証明書」方式（§1） |
-| 製品名 | **要決定** | 推奨 `PicoCast`。§2 の候補から利用者が選ぶまで §2 の実装に着手しない |
+| 製品名 | 決定（2026-10-14） | **PicoCast**。§2.2 の対応表どおりに改名する |
 | リポジトリ名 | 製品名に従う | 製品名決定後に変更（§2.4） |
 | 機能改善 | 提案 | §3。採否は利用者が決める。着手順の推奨は §4 |
+| 多言語対応 | 要望あり（2026-10-14） | §3.5 と T13。L1（YouTube メタデータ）から段階的に |
 | 無料アップデート期間 | 仮 | 1年（`tools/license/gas/Code.gs` の `UPDATE_MONTHS`） |
 
 ---
@@ -120,7 +121,7 @@ PicoAgent と並ぶ「Pico シリーズ」にすると、ブランドを共有�
 | TubeLoom | 台本・声・絵を「織る」 | 独自性は高いが意味が伝わりにくい |
 
 - キャラクター名（ずんだもん等）・「YouTube」・「VOICEVOX」を製品名に入れない（他者の商標・キャラクター規約）。
-- 決定前に、商標検索（J-PlatPat）と BOOTH・GitHub・ドメインでの同名確認を利用者が行う。
+- 公開前に、商標検索（J-PlatPat）と BOOTH・GitHub・ドメインでの同名確認を利用者が行う。
 
 ### 2.2 命名の対応表（PicoCast の場合）
 
@@ -206,6 +207,28 @@ PicoAgent と並ぶ「Pico シリーズ」にすると、ブランドを共有�
 
 ---
 
+### 3.5 多言語対応（利用者要望 2026-10-14）
+
+多言語対応は、狙いの違う4層に分けて段階的に入れる。上の層ほど費用が小さく効果が早い。
+
+| 層 | 内容 | 効果 | 優先 |
+|---|---|---|---|
+| L1 **YouTube メタデータの多言語化** | タイトル・説明文を英語などへ翻訳し、YouTube Data API の `localizations`（言語別タイトル・説明）と `defaultLanguage` / `defaultAudioLanguage` を設定する。視聴者の言語設定に合わせて翻訳タイトルが表示される | 日本語の動画のまま海外の検索・おすすめに出る。台本・音声の作り直し不要 | ★★★ |
+| L2 **字幕ファイル** | 既存の字幕タイミング（`native_renderer._captions_for_audio_files`）から SRT を書き出し、翻訳 SRT も作る。`captions.insert` でアップロード（1件 400 クォータのため設定で ON/OFF） | 自動翻訳字幕より正確な多言語字幕。焼き込み字幕と別に持てる | ★★ |
+| L3 **アプリ画面の多言語化** | 画面・エラー文言・メール文面・法務文書を日本語／英語で切り替える | 海外の購入者に売れる | ★★ |
+| L4 **他言語チャンネルの制作** | チャンネルごとに「制作言語」を持ち、台本生成・読み上げ・字幕フォント・NGワードをその言語で行う | 英語圏などのチャンネルを新規に運用できる | ★ |
+
+設計上の前提:
+
+- **原文は日本語のまま**。コードコメント・AGENTS.md・SPEC.md は日本語（AGENTS.md の規則）。多言語化するのは利用者に見える文言と生成物だけ。
+- **翻訳エンジン**: 既定は Gemini（既存の `ai_generator`。費用は少額）、ローカル優先モードでは Ollama。翻訳結果はキャッシュして同じ文を2回翻訳しない。機械翻訳であることを画面に明示する。
+- **言語コード**は BCP 47（`ja`, `en`, `zh-Hans`, `ko`, `es` など）で統一する。
+- **読み上げ**: VOICEVOX は日本語専用。L4 では言語別の音声エンジンが必要になる。候補はローカルで動き商用利用できる Kokoro（Apache-2.0。英・中・日などに対応）や Piper（MIT）。採用前にライセンス・音質・速度を比較して利用者が決める（`audio_backends.py` の既存の切り替え口に追加する）。
+- **日本語専用の処理**（よみがな正規化 `reading_normalizer`、SudachiPy）は制作言語が `ja` のときだけ通す。他言語では呼ばない（別処理へのフォールバックにしない）。
+- **販売面**: BOOTH は海外購入にも対応しているが、海外向けの本格販売は L3 完了後に判断する。英語版の法務文書は翻訳だけでなく販売者の確認が必要。
+
+---
+
 ## 4. タスクカード（Codex 向け・この順に着手）
 
 共通ルール:
@@ -263,7 +286,7 @@ PicoAgent と並ぶ「Pico シリーズ」にすると、ブランドを共有�
 - `core/error_codes.py`: `E-LICENSE-MACHINE` / `E-LICENSE-LIMIT-DEVICES` / `E-LICENSE-EXPIRED` / `E-LICENSE-API`。
 - 受入: API をモックしたテストで、activate → active、limit → エラー表示、renew 失敗でも期限内は active、期限切れで trial。
 
-### T5. 製品名の定数化と一括改名  依存: **製品名の決定（要決定）**
+### T5. 製品名の定数化と一括改名  依存: なし（製品名は PicoCast に決定）
 
 - `config.py` に `PRODUCT_NAME`（表示名）、`PRODUCT_SLUG`（exe・フォルダ・タスク名）、`PRODUCT_ID`（端末コードの塩）、`LICENSE_KEY_PREFIX` / `LICENSE_ACTIVATION_PREFIX` を定義する。`git grep -n "Native Video Factory\|NativeVideoFactory\|NVF\|nvf"` の全件を、これらの参照か新名へ置換する（§2.2 の表）。
 - 文書・法務文書（`legal/`）・スキル名（`.agents/skills/*-nvf-*` と `.claude/skills/` の入口）・`build_exe.ps1`・`make_codesign_cert.ps1`・テストの期待値も対象。
@@ -314,7 +337,40 @@ PicoAgent と並ぶ「Pico シリーズ」にすると、ブランドを共有�
 - 段1（推奨）: `pywebview` でウィンドウを開き、内部で既存の uvicorn を起動する入口 `web_app/desktop.py` を追加する。`--open-browser` は開発用に残す。トレイ常駐は段2。
 - 技術選定の比較（pywebview / Tauri＋Python サイドカー）を PR 本文に書き、利用者の承認後に着手する（配布サイズ・自動更新・署名の差が大きいため）。
 
-### T13 以降（設計のみ。着手前に個別設計を PR 本文へ書く）
+### T13. 多言語対応（§3.5）  依存: L1・L2 はなし、L3 は T5 の後、L4 は L3 の後
+
+段ごとに1コミット以上。各段の着手時に、この節の仕様を現行コードと照合してから進める。
+
+**L1 YouTube メタデータの多言語化**
+- `config.py`: `YOUTUBE_LOCALIZATION_LANGUAGES`（既定は空＝無効。例 `["en", "zh-Hans", "ko"]`）、`YOUTUBE_DEFAULT_LANGUAGE`（既定 `ja`）。チャンネルごとに変えられるよう channel profile にも同名の上書き項目を持たせる。
+- `core/translation.py`（新規）: `translate(texts: list[str], target: str, *, kind: str) -> list[str]`。Gemini / Ollama を設定で切り替え、`metadata.db` の `translation_cache(source_hash, target, kind, text)` に保存。失敗は `E-TRANSLATE`（新設）で止め、未翻訳のまま投稿しない。
+- `core/youtube_uploader.py`: 投稿時（と後からの一括適用）に `snippet.defaultLanguage` / `snippet.defaultAudioLanguage` と `localizations = {lang: {title, description}}` を設定。タイトルは YouTube の100文字制限を翻訳後に検査し、超過は再翻訳（短く）→ それでも超過ならエラー。
+- 画面: 投稿確認画面に言語別タイトル・説明の確認と手修正欄。既存動画へ一括適用するジョブ（`job_manager` 経由）。
+- 受入: 翻訳をモックしたテストで `localizations` の組み立て、100文字超過の扱い、キャッシュの再利用。
+
+**L2 字幕ファイル**
+- `core/subtitles.py`（新規）: レンダー時に使った字幕チャンクとタイミングから `captions_<lang>.srt` を動画フォルダに書き出す（焼き込みと同じタイミング源を使い、別計算を書かない）。
+- 翻訳 SRT は L1 の `translate()` を使う。
+- `captions.insert` でのアップロードは `YOUTUBE_UPLOAD_CAPTIONS`（既定 OFF。クォータ 400/件の注意を画面に表示）。
+- 受入: SRT の時刻書式・連番・改行のテスト、翻訳 SRT の行数が原文と一致すること。
+
+**L3 アプリ画面の多言語化**
+- 文言カタログ `web_app/i18n/ja.json`（原文）と `en.json`。キーは `画面名.要素名`。Jinja には `t("key")`、JS には `window.t("key")`（`base.html` で現在言語のカタログを埋め込む）。
+- 設定 `UI_LANGUAGE`（既定 `ja`。初回セットアップで選択）。
+- `core/error_codes.py` の `ErrorDef.message` / `remediation` をカタログキー参照に変え、`format_error()` が現在言語で返す。英語訳が無いキーは**起動時の検査テストで失敗させる**（実行時に日本語へ黙って戻さない）。
+- 対象の洗い出し: `web_app/templates/*.html`（19ファイル）、`web_app/static/*.js`、`core/error_codes.py`、Apps Script のメール文面、`legal/`（英語版は `legal/en/`）。
+- 移行は画面単位で段階的に進め、カタログ化済みの画面を HANDOFF.md に記録する。
+- 受入: `ja.json` と `en.json` のキー集合が一致するテスト、テンプレートに直書きの日本語が残っていないかの検査（カタログ化済み画面のみ対象）。
+
+**L4 他言語チャンネルの制作**
+- channel profile に `content_language`（既定 `ja`）。ジャンルパック（T9）の manifest に `language` を持たせ、言語が合うパックだけ選べる。
+- 台本プロンプト・NGワード・タイトル規則は言語別テンプレートとして DB に持つ（`prompt_templates` に `language` 列）。
+- 音声エンジンの選定（Kokoro / Piper など）は利用者の承認後。`audio_backends.py` に追加し、`content_language` とエンジンの対応を検証して不一致はエラー。
+- `reading_normalizer` は `content_language == "ja"` のときだけ呼ぶ。
+- 字幕フォントを言語別に設定（`config.py`）。
+- 受入: `en` チャンネルで台本 → 音声 → 動画が日本語処理を通らずに完走する統合テスト（音声エンジンはモック）。
+
+### T14 以降（設計のみ。着手前に個別設計を PR 本文へ書く）
 
 - F 勝ちパターン学習、C シーン編集、B 3ステップのホーム、E 通知、H タイトル・サムネ比較、I ネタ在庫、J 音声エンジン追加、K ローカル優先モード、L 他SNS書き出し、N PicoAgent 連携。
 
