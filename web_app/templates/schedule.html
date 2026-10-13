@@ -164,22 +164,18 @@ async function rebalanceApply() {
 }
 
 function pollJob(jobId, statusBox, reloadOnSuccess) {
-  let _polling = false;
-  const interval = setInterval(async () => {
-    if (_polling) return;
-    _polling = true;
+  createBackoffPoller(async () => {
     try {
       const { allDone, hasFailed } = await updateJobLogs([jobId], statusBox);
       if (allDone) {
-        clearInterval(interval);
         if (!hasFailed && reloadOnSuccess) {
           setTimeout(() => location.reload(), 1200);
         }
+        return true;
       }
-    } catch {} finally {
-      _polling = false;
-    }
-  }, window.WEB_JOB_POLL_INTERVAL_MS);
+    } catch(error) { showJobMonitorError(statusBox, error); }
+    return false;
+  }, window.WEB_JOB_POLL_INTERVAL_MS, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
 function _buildDateOptions(selectEl, selectedDate) {

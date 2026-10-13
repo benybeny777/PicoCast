@@ -52,24 +52,24 @@ async function startCheck() {
 
 async function pollCheckJob(jobId) {
   const logBox = document.getElementById('check-log');
-  const interval = setInterval(async () => {
+  createBackoffPoller(async () => {
     try {
       const { allDone, hasFailed } = await updateJobLogs([jobId], logBox, {
         resultLabel: r => r.message || '',
       });
       if (allDone) {
-        clearInterval(interval);
         // 完了ステータスを確認してタイトル更新
-        const res = await fetch(`/api/jobs/${jobId}`);
-        const job = await res.json();
+        const job = await fetchJobStatus(jobId);
         document.getElementById('check-status-title').textContent =
           `チェック: ${job.status}`;
         if (job.status === 'success' && Array.isArray(job.result)) {
           renderResults(job.result);
         }
+        return true;
       }
-    } catch {}
-  }, window.WEB_JOB_POLL_INTERVAL_MS);
+    } catch(error) { showJobMonitorError(logBox, error); }
+    return false;
+  }, window.WEB_JOB_POLL_INTERVAL_MS, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
 function renderResults(results) {

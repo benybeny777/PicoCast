@@ -562,6 +562,14 @@ runner は `generate` / `render` ジョブの `heartbeat_at` を定期更新し�
 
 Ctrl+C / SIGTERM / `/api/shutdown` の終了時は `core.app_shutdown` の終了フックを通し、job-runner を停止してから metadata DB 接続を閉じる。Ctrl+C が uvicorn の lifespan shutdown へ到達しない場合も、`web_app.app` の `KeyboardInterrupt` 捕捉で `request_shutdown(force=True, async_shutdown=False)` を呼び、runner プロセスを残さない。終了フックは二重実行しない。
 
+### Web UI のジョブ監視
+
+- 共通ポーラーは停止フラグを持ち、通信待ちの最中に停止しても次の監視タイマーを登録しない。
+- ジョブ状態取得は HTTP 成功、要求したジョブID、既知の状態値を検証する。通信失敗・不正な応答はジョブ完了として扱わない。
+- 取得失敗時は最後に取得した状態・ログを残し、中央エラーカタログの `E-JOB-MONITOR` と対処手順を表示する。次回取得成功時に監視エラー表示を解除する。
+- キャンセル要求が失敗した場合は監視を続け、要求送信済み・処理完了として表示しない。
+- ブラウザ内の通信失敗は開発者コンソールへ記録する。Web API 自体の例外は既存の role 別デバッグログへ記録する。
+
 ### ジョブの同時実行制御（キュー）
 
 Web UI は生成・レンダーを直接実行しない。`app.py` が起動時に `workers.runner` を別プロセスとして起動・監視し、runner が DB queue から `generate` / `render` を取得して処理する。

@@ -13,32 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
- * ジョブをポーリングしてステータスを更新する汎用関数。
- * @param {string} jobId
- * @param {function} onUpdate - (job) => void
- * @param {function} onDone - (job) => void
- * @param {number} intervalMs
- */
-function pollJob(jobId, onUpdate, onDone, intervalMs = null) {
-  const pollIntervalMs = intervalMs || window.WEB_JOB_POLL_INTERVAL_MS;
-  const timer = setInterval(async () => {
-    try {
-      const res = await fetch(`/api/jobs/${jobId}`);
-      if (!res.ok) return;
-      const job = await res.json();
-      if (onUpdate) onUpdate(job);
-      if (['success', 'failed', 'cancelled'].includes(job.status)) {
-        clearInterval(timer);
-        if (onDone) onDone(job);
-      }
-    } catch (e) {
-      // ネットワークエラーはサイレントに無視
-    }
-  }, pollIntervalMs);
-  return timer;
-}
-
-/**
  * ログエントリを DOM に追記する。
  * @param {HTMLElement} container
  * @param {string} message

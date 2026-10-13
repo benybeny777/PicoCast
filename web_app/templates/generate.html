@@ -337,8 +337,16 @@ function readBgmParams(tab) {
 }
 
 async function cancelGenerate() {
-  for (const jobId of activeJobIds) {
-    try { await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'}); } catch {}
+  const container = document.getElementById('job-card-log-container');
+  try {
+    for (const jobId of activeJobIds) {
+      const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, {method: 'POST'});
+      if (!res.ok) throw new Error(`キャンセル要求 HTTP ${res.status}`);
+    }
+  } catch (error) {
+    showJobMonitorError(container, error);
+    appendLog('キャンセル要求を確認できませんでした。処理状況を確認してから再度キャンセルしてください。', 'error');
+    return;
   }
   appendLog('キャンセル要求を送信しました', 'warning');
   finishGenerate(activeTab);
@@ -349,15 +357,15 @@ function pollJobs(tab) {
   let _polling = false;
   const container = document.getElementById('job-card-log-container');
   pollTimer = createBackoffPoller(async () => {
-    if (!activeJobIds.length) { clearInterval(pollTimer); return; }
+    if (!activeJobIds.length) return true;
     if (_polling) return;
     _polling = true;
     try {
       let allDone = true;
+      let monitorFailed = false;
       for (const jobId of [...activeJobIds]) {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
-          const job = await res.json();
+          const job = await fetchJobStatus(jobId);
           updateJobCard(container, job);
           if (job.type === 'generate_batch') {
             await trackVisibleGenerateChildren();
@@ -382,8 +390,13 @@ function pollJobs(tab) {
           } else {
             allDone = false;
           }
-        } catch { allDone = false; }
+        } catch (error) {
+          allDone = false;
+          monitorFailed = true;
+          showJobMonitorError(container, error);
+        }
       }
+      if (!monitorFailed) clearJobMonitorError(container);
       if (allDone) { finishGenerate(tab); return true; }
       return false;
     } finally { _polling = false; }

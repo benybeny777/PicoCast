@@ -60,6 +60,8 @@ def _render(request: Request, name: str, ctx: dict):
     ctx["web_toast_visible_ms"] = WEB_TOAST_VISIBLE_MS
     ctx["web_toast_hide_delay_ms"] = WEB_TOAST_HIDE_DELAY_MS
     ctx["static_asset_version"] = _static_asset_version()
+    from core.error_codes import format_error
+    ctx["web_job_monitor_error"] = format_error("E-JOB-MONITOR", with_fix=True)
     return templates.TemplateResponse(request, name, ctx)
 
 

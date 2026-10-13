@@ -352,15 +352,20 @@ function pollJobs(onSuccess) {
     try {
       let allDone = true;
       let hasFailed = false;
+      let monitorFailed = false;
       for (const jobId of activeJobIds) {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
-          const job = await res.json();
+          const job = await fetchJobStatus(jobId);
           _updateJobCard(container, job);
           if (!['success', 'failed', 'cancelled'].includes(job.status)) allDone = false;
           if (['failed', 'cancelled'].includes(job.status)) hasFailed = true;
-        } catch(e) { allDone = false; }
+        } catch(error) {
+          allDone = false;
+          monitorFailed = true;
+          showJobMonitorError(container, error);
+        }
       }
+      if (!monitorFailed) clearJobMonitorError(container);
       if (allDone) {
         if (hasFailed) {
           appendLog('一部の処理が失敗またはキャンセルされました。', 'error');

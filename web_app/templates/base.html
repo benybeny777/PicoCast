@@ -193,6 +193,7 @@ window.WEB_TOAST_VISIBLE_MS = {{ web_toast_visible_ms }};
 window.WEB_TOAST_HIDE_DELAY_MS = {{ web_toast_hide_delay_ms }};
 </script>
 <script src="/static/app.js?v={{ static_asset_version }}"></script>
+<script>window.WEB_JOB_MONITOR_ERROR = {{ web_job_monitor_error | tojson }};</script>
 <script src="/static/job_poll.js?v={{ static_asset_version }}"></script>
 {% block scripts %}{% endblock %}
 </body>

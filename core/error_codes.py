@@ -84,6 +84,9 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
     # ディスク
     "E-DISK": ErrorDef("E-DISK", "ディスクの空き容量が不足している可能性があります。", "system", False,
                        "出力先ドライブの空き容量を確保してから再実行してください。"),
+    # ジョブ監視
+    "E-JOB-MONITOR": ErrorDef("E-JOB-MONITOR", "処理状況を取得できません。最後に取得した状態を表示しています。", "network", True,
+                              "アプリが起動しているか確認してください。状況の取得を再試行します。動画生成を重複実行せず、ログ画面で処理状況を確認してください。"),
     # 既定
     "E-UNKNOWN": ErrorDef("E-UNKNOWN", "不明なエラーが発生しました。", "generic", False,
                           "デバッグログ（app_debug_*.log）を確認し、解決しない場合は設定画面「製品管理」から診断パッケージを作成して問い合わせてください。"),

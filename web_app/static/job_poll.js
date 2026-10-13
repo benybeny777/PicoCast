@@ -117,9 +117,13 @@ function createBackoffPoller(fn, initialMs, maxMs) {
   let elapsed = 0;
   let timer = null;
   let _running = false;
+  let stopped = false;
 
   function _schedule() {
+    if (stopped) return;
     timer = setTimeout(async () => {
+      timer = null;
+      if (stopped) return;
       if (_running) { _schedule(); return; }
       _running = true;
       let done = false;
@@ -135,7 +139,38 @@ function createBackoffPoller(fn, initialMs, maxMs) {
   }
 
   _schedule();
-  return { stop: () => { if (timer) { clearTimeout(timer); timer = null; } } };
+  return { stop: () => {
+    stopped = true;
+    if (timer !== null) { clearTimeout(timer); timer = null; }
+  } };
+}
+
+/** HTTPエラーや不正な応答をジョブ状態として扱わない。 */
+async function fetchJobStatus(jobId) {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {cache: 'no-store'});
+  if (!res.ok) throw new Error(`ジョブ状態取得 HTTP ${res.status}`);
+  const job = await res.json();
+  if (job.job_id !== jobId || !['queued', 'running', 'success', 'failed', 'cancelled'].includes(job.status)) {
+    throw new Error('ジョブ状態の応答形式が不正です');
+  }
+  return job;
+}
+
+/** 最後の状態を残し、通信障害を処理失敗と区別して表示する。 */
+function showJobMonitorError(container, error) {
+  console.error('ジョブ監視に失敗しました', error);
+  let notice = container.querySelector('.job-monitor-error');
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.className = 'error-text job-monitor-error';
+    notice.setAttribute('role', 'alert');
+    container.prepend(notice);
+  }
+  notice.textContent = window.WEB_JOB_MONITOR_ERROR;
+}
+
+function clearJobMonitorError(container) {
+  container.querySelector('.job-monitor-error')?.remove();
 }
 
 /**
@@ -149,11 +184,11 @@ async function updateJobLogs(activeJobIds, logBox, options = {}) {
   let allDone = true;
   let hasFailed = false;
   let htmlContent = '';
+  let monitorError = null;
 
   for (const jobId of activeJobIds) {
     try {
-      const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
-      const job = await res.json();
+      const job = await fetchJobStatus(jobId);
       // ジョブ種別とステータスをヘッダーとして表示（progress_text は最後のログ行と重複するので含めない）
       htmlContent += `<div class="log-job-header">[${escapeHtml(job.type)}] ${escapeHtml(job.status)}</div>`;
 
@@ -168,10 +203,16 @@ async function updateJobLogs(activeJobIds, logBox, options = {}) {
       }
     } catch(e) {
       allDone = false;
+      monitorError = e;
     }
   }
 
   const isScrolledToBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80;
+  // 取得失敗時は最後に取得できたログを維持する。
+  if (monitorError) {
+    showJobMonitorError(logBox, monitorError);
+    return { allDone: false, hasFailed };
+  }
   logBox.innerHTML = htmlContent;
   if (isScrolledToBottom) logBox.scrollTop = logBox.scrollHeight;
 
