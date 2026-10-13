@@ -104,11 +104,6 @@ def api_list_templates(kind: str | None = Query(default=None)):
 def api_create_template(req: CreateTemplateRequest):
     """active profile にテンプレートを作成する。"""
     profile_id = _active_profile_id()
-    try:
-        from core.license_manager import assert_template_limit
-        assert_template_limit(profile_id, adding=1)
-    except RuntimeError as e:
-        raise_api_error(e, status_code=403, action="プロンプトテンプレート上限確認")
     if req.template_kind not in TEMPLATE_KINDS:
         raise HTTPException(status_code=422, detail=f"template_kind は {TEMPLATE_KINDS} のいずれかで指定してください")
     if not req.template_name.strip():

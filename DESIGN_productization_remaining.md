@@ -14,7 +14,8 @@
 
 ## 方針・前提
 - ユーザーは本ツールを実利用中。**現状の操作を壊さない**こと（成功パス・既存APIは不変、失敗時メッセージ・新規任意機能の追加が中心）。
-- 後回し（着手不要）: ライセンス実キー署名検証 / 配布パッケージ(Nuitka) / 同梱ソフトのライセンス整理（個別DL方針）。
+- 後回し（着手不要）: 配布パッケージ(Nuitka) / 同梱ソフトのライセンス整理（個別DL方針）。
+- ライセンス実キー署名検証は 2026-10-14 に実装済み（下記タスク9）。
 - 表記ルール: 「Stable Diffusion WebUI」のみ。「SD」略語・「Forge」単独禁止（`rg "SD WebUI|\bSD\b|Forge"` で確認）。
 - テスト: `./.venv/Scripts/python.exe -m pytest -q`（基準: 388 passed, 1 skipped）。
 - コミット規約: 日本語、末尾に `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`。直接コミット可（PR不要）。ドキュメント(README/SPEC/CHANGELOG)も同時更新。
@@ -83,3 +84,8 @@
 ## 完了済み
 - 外部依存の導線 / エラー対処文言 / 購入動線UX / 起動自己回復 / クロスPC復元（パスフレーズ）
 - Stable Diffusion WebUI 時 Ollama 必須化 / 表記統一 / 必須構成早見表（/setup・README）
+
+### 9. 署名付きライセンスキー（買い切り販売）  状態: ✅ 実装（運用設置は未）
+- `core/license_key.py`（RSA-SHA256 署名キー検証）、`core/license_manager.py`（キーから edition 判定・失効確認）、`tools/license/`（鍵生成・手動発行・Apps Script 自動発行）。
+- 残作業: スプレッドシート・フォーム・Apps Script の設置、BOOTH 購入通知メールの実書式に合わせた `ORDER_NUMBER_REGEX` / `PRODUCTS` 調整、失効確認URLを製品ビルドの既定値に入れるか判断。
+- 次の候補: 保存先の `%LOCALAPPDATA%` 化（`core/runtime_env.py:app_base_dir`）、インストーラ化、`.nvfpack` パック形式（キーの `packs` で解放）。

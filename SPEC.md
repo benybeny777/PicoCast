@@ -616,11 +616,25 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 
 ### ライセンス管理
 
-- ライセンス情報は `data/settings.db:settings` を正本とする。`LICENSE_EDITION` 未設定時は `trial`。
-- edition は `trial` / `personal` / `pro` / `studio`。秘密情報や購入者情報をログ・レスポンスへ出さない。
-- 制限項目: Trial 透かし、1日生成本数、最大 channel profile 数、YouTubeアップロード可否、Analytics可否、テンプレート数上限。
+- edition は `trial`（体験版・キー不要）/ `standard` / `pro`。DB に edition は保存せず、`data/settings.db:settings.LICENSE_KEY` の署名付きキーを参照のたびに検証して決める（`core/license_key.py`）。旧 `LICENSE_EDITION` は無視する。
+- キー形式: `NVF1.<payload>.<signature>`。payload は `{v, lid, ed, buyer, iat, upd, packs}` の JSON を URL-safe base64 にしたもの、signature は payload 文字列への RSA-SHA256（PKCS#1 v1.5）署名。アプリは `core/license_public_key.py` の公開鍵だけを持ち、オフラインで検証する。秘密鍵はリポジトリに置かない。
+- 発行は Google スプレッドシート＋Apps Script（`tools/license/gas/Code.gs`）が自動で行う。BOOTH 購入通知メールを Gmail から取り込み、購入者がフォームに送った注文番号と照合してキーをメール送信する。手動発行・鍵生成は `tools/license/license_tool.py`。手順は `tools/license/README.md`。`tools/` は配布物に含めない。
+- 制限:
+
+  | | trial | standard | pro |
+  |---|---|---|---|
+  | 透かし | あり | なし | なし |
+  | 1日生成本数 | 3 | 無制限 | 無制限 |
+  | channel profile 数 | 1 | 1 | 無制限 |
+  | YouTubeアップロード | 可 | 可 | 可 |
+  | Analytics | 不可 | 可 | 可 |
+  | 自動運用 | 不可 | 可 | 可 |
+
+- 自動運用は有効化保存時（`POST /api/autopilot/settings`、403）と各工程の実行時（`E-LICENSE-LIMIT` で保留）に確認する。
+- キー状態 `status`: `unregistered` / `active` / `invalid`（保存済みキーが検証できない → trial として動作し理由を表示）/ `revoked`（失効 → trial）。不正なキーの登録は `E-LICENSE-INVALID`（422）で拒否し保存しない。
+- 失効確認（任意）: `LICENSE_REVOCATION_CHECK_URL`（Apps Script Web アプリ。空=通信しない）を設定すると、キー登録時・起動時（前回確認から `LICENSE_REVOCATION_CHECK_INTERVAL_DAYS` 日以上経過時）・`POST /api/settings/license/check-revocation` で `?lid=` を問い合わせる。応答 `{"status": "active"|"revoked"|"unknown"}`。通信失敗時は前回判定を維持し、最終確認日時とエラーを画面に表示する。
 - Trial は native MP4 の最終出力へ `Native Video Factory Trial` の小さな透かしを焼き込む。
-- 試用→購入の動線（UX先行）: `get_license_info()` は `purchase_url`（`config.PRODUCT_PURCHASE_URL`）と `upgrade_available`（edition が studio 以外）を返す。上限到達エラー（生成本数・profile 数・アップロード・Analytics・テンプレート）の文言には購入導線を付ける。設定画面「製品管理」のライセンスカードに購入リンクとライセンスキー入力欄を表示し、`POST /api/settings/license` で即時反映する。実ライセンスキーの署名検証は未実装（後付け予定）。
+- `GET /api/settings/license` は edition・status・購入者名・license_id・更新期限・パック・制限・失効確認状態を返す（キー文字列は返さない）。`POST /api/settings/license` は `{license_key}` を受け取る。設定画面「製品管理」のライセンスカードでキーを貼り付けて登録する。上限到達エラーの文言には購入導線（`PRODUCT_PURCHASE_URL`）を付ける。
 
 ### 診断パッケージ
 
@@ -664,7 +678,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - 詳細: ＋ よみがな辞書 / Stable Diffusion WebUI 詳細（モデル選択）。
 - 開発者: ＋ 管理者設定（ジョブ並列数・ログ保持・DB診断・危険操作）。
 - 隠れたタブへの URL ハッシュ遷移時は必要なモードまで自動で引き上げる。破壊的操作は従来どおり `confirmed=true` と確認ダイアログを必須にする。
-- 販売版では `DEVELOPER_TOOLS_ENABLED=0`（`config/config.py`）にすることで、管理者設定タブ・「開発者」モード・edition切替などの開発者向けUIをサーバー側で描画しない。あわせて `admin` 指定の設定項目は `get_editable_config()` から除外し、`save_config()` も拒否する（HTML非表示だけでなくAPIでも保護する）。表示モードは localStorage 依存のため、秘匿はこのフラグで行う。
+- 販売版では `DEVELOPER_TOOLS_ENABLED=0`（`config/config.py`）にすることで、管理者設定タブ・「開発者」モードなどの開発者向けUIをサーバー側で描画しない。あわせて `admin` 指定の設定項目は `get_editable_config()` から除外し、`save_config()` も拒否する（HTML非表示だけでなくAPIでも保護する）。表示モードは localStorage 依存のため、秘匿はこのフラグで行う。
 
 ### 主要画面
 

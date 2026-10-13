@@ -330,8 +330,7 @@ def api_ollama_models():
 
 
 class LicenseRequest(BaseModel):
-    edition: str
-    license_id: str = ""
+    license_key: str
 
 
 class SetupCompleteRequest(BaseModel):
@@ -415,19 +414,27 @@ def api_check_update():
 
 @router.get("/license")
 def api_license_status():
-    """ライセンス状態を返す。購入者情報や秘密値は返さない。"""
+    """ライセンス状態を返す。キー文字列そのものは返さない（購入者名は画面表示用に返す）。"""
     from core.license_manager import get_license_info
     return get_license_info()
 
 
 @router.post("/license")
 def api_save_license(req: LicenseRequest):
-    """ライセンス edition を保存する。"""
+    """署名付きライセンスキーを検証して保存する。"""
+    from core.error_codes import AppError
+    from core.license_manager import save_license
     try:
-        from core.license_manager import save_license
-        return save_license(req.edition, req.license_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        return save_license(req.license_key)
+    except AppError as exc:
+        raise_api_error(exc, status_code=422, action="ライセンスキー登録", detail=exc.user_message())
+
+
+@router.post("/license/check-revocation")
+def api_check_license_revocation():
+    """ライセンスの失効をオンラインで確認する（失効確認URL未設定なら何もしない）。"""
+    from core.license_manager import check_revocation
+    return check_revocation()
 
 
 @router.post("/diagnostics")

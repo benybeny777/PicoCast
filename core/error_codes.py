@@ -81,6 +81,8 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
                                   "active channel profile の genre_profile と profile.yaml を確認してください。"),
     "E-LICENSE-LIMIT": ErrorDef("E-LICENSE-LIMIT", "現在のライセンスエディションの利用上限に達しました。", "license", False,
                                 "設定画面「製品管理」で上位エディションに切り替えるか、上限の範囲内で実行してください。"),
+    "E-LICENSE-INVALID": ErrorDef("E-LICENSE-INVALID", "ライセンスキーを確認できませんでした。", "license", False,
+                                  "購入後に届いたメールのキーを、先頭の NVF1. から末尾まで省略せず貼り付けてください。解決しない場合は注文番号を添えてサポートへ連絡してください。"),
     # ディスク
     "E-DISK": ErrorDef("E-DISK", "ディスクの空き容量が不足している可能性があります。", "system", False,
                        "出力先ドライブの空き容量を確保してから再実行してください。"),

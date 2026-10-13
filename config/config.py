@@ -337,7 +337,10 @@ VOICEVOX_DOWNLOAD_URL = os.environ.get("VOICEVOX_DOWNLOAD_URL", "https://voicevo
 FFMPEG_DOWNLOAD_URL   = os.environ.get("FFMPEG_DOWNLOAD_URL",   "https://www.gyan.dev/ffmpeg/builds/")   # ffmpeg Windows ビルド配布
 OLLAMA_DOWNLOAD_URL   = os.environ.get("OLLAMA_DOWNLOAD_URL",   "https://ollama.com/download")           # Ollama 公式ダウンロード
 SD_WEBUI_DOWNLOAD_URL = os.environ.get("SD_WEBUI_DOWNLOAD_URL", "https://github.com/lllyasviel/stable-diffusion-webui-forge/releases")  # Stable Diffusion WebUI 配布
-# 試用→購入の動線。trial 上限到達時や製品管理タブからこのURLへ誘導する（実キー検証はライセンス機能実装時に後付け）。
+# ライセンス失効確認（任意）。Apps Script の Web アプリURLを設定すると起動時と登録時に失効を確認する（空=確認しない・ネットワークアクセスしない）。
+LICENSE_REVOCATION_CHECK_URL = _setting_value("LICENSE_REVOCATION_CHECK_URL", "")  # 失効確認APIのURL（空=無効）
+LICENSE_REVOCATION_CHECK_INTERVAL_DAYS = float(_setting_value("LICENSE_REVOCATION_CHECK_INTERVAL_DAYS", "7"))  # 起動時に失効確認を行う間隔(日)
+# 試用→購入の動線。trial 上限到達時や製品管理タブからこのURLへ誘導する。
 PRODUCT_PURCHASE_URL = os.environ.get("PRODUCT_PURCHASE_URL", "")  # 購入ページURL（空=未設定。設定すると購入導線リンクを表示）
 # サポート導線。設定すると製品管理タブの診断パッケージ付近に問い合わせ先を表示する（空=非表示）。
 PRODUCT_SUPPORT_URL = os.environ.get("PRODUCT_SUPPORT_URL", "")      # サポート/問い合わせページURL（空=非表示）

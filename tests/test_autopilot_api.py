@@ -11,6 +11,8 @@ from web_app.routes import api_autopilot as api
 def client(monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setattr(api, "require_active_profile", lambda: SimpleNamespace(profile_id="channel-a"))
+    from core import license_manager
+    monkeypatch.setattr(license_manager, "assert_can_use_autopilot", lambda: None)
     app = FastAPI()
     app.include_router(api.router)
     return TestClient(app)
@@ -56,3 +58,14 @@ def test_error_has_code_and_fix_without_stack(client, monkeypatch):
     assert response.status_code == 400
     assert "E-AUTO-BUDGET" in response.json()["detail"]
     assert "Traceback" not in response.text
+
+
+def test_trial_cannot_enable_autopilot(monkeypatch):
+    from types import SimpleNamespace
+    from core import license_manager
+    monkeypatch.setattr(api, "require_active_profile", lambda: SimpleNamespace(profile_id="channel-a"))
+    monkeypatch.setattr(license_manager, "get_all", lambda: {})
+    monkeypatch.setattr(api.store, "save_policy", lambda *a, **k: pytest.fail("trial で自動運用を保存した"))
+    app = FastAPI()
+    app.include_router(api.router)
+    assert TestClient(app).post("/api/autopilot/settings", json=policy()).status_code == 403

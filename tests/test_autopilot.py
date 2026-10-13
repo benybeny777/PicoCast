@@ -35,6 +35,8 @@ def isolated(monkeypatch, tmp_path):
     from core import setup_state, secret_store
     monkeypatch.setattr(setup_state, "require_setup_completed_for", lambda action: None)
     monkeypatch.setattr(secret_store, "has_secret", lambda name: True)
+    from core import license_manager
+    monkeypatch.setattr(license_manager, "assert_can_use_autopilot", lambda: None)
     store.initialize()
     return tmp_path
 

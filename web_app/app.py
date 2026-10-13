@@ -100,6 +100,9 @@ async def _lifespan(app):
 
     # 固定コメント投稿タスクが exe 移動などでズレていれば起動時に自動修正する
     threading.Thread(target=_self_heal_fixed_comment_task, daemon=True, name="fixed-comment-task-heal").start()
+    # ライセンス失効確認（URL設定時のみ・前回確認から一定日数経過時のみ通信する）
+    from core.license_manager import check_revocation_if_due
+    threading.Thread(target=check_revocation_if_due, daemon=True, name="license-revocation-check").start()
     yield
     # ── shutdown フェーズ（Ctrl+C / SIGTERM / /api/shutdown すべてここを通る） ──
     run_lifespan_shutdown()

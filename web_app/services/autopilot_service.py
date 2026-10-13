@@ -214,6 +214,14 @@ def _upload(run: dict, log) -> dict:
     return {"video_id": video_id}
 
 
+def _assert_autopilot_license() -> None:
+    from core.license_manager import assert_can_use_autopilot
+    try:
+        assert_can_use_autopilot()
+    except RuntimeError as exc:
+        raise AppError("E-LICENSE-LIMIT", str(exc)) from exc
+
+
 def execute_step(job: dict, cancel_event, log) -> dict:
     """1工程だけ実行する。次工程登録は、結果確定後のrunner巡回に任せる。"""
     from web_app.job_manager import Job
@@ -224,6 +232,7 @@ def execute_step(job: dict, cancel_event, log) -> dict:
         raise AppError("E-AUTO-HOLD", "工程の所有権が一致しません")
     try:
         store.assert_authorized(run)
+        _assert_autopilot_license()
         store.update_run(run_id, state="working")
         if cancel_event.is_set():
             raise AppError("E-AUTO-HOLD", "自動運用を停止しました")

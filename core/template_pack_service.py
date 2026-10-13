@@ -34,13 +34,11 @@ def export_template_pack(profile_id: str) -> dict:
 
 
 def import_template_pack(profile_id: str, pack_json: dict) -> dict:
-    from core.license_manager import assert_template_limit
     from core.prompt_template_store import create_template
 
     templates = pack_json.get("templates")
     if not isinstance(templates, list):
         raise RuntimeError("templates 配列が必要です")
-    assert_template_limit(profile_id, adding=len(templates))
     created = []
     for item in templates:
         if not isinstance(item, dict):

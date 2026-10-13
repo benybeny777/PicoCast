@@ -229,17 +229,14 @@
     <h2>ライセンス</h2>
     <div id="license-status" class="hint">読み込み中...</div>
     <div id="license-purchase" class="mt" style="display:none"></div>
-    <div class="form-row mt">
-      <select id="license-edition" class="form-input" style="width:160px">
-        <option value="trial">trial</option>
-        <option value="personal">personal</option>
-        <option value="pro">pro</option>
-        <option value="studio">studio</option>
-      </select>
-      <input id="license-id" class="form-input" style="width:260px" placeholder="ライセンスキー（任意・購入後に入力）">
-      <button class="btn btn-primary" onclick="saveLicense()">登録</button>
+    <div class="mt">
+      <textarea id="license-key" class="form-input" rows="3" style="width:100%;font-family:monospace" placeholder="NVF1. から始まるライセンスキーを貼り付け"></textarea>
     </div>
-    <p class="hint mt">購入後に届いたライセンスキーを入力して「登録」すると即時反映されます。</p>
+    <div class="action-row mt">
+      <button class="btn btn-primary" onclick="saveLicense()">登録</button>
+      <button class="btn btn-secondary" id="license-revocation-btn" style="display:none" onclick="checkLicenseRevocation()">ライセンス状態をオンライン確認</button>
+    </div>
+    <p class="hint mt">購入後に届いたメールのライセンスキーを貼り付けて「登録」すると即時反映されます。</p>
   </div>
   <div class="card">
     <h2>診断パッケージ</h2>
@@ -395,19 +392,6 @@
     </div>
   </div>
 
-  <!-- 一時的なデバッグ用: ライセンス edition の即時切替（後で削除する） -->
-  <div class="card" style="border-left:4px solid var(--accent2)">
-    <h2>⚠ ライセンス edition 切替（デバッグ用・後で削除）</h2>
-    <p class="hint">動作確認用にライセンス edition を即時切替します。製品リリース前に削除してください。</p>
-    <div id="dev-edition-current" class="hint">現在: 読み込み中...</div>
-    <div class="action-row mt">
-      <button class="btn btn-secondary" onclick="devSetEdition('trial')">trial</button>
-      <button class="btn btn-secondary" onclick="devSetEdition('personal')">personal</button>
-      <button class="btn btn-secondary" onclick="devSetEdition('pro')">pro</button>
-      <button class="btn btn-secondary" onclick="devSetEdition('studio')">studio</button>
-    </div>
-    <div id="dev-edition-result" class="hint mt"></div>
-  </div>
 </div>
 {% endif %}
 
@@ -811,7 +795,6 @@ function switchTab(name, btn) {
   if (name === 'templates' && !_tmplLoaded) tmplLoad();
   if (name === 'bgm' && !_bgmLoaded) loadBgm();
   if (name === 'product') { loadProductStatus(); loadProductInfo(); loadOutputBase(); loadFixedCommentTask(); }
-  if (name === 'admin') devLoadEdition();
   if (name === 'characters' && !_charactersLoaded) loadCharacters();
 }
 
@@ -1036,26 +1019,6 @@ async function deleteCharacter(cid) {
   }
 }
 
-// 一時的なデバッグ用: ライセンス edition 切替（後で削除する）
-async function devLoadEdition() {
-  try {
-    const res = await fetch('/api/settings/license');
-    const data = await res.json();
-    document.getElementById('dev-edition-current').textContent = `現在: ${data.edition}（透かし=${data.limits && data.limits.watermark}）`;
-  } catch(e) {
-    document.getElementById('dev-edition-current').textContent = '現在: 取得失敗 ' + e;
-  }
-}
-async function devSetEdition(edition) {
-  const out = document.getElementById('dev-edition-result');
-  out.textContent = `${edition} に切替中...`;
-  const res = await fetch('/api/settings/license', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({edition})});
-  const data = await res.json();
-  if (!res.ok) { out.textContent = '切替失敗: ' + (data.detail || ''); return; }
-  out.textContent = `edition を ${data.edition} に切り替えました`;
-  devLoadEdition();
-}
-
 // ── 設定モード（通常 / 詳細 / 開発者）でタブの表示範囲を切り替える ──
 const DEVELOPER_TOOLS_ENABLED = {{ developer_tools_enabled | tojson }};
 const SETTINGS_MODE_LEVELS = { normal: 1, advanced: 2, developer: 3 };
@@ -1103,17 +1066,39 @@ function setSettingsMode(mode) {
   }
 }
 
+const LICENSE_EDITION_LABELS = { trial: '体験版', standard: 'Standard', pro: 'Pro' };
+const LICENSE_STATUS_LABELS = { unregistered: '未登録', active: '有効', invalid: 'キーを確認できません', revoked: '無効化済み' };
+
 async function loadProductStatus() {
+  const statusEl = document.getElementById('license-status');
   try {
     const res = await fetch('/api/settings/license');
     const data = await res.json();
-    document.getElementById('license-edition').value = data.edition || 'trial';
-    document.getElementById('license-status').textContent = `edition=${data.edition}, registered=${data.registered}, limits=${JSON.stringify(data.limits)}`;
-    // 試用→購入の導線: trial や上位余地がある場合に購入リンクを表示する
+    if (!res.ok) { statusEl.textContent = 'ライセンス状態の取得に失敗: ' + (data.detail || res.status); return; }
+    const lim = data.limits || {};
+    const lines = [
+      `エディション: ${LICENSE_EDITION_LABELS[data.edition] || data.edition}（${LICENSE_STATUS_LABELS[data.status] || data.status}）`,
+    ];
+    if (data.buyer) lines.push(`購入者: ${data.buyer}`);
+    if (data.license_id) lines.push(`ライセンスID: ${data.license_id}`);
+    if (data.status === 'active' || data.status === 'revoked') lines.push(`無料アップデート期限: ${data.updates_until || '無期限'}`);
+    if (data.packs && data.packs.length) lines.push(`パック: ${data.packs.join(', ')}`);
+    lines.push(`チャンネル数: ${lim.max_profiles ?? '無制限'} / 1日の生成: ${lim.daily_generations ?? '無制限'} / 透かし: ${lim.watermark ? 'あり' : 'なし'} / Analytics: ${lim.analytics ? '可' : '不可'} / 自動運用: ${lim.autopilot ? '可' : '不可'}`);
+    const rev = data.revocation || {};
+    if (rev.enabled && data.registered) lines.push(`オンライン確認: ${rev.checked_at || '未確認'}${rev.error ? '（' + rev.error + '）' : ''}`);
+    if (data.reason) lines.push(`⚠ ${data.reason}`);
+    statusEl.textContent = lines.join('\n');
+    statusEl.style.whiteSpace = 'pre-line';
+    document.getElementById('license-revocation-btn').style.display = (rev.enabled && data.registered) ? '' : 'none';
+    // 試用→購入の導線: 上位余地がある場合に購入リンクを表示する
     const box = document.getElementById('license-purchase');
     if (data.upgrade_available && data.purchase_url) {
-      const label = data.edition === 'trial' ? '製品版を購入してすべての機能を解放' : '上位エディションにアップグレード';
-      box.innerHTML = `<a class="btn btn-primary" href="${data.purchase_url}" target="_blank" rel="noopener">🛒 ${label}</a>`;
+      const label = data.edition === 'trial' ? '製品版を購入してすべての機能を解放' : 'Pro にアップグレード';
+      box.innerHTML = '';
+      const a = document.createElement('a');
+      a.className = 'btn btn-primary'; a.href = data.purchase_url; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = '🛒 ' + label;
+      box.appendChild(a);
       box.style.display = '';
     } else if (data.upgrade_available && data.edition === 'trial') {
       box.innerHTML = '<span class="hint">購入ページURL（PRODUCT_PURCHASE_URL）が未設定です。</span>';
@@ -1122,19 +1107,25 @@ async function loadProductStatus() {
       box.style.display = 'none';
     }
   } catch(e) {
-    document.getElementById('license-status').textContent = 'ライセンス状態の取得に失敗: ' + e;
+    statusEl.textContent = 'ライセンス状態の取得に失敗: ' + e;
   }
 }
 
 async function saveLicense() {
-  const body = {
-    edition: document.getElementById('license-edition').value,
-    license_id: document.getElementById('license-id').value,
-  };
-  const res = await fetch('/api/settings/license', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  const key = document.getElementById('license-key').value.trim();
+  if (!key) { showToast('ライセンスキーを貼り付けてください', true); return; }
+  const res = await fetch('/api/settings/license', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({license_key: key})});
   const data = await res.json();
-  if (!res.ok) { showToast('ライセンス保存失敗: ' + (data.detail || ''), true); return; }
-  showToast('ライセンスを保存しました', false);
+  if (!res.ok) { showToast('ライセンス登録失敗: ' + (data.detail || ''), true); return; }
+  document.getElementById('license-key').value = '';
+  showToast('ライセンスを登録しました', false);
+  await loadProductStatus();
+}
+
+async function checkLicenseRevocation() {
+  const res = await fetch('/api/settings/license/check-revocation', {method:'POST'});
+  const data = await res.json();
+  if (!res.ok) { showToast('ライセンス確認失敗: ' + (data.detail || ''), true); return; }
   await loadProductStatus();
 }
 

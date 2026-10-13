@@ -1,0 +1,172 @@
+/**
+ * Native Video Factory ライセンス発行・失効確認（Google Apps Script）
+ *
+ * 構成（スプレッドシートにバインドして使う。設置手順は ../README.md）:
+ *   - importBoothOrders(): 時間主導トリガー。Gmail の BOOTH 購入通知を読み「注文」シートへ追記する。
+ *   - onFormSubmit(e):     フォーム送信トリガー。注文番号を照合してキーを発行し、購入者へメール送信する。
+ *   - doGet(e):            Web アプリ。?lid=<license_id> に {"status":"active|revoked|unknown"} を返す（アプリの失効確認）。
+ *
+ * キー形式は core/license_key.py と完全一致させること:
+ *   "NVF1." + base64url(JSON) + "." + base64url(RSA-SHA256(base64url(JSON)))
+ *
+ * スクリプトプロパティ:
+ *   LICENSE_PRIVATE_KEY : tools/license/license_tool.py genkey で作った秘密鍵 PEM（全文）
+ */
+
+// ── 設定（販売形態に合わせて編集する） ─────────────────────────
+const CONFIG = {
+  ORDER_SHEET: '注文',
+  ISSUED_SHEET: '発行済み',
+  // BOOTH の購入通知メールを探す Gmail 検索式。実際の通知メールで件名・送信元を確認して調整する。
+  BOOTH_MAIL_QUERY: 'from:booth.pm subject:注文 newer_than:30d',
+  // 通知メール本文から注文番号を抜き出す正規表現（1つ目のキャプチャが注文番号）。実メールで要確認。
+  ORDER_NUMBER_REGEX: /注文番号[:：]\s*(\d+)/,
+  // 商品名 → 付与内容。本文に商品名が含まれていればその商品として扱う（上から順に判定）。
+  PRODUCTS: [
+    { match: 'Pro', edition: 'pro', packs: [] },
+    { match: 'Standard', edition: 'standard', packs: [] },
+    // パック例: { match: '都市伝説パック', edition: '', packs: ['urban_legend'] },
+  ],
+  UPDATE_MONTHS: 12,           // 無料アップデート期間（0 = 無期限）
+  MAIL_SUBJECT: '【Native Video Factory】ライセンスキーのお知らせ',
+  // フォームの質問タイトル（フォーム側と一致させる）
+  FORM_ORDER_FIELD: '注文番号',
+  FORM_EMAIL_FIELD: 'メールアドレス',
+  FORM_NAME_FIELD: 'お名前',
+};
+
+const EDITION_RANK = { '': 0, standard: 1, pro: 2 };
+
+// 注文: 注文番号 | 商品 | edition | packs | 受信日時 | メールID
+// 発行済み: license_id | 注文番号 | メール | 購入者名 | edition | packs | 発行日 | 更新期限 | 失効 | メモ
+const ISSUED_COLS = { lid: 0, order: 1, email: 2, buyer: 3, edition: 4, packs: 5, issued: 6, upd: 7, revoked: 8, memo: 9 };
+
+function sheet_(name) {
+  const sh = SpreadsheetApp.getActive().getSheetByName(name);
+  if (!sh) throw new Error('シートがありません: ' + name);
+  return sh;
+}
+
+function rows_(name) {
+  const values = sheet_(name).getDataRange().getValues();
+  return values.slice(1); // 1行目は見出し
+}
+
+// ── BOOTH 購入通知の取り込み ───────────────────────────────
+function importBoothOrders() {
+  const known = new Set(rows_(CONFIG.ORDER_SHEET).map(r => String(r[5])));
+  const orderSheet = sheet_(CONFIG.ORDER_SHEET);
+  const threads = GmailApp.search(CONFIG.BOOTH_MAIL_QUERY, 0, 100);
+  let unmatched = 0;
+  threads.forEach(thread => thread.getMessages().forEach(msg => {
+    if (known.has(msg.getId())) return;
+    const body = msg.getPlainBody();
+    const m = body.match(CONFIG.ORDER_NUMBER_REGEX);
+    const product = CONFIG.PRODUCTS.find(p => body.indexOf(p.match) >= 0);
+    if (!m || !product) {
+      unmatched++;
+      console.warn('購入通知を解析できません: messageId=' + msg.getId() + ' subject=' + msg.getSubject());
+      return;
+    }
+    orderSheet.appendRow([m[1], product.match, product.edition, product.packs.join(','), msg.getDate(), msg.getId()]);
+    known.add(msg.getId());
+  }));
+  if (unmatched > 0) {
+    // 書式変更で取り込みが止まったことに気づけるよう販売者へ通知する
+    MailApp.sendEmail(Session.getEffectiveUser().getEmail(),
+      '[NVF] BOOTH購入通知の解析に失敗しました',
+      unmatched + ' 件の通知メールを解析できませんでした。Code.gs の ORDER_NUMBER_REGEX / PRODUCTS を確認してください。');
+  }
+}
+
+// ── フォーム受付 → キー発行 ─────────────────────────────────
+function onFormSubmit(e) {
+  const answers = e.namedValues;
+  const orderNo = String((answers[CONFIG.FORM_ORDER_FIELD] || [''])[0]).trim();
+  const email = String((answers[CONFIG.FORM_EMAIL_FIELD] || [''])[0]).trim();
+  const buyer = String((answers[CONFIG.FORM_NAME_FIELD] || [''])[0]).trim();
+  if (!orderNo || !email) throw new Error('注文番号またはメールアドレスが空です');
+
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const order = rows_(CONFIG.ORDER_SHEET).find(r => String(r[0]) === orderNo);
+    if (!order) {
+      MailApp.sendEmail(email, CONFIG.MAIL_SUBJECT,
+        '注文番号 ' + orderNo + ' の購入を確認できませんでした。購入直後の場合は1時間ほど待ってから再度お申し込みください。');
+      return;
+    }
+    const issued = rows_(CONFIG.ISSUED_SHEET);
+    if (issued.some(r => String(r[ISSUED_COLS.order]) === orderNo)) {
+      MailApp.sendEmail(email, CONFIG.MAIL_SUBJECT,
+        '注文番号 ' + orderNo + ' のキーは発行済みです。再送が必要な場合はサポートへご連絡ください。');
+      return;
+    }
+    // 同じメールアドレスの既存ライセンスがあれば、edition の上位とパックを合算して同じ license_id で再発行する
+    const previous = issued.filter(r => String(r[ISSUED_COLS.email]).toLowerCase() === email.toLowerCase()
+      && !r[ISSUED_COLS.revoked]);
+    let edition = String(order[2] || '');
+    const packs = new Set(String(order[3] || '').split(',').filter(Boolean));
+    let lid = '';
+    previous.forEach(r => {
+      if (EDITION_RANK[r[ISSUED_COLS.edition]] > EDITION_RANK[edition]) edition = r[ISSUED_COLS.edition];
+      String(r[ISSUED_COLS.packs] || '').split(',').filter(Boolean).forEach(p => packs.add(p));
+      lid = lid || String(r[ISSUED_COLS.lid]);
+    });
+    if (!edition) {
+      MailApp.sendEmail(email, CONFIG.MAIL_SUBJECT,
+        'パックのみのご購入です。本体（Standard / Pro）購入時と同じメールアドレスでお申し込みください。');
+      return;
+    }
+    lid = lid || Utilities.getUuid().replace(/-/g, '').slice(0, 16);
+    const today = new Date();
+    const payload = {
+      v: 1, lid: lid, ed: edition, buyer: buyer,
+      iat: isoDate_(today), upd: CONFIG.UPDATE_MONTHS > 0 ? isoDate_(addMonths_(today, CONFIG.UPDATE_MONTHS)) : '',
+      packs: Array.from(packs),
+    };
+    const key = signKey_(payload);
+    sheet_(CONFIG.ISSUED_SHEET).appendRow([lid, orderNo, email, buyer, edition, payload.packs.join(','),
+      payload.iat, payload.upd, '', '']);
+    MailApp.sendEmail(email, CONFIG.MAIL_SUBJECT,
+      buyer + ' 様\n\nご購入ありがとうございます。以下のライセンスキーを、アプリの「設定 > 製品管理 > ライセンス」に貼り付けて登録してください。\n\n'
+      + key + '\n\nエディション: ' + edition + (payload.packs.length ? '\nパック: ' + payload.packs.join(', ') : '')
+      + '\n無料アップデート期限: ' + (payload.upd || '無期限') + '\n');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ── 失効確認 API ──────────────────────────────────────────
+function doGet(e) {
+  const lid = String((e && e.parameter && e.parameter.lid) || '').trim();
+  const rows = rows_(CONFIG.ISSUED_SHEET).filter(r => String(r[ISSUED_COLS.lid]) === lid);
+  let status = 'unknown';
+  if (rows.length) status = rows.some(r => r[ISSUED_COLS.revoked]) ? 'revoked' : 'active';
+  return ContentService.createTextOutput(JSON.stringify({ status: status }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ── 署名 ─────────────────────────────────────────────────
+function signKey_(payload) {
+  const privateKey = PropertiesService.getScriptProperties().getProperty('LICENSE_PRIVATE_KEY');
+  if (!privateKey) throw new Error('スクリプトプロパティ LICENSE_PRIVATE_KEY が未設定です');
+  const payloadB64 = Utilities.base64EncodeWebSafe(JSON.stringify(payload), Utilities.Charset.UTF_8);
+  const signature = Utilities.computeRsaSha256Signature(payloadB64, privateKey);
+  return 'NVF1.' + payloadB64 + '.' + Utilities.base64EncodeWebSafe(signature);
+}
+
+function isoDate_(d) {
+  return Utilities.formatDate(d, 'Asia/Tokyo', 'yyyy-MM-dd');
+}
+
+function addMonths_(d, months) {
+  const r = new Date(d.getTime());
+  r.setMonth(r.getMonth() + months);
+  return r;
+}
+
+/** 手動テスト用: 実行ログにテストキーを出す（アプリの verify で検証できる）。 */
+function testIssueKey() {
+  console.log(signKey_({ v: 1, lid: 'test0000', ed: 'pro', buyer: 'テスト', iat: isoDate_(new Date()), upd: '', packs: [] }));
+}

@@ -42,6 +42,12 @@ def get_status():
 @router.post("/settings")
 def save_settings(req: PolicyRequest):
     _check_profile(req.profile_id)
+    if req.enabled:
+        from core.license_manager import assert_can_use_autopilot
+        try:
+            assert_can_use_autopilot()
+        except RuntimeError as exc:
+            raise_api_error(exc, status_code=403, action="自動運用ライセンス確認")
     try:
         return store.save_policy(req.model_dump(exclude={"profile_id", "confirmed"}), confirmed=req.confirmed)
     except Exception as exc:
