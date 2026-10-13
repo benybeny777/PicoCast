@@ -1,7 +1,7 @@
 # 製品化 v2 設計（ライセンス強化・ブランド刷新・機能改善）
 
 最終更新: 2026-10-14
-実装担当: Codex（この文書を正本として段階ごとにコミットする）
+実装担当: Codex（この文書を正本として段階ごとにコミットする。進捗と決定待ちは HANDOFF.md）
 前提: 署名付きライセンスキー v1（`core/license_key.py` / `core/license_manager.py` / `tools/license/`）は実装済み。本書はその上に積む。
 
 ---
@@ -206,16 +206,117 @@ PicoAgent と並ぶ「Pico シリーズ」にすると、ブランドを共有�
 
 ---
 
-## 4. 推奨の着手順（Codex 向け）
+## 4. タスクカード（Codex 向け・この順に着手）
 
-各段は独立コミット。各段の完了時に `./.venv/Scripts/python.exe -m pytest -q` を通し、README / SPEC / CHANGELOG を同時更新する（AGENTS.md）。
+共通ルール:
+- 1カード＝1コミット（大きいものは「段」ごとに分ける）。各コミットで `./.venv/Scripts/python.exe -m pytest -q` を通し、README / SPEC / CHANGELOG を同時更新する（AGENTS.md）。
+- 進捗は `HANDOFF.md` の「タスク状態」表を更新してコミットに含める（クレジット切れ・担当交代に備える）。
+- 「要決定」のカードは、利用者の決定が HANDOFF.md に記録されるまで着手しない。
+- エラーは `core/error_codes.py` の `E-...` コードで返す。フォールバックは本書に「許可」と書いたものだけ。
 
-1. **製品名の決定待ち**（利用者）。決まるまで 2 に着手しない。1.x のライセンス作業は先行してよい。
-2. ライセンス v2（§1）: `core/machine_id.py` → 証明書検証 → API → 画面 → Apps Script。
-3. 名称の定数集約と一括改名（§2.5-1, 2）。
-4. 保存先の `%LOCALAPPDATA%` 化と移行画面（§2.3）。
-5. リポジトリ・フォルダの変更（§2.4。利用者の操作）。
-6. 機能改善: 推奨順は D（YouTube 接続ウィザード）→ M（パック）→ A（デスクトップアプリ化）→ O（アプリ内更新）→ G（量産判定）→ F（勝ちパターン学習）→ C（シーン編集）→ B（ホーム画面）。それぞれ着手前に、個別の設計を PR 本文に書いてから実装する。
+### T1. 端末コード（`core/machine_id.py`）  依存: なし
+
+- `machine_code() -> str`: `sha256(PRODUCT_ID + ":" + raw_id)` の hex 先頭 32 文字。`PRODUCT_ID` は `config.py` 定数（§2 の改名で新名に変える。現時点は `nvf`）。
+- `_raw_machine_id()`:
+  - Windows: `winreg` で `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography` の `MachineGuid`（`KEY_READ | KEY_WOW64_64KEY`）。
+  - macOS: `ioreg -rd1 -c IOPlatformExpertDevice` 出力の `IOPlatformUUID`（`subprocess.run(..., timeout=5, check=True)`）。
+  - それ以外・取得失敗: `AppError("E-LICENSE-MACHINE", ...)`。空文字や固定値で続けない。
+- 生 ID はログ・画面・送信に出さない。ハッシュのみ。
+- テスト: `_raw_machine_id` をモンキーパッチし、同じ入力で同じコード・別入力で別コード・失敗時に AppError。
+- 受入: `GET /api/settings/license/machine-code` が `{"machine_code": "<32hex>"}` を返す。
+
+### T2. アクティベーション証明書の検証（アプリ側）  依存: T1
+
+- 形式: `NVA1.<payload>.<signature>`（キーと同じ RSA 鍵・同じ署名方式。`core/license_key.py` の base64 処理と署名検証を共通化して使う。写さない）。
+- payload: `{"v":1, "lid", "ed", "packs", "buyer", "upd", "mid", "iat", "exp"}`。`exp` は ISO 日時（UTC）。手動アクティベーションでは空文字＝無期限。
+- `core/license_manager.py`:
+  - 状態: `unregistered` / `not_activated`（キーのみ）/ `active` / `expired` / `machine_mismatch` / `invalid` / `revoked`。`active` 以外は edition=`trial`。
+  - 判定は「証明書の署名OK」かつ「`mid == machine_code()`」かつ「`exp` 未経過」かつ「キーの `lid` と証明書の `lid` が一致」。
+  - 保存: `settings.LICENSE_ACTIVATION`。Windows では `core/secret_store.py` の DPAPI 保護関数で暗号化して保存する（新しい暗号化処理を書かず、既存関数を公開して使う）。
+  - `get_license_info()` に `machine_code`、`activation_expires_at`、`activation_status` を追加。
+- 検証箇所の分散（§1.7-1）: `current_limits()` に加え、`native_renderer` の透かし判定と、`upload_service` / `autopilot_service._upload` の直前で `license_manager.verify_activation_now()`（キャッシュを使わず毎回検証する1関数）を呼ぶ。
+- 公開鍵のピン留め（§1.7-4）: `core/license_public_key.py` の PEM の SHA-256 を `core/license_key.py` に定数で持ち、検証前に一致を確認。不一致は `E-LICENSE-INVALID`。
+- テスト（`tests/test_license_key.py` に追加）: 端末不一致・期限切れ・lid 不一致・他鍵署名・ピン不一致がすべて trial。正常時は edition が反映される。
+
+### T3. アクティベーション API（Apps Script）  依存: なし（T2 と並行可）
+
+- `tools/license/gas/Code.gs` に `doPost(e)` を追加。本文 JSON `{"action": "...", ...}`、応答 JSON。
+  - `activate {license_key, machine_code, app_version}`:
+    1. キーの署名を Apps Script 側でも検証する（`Utilities.computeRsaSha256Signature` は署名専用のため、「同じ payload を再署名して一致比較」で検証する）。
+    2. 「発行済み」で lid を探し、失効なら `{error: "revoked"}`。
+    3. 「端末」シートで lid の有効端末を数える。同じ mid が有効ならそのまま再発行。上限（`CONFIG.DEVICE_LIMITS = {standard: 2, pro: 3}`）以上なら `{error: "limit", devices: [{mid の末尾6桁, 最終更新}]}`。
+    4. 端末を登録（または最終更新を更新）し、`exp = 現在 + LEASE_DAYS(30)` の証明書を返す。
+  - `renew {activation}`: 証明書を再署名比較で検証 → 失効・端末無効なら error → exp を延ばした証明書。
+  - `deactivate {activation}`: 該当端末を「解除済み」にする。
+  - `reset {license_key, order_number}`: 「リセット申請」に記録し、その年の2回目までは全端末を自動解除。3回目以降は `{error: "manual_review"}` を返して販売者へメール。
+- v1 の `doGet ?lid=` は削除し、README の設置手順を更新。シート「端末」「リセット申請」を README に追加。
+- 受入: README の手動確認手順（GAS エディタから `testActivate()` などを実行）で各分岐を確認できる。
+
+### T4. アプリの API と画面  依存: T2, T3
+
+- `config.py`: `LICENSE_REVOCATION_CHECK_URL` を `LICENSE_API_URL` に改名し、`LICENSE_LEASE_RENEW_BEFORE_DAYS`（既定 7）を追加。`LICENSE_REVOCATION_CHECK_INTERVAL_DAYS` は削除。
+- `POST /api/settings/license {license_key}`: キー検証 → `activate` 呼び出し → 証明書保存。API 未設定・通信失敗時は `not_activated` で保存し、画面に手動アクティベーションを案内する（自動で別経路に切り替えない）。
+- `POST /api/settings/license/activation {activation}`: 手動アクティベーション（メールで届いた証明書の貼り付け）。
+- `POST /api/settings/license/renew`、`POST /api/settings/license/deactivate {confirmed: true}`（破壊的操作のため確認必須）。
+- 起動時（`web_app/app.py` lifespan の既存スレッド）: `exp` まで `LICENSE_LEASE_RENEW_BEFORE_DAYS` 日以内なら `renew`。失敗は `_logger.warning` と画面表示。コメント `# フォールバック許可: 期限内はオフラインでも製品版のまま動かす（利用者決定 2026-10-14）` を付ける。
+- 画面（設定 > 製品管理 > ライセンス）: 端末コード（コピーボタン）、状態、期限、台数上限エラー時の端末一覧、「このPCの登録を解除」、手動アクティベーション欄。
+- `core/error_codes.py`: `E-LICENSE-MACHINE` / `E-LICENSE-LIMIT-DEVICES` / `E-LICENSE-EXPIRED` / `E-LICENSE-API`。
+- 受入: API をモックしたテストで、activate → active、limit → エラー表示、renew 失敗でも期限内は active、期限切れで trial。
+
+### T5. 製品名の定数化と一括改名  依存: **製品名の決定（要決定）**
+
+- `config.py` に `PRODUCT_NAME`（表示名）、`PRODUCT_SLUG`（exe・フォルダ・タスク名）、`PRODUCT_ID`（端末コードの塩）、`LICENSE_KEY_PREFIX` / `LICENSE_ACTIVATION_PREFIX` を定義する。`git grep -n "Native Video Factory\|NativeVideoFactory\|NVF\|nvf"` の全件を、これらの参照か新名へ置換する（§2.2 の表）。
+- 文書・法務文書（`legal/`）・スキル名（`.agents/skills/*-nvf-*` と `.claude/skills/` の入口）・`build_exe.ps1`・`make_codesign_cert.ps1`・テストの期待値も対象。
+- 環境変数 `NVF_MASTER_KEY` の改名は keyring の移行と同時に行う（§2.3-2）。
+- 受入: `git grep -n "Native Video Factory\|NativeVideoFactory\|NVF_\|\bnvf\b"` が CHANGELOG の過去記録以外 0 件。
+
+### T6. 保存先の分離と移行  依存: T5
+
+- `core/runtime_env.py:app_base_dir()`: exe 版は `%LOCALAPPDATA%\<PRODUCT_SLUG>`（macOS は `~/Library/Application Support/<PRODUCT_SLUG>`）、開発版はリポジトリ直下のまま。他の場所を探さない。
+- 初回起動時、新保存先に `data/settings.db` が無く、exe と同じフォルダに `data/settings.db` があれば、`/migrate` 画面で移動を確認 → `data/` と `output/` を移動 → 旧場所に `MOVED_TO_<PRODUCT_SLUG>.txt` を置く。移動はコピー → 検証 → 旧側削除の順にし、失敗時は中止して理由を表示する（部分移動を残さない）。
+- `core/fixed_comment_task.py`: 自己修復で旧接頭辞 `NativeVideoFactory-FixedComment-*` のタスクを削除し、新名で再登録する。
+- 受入: 一時ディレクトリで旧配置を作るテストで、移動・再実行時に何もしないこと・失敗時のロールバックを確認する。
+
+### T7. リポジトリ・フォルダの変更  依存: T5, T6（利用者の操作）
+
+- §2.4 の手順を利用者に案内し、完了後に README のクローン URL と `*.code-workspace` 名を更新する。Codex が GitHub のリポジトリ名を勝手に変えない。
+
+### T8. YouTube 接続ウィザード（改善案 D）  依存: なし
+
+- 新画面 `/setup/youtube`（既存の `/setup` から遷移）。手順: ①GCP プロジェクト作成 ②YouTube Data API v3 / YouTube Analytics API の有効化 ③OAuth 同意画面（外部・**本番**へ公開）④OAuth クライアント（デスクトップアプリ）を作成し JSON を貼り付け ⑤認可テスト。各手順に公式画面への直リンクと注意点を付ける。
+- JSON 検証: `installed` キーがあり、`client_id` / `client_secret` / `redirect_uris` が揃うこと。`web` タイプは理由付きで拒否する。保存は既存の `POST /api/settings/client-secrets`。
+- トークン失効の検知: refresh 時の `invalid_grant` を `E-YOUTUBE-TOKEN-EXPIRED`（新設）にし、「同意画面がテストのままだと7日で失効する」という対処を表示する。
+- 受入: 不正 JSON 3種の拒否テストと、`invalid_grant` のエラー変換テスト。
+
+### T9. ジャンルパック（拡張子は改名後の製品名に合わせる）（改善案 M）  依存: T2（packs 判定）
+
+- zip 構成: `manifest.json`（`pack_id`, `version`, `title`, `min_app_version`, `free`, `files` の SHA-256 一覧）、`manifest.sig`（manifest への RSA 署名。キーと同じ鍵）、`genre/`（`config/prompt_profiles/genres/<genre>/` と同じ構成）、`characters/`、`bgm/`、`reading_dict.json`、`ng_words.json`。
+- `core/pack_store.py`（新規）: 署名・ハッシュを検証 → `<保存先>/packs/<pack_id>/<version>/` に展開 → DB の `installed_packs(pack_id, version, installed_at)` に記録。テンプレート・キャラ・BGM に `source_pack_id` / `source_pack_version` / `user_modified` を持たせる。再インストール時は `user_modified=0` だけ上書きし、`1` は画面で利用者に選ばせる。
+- 解放判定: ライセンスの `packs` に `pack_id` があるか、manifest の `free` が true。
+- 製品同梱の `config/SEED/prompt_packs/product` も同じ形式の無料パックとして扱い、seed の経路を一本化する（`channel_profile.py:238` と `prompt_profile_loader.py:22` の二重経路を解消）。
+- 作成ツール: `tools/pack/build_pack.py <genre_dir> --pack-id ... --version ...`（秘密鍵で署名）。
+- 受入: 改ざん zip の拒否、未購入パックのロック、上書き更新で `user_modified` が保たれることのテスト。
+
+### T10. 量産判定チェッカー（改善案 G）  依存: なし
+
+- 生成済みの台本（`metadata.db.videos.script_content`）を、同じチャンネルの直近 N 本（`config.py` 定数）と比べて類似度を計算する。指標は文字 3-gram の Jaccard と、構成（シーン数・見出しの型）の一致率。外部 API は使わない。
+- 閾値（`config.py`）を超えたら、自動運用は `held`（`E-AUTO-SIMILAR` を新設）、手動生成は警告表示のみ。
+- 受入: 同一台本・軽微な改変・別台本の3ケースのテスト。
+
+### T11. アプリ内アップデート（改善案 O）  依存: T5
+
+- `update_check.py` の JSON を `{"latest_version", "url", "sha256", "notes", "released_at"}` に拡張する。ライセンスの `upd`（無料アップデート期限）より `released_at` が後なら「有償アップグレード」と表示する。
+- ダウンロードは `<保存先>/updates/` へ保存し、SHA-256 の一致を確認してからインストーラを起動してアプリを終了する。不一致ならファイルを削除して中止する。
+- 受入: 期限内・期限後・ハッシュ不一致のテスト。
+
+### T12. デスクトップアプリ化（改善案 A）  依存: T5, T6
+
+- 段1（推奨）: `pywebview` でウィンドウを開き、内部で既存の uvicorn を起動する入口 `web_app/desktop.py` を追加する。`--open-browser` は開発用に残す。トレイ常駐は段2。
+- 技術選定の比較（pywebview / Tauri＋Python サイドカー）を PR 本文に書き、利用者の承認後に着手する（配布サイズ・自動更新・署名の差が大きいため）。
+
+### T13 以降（設計のみ。着手前に個別設計を PR 本文へ書く）
+
+- F 勝ちパターン学習、C シーン編集、B 3ステップのホーム、E 通知、H タイトル・サムネ比較、I ネタ在庫、J 音声エンジン追加、K ローカル優先モード、L 他SNS書き出し、N PicoAgent 連携。
 
 ## 5. 未確認・リスク
 
