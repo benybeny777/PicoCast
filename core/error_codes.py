@@ -84,6 +84,13 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
     # ディスク
     "E-DISK": ErrorDef("E-DISK", "ディスクの空き容量が不足している可能性があります。", "system", False,
                        "出力先ドライブの空き容量を確保してから再実行してください。"),
+    # 自動運用
+    "E-AUTO-CONFIG": ErrorDef("E-AUTO-CONFIG", "自動運用の設定を確認してください。", "config", False,
+                              "本数・開始時刻・品質基準・有料API上限を設定し、対象チャンネルへの投稿予約を確認してから有効化してください。"),
+    "E-AUTO-BUDGET": ErrorDef("E-AUTO-BUDGET", "有料APIの1日上限に達したため自動運用を保留しました。", "quota", False,
+                              "自動運用画面で使用回数と上限を確認してください。保留中の成果物を確認してから次の運用を開始してください。"),
+    "E-AUTO-HOLD": ErrorDef("E-AUTO-HOLD", "自動運用を保留しました。", "pipeline", False,
+                            "自動運用画面とデバッグログを確認してください。投稿結果が不明な場合はYouTube Studioで確認し、同じ動画を再アップロードしないでください。"),
     # ジョブ監視
     "E-JOB-MONITOR": ErrorDef("E-JOB-MONITOR", "処理状況を取得できません。最後に取得した状態を表示しています。", "network", True,
                               "アプリが起動しているか確認してください。状況の取得を再試行します。動画生成を重複実行せず、ログ画面で処理状況を確認してください。"),

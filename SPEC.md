@@ -562,6 +562,22 @@ runner は `generate` / `render` ジョブの `heartbeat_at` を定期更新し�
 
 Ctrl+C / SIGTERM / `/api/shutdown` の終了時は `core.app_shutdown` の終了フックを通し、job-runner を停止してから metadata DB 接続を閉じる。Ctrl+C が uvicorn の lifespan shutdown へ到達しない場合も、`web_app.app` の `KeyboardInterrupt` 捕捉で `request_shutdown(force=True, async_shutdown=False)` を呼び、runner プロセスを残さない。終了フックは二重実行しない。
 
+### チャンネル別フルオート運用
+
+- 入口は `/autopilot`。設定画面にもリンクを置く。`GET /api/autopilot` が設定・当日API回数・工程履歴を返す。
+- `POST /api/autopilot/settings` で `enabled`、`daily_shorts`、`daily_longs`、`start_hour`、`min_score`、`daily_paid_limit` を保存する。本数は形式ごと0以上・合計24本以下、時刻0〜23時、点数0〜100。初期値はShorts 1本・Long 0本・6時・80点・上限0回・停止中。
+- 設定は `core.settings_store` 経由で `data/settings.db:settings` の `AUTOPILOT_POLICY:{profile_id}` に保存し、毎工程・キュー登録・有料API呼び出しで再取得する。チャンネル別設定をグローバルなcfgへ上書きせず、再起動なしで反映する。
+- 有効化と有効中の設定変更は `confirmed=true` と画面確認ダイアログが必須。生成・投稿・Analytics認証、正のAPI上限、本数を確認し、設定のハッシュを日次枠へ保存する。枠の実行中に設定変更・停止した場合は旧設定の権限で投稿を続けない。
+- 日次枠・工程・投稿ID・判定・エラーはチャンネル別 `metadata.db:autopilot_runs` に永続化する。`(day, video_type, ordinal)` が一意で、運用日と開始時刻はチャンネルのタイムゾーンを使う。未実行の過去日を埋めない。生成本数を制御し、公開日は既存YouTube予約スロットの空きに従う。
+- `analytics → topic → script → generate → render → review → upload → analysis → complete` の各工程をrunnerの `autopilot` ジョブとして1つずつ実行する。日次枠とジョブ登録は同じ `BEGIN IMMEDIATE` トランザクションで行い、同じチャンネルは1工程ずつ進める。手動アップロード実行中は自動工程の追加を待つ。
+- queuedの自動運用ジョブは起動時に破棄しない。完了工程の次から再開する。heartbeat切れ等で実行中工程の結果が不明な場合は `held` にして自動再試行しない。保留が1件でもあるチャンネルは後続枠を開始しない。
+- ネタ選定は既存動画・運用中テーマとAnalyticsを参照する。台本生成はプロファイル所有のDBテンプレートを使い、形式・タイトル・動画種別を検証する。生成とレンダーは既存パイプラインをrunnerから呼び出す。
+- 公開判定はMP4実体、ffprobeで音声・映像・実尺、ローカル必須条件、Ollamaの台本判定を確認する。最低点以上、`publish_ok=true`、`must_fix=[]` をすべて必須とする。Ollamaは動画を視聴した判定ではない。
+- 自動投稿はprivate＋予約日時を初回アップロードで指定し、動画IDをサムネイル等の後処理より先に保存する。YouTube取得APIでprivateと予約日時の一致を確認後に予約完了扱いにする。既存IDがあれば再アップロードしない。結果不明時はStudio確認を促す。
+- Google AIとOpenAIのアプリ側呼び出し回数は `autopilot_usage` に日次記録し、要求前に原子的に枠を確保する。画像の子スレッドでも生成元のprofile・運用枠を保持する。失敗した呼び出しも消費に数え、上限超過は保留する。SDK内部再試行や金額自体を制限する機能ではない。
+- `POST /api/autopilot/{run_id}/dismiss` は確認済みの保留枠を `skipped` にする。成果物の削除・公開・再生成・再投稿はしない。APIのprofile_idが現在チャンネルと違えば409で拒否する。
+- 自動運用の失敗は中央エラーコードと対処を表示し、スタックはrole別デバッグログに記録する。初期OFFのまま配布し、実APIの費用や公開が発生する検証は自動テストで行わない。
+
 ### Web UI のジョブ監視
 
 - 共通ポーラーは停止フラグを持ち、通信待ちの最中に停止しても次の監視タイマーを登録しない。

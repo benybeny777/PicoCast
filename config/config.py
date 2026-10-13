@@ -12,6 +12,14 @@ from core.settings_store import get_all as _get_settings_all, initialize as _ini
 _init_settings()
 _SETTINGS_VALUES = _get_settings_all()
 
+# 自動運用の初期値。保存値はチャンネル別に設定DBから毎回取得する。
+AUTOPILOT_DAILY_SHORTS = 1  # 1日あたりのShorts生成本数の初期値
+AUTOPILOT_DAILY_LONGS = 0  # 1日あたりのLong生成本数の初期値
+AUTOPILOT_START_HOUR = 6  # 生成開始時刻の初期値（チャンネルのタイムゾーン）
+AUTOPILOT_MIN_SCORE = 80  # 自動投稿を許可する品質スコアの初期値
+AUTOPILOT_DAILY_PAID_LIMIT = 0  # 有料APIの1日上限。0では有効化を禁止
+AUTOPILOT_MAX_DAILY_VIDEOS = 24  # 設定できる1日の合計本数の上限
+
 _logger = logging.getLogger(__name__)
 
 _ENV_VALUE_QUOTES = "\"'`´‘’“”＇＂"

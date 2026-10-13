@@ -71,6 +71,7 @@ def _static_asset_version() -> int:
             os.path.join(_STATIC_DIR, "app.css"),
             os.path.join(_STATIC_DIR, "app.js"),
             os.path.join(_STATIC_DIR, "job_poll.js"),
+            os.path.join(_STATIC_DIR, "autopilot.js"),
         ]
         return int(max(os.path.getmtime(path) for path in paths if os.path.exists(path)))
     except Exception:
@@ -90,6 +91,11 @@ def page_dashboard(request: Request):
         "histories": histories,
         "recent_jobs": jobs,
     })
+
+
+@router.get("/autopilot", response_class=HTMLResponse)
+def page_autopilot(request: Request):
+    return _render(request, "autopilot.html", {"autopilot_max_daily": _cfg.AUTOPILOT_MAX_DAILY_VIDEOS})
 
 
 @router.get("/generate", response_class=HTMLResponse)

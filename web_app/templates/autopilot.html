@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}自動運用{% endblock %}
+{% block content %}
+<style>
+.auto-summary { display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:18px; }
+.auto-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:18px; }
+.auto-fields label { display:flex; flex-direction:column; gap:8px; }
+.auto-fields input { width:100%; box-sizing:border-box; }
+.auto-fields small { color:var(--text-muted); }
+.auto-flow { display:flex; flex-wrap:wrap; gap:8px; color:var(--text-muted); margin:16px 0; }
+.auto-runs { overflow-x:auto; }
+.auto-runs td { vertical-align:top; }
+.auto-runs .error-text { max-width:440px; white-space:normal; }
+</style>
+<h1>チャンネルの自動運用</h1>
+<p>ネタ選定から動画の完成、品質判定、YouTube投稿予約、実績分析までをつなぎます。</p>
+<div class="auto-flow" aria-label="自動運用の流れ">
+  <span>実績分析</span><span>→</span><span>ネタ選定</span><span>→</span><span>台本・素材生成</span>
+  <span>→</span><span>動画完成</span><span>→</span><span>品質判定</span><span>→</span><span>投稿予約</span>
+</div>
+<div class="card">
+  <div class="auto-summary">
+    <strong id="auto-state">設定を読み込み中...</strong>
+    <span id="auto-usage"></span>
+    <button id="auto-stop" class="btn btn-danger" type="button" onclick="stopAutomation()" disabled>自動運用を停止</button>
+  </div>
+  <p class="hint">このチャンネル専用の設定です。アプリとPCが起動している間に動きます。投稿時刻はチャンネルの予約スロットを使い、空き枠に割り当てます。</p>
+  <form id="auto-form" onsubmit="saveAutomation(event)">
+    <fieldset id="auto-fields" disabled style="border:0;padding:0;margin:0">
+      <div class="auto-fields">
+        <label>Shorts / 1日の本数<input id="auto-shorts" type="number" min="0" max="{{ autopilot_max_daily }}" step="1" required><small>0本にするとShortsを作りません。</small></label>
+        <label>Long / 1日の本数<input id="auto-longs" type="number" min="0" max="{{ autopilot_max_daily }}" step="1" required><small>0本にするとLongを作りません。合計{{ autopilot_max_daily }}本まで設定できます。</small></label>
+        <label>生成開始時刻<input id="auto-hour" type="number" min="0" max="23" step="1" required><small>チャンネルのタイムゾーンで、毎日この時刻以降に開始します。</small></label>
+        <label>品質の最低点<input id="auto-score" type="number" min="0" max="100" step="1" required><small>点数に加え、公開可・修正必須なしの判定が必要です。</small></label>
+        <label>有料API / 1日の上限回数<input id="auto-limit" type="number" min="0" step="1" required><small>Google AI・画像生成・OpenAIのアプリ側呼び出しを合算。0では開始できません。料金の上限ではありません。</small></label>
+      </div>
+      <p class="mt"><label><input id="auto-enabled" type="checkbox"> このチャンネルの自動運用を有効にする</label></p>
+      <p class="hint">有効化すると、この本数の生成と品質基準を満たした動画の投稿予約を自動で行います。品質不足・通信失敗・結果不明の処理は保留し、そのチャンネルの後続運用を止めます。設定変更中の運用は保留になる場合があります。</p>
+      <button class="btn btn-primary" type="submit">設定を保存</button>
+      <a class="btn btn-secondary" href="/schedule">投稿時刻を確認</a>
+    </fieldset>
+  </form>
+  <p id="auto-message" role="status" aria-live="polite"></p>
+</div>
+<div class="card mt">
+  <div class="auto-summary"><h2 style="margin:0">進行状況と保留</h2><button class="btn btn-secondary" type="button" onclick="refreshAutomation(false)">更新</button></div>
+  <p class="hint">保留の原因と成果物を確認し、「この枠を終了」で保留枠を終了すると次の運用へ進みます。終了した枠の動画を自動で再生成・再アップロードすることはありません。予約動画の実績は翌日以降の分析に反映されます。</p>
+  <div id="auto-runs" class="auto-runs"><p>読み込み中...</p></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/autopilot.js?v={{ static_asset_version }}"></script>
+{% endblock %}

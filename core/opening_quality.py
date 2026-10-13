@@ -892,6 +892,8 @@ def final_chatgpt_review(
         "input": prompt,
         "text": {"format": {"type": "json_object"}},
     }
+    from core.autopilot_budget import reserve_paid_call
+    reserve_paid_call()
     with requests.post(
         "https://api.openai.com/v1/responses",
         headers={

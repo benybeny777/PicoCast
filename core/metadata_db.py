@@ -1582,7 +1582,7 @@ def is_cancel_requested(job_id: str) -> bool:
     return bool(row and row["cancel_requested"])
 
 
-def reap_stale_running_jobs(timeout_sec: float) -> int:
+def reap_stale_running_jobs(timeout_sec: float, job_types: tuple[str, ...] = ("generate", "render")) -> int:
     """heartbeat が途絶えた runner 管轄ジョブを failed にする。"""
     from datetime import datetime as _dt, timedelta as _td
 
@@ -1590,7 +1590,7 @@ def reap_stale_running_jobs(timeout_sec: float) -> int:
     threshold = (_dt.fromisoformat(_now_jst()) - _td(seconds=float(timeout_sec))).isoformat()
     with ManagedConnection() as conn:
         cur = conn.execute(
-            """
+            f"""
             UPDATE jobs
             SET status='failed',
                 error='runner停止により中断',
@@ -1598,11 +1598,11 @@ def reap_stale_running_jobs(timeout_sec: float) -> int:
                 finished_at=?,
                 runner_pid=NULL
             WHERE status='running'
-              AND job_type IN ('generate', 'render')
+              AND job_type IN ({','.join('?' for _ in job_types)})
               AND runner_pid IS NOT NULL
               AND (heartbeat_at IS NULL OR heartbeat_at < ?)
             """,
-            (_now_jst(), threshold),
+            (_now_jst(), *job_types, threshold),
         )
         conn.commit()
         return int(cur.rowcount or 0)

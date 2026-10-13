@@ -16,6 +16,7 @@
   <ul class="nav-links">
     <li><a href="/" {% if request.url.path == "/" %}class="active"{% endif %}>ダッシュボード</a></li>
     <li><a href="/generate" {% if request.url.path == "/generate" %}class="active"{% endif %}>生成</a></li>
+    <li><a href="/autopilot" {% if request.url.path == "/autopilot" %}class="active"{% endif %}>自動運用</a></li>
     <li><a href="/check" {% if request.url.path == "/check" %}class="active"{% endif %}>チェック</a></li>
     <li><a href="/history" {% if request.url.path.startswith("/history") %}class="active"{% endif %}>履歴</a></li>
     <li><a href="/analytics" {% if request.url.path == "/analytics" %}class="active"{% endif %}>Analytics</a></li>
@@ -188,6 +189,7 @@ async function navShutdown() {
 
 <script>
 window.WEB_JOB_POLL_INTERVAL_MS = {{ web_job_poll_interval_ms }};
+window.WEB_LOG_POLL_INTERVAL_MS = {{ web_log_poll_interval_ms }};
 window.WEB_SUCCESS_RELOAD_DELAY_MS = {{ web_success_reload_delay_ms }};
 window.WEB_TOAST_VISIBLE_MS = {{ web_toast_visible_ms }};
 window.WEB_TOAST_HIDE_DELAY_MS = {{ web_toast_hide_delay_ms }};

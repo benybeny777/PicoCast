@@ -289,6 +289,8 @@ app.include_router(channel_router)
 app.include_router(channels_router)
 app.include_router(prompt_templates_router)
 app.include_router(character_profiles_router)
+from web_app.routes.api_autopilot import router as autopilot_router
+app.include_router(autopilot_router)
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():

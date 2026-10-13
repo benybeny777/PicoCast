@@ -28,7 +28,7 @@ from core.user_log import sanitize_process_log_message, user_facing_error_messag
 
 _JST = timezone(timedelta(hours=9))
 _logger = logging.getLogger("yj.runner")
-_RUNNABLE_TYPES = ("generate", "render")
+_RUNNABLE_TYPES = ("generate", "render", "autopilot")
 _worker_limit_cache: tuple[float, int] = (0.0, max(1, JOB_MAX_CONCURRENT_WORKERS))
 _TAG_TO_LEVEL = {
     "error": logging.ERROR,
@@ -207,7 +207,7 @@ def _result_error_message(result: dict[str, Any] | None) -> str:
     return ""
 
 
-def _watch_cancel_and_heartbeat(profile_id: str, job_id: str, cancel_event: threading.Event, stop_event: threading.Event) -> None:
+def _watch_cancel_and_heartbeat(profile_id: str, job_id: str, cancel_event: threading.Event, stop_event: threading.Event, job_type: str = "") -> None:
     from core.metadata_db import is_cancel_requested, update_job_progress
 
     last_heartbeat = 0.0
@@ -215,6 +215,10 @@ def _watch_cancel_and_heartbeat(profile_id: str, job_id: str, cancel_event: thre
         with profile_context(profile_id):
             if is_cancel_requested(job_id):
                 cancel_event.set()
+            if job_type == "autopilot":
+                from core.autopilot_store import load_policy
+                if not load_policy()["enabled"]:
+                    cancel_event.set()
             if time.monotonic() - last_heartbeat >= JOB_RUNNER_HEARTBEAT_INTERVAL_SEC:
                 update_job_progress(job_id, None, _now_iso())
                 last_heartbeat = time.monotonic()
@@ -227,7 +231,7 @@ def _run_job(job: dict) -> None:
     cancel_event = threading.Event()
     stop_event = threading.Event()
     log = _BufferedJobLog(profile_id, job_id)
-    watcher = threading.Thread(target=_watch_cancel_and_heartbeat, args=(profile_id, job_id, cancel_event, stop_event), daemon=True)
+    watcher = threading.Thread(target=_watch_cancel_and_heartbeat, args=(profile_id, job_id, cancel_event, stop_event, job_type), daemon=True)
     watcher.start()
     status = "failed"
     result: dict[str, Any] | None = None
@@ -238,6 +242,9 @@ def _run_job(job: dict) -> None:
                 result = _run_generate(job, cancel_event, log)
             elif job_type == "render":
                 result = _run_render(job, cancel_event, log)
+            elif job_type == "autopilot":
+                from web_app.services.autopilot_service import execute_step
+                result = execute_step(job, cancel_event, log)
             else:
                 raise RuntimeError(f"未対応のジョブ種別です: {job_type}")
         if cancel_event.is_set() or (result or {}).get("cancelled"):
@@ -287,8 +294,8 @@ def _discard_pending_on_startup() -> None:
         with profile_context(profile.profile_id):
             if not is_initialized():
                 initialize_db()
-            queued_total += discard_pending_jobs(_RUNNABLE_TYPES)
-            running_total += discard_orphan_running_jobs(_RUNNABLE_TYPES)
+            queued_total += discard_pending_jobs(("generate", "render"))
+            running_total += discard_orphan_running_jobs(("generate", "render"))
     if queued_total or running_total:
         _logger.info(
             "起動時に前回ジョブ残骸を破棄しました: queued=%s orphan_running=%s",
@@ -304,9 +311,11 @@ def _claim_one(pid: int) -> dict | None:
         with profile_context(profile.profile_id):
             if not is_initialized():
                 initialize_db()
-            reaped = reap_stale_running_jobs(JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC)
+            reaped = reap_stale_running_jobs(JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC, _RUNNABLE_TYPES)
             if reaped:
                 _logger.warning("heartbeat切れのrunnerジョブを失敗化しました: profile=%s count=%s", profile.profile_id, reaped)
+            from core.autopilot_store import queue_next
+            queue_next()
             job = claim_queued_job(pid, _RUNNABLE_TYPES)
             if job:
                 job["profile_id"] = job.get("profile_id") or profile.profile_id

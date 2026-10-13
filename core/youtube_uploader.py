@@ -516,7 +516,7 @@ def _write_youtube_metadata(output_dir: str, title: str, youtube_tags: list[str]
 
 
 def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
-                 privacy="private", publish_at=None, progress_callback=None):
+                 privacy="private", publish_at=None, progress_callback=None, on_uploaded=None):
     """
     publish_at: datetime (JST) または ISO8601 文字列を指定すると予約投稿になる。
                 指定時は privacyStatus が自動的に 'private' になる。
@@ -604,6 +604,8 @@ def upload_video(mp4_path, title, description, tags, thumbnail_path=None,
             del media
 
         video_id = response["id"]
+        if on_uploaded is not None:
+            on_uploaded(video_id)
         _log(f"✅ アップロード完了: https://youtu.be/{video_id}")
 
         if thumbnail_path and os.path.exists(thumbnail_path):

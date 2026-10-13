@@ -150,7 +150,8 @@ class ImageGenerator:
             if not has_secret("google_api_key", profile_id=profile_id):
                 from core.error_codes import format_error
                 raise RuntimeError(format_error("E-SECRET-MISSING", "Google API キー（設定画面の「認証情報」から登録）"))
-            self.client = genai.Client(api_key=load_secret("google_api_key", profile_id=profile_id))
+            from core.autopilot_budget import guard_paid_client
+            self.client = guard_paid_client(genai.Client(api_key=load_secret("google_api_key", profile_id=profile_id)))
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):

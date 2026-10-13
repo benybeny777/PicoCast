@@ -17,7 +17,8 @@ class AIGenerator:
         from core.secret_store import require_current_profile_id, has_secret, load_secret
         profile_id = require_current_profile_id()
         if has_secret("google_api_key", profile_id=profile_id):
-            self.client = genai.Client(api_key=load_secret("google_api_key", profile_id=profile_id))
+            from core.autopilot_budget import guard_paid_client
+            self.client = guard_paid_client(genai.Client(api_key=load_secret("google_api_key", profile_id=profile_id)))
 
     def close(self):
         if self.client is not None and hasattr(self.client, "close"):
