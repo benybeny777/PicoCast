@@ -13,6 +13,9 @@ _logger = logging.getLogger(__name__)
 
 # 編集可能な設定項目の定義（秘密値は含めない）
 EDITABLE_CONFIG: list[dict[str, Any]] = [
+    {"key": "LICENSE_API_URL", "type": "str", "label": "ライセンスAPI URL（HTTPS）", "default": str(cfg.LICENSE_API_URL), "allow_empty": True, "group": "製品管理", "admin": True},
+    {"key": "LICENSE_LEASE_RENEW_BEFORE_DAYS", "type": "float", "label": "ライセンス更新開始（期限の何日前）", "default": str(cfg.LICENSE_LEASE_RENEW_BEFORE_DAYS), "min": 0, "max": 30, "group": "製品管理", "admin": True},
+    {"key": "LICENSE_API_TIMEOUT_SEC", "type": "float", "label": "ライセンスAPIタイムアウト（秒）", "default": str(cfg.LICENSE_API_TIMEOUT_SEC), "min": 1, "max": 60, "group": "タイムアウト", "admin": True},
     # ── VOICEVOX ──
     {"key": "VOICEVOX_PATH",                   "type": "str",   "label": "VOICEVOX 実行ファイルパス (空=手動起動)", "default": str(cfg.VOICEVOX_PATH), "allow_empty": True,           "group": "VOICEVOX"},
     {"key": "VOICEVOX_URL",                    "type": "str",   "label": "VOICEVOX API URL",                       "default": str(cfg.VOICEVOX_URL),                                  "group": "VOICEVOX"},

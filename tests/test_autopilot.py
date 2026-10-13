@@ -275,8 +275,8 @@ def test_upload_refuses_existing_video_id(isolated, monkeypatch, id_source):
     upload.assert_not_called()
 
 
-@pytest.mark.parametrize("outcome", ["thumbnail_failure", "wrong_schedule", "verified"])
-def test_upload_saves_id_before_postprocessing_and_checks_schedule(isolated, monkeypatch, outcome):
+@pytest.fixture
+def upload_ready(isolated, monkeypatch):
     from core import channel_info, license_manager, upload_scheduler, youtube_uploader
     from web_app import security
     from web_app.services import upload_service
@@ -288,10 +288,18 @@ def test_upload_saves_id_before_postprocessing_and_checks_schedule(isolated, mon
         conn.commit()
     monkeypatch.setattr(channel_info, "get_channel_info", lambda: {"upload_allowed": True})
     monkeypatch.setattr(license_manager, "assert_can_upload", lambda: None)
+    monkeypatch.setattr(license_manager, "verify_activation_now", lambda: SimpleNamespace(edition="pro", autopilot=True))
     monkeypatch.setattr(metadata, "get_render_info", lambda name: {"video_title": "新テーマ"})
     monkeypatch.setattr(security, "find_history_dir", lambda name: str(isolated))
     monkeypatch.setattr(upload_service, "_find_mp4", lambda path: str(isolated / "video.mp4"))
     monkeypatch.setattr(upload_scheduler, "assign_slots_from_youtube", lambda *args: [NOW])
+    return job_id, run
+
+
+@pytest.mark.parametrize("outcome", ["thumbnail_failure", "wrong_schedule", "verified"])
+def test_upload_saves_id_before_postprocessing_and_checks_schedule(upload_ready, monkeypatch, outcome):
+    from core import youtube_uploader
+    job_id, run = upload_ready
 
     def uploaded(*args, **kwargs):
         kwargs["on_uploaded"]("created-video")
@@ -323,3 +331,22 @@ def test_upload_saves_id_before_postprocessing_and_checks_schedule(isolated, mon
         finish_job(job_id)
         assert store.queue_next(NOW) is None
     upload.assert_called_once()
+
+
+def test_upload_is_held_when_license_becomes_trial_before_posting(upload_ready, monkeypatch):
+    from core import license_manager, youtube_uploader
+    job_id, run = upload_ready
+    verify = Mock(return_value=SimpleNamespace(edition="trial", autopilot=False))
+    upload = Mock(side_effect=AssertionError("投稿直前に体験版へ戻った場合は投稿してはいけない"))
+    monkeypatch.setattr(license_manager, "verify_activation_now", verify)
+    monkeypatch.setattr(youtube_uploader, "upload_video", upload)
+    with pytest.raises(AppError):
+        service.execute_step({"job_id": job_id, "params": {"run_id": run["run_id"]}}, threading.Event(), Mock())
+    verify.assert_called_once()
+    upload.assert_not_called()
+    saved = store.get_run(run["run_id"])
+    assert (saved["state"], saved["stage"]) == ("held", "upload")
+    assert not saved["video_id"]
+    assert "E-LICENSE-LIMIT" in saved["error"]
+    with metadata.ManagedConnection() as conn:
+        assert conn.execute("SELECT youtube_video_id FROM youtube_status WHERE local_id='fresh'").fetchone() is None

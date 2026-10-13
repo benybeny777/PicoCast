@@ -303,7 +303,7 @@ pip install --upgrade -r config/requirements-dev.txt
 ## 🏷 製品版MVP運用
 
 - 初回セットアップ状態は `data/settings.db:settings` に保存します。未完了時は生成・アップロードをブロックします。
-- ライセンス未登録時は体験版（`trial`）として扱い、native MP4 に小さな透かしを入れます。購入後にメールで届くライセンスキー（`NVF1.` で始まる文字列）を設定画面「製品管理」に貼り付けると Standard / Pro が即時反映されます。エディションごとの制限は SPEC.md「ライセンス管理」を参照。キーの発行手順（販売者向け）は [tools/license/README.md](tools/license/README.md)。
+- ライセンス未登録・端末未登録時は体験版（`trial`）として扱い、native MP4 に小さな透かしを入れます。購入キー（`NVF1.`）を設定画面「製品管理」に登録し、このPC用の署名証明書（`NVA1.`）を取得すると Standard / Pro が即時反映されます。オンライン証明書は30日間有効で、期限の7日前から起動時に更新します。期限内は通信できなくても利用できます。API未設定・通信失敗時は画面に理由を表示し、販売者から届いた手動証明書を貼り付けられます。端末コードのコピー・期限確認・確認付き端末解除も同じ画面で行います。エディションごとの制限は SPEC.md「ライセンス管理」、販売者向けの設置・発行は [tools/license/README.md](tools/license/README.md) を参照。
 - 診断パッケージは設定画面「製品管理」から作成します。ZIPには設定状態・ジョブログ・エラーコード・スキーマ情報を含めますが、APIキー、OAuth token、client_secrets、台本本文、生成動画、画像は含めません。
 - バックアップは `data/settings.db` と profile 別 `metadata.db` をZIP化します。**パスフレーズを入力すると認証情報（APIキー・OAuth）も再暗号化して同梱し、別PCでも同じパスフレーズで復元できます**（PBKDF2 + AES-GCM）。パスフレーズ空欄の場合は従来どおり同一PC専用で、別PC復元時は認証情報を再登録してください。
 - 製品版初期テンプレートは `config/SEED/prompt_packs/product/` 配下に置きます。食べ物雑学専用・実績入りテンプレートは製品版seedへ入れません。

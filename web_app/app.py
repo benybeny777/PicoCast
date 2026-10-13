@@ -62,7 +62,10 @@ async def _lifespan(app):
     from core.metadata_db import close_all_connections
 
     from core.metadata_db import initialize_db
-    initialize_db()  # 起動時に DB を確実に初期化しログを残す
+    from core.channel_profile import get_active_profile
+    # 初回セットアップ前はprofile別DBの保存先がまだない。登録後の経路で初期化する。
+    if get_active_profile() is not None:
+        initialize_db()
     _start_job_runner()
     register_shutdown_hook("job_runner", _stop_job_runner)
     register_shutdown_hook("metadata_db", close_all_connections)
@@ -100,9 +103,9 @@ async def _lifespan(app):
 
     # 固定コメント投稿タスクが exe 移動などでズレていれば起動時に自動修正する
     threading.Thread(target=_self_heal_fixed_comment_task, daemon=True, name="fixed-comment-task-heal").start()
-    # ライセンス失効確認（URL設定時のみ・前回確認から一定日数経過時のみ通信する）
-    from core.license_manager import check_revocation_if_due
-    threading.Thread(target=check_revocation_if_due, daemon=True, name="license-revocation-check").start()
+    # 証明書期限が近い場合だけ更新し、通信失敗は設定画面に表示する。
+    from core.license_manager import renew_activation_if_due
+    threading.Thread(target=renew_activation_if_due, daemon=True, name="license-activation-renew").start()
     yield
     # ── shutdown フェーズ（Ctrl+C / SIGTERM / /api/shutdown すべてここを通る） ──
     run_lifespan_shutdown()

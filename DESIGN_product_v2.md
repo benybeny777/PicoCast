@@ -2,7 +2,7 @@
 
 最終更新: 2026-10-14
 実装担当: Codex（この文書を正本として段階ごとにコミットする。進捗と決定待ちは HANDOFF.md）
-前提: 署名付きライセンスキー v1（`core/license_key.py` / `core/license_manager.py` / `tools/license/`）は実装済み。本書はその上に積む。
+前提: 署名付きライセンスキー v1 と端末固定ライセンス v2（T1〜T4）は実装済み。本書は設計正本として残す。以後の未着手カードと運用受入は `HANDOFF.md` を参照する。
 
 ---
 
@@ -88,7 +88,7 @@
 | `web_app/routes/api_settings.py` | `POST /license`（キー登録→即アクティベート）、`POST /license/renew`、`POST /license/deactivate`、`GET /license/machine-code` |
 | 設定画面 | 端末コード表示、登録台数、期限、解除ボタン、手動アクティベーションの貼り付け欄 |
 | `core/error_codes.py` | `E-LICENSE-MACHINE`（端末コード取得失敗）、`E-LICENSE-LIMIT-DEVICES`（台数上限）、`E-LICENSE-EXPIRED`（リース切れ） |
-| `tools/license/gas/Code.gs` | `doPost` の3アクションと2シート |
+| `tools/license/gas/Code.gs` | `doPost` の4アクションと2シート |
 
 ### 1.7 ガードを強める追加策（コストが小さい順）
 

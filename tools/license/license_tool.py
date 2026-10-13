@@ -9,6 +9,9 @@
       手動発行したキーは失効確認で見つかるよう、スプレッドシート「発行済み」シートにも記録すること。
   python tools/license/license_tool.py verify <key>
       キーを公開鍵で検証して中身を表示する。
+  python tools/license/license_tool.py activate --key-file <購入キーのファイル> --machine-code <32桁端末コード> --permanent
+      既存の購入キーと販売者秘密鍵でオーナー・オフライン用の無期限証明書を発行する。
+      オンライン用は --permanent の代わりに --expires-at <UTCタイムゾーン付きISO日時> を指定する。
 """
 from __future__ import annotations
 
@@ -22,7 +25,8 @@ _ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_ROOT))
 
 from core.license_key import (  # noqa: E402
-    ISSUABLE_EDITIONS, LicensePayload, encode_license_key, generate_key_pair, verify_license_key,
+    ISSUABLE_EDITIONS, ActivationPayload, LicensePayload, encode_activation, encode_license_key,
+    generate_key_pair, verify_activation, verify_license_key,
 )
 
 _PRIVATE_KEY_PATH = Path.home() / ".nvf_license" / "private_key.pem"
@@ -41,6 +45,8 @@ def _add_months(base: date, months: int) -> date:
 
 
 def cmd_genkey(_args) -> None:
+    if _PUBLIC_KEY_MODULE.exists():
+        raise SystemExit("公開鍵が既にあります。発行済みキーを無効化する鍵の再生成は禁止です。")
     if _PRIVATE_KEY_PATH.exists():
         raise SystemExit(f"秘密鍵が既にあります（上書きしません）: {_PRIVATE_KEY_PATH}")
     private_pem, public_pem = generate_key_pair()
@@ -60,7 +66,7 @@ def cmd_genkey(_args) -> None:
 
 def cmd_issue(args) -> None:
     if not _PRIVATE_KEY_PATH.exists():
-        raise SystemExit(f"秘密鍵がありません: {_PRIVATE_KEY_PATH}（先に genkey を実行）")
+        raise SystemExit(f"秘密鍵がありません: {_PRIVATE_KEY_PATH}（既存の販売者秘密鍵を復元してください）")
     today = date.today()
     updates_until = "" if args.update_months <= 0 else _add_months(today, args.update_months).isoformat()
     payload = LicensePayload(
@@ -77,8 +83,23 @@ def cmd_issue(args) -> None:
 
 
 def cmd_verify(args) -> None:
-    payload = verify_license_key(args.key)
+    payload = verify_activation(args.key) if args.key.startswith("NVA1.") else verify_license_key(args.key)
     print(payload.to_dict())
+
+
+def cmd_activate(args) -> None:
+    """検証済み購入キーの権利を継承して手動証明書を発行する。"""
+    if not _PRIVATE_KEY_PATH.exists():
+        raise SystemExit("既存の販売者秘密鍵がありません。鍵を新規生成しないでください。")
+    license_key = Path(args.key_file).read_text(encoding="utf-8-sig").strip()
+    purchase = verify_license_key(license_key)
+    activation = encode_activation(
+        ActivationPayload(**purchase.__dict__, machine_code=args.machine_code,
+                          expires_at="" if args.permanent else args.expires_at),
+        _PRIVATE_KEY_PATH.read_text(encoding="ascii"),
+    )
+    verify_activation(activation)  # 既存の埋め込み公開鍵と秘密鍵の組を照合する
+    print(activation)
 
 
 def main() -> None:
@@ -95,6 +116,13 @@ def main() -> None:
     verify = sub.add_parser("verify")
     verify.add_argument("key")
     verify.set_defaults(func=cmd_verify)
+    activate = sub.add_parser("activate", help="既存購入キーから手動の端末証明書を発行")
+    activate.add_argument("--key-file", required=True, help="購入キーを保存したローカルファイル")
+    activate.add_argument("--machine-code", required=True, help="アプリが表示する32桁の端末コード")
+    validity = activate.add_mutually_exclusive_group(required=True)
+    validity.add_argument("--permanent", action="store_true", help="オーナー・オフライン利用者向け無期限証明書")
+    validity.add_argument("--expires-at", help="UTCタイムゾーン付きISO日時")
+    activate.set_defaults(func=cmd_activate)
     args = parser.parse_args()
     args.func(args)
 

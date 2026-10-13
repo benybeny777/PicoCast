@@ -419,6 +419,17 @@ def api_license_status():
     return get_license_info()
 
 
+@router.get("/license/machine-code")
+def api_license_machine_code():
+    """生の端末IDを含まない端末コードを返す。"""
+    from core.error_codes import AppError
+    from core.machine_id import machine_code
+    try:
+        return {"machine_code": machine_code()}
+    except AppError as exc:
+        raise HTTPException(status_code=422, detail=exc.user_message()) from None
+
+
 @router.post("/license")
 def api_save_license(req: LicenseRequest):
     """署名付きライセンスキーを検証して保存する。"""
@@ -430,11 +441,39 @@ def api_save_license(req: LicenseRequest):
         raise_api_error(exc, status_code=422, action="ライセンスキー登録", detail=exc.user_message())
 
 
-@router.post("/license/check-revocation")
-def api_check_license_revocation():
-    """ライセンスの失効をオンラインで確認する（失効確認URL未設定なら何もしない）。"""
-    from core.license_manager import check_revocation
-    return check_revocation()
+class ActivationRequest(BaseModel):
+    activation: str
+
+
+class DeactivationRequest(BaseModel):
+    confirmed: bool = False
+
+
+def _license_operation(operation, **kwargs):
+    """証明書操作の停止エラーを共通のAPI形式へ変換する。"""
+    from core.error_codes import AppError
+    try:
+        return operation(**kwargs)
+    except AppError as exc:
+        raise_api_error(exc, status_code=422, action="ライセンス証明書操作", detail=exc.user_message())
+
+
+@router.post("/license/activation")
+def api_save_activation(req: ActivationRequest):
+    from core.license_manager import save_activation
+    return _license_operation(save_activation, activation=req.activation)
+
+
+@router.post("/license/renew")
+def api_renew_activation():
+    from core.license_manager import renew_activation
+    return _license_operation(renew_activation)
+
+
+@router.post("/license/deactivate")
+def api_deactivate_activation(req: DeactivationRequest):
+    from core.license_manager import deactivate_activation
+    return _license_operation(deactivate_activation, confirmed=req.confirmed)
 
 
 @router.post("/diagnostics")

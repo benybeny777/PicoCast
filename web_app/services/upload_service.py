@@ -136,6 +136,8 @@ def _run_upload(job: Job, history_name: str, playlist_existing_mode: str = "reus
         thumbnail_path = None
 
     try:
+        from core.license_manager import verify_activation_now
+        verify_activation_now()
         video_id = upload_video(
             mp4_path=mp4_path,
             title=render_info.get("video_title", history_name),

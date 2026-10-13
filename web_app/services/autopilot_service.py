@@ -198,6 +198,9 @@ def _upload(run: dict, log) -> dict:
             conn.commit()
 
     thumbnail = os.path.join(theme_dir, "thumbnails", "thumbnail.png")
+    from core.license_manager import verify_activation_now
+    if not verify_activation_now().autopilot:
+        raise AppError("E-LICENSE-LIMIT", "投稿直前のライセンス検証で自動運用が許可されませんでした")
     video_id = upload_video(mp4, info.get("video_title", ""), info.get("description", ""), info.get("tags") or [],
                             thumbnail_path=thumbnail if os.path.isfile(thumbnail) else None, publish_at=slot,
                             progress_callback=lambda message: log.add(message), on_uploaded=record_uploaded)

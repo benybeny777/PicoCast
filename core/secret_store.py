@@ -153,6 +153,30 @@ def _dpapi_unprotect(data: bytes) -> bytes:
     return decrypted
 
 
+def _local_data(data: bytes, *, decrypt: bool) -> bytes:
+    if not isinstance(data, bytes):
+        raise TypeError("ローカル保護データは bytes で指定してください")
+    # Windows の証明書は利用者別 DPAPI で保護する。macOS/Linux では
+    # 秘密値を含まない証明書の署名と端末照合で改変・他端末利用を拒否する。
+    if sys.platform != "win32":
+        return data
+    try:
+        return _dpapi_unprotect(data) if decrypt else _dpapi_protect(data)
+    except Exception:
+        _logger.error("[SecretStore] ローカルデータの%sに失敗しました", "復号" if decrypt else "保護", exc_info=True)
+        raise
+
+
+def protect_local_data(data: bytes) -> bytes:
+    """署名済み証明書をローカル保存用に保護する。OS の失敗は伝播する。"""
+    return _local_data(data, decrypt=False)
+
+
+def unprotect_local_data(data: bytes) -> bytes:
+    """ローカル保存した証明書を取り出す。署名検証は呼び出し側の責務。"""
+    return _local_data(data, decrypt=True)
+
+
 def _get_master_key_unix() -> bytes:
     """
     macOS/Linux: keyring → NVF_MASTER_KEY 環境変数 の順で試みる。

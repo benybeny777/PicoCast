@@ -76,10 +76,10 @@ def test_license_manager_resolves_edition_from_key(keys, monkeypatch):
 
     monkeypatch.setattr(lm, "get_all", lambda: {"LICENSE_KEY": key})
     info = lm.get_license_info()
-    assert info["edition"] == "standard"
-    assert info["status"] == "active"
+    assert info["edition"] == "trial"
+    assert info["status"] == "not_activated"
     assert info["limits"]["max_profiles"] == 1
-    assert info["limits"]["watermark"] is False
+    assert info["limits"]["watermark"] is True
 
     # 旧方式の edition 直書きは無視される
     monkeypatch.setattr(lm, "get_all", lambda: {"LICENSE_EDITION": "pro"})

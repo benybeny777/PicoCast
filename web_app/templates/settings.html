@@ -228,15 +228,31 @@
   <div class="card">
     <h2>ライセンス</h2>
     <div id="license-status" class="hint">読み込み中...</div>
+    <div class="action-row mt">
+      <label for="license-machine-code">このPCの端末コード</label>
+      <input id="license-machine-code" class="form-input" type="text" readonly style="flex:1;min-width:220px;font-family:monospace">
+      <button class="btn btn-secondary" onclick="copyLicenseMachineCode()">コピー</button>
+    </div>
+    <div id="license-activation-error" class="hint mt" role="status" style="white-space:pre-line"></div>
+    <ul id="license-devices" class="hint" style="display:none"></ul>
     <div id="license-purchase" class="mt" style="display:none"></div>
     <div class="mt">
-      <textarea id="license-key" class="form-input" rows="3" style="width:100%;font-family:monospace" placeholder="NVF1. から始まるライセンスキーを貼り付け"></textarea>
+      <label for="license-key">購入したライセンスキー</label>
+      <textarea id="license-key" class="form-input" rows="3" style="width:100%;font-family:monospace" placeholder="NVF1. から始まるライセンスキーを貼り付け" autocomplete="off" spellcheck="false"></textarea>
     </div>
     <div class="action-row mt">
       <button class="btn btn-primary" onclick="saveLicense()">登録</button>
-      <button class="btn btn-secondary" id="license-revocation-btn" style="display:none" onclick="checkLicenseRevocation()">ライセンス状態をオンライン確認</button>
+      <button class="btn btn-secondary" id="license-renew-btn" style="display:none" onclick="renewLicense()">有効期限を更新</button>
+      <button class="btn btn-secondary" id="license-deactivate-btn" style="display:none" onclick="deactivateLicense()">このPCの登録を解除</button>
     </div>
-    <p class="hint mt">購入後に届いたメールのライセンスキーを貼り付けて「登録」すると即時反映されます。</p>
+    <p class="hint mt">登録時にこのPCをアクティベーションします。有効期限内はオフラインでも利用できます。台数上限に達した場合は、使わないPCで登録を解除してください。</p>
+    <details class="mt" id="license-manual">
+      <summary>手動アクティベーション</summary>
+      <p class="hint">オンライン登録ができない場合は、端末コードを販売者へ伝え、このPC用に発行された証明書を貼り付けてください。</p>
+      <label for="license-activation">アクティベーション証明書</label>
+      <textarea id="license-activation" class="form-input" rows="3" style="width:100%;font-family:monospace" placeholder="メールで届いたアクティベーション証明書を貼り付け" autocomplete="off" spellcheck="false"></textarea>
+      <button class="btn btn-primary mt" onclick="saveLicenseActivation()">証明書を登録</button>
+    </details>
   </div>
   <div class="card">
     <h2>診断パッケージ</h2>
@@ -1067,41 +1083,67 @@ function setSettingsMode(mode) {
 }
 
 const LICENSE_EDITION_LABELS = { trial: '体験版', standard: 'Standard', pro: 'Pro' };
-const LICENSE_STATUS_LABELS = { unregistered: '未登録', active: '有効', invalid: 'キーを確認できません', revoked: '無効化済み' };
+const LICENSE_STATUS_LABELS = { unregistered: '未登録', not_activated: '端末の登録待ち', active: '有効', expired: 'アクティベーション期限切れ', machine_mismatch: '別の端末用の証明書', invalid: 'キーまたは証明書を確認できません', revoked: '無効化済み' };
+
+async function licenseRequest(path = '', payload) {
+  const options = payload === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)};
+  const res = await fetch('/api/settings/license' + path, options);
+  const data = await res.json();
+  if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : `ライセンス処理に失敗しました（HTTP ${res.status}）`);
+  return data;
+}
+
+function renderLicenseActivationError(data) {
+  const error = data.activation_error;
+  const errorEl = document.getElementById('license-activation-error');
+  errorEl.textContent = typeof error === 'string' ? error : (error ? [error.code, error.message].filter(Boolean).join(' — ') : '');
+  const devices = data.devices || (error && error.devices) || [];
+  const list = document.getElementById('license-devices');
+  list.replaceChildren();
+  for (const device of devices) {
+    const item = document.createElement('li');
+    item.textContent = `登録端末: …${String(device.mid || '').slice(-6)} / 最終更新: ${device.last_updated || '不明'}`;
+    list.appendChild(item);
+  }
+  list.style.display = devices.length ? '' : 'none';
+}
 
 async function loadProductStatus() {
   const statusEl = document.getElementById('license-status');
   try {
-    const res = await fetch('/api/settings/license');
-    const data = await res.json();
-    if (!res.ok) { statusEl.textContent = 'ライセンス状態の取得に失敗: ' + (data.detail || res.status); return; }
+    const data = await licenseRequest();
     const lim = data.limits || {};
     const lines = [
       `エディション: ${LICENSE_EDITION_LABELS[data.edition] || data.edition}（${LICENSE_STATUS_LABELS[data.status] || data.status}）`,
     ];
     if (data.buyer) lines.push(`購入者: ${data.buyer}`);
     if (data.license_id) lines.push(`ライセンスID: ${data.license_id}`);
+    const activationStatus = data.activation_status || data.status;
+    lines.push(`端末登録: ${LICENSE_STATUS_LABELS[activationStatus] || activationStatus}`);
+    if (activationStatus === 'active' || data.activation_expires_at) lines.push(`アクティベーション期限: ${data.activation_expires_at || '無期限'}`);
     if (data.status === 'active' || data.status === 'revoked') lines.push(`無料アップデート期限: ${data.updates_until || '無期限'}`);
     if (data.packs && data.packs.length) lines.push(`パック: ${data.packs.join(', ')}`);
     lines.push(`チャンネル数: ${lim.max_profiles ?? '無制限'} / 1日の生成: ${lim.daily_generations ?? '無制限'} / 透かし: ${lim.watermark ? 'あり' : 'なし'} / Analytics: ${lim.analytics ? '可' : '不可'} / 自動運用: ${lim.autopilot ? '可' : '不可'}`);
-    const rev = data.revocation || {};
-    if (rev.enabled && data.registered) lines.push(`オンライン確認: ${rev.checked_at || '未確認'}${rev.error ? '（' + rev.error + '）' : ''}`);
     if (data.reason) lines.push(`⚠ ${data.reason}`);
     statusEl.textContent = lines.join('\n');
     statusEl.style.whiteSpace = 'pre-line';
-    document.getElementById('license-revocation-btn').style.display = (rev.enabled && data.registered) ? '' : 'none';
+    document.getElementById('license-machine-code').value = data.machine_code || '';
+    document.getElementById('license-renew-btn').style.display = data.api_enabled && ['active', 'expired'].includes(activationStatus) ? '' : 'none';
+    document.getElementById('license-deactivate-btn').style.display = data.api_enabled && ['active', 'expired'].includes(activationStatus) ? '' : 'none';
+    document.getElementById('license-manual').open = ['not_activated', 'machine_mismatch', 'expired'].includes(activationStatus);
+    renderLicenseActivationError(data);
     // 試用→購入の導線: 上位余地がある場合に購入リンクを表示する
     const box = document.getElementById('license-purchase');
     if (data.upgrade_available && data.purchase_url) {
       const label = data.edition === 'trial' ? '製品版を購入してすべての機能を解放' : 'Pro にアップグレード';
-      box.innerHTML = '';
+      box.replaceChildren();
       const a = document.createElement('a');
       a.className = 'btn btn-primary'; a.href = data.purchase_url; a.target = '_blank'; a.rel = 'noopener';
       a.textContent = '🛒 ' + label;
       box.appendChild(a);
       box.style.display = '';
     } else if (data.upgrade_available && data.edition === 'trial') {
-      box.innerHTML = '<span class="hint">購入ページURL（PRODUCT_PURCHASE_URL）が未設定です。</span>';
+      box.textContent = '購入ページURL（PRODUCT_PURCHASE_URL）が未設定です。';
       box.style.display = '';
     } else {
       box.style.display = 'none';
@@ -1114,19 +1156,57 @@ async function loadProductStatus() {
 async function saveLicense() {
   const key = document.getElementById('license-key').value.trim();
   if (!key) { showToast('ライセンスキーを貼り付けてください', true); return; }
-  const res = await fetch('/api/settings/license', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({license_key: key})});
-  const data = await res.json();
-  if (!res.ok) { showToast('ライセンス登録失敗: ' + (data.detail || ''), true); return; }
-  document.getElementById('license-key').value = '';
-  showToast('ライセンスを登録しました', false);
-  await loadProductStatus();
+  await runLicenseAction('', {license_key:key}, 'ライセンスキーを登録しました', 'license-key');
 }
 
-async function checkLicenseRevocation() {
-  const res = await fetch('/api/settings/license/check-revocation', {method:'POST'});
-  const data = await res.json();
-  if (!res.ok) { showToast('ライセンス確認失敗: ' + (data.detail || ''), true); return; }
-  await loadProductStatus();
+async function runLicenseAction(path, payload, successMessage, clearId) {
+  const buttons = document.querySelectorAll('#license-status ~ .action-row button, #license-manual button');
+  buttons.forEach(button => { button.disabled = true; });
+  try {
+    const data = await licenseRequest(path, payload);
+    const error = data.activation_error;
+    const failure = typeof error === 'string' ? error : (error && error.message);
+    if (failure) {
+      showToast(failure, true);
+      await loadProductStatus();
+      return;
+    }
+    if (clearId) document.getElementById(clearId).value = '';
+    showToast(successMessage, false);
+    await loadProductStatus();
+  } catch(e) {
+    showToast(e.message || 'ライセンス処理に失敗しました', true);
+    await loadProductStatus();
+  } finally {
+    buttons.forEach(button => { button.disabled = false; });
+  }
+}
+
+async function saveLicenseActivation() {
+  const activation = document.getElementById('license-activation').value.trim();
+  if (!activation) { showToast('アクティベーション証明書を貼り付けてください', true); return; }
+  await runLicenseAction('/activation', {activation}, 'このPCの証明書を登録しました', 'license-activation');
+}
+
+async function renewLicense() {
+  await runLicenseAction('/renew', {}, 'アクティベーション期限を更新しました');
+}
+
+async function deactivateLicense() {
+  if (!confirm('このPCの登録を解除しますか？\nこのPCは体験版に戻ります。製品版を使うには再アクティベーションが必要です。')) return;
+  await runLicenseAction('/deactivate', {confirmed:true}, 'このPCの登録を解除しました');
+}
+
+async function copyLicenseMachineCode() {
+  const field = document.getElementById('license-machine-code');
+  if (!field.value) { showToast('端末コードの読み込みが完了していません', true); return; }
+  try {
+    await navigator.clipboard.writeText(field.value);
+    showToast('端末コードをコピーしました', false);
+  } catch(e) {
+    field.focus(); field.select();
+    showToast('コピーできませんでした。選択された端末コードを手動でコピーしてください', true);
+  }
 }
 
 async function loadProductInfo() {

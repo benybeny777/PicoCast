@@ -1,12 +1,12 @@
-"""製品版ライセンスとエディション制限の管理。
-
-edition は保存せず、`data/settings.db:settings.LICENSE_KEY` に保存した署名付きキーを
-参照のたびに検証して決める（DB を書き換えても上位版にならない）。キーの形式は core/license_key.py。
-"""
+"""端末固定の署名証明書とライセンス制限を管理する。"""
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 import logging
+import re
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -15,25 +15,24 @@ from datetime import datetime, timedelta, timezone
 
 from config import config
 from core.error_codes import AppError
-from core.license_key import LicensePayload, verify_license_key
+from core.license_key import LicensePayload, ActivationPayload, verify_license_key, verify_activation
+from core.machine_id import machine_code
+from core.secret_store import protect_local_data, unprotect_local_data
 from core.settings_store import get_all, set_many
 
 _logger = logging.getLogger(__name__)
-
+_operation_lock = threading.RLock()
 LICENSE_KEY_KEY = "LICENSE_KEY"
-# 失効確認（任意）の結果。オンライン確認できたときだけ更新する。
+LICENSE_ACTIVATION_KEY = "LICENSE_ACTIVATION"
 LICENSE_REVOKED_KEY = "LICENSE_REVOKED"
-LICENSE_REVOCATION_CHECKED_AT_KEY = "LICENSE_REVOCATION_CHECKED_AT"
-LICENSE_REVOCATION_ERROR_KEY = "LICENSE_REVOCATION_ERROR"
+LICENSE_ACTIVATION_ERROR_KEY = "LICENSE_ACTIVATION_ERROR"
 
 
 def purchase_url() -> str:
-    """購入ページURL（未設定なら空文字）。"""
     return (config.PRODUCT_PURCHASE_URL or "").strip()
 
 
 def _purchase_cta() -> str:
-    """上限到達エラーへ付ける購入導線の文言。URL未設定時は誘導文のみ。"""
     base = "製品版（Standard / Pro）の購入で上限を解放できます"
     url = purchase_url()
     return f"{base}（購入: {url}）。" if url else f"{base}。"
@@ -50,7 +49,7 @@ class LicenseLimits:
     autopilot: bool
 
 
-_LIMITS: dict[str, LicenseLimits] = {
+_LIMITS = {
     "trial": LicenseLimits("trial", True, 3, 1, True, False, False),
     "standard": LicenseLimits("standard", False, None, 1, True, True, True),
     "pro": LicenseLimits("pro", False, None, None, True, True, True),
@@ -60,9 +59,39 @@ _LIMITS: dict[str, LicenseLimits] = {
 @dataclass(frozen=True)
 class _ResolvedLicense:
     edition: str
-    status: str            # unregistered / active / invalid / revoked
+    status: str
     payload: LicensePayload | None
     reason: str
+    activation: ActivationPayload | None = None
+
+
+def _activation_text(settings: dict[str, str]) -> str:
+    stored = settings.get(LICENSE_ACTIVATION_KEY, "")
+    if not stored:
+        return ""
+    try:
+        blob = base64.b64decode(stored, validate=True)
+    except (ValueError, binascii.Error):
+        raise AppError("E-LICENSE-INVALID", "保存された証明書を読み取れません") from None
+    # DPAPI復号失敗は黙って体験版に降格せず上位へ伝播する。
+    try:
+        decoded = unprotect_local_data(blob)
+    except Exception:
+        _logger.error("証明書の端末保護を解除できませんでした", exc_info=True)
+        raise
+    try:
+        return decoded.decode("utf-8")
+    except UnicodeError:
+        raise AppError("E-LICENSE-INVALID", "保存された証明書の文字形式が不正です") from None
+
+
+def _checked_activation(text: str, payload: LicensePayload) -> ActivationPayload:
+    cert = verify_activation(text)
+    if (cert.license_id, cert.edition, cert.buyer, cert.updates_until, cert.packs) != (
+        payload.license_id, payload.edition, payload.buyer, payload.updates_until, payload.packs
+    ):
+        raise AppError("E-LICENSE-INVALID", "キーと証明書のライセンス内容が一致しません")
+    return cert
 
 
 def _resolve(settings: dict[str, str]) -> _ResolvedLicense:
@@ -72,12 +101,41 @@ def _resolve(settings: dict[str, str]) -> _ResolvedLicense:
     try:
         payload = verify_license_key(key)
     except AppError as exc:
-        # フォールバック許可: 保存済みキーが検証できない場合は体験版として動かし、理由を画面に表示する
-        _logger.warning("保存済みライセンスキーの検証に失敗したため trial として扱います: %s", exc.detail)
+        # フォールバック許可: 検証不成立の保存キーは体験版とし、理由を画面へ出す（設計T2）。
+        _logger.warning("保存キーの検証失敗 code=E-LICENSE-INVALID")
         return _ResolvedLicense("trial", "invalid", None, exc.user_message())
     if settings.get(LICENSE_REVOKED_KEY) == "1":
-        return _ResolvedLicense("trial", "revoked", payload, "このライセンスは無効化されています。サポートへ連絡してください。")
-    return _ResolvedLicense(payload.edition, "active", payload, "")
+        return _ResolvedLicense("trial", "revoked", payload, "ライセンスが失効しています。サポートへ連絡してください。")
+    try:
+        text = _activation_text(settings)
+        if not text:
+            return _ResolvedLicense("trial", "not_activated", payload, "このPCは未登録です。手動証明書を貼り付けるか、オンラインで登録してください。")
+        cert = _checked_activation(text, payload)
+    except AppError as exc:
+        # フォールバック許可: 検証不成立の保存証明書は体験版とし、理由を画面へ出す（設計T2）。
+        _logger.warning("保存証明書の検証失敗 code=E-LICENSE-INVALID")
+        return _ResolvedLicense("trial", "invalid", payload, exc.user_message())
+    if cert.machine_code != machine_code():
+        _logger.warning("証明書の端末が不一致 code=E-LICENSE-MACHINE")
+        return _ResolvedLicense("trial", "machine_mismatch", payload, "別のPCの証明書です。このPC用の証明書を登録してください。", cert)
+    if cert.expires_at and datetime.fromisoformat(cert.expires_at) <= datetime.now(timezone.utc):
+        _logger.warning("証明書が期限切れ code=E-LICENSE-EXPIRED")
+        return _ResolvedLicense("trial", "expired", payload, AppError("E-LICENSE-EXPIRED").user_message(), cert)
+    return _ResolvedLicense(payload.edition, "active", payload, "", cert)
+
+
+def _stored_error(settings: dict[str, str]) -> dict:
+    text = settings.get(LICENSE_ACTIVATION_ERROR_KEY, "")
+    if not text:
+        return {}
+    try:
+        result = json.loads(text)
+        if not isinstance(result, dict):
+            raise ValueError("保存形式")
+        return result
+    except ValueError:
+        _logger.error("ライセンス処理エラーの保存形式が不正です", exc_info=True)
+        raise AppError("E-LICENSE-API", "設定データの保存形式が不正です") from None
 
 
 def get_license_info() -> dict:
@@ -85,107 +143,219 @@ def get_license_info() -> dict:
     resolved = _resolve(settings)
     limits = _LIMITS[resolved.edition]
     payload = resolved.payload
+    error = _stored_error(settings)
     return {
-        "edition": resolved.edition,
-        "status": resolved.status,
-        "reason": resolved.reason,
+        "edition": resolved.edition, "status": resolved.status,
+        "activation_status": resolved.status, "reason": resolved.reason,
         "registered": resolved.status != "unregistered",
         "buyer": payload.buyer if payload else "",
         "license_id": payload.license_id if payload else "",
         "issued_at": payload.issued_at if payload else "",
         "updates_until": payload.updates_until if payload else "",
-        "packs": list(payload.packs) if payload else [],
-        "purchase_url": purchase_url(),
-        "upgrade_available": resolved.edition != "pro",
-        "revocation": {
-            "enabled": bool(_revocation_url()),
-            "checked_at": settings.get(LICENSE_REVOCATION_CHECKED_AT_KEY, ""),
-            "error": settings.get(LICENSE_REVOCATION_ERROR_KEY, ""),
-        },
-        "limits": {
-            "watermark": limits.watermark,
-            "daily_generations": limits.daily_generations,
-            "max_profiles": limits.max_profiles,
-            "youtube_upload": limits.youtube_upload,
-            "analytics": limits.analytics,
-            "autopilot": limits.autopilot,
-        },
+        "packs": list(payload.packs) if payload and resolved.status == "active" else [],
+        "machine_code": machine_code(),
+        "activation_expires_at": resolved.activation.expires_at if resolved.activation else "",
+        "activation_error": error, "devices": error.get("devices", []),
+        "api_enabled": bool(_api_url()),
+        "purchase_url": purchase_url(), "upgrade_available": resolved.edition != "pro",
+        "limits": {name: getattr(limits, name) for name in (
+            "watermark", "daily_generations", "max_profiles", "youtube_upload", "analytics", "autopilot"
+        )},
     }
 
 
-def save_license(license_key: str) -> dict:
-    """キーを検証して保存する。不正なキーは保存せず AppError(E-LICENSE-INVALID)。"""
-    key = "".join((license_key or "").split())
-    verify_license_key(key)
-    set_many({
-        LICENSE_KEY_KEY: key,
-        LICENSE_REVOKED_KEY: "",
-        LICENSE_REVOCATION_CHECKED_AT_KEY: "",
-        LICENSE_REVOCATION_ERROR_KEY: "",
-    })
-    if _revocation_url():
-        check_revocation()
-    return get_license_info()
-
-
-def _revocation_url() -> str:
-    return (config.LICENSE_REVOCATION_CHECK_URL or "").strip()
-
-
-def check_revocation(timeout: float = 10.0) -> dict:
-    """失効確認APIへ問い合わせて結果を保存する。
-
-    API は ``?lid=<license_id>`` に ``{"status": "active" | "revoked" | "unknown"}`` を返す（tools/license/gas）。
-    通信できない場合は前回の判定を維持し、エラーと最終確認日時を画面に表示する。
-    """
-    url = _revocation_url()
-    if not url:
-        return get_license_info()
-    resolved = _resolve(get_all())
-    if resolved.payload is None:
-        return get_license_info()
-    lid = resolved.payload.license_id
-    query = urllib.parse.urlencode({"lid": lid})
-    request_url = f"{url}{'&' if '?' in url else '?'}{query}"
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    try:
-        req = urllib.request.Request(request_url, headers={"User-Agent": "NVF-license-check"})
-        with urllib.request.urlopen(req, timeout=timeout) as res:
-            data = json.loads(res.read().decode("utf-8"))
-        status = str(data.get("status") or "") if isinstance(data, dict) else ""
-        if status not in ("active", "revoked", "unknown"):
-            raise ValueError(f"想定外の応答です: status={status!r}")
-    except (urllib.error.URLError, OSError, TimeoutError, ValueError) as exc:
-        # フォールバック許可: オフラインでも製品を使えるよう前回判定を維持し、確認失敗を画面に表示する
-        _logger.warning("ライセンス失効確認に失敗しました: license_id=%s", lid, exc_info=True)
-        set_many({LICENSE_REVOCATION_ERROR_KEY: f"{now} 失効確認に失敗しました（{type(exc).__name__}）"})
-        return get_license_info()
-    updates = {LICENSE_REVOCATION_CHECKED_AT_KEY: now, LICENSE_REVOKED_KEY: "1" if status == "revoked" else ""}
-    if status == "unknown":
-        _logger.warning("失効確認APIに未登録の license_id です: %s", lid)
-        updates[LICENSE_REVOCATION_ERROR_KEY] = f"{now} 発行台帳に未登録のキーです。サポートへ連絡してください。"
-    else:
-        updates[LICENSE_REVOCATION_ERROR_KEY] = ""
-    set_many(updates)
-    return get_license_info()
-
-
-def check_revocation_if_due() -> None:
-    """起動時用。最終確認から LICENSE_REVOCATION_CHECK_INTERVAL_DAYS 日以上経っていれば確認する。"""
-    if not _revocation_url():
-        return
-    settings = get_all()
-    if not (settings.get(LICENSE_KEY_KEY) or "").strip():
-        return
-    checked_at = _parse_dt(settings.get(LICENSE_REVOCATION_CHECKED_AT_KEY, ""))
-    interval = timedelta(days=float(config.LICENSE_REVOCATION_CHECK_INTERVAL_DAYS))
-    if checked_at and datetime.now(timezone.utc) - checked_at < interval:
-        return
-    check_revocation()
+def verify_activation_now() -> LicenseLimits:
+    """キャッシュを使わず署名・端末・期限を再検証する。"""
+    return _LIMITS[_resolve(get_all()).edition]
 
 
 def current_limits() -> LicenseLimits:
-    return _LIMITS[get_license_info()["edition"]]
+    return verify_activation_now()
+
+
+def _api_url() -> str:
+    return (config.LICENSE_API_URL or "").strip()
+
+
+def _response_devices(value) -> list[dict[str, str]]:
+    """端末エラーは表示用IDと日時だけ受け取り、応答の任意本文を保存しない。"""
+    try:
+        if not isinstance(value, list):
+            raise ValueError("一覧形式")
+        devices = []
+        for row in value:
+            if not isinstance(row, dict):
+                raise ValueError("行形式")
+            mid, updated = row.get("mid"), row.get("last_updated")
+            if not isinstance(mid, str) or re.fullmatch(r"(?:[0-9a-f]{6}|[0-9a-f]{32})", mid) is None:
+                raise ValueError("端末形式")
+            if not isinstance(updated, str):
+                raise ValueError("日時形式")
+            stamp = datetime.fromisoformat(updated)
+            devices.append({"mid": mid[-6:], "last_updated": stamp.isoformat()})
+        return devices
+    except (TypeError, ValueError):
+        _logger.warning("ライセンスAPI端末一覧の形式が不正 code=E-LICENSE-API")
+        raise AppError("E-LICENSE-API", "端末一覧の応答形式が不正です") from None
+
+
+def _api_call(action: str, **fields) -> dict:
+    url = _api_url()
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        valid_url = parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password
+    except ValueError:
+        valid_url = False
+    if not valid_url:
+        _logger.warning("ライセンスAPI URLが未設定または不正 code=E-LICENSE-API")
+        raise AppError("E-LICENSE-API", "ライセンスAPIのHTTPS URLが未設定または不正です")
+    request = urllib.request.Request(
+        url, data=json.dumps({"action": action, **fields}).encode("utf-8"),
+        headers={"Content-Type": "application/json", "User-Agent": "NVF-license-v2"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=config.LICENSE_API_TIMEOUT_SEC) as response:
+            body = response.read(65537)
+        if len(body) > 65536:
+            raise ValueError("応答サイズ上限")
+        data = json.loads(body.decode("utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("応答形式")
+    except (urllib.error.URLError, OSError, TimeoutError, ValueError, UnicodeError) as exc:
+        # HTTP応答・URLに秘密値が含まれ得るため例外本文を記録しない。
+        _logger.warning("ライセンスAPI通信失敗 action=%s type=%s code=E-LICENSE-API", action, type(exc).__name__)
+        raise AppError("E-LICENSE-API", "通信に失敗しました") from None
+    error = data.get("error")
+    if error is not None and (not isinstance(error, str) or not error):
+        _logger.warning("ライセンスAPI応答のerror形式が不正 action=%s code=E-LICENSE-API", action)
+        raise AppError("E-LICENSE-API", "応答形式が不正です")
+    if error:
+        code = {"limit": "E-LICENSE-LIMIT-DEVICES", "invalid": "E-LICENSE-INVALID",
+                "machine": "E-LICENSE-MACHINE", "expired": "E-LICENSE-EXPIRED"}.get(error, "E-LICENSE-API")
+        _logger.warning("ライセンスAPI処理失敗 action=%s code=%s", action, code)
+        exc = AppError(code)
+        exc.remote_error = error if error in ("revoked", "inactive") else ""
+        exc.devices = _response_devices(data.get("devices", [])) if error == "limit" else []
+        raise exc
+    return data
+
+
+def _record_error(exc: AppError) -> None:
+    updates = {LICENSE_ACTIVATION_ERROR_KEY: json.dumps(
+        {"code": exc.code, "message": exc.user_message(), "devices": getattr(exc, "devices", [])},
+        ensure_ascii=False,
+    )}
+    if getattr(exc, "remote_error", "") == "revoked":
+        updates[LICENSE_REVOKED_KEY] = "1"
+    if getattr(exc, "remote_error", "") == "inactive":
+        updates[LICENSE_ACTIVATION_KEY] = ""
+    _logger.warning("ライセンス処理未完了 code=%s", exc.code)
+    set_many(updates)
+
+
+def save_activation(activation: str) -> dict:
+    with _operation_lock:
+        settings = get_all()
+        payload = verify_license_key(settings.get(LICENSE_KEY_KEY, ""))
+        if settings.get(LICENSE_REVOKED_KEY) == "1":
+            _logger.warning("失効済みライセンスへの証明書登録を拒否 code=E-LICENSE-INVALID")
+            raise AppError("E-LICENSE-INVALID", "このライセンスは失効しています。サポートへ連絡してください")
+        text = "".join((activation or "").split())
+        cert = _checked_activation(text, payload)
+        if cert.machine_code != machine_code():
+            raise AppError("E-LICENSE-MACHINE", "このPCの端末コードと一致しません")
+        if cert.expires_at and datetime.fromisoformat(cert.expires_at) <= datetime.now(timezone.utc):
+            raise AppError("E-LICENSE-EXPIRED")
+        stored = base64.b64encode(protect_local_data(text.encode("utf-8"))).decode("ascii")
+        set_many({LICENSE_ACTIVATION_KEY: stored, LICENSE_ACTIVATION_ERROR_KEY: "", LICENSE_REVOKED_KEY: ""})
+        return get_license_info()
+
+
+def save_license(license_key: str) -> dict:
+    with _operation_lock:
+        key = "".join((license_key or "").split())
+        payload = verify_license_key(key)
+        settings = get_all()
+        previous_key = settings.get(LICENSE_KEY_KEY, "")
+        changed = previous_key != key
+        revoked = settings.get(LICENSE_REVOKED_KEY, "")
+        if changed and revoked == "1" and previous_key:
+            # 同じ購入の再発行キーでも失効状態を引き継ぐ。
+            # 検証できない旧キーの失効も、利用者操作だけでは解除しない。
+            try:
+                if verify_license_key(previous_key).license_id != payload.license_id:
+                    revoked = ""
+            except AppError:
+                _logger.warning("旧購入キーの検証不成立のため失効状態を維持 code=E-LICENSE-INVALID")
+        elif changed:
+            revoked = ""
+        set_many({LICENSE_KEY_KEY: key, LICENSE_ACTIVATION_ERROR_KEY: "", **(
+            {LICENSE_ACTIVATION_KEY: "", LICENSE_REVOKED_KEY: revoked} if changed else {}
+        )})
+        try:
+            from core.gui_support import build_app_version
+            result = _api_call("activate", license_key=key, machine_code=machine_code(), app_version=build_app_version())
+            if not isinstance(result.get("activation"), str):
+                raise AppError("E-LICENSE-API", "証明書が応答にありません")
+            return save_activation(result["activation"])
+        except AppError as exc:
+            # フォールバック許可: API未設定・通信失敗はキーを保存して手動登録を案内する（設計T4）。
+            _record_error(exc)
+            return get_license_info()
+
+
+def renew_activation() -> dict:
+    with _operation_lock:
+        settings = get_all()
+        payload = verify_license_key(settings.get(LICENSE_KEY_KEY, ""))
+        text = _activation_text(settings)
+        if not text:
+            raise AppError("E-LICENSE-API", "先にこのPCを登録してください")
+        cert = _checked_activation(text, payload)
+        if cert.machine_code != machine_code():
+            raise AppError("E-LICENSE-MACHINE", "証明書の端末が一致しません")
+        try:
+            result = _api_call("renew", activation=text)
+            if not isinstance(result.get("activation"), str):
+                raise AppError("E-LICENSE-API", "証明書が応答にありません")
+            return save_activation(result["activation"])
+        except AppError as exc:
+            # フォールバック許可: 期限内はオフラインでも製品版のまま動かす（利用者決定 2026-10-14）。
+            _record_error(exc)
+            return get_license_info()
+
+
+def deactivate_activation(*, confirmed: bool) -> dict:
+    if not confirmed:
+        raise AppError("E-LICENSE-API", "このPCの登録解除には確認が必要です")
+    with _operation_lock:
+        settings = get_all()
+        payload = verify_license_key(settings.get(LICENSE_KEY_KEY, ""))
+        text = _activation_text(settings)
+        if not text or _checked_activation(text, payload).machine_code != machine_code():
+            raise AppError("E-LICENSE-MACHINE", "このPCの証明書を登録してください")
+        try:
+            result = _api_call("deactivate", activation=text)
+            if result.get("ok") is not True:
+                raise AppError("E-LICENSE-API", "解除の完了を確認できませんでした")
+        except AppError as exc:
+            _record_error(exc)
+            raise
+        set_many({LICENSE_ACTIVATION_KEY: "", LICENSE_ACTIVATION_ERROR_KEY: ""})
+        return get_license_info()
+
+
+def renew_activation_if_due() -> None:
+    with _operation_lock:
+        if not _api_url():
+            return
+        resolved = _resolve(get_all())
+        cert = resolved.activation
+        if resolved.status not in ("active", "expired") or cert is None or not cert.expires_at:
+            return
+        remaining = datetime.fromisoformat(cert.expires_at) - datetime.now(timezone.utc)
+        if remaining <= timedelta(days=config.LICENSE_LEASE_RENEW_BEFORE_DAYS):
+            renew_activation()
 
 
 def should_watermark() -> bool:

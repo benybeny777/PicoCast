@@ -616,7 +616,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 
 ### ライセンス管理
 
-- edition は `trial`（体験版・キー不要）/ `standard` / `pro`。DB に edition は保存せず、`data/settings.db:settings.LICENSE_KEY` の署名付きキーを参照のたびに検証して決める（`core/license_key.py`）。旧 `LICENSE_EDITION` は無視する。
+- edition は `trial`（体験版・キー不要）/ `standard` / `pro`。DB に edition は保存せず、`settings.LICENSE_KEY` の購入キーと `settings.LICENSE_ACTIVATION` の端末証明書を毎回検証して決める。旧 `LICENSE_EDITION` は無視する。キーだけでは `not_activated`（体験版）。
 - キー形式: `NVF1.<payload>.<signature>`。payload は `{v, lid, ed, buyer, iat, upd, packs}` の JSON を URL-safe base64 にしたもの、signature は payload 文字列への RSA-SHA256（PKCS#1 v1.5）署名。アプリは `core/license_public_key.py` の公開鍵だけを持ち、オフラインで検証する。秘密鍵はリポジトリに置かない。
 - 発行は Google スプレッドシート＋Apps Script（`tools/license/gas/Code.gs`）が自動で行う。BOOTH 購入通知メールを Gmail から取り込み、購入者がフォームに送った注文番号と照合してキーをメール送信する。手動発行・鍵生成は `tools/license/license_tool.py`。手順は `tools/license/README.md`。`tools/` は配布物に含めない。
 - 制限:
@@ -631,10 +631,14 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
   | 自動運用 | 不可 | 可 | 可 |
 
 - 自動運用は有効化保存時（`POST /api/autopilot/settings`、403）と各工程の実行時（`E-LICENSE-LIMIT` で保留）に確認する。
-- キー状態 `status`: `unregistered` / `active` / `invalid`（保存済みキーが検証できない → trial として動作し理由を表示）/ `revoked`（失効 → trial）。不正なキーの登録は `E-LICENSE-INVALID`（422）で拒否し保存しない。
-- 失効確認（任意）: `LICENSE_REVOCATION_CHECK_URL`（Apps Script Web アプリ。空=通信しない）を設定すると、キー登録時・起動時（前回確認から `LICENSE_REVOCATION_CHECK_INTERVAL_DAYS` 日以上経過時）・`POST /api/settings/license/check-revocation` で `?lid=` を問い合わせる。応答 `{"status": "active"|"revoked"|"unknown"}`。通信失敗時は前回判定を維持し、最終確認日時とエラーを画面に表示する。
+- 証明書形式: `NVA1.<payload>.<signature>`。payload は購入キーと同じ権利に `mid`（32桁の端末コード）と `exp`（UTCオフセット付きISO日時、手動の空文字は無期限）を加える。署名・端末・期限・キーとの license_id / edition / packs / buyer / upd 一致を検証する。公開鍵PEMのSHA-256を固定し、差し替えを拒否する。
+- チャンネル未登録の初回起動ではprofile別metadata.dbの初期化を行わず、セットアップ画面を起動する。登録済みprofileがある場合のみ起動時に初期化する。
+- 状態 `status` / `activation_status`: `unregistered` / `not_activated` / `active` / `expired` / `machine_mismatch` / `invalid` / `revoked`。`active` 以外は体験版とし理由を表示する。Windows保存は既存DPAPIで利用者別に保護し、復号失敗は停止する。macOSは署名証明書をbase64で保持し、署名・端末照合で改変と流用を拒否する。
+- 端末コードは `sha256(PRODUCT_ID + ":" + raw_id)` の先頭32hex。Windowsの64bitレジストリ `MachineGuid`、macOSの `IOPlatformUUID` から計算する。生IDは保存・送信・ログ出力しない。取得失敗・非対応OSは `E-LICENSE-MACHINE` で停止する。`PRODUCT_ID` は現在 `nvf`（T5で改名する固定識別子）。
+- `LICENSE_API_URL`（HTTPS、空は手動登録）、`LICENSE_LEASE_RENEW_BEFORE_DAYS`（既定7日）、`LICENSE_API_TIMEOUT_SEC`（既定10秒）を設定DBと管理者設定画面で管理し、保存後は即時反映する。旧失効URLはAPI形式が異なるため自動転用しない。Standard 2台 / Pro 3台・30日間の暫定運用値はGASのCONFIGで管理する。起動時は期限が近い証明書だけ更新する。通信失敗は画面に残し、期限内のみ製品版を維持する。期限切れは体験版。失効を受信したライセンスは旧証明書を貼り付けても解除できない。
 - Trial は native MP4 の最終出力へ `Native Video Factory Trial` の小さな透かしを焼き込む。
-- `GET /api/settings/license` は edition・status・購入者名・license_id・更新期限・パック・制限・失効確認状態を返す（キー文字列は返さない）。`POST /api/settings/license` は `{license_key}` を受け取る。設定画面「製品管理」のライセンスカードでキーを貼り付けて登録する。上限到達エラーの文言には購入導線（`PRODUCT_PURCHASE_URL`）を付ける。
+- `GET /api/settings/license` は edition・状態・購入者・license_id・更新期限・有効なパック・制限・端末コード・証明書期限・処理エラー・上限時の端末末尾6桁を返す（購入キー・証明書は返さない）。`GET /license/machine-code` は端末コードのみ。`POST /license` は `{license_key}` でオンライン登録を試み、失敗時はキーを保存し手動登録を案内する。`POST /license/activation {activation}` は手動登録、`POST /license/renew` は更新、`POST /license/deactivate {confirmed:true}` は確認付き解除。各パスの先頭は `/api/settings`。
+- `current_limits()`・native透かし判定・手動アップロード直前・自動投稿直前で `verify_activation_now()` を呼び、キャッシュによる検証省略をしない。自動投稿直前に体験版へ降格した場合は投稿を保留する。体験版の手動アップロードは従来どおり可能。
 
 ### 診断パッケージ
 
