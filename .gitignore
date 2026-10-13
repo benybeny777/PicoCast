@@ -2,7 +2,8 @@
 client_secrets.json
 token.json
 token_analytics.json
-.claude/
+.claude/*
+!.claude/skills/
 config/prompt_parts/local/
 config/prompt_profiles/local/
 assets/characters/_native_cache/
@@ -26,3 +27,4 @@ dist/
 *.dist/
 *.onefile-build/
 core/_build_version.py
+temp/
