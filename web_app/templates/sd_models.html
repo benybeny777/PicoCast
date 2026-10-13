@@ -100,9 +100,6 @@ function fmtBytes(b) {
   return b.toFixed(i > 1 ? 1 : 0) + ' ' + u[i];
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
 
 /* ─── 生成に使われるモデルバナー ─── */
 function renderActiveBanner(forgeModel) {

@@ -327,7 +327,12 @@ function finishGenerate() {
 
 async function cancelGenerate() {
   for (const jobId of activeJobIds) {
-    try { await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'}); } catch {}
+    try {
+      const res = await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      appendLog(`キャンセル要求を送れませんでした（${jobId.slice(0, 8)}）: ${e.message || e}`, 'error');
+    }
   }
   appendLog('キャンセル要求を送信しました', 'warning');
   finishGenerate();

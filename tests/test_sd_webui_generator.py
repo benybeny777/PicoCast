@@ -280,3 +280,32 @@ class TestImageGeneratorBackendDispatch:
 
         with pytest.raises(ValueError, match="未対応の IMAGE_BACKEND"):
             ImageGenerator(width=1920, height=1080)
+
+
+@pytest.mark.parametrize(("width", "height"), [(1080, 1920), (1920, 1080)])
+def test_sd_webui_keeps_requested_orientation(monkeypatch, tmp_path, width, height):
+    """Shorts（1080x1920）は縦長のまま Stable Diffusion WebUI に依頼する（以前は横長に入れ替わっていた）。"""
+    import core.image_generator as ig
+    import core.sd_webui_generator as sd
+
+    sizes = []
+
+    class FakeGenerator:
+        def __init__(self, width, height):
+            sizes.append((width, height))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def generate_image(self, prompt, output_path, prompt_suffix=""):
+            return output_path
+
+    monkeypatch.setattr(sd, "StableDiffusionWebUIGenerator", FakeGenerator)
+    monkeypatch.setattr(ig, "_translate_to_english_for_sd", lambda description, debug=False: "background")
+    monkeypatch.setattr(ig.ImageGenerator, "_prepare_sd_webui_model", lambda self: None)
+    with ig.ImageGenerator(width=width, height=height, background_engine="sd_webui") as gen:
+        gen.generate_background("背景", target_dir=str(tmp_path))
+    assert sizes == [(width, height)]

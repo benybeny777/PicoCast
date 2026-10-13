@@ -555,3 +555,27 @@ class UploadSchedulerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+import pytest as _pytest
+
+
+@_pytest.mark.parametrize("call", [
+    lambda us: us.assign_slots_from_youtube(1, "shorts"),
+    lambda us: us.schedule_from_youtube(),
+    lambda us: us.sync_schedule_from_youtube(),
+])
+def test_youtube_failure_stops_instead_of_guessing_from_local_records(monkeypatch, call):
+    """YouTube から予約状況を取れないとき、ローカル記録だけで推定・同期しない（予約の重複を防ぐ）。"""
+    import core.upload_scheduler as us
+    import core.youtube_uploader as yu
+    from core.error_codes import AppError
+
+    def broken():
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(yu, "get_channel_upload_video_statuses", broken)
+    monkeypatch.setattr(us, "load_upload_records", lambda: [], raising=False)
+    with _pytest.raises(AppError) as exc:
+        call(us)
+    assert exc.value.code == "E-YOUTUBE-SCHEDULE"

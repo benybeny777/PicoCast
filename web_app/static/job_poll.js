@@ -3,17 +3,6 @@
  * generate.html / history_detail.html で共有する。
  */
 
-function escapeHtml(str) {
-  if (typeof str !== 'string') return str;
-  return str.replace(/[&<>'"]/g, tag => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;'
-  }[tag] || tag));
-}
-
 function buildLogLine(msg, tag, time) {
   let resolvedTag = tag || 'info';
   if (msg.includes('スコア') && msg.includes('点')) {
@@ -26,8 +15,8 @@ function buildLogLine(msg, tag, time) {
     }
   }
   const t = time ? String(time).slice(11, 19) || String(time).slice(0, 8) : '';
-  const prefix = t ? `${escapeHtml(t)} [${escapeHtml(resolvedTag)}] ` : `[${escapeHtml(resolvedTag)}] `;
-  let displayMsg = escapeHtml(msg);
+  const prefix = t ? `${esc(t)} [${esc(resolvedTag)}] ` : `[${esc(resolvedTag)}] `;
+  let displayMsg = esc(msg);
   displayMsg = displayMsg.replace(/(\d+点)/g, '<strong style="font-size: 1.15em; text-decoration: underline; color: #fff;">$1</strong>');
   displayMsg = displayMsg.replace(/(スコア)/g, '<strong style="color: #fff;">$1</strong>');
   return `<div class="log-line log-${resolvedTag}">${prefix}${displayMsg}</div>`;
@@ -40,17 +29,17 @@ function buildJobCardHtml(job) {
                     job.status === 'running' ? 'badge-running' : 'badge-warn';
   const t = (job.started_at || '').slice(0, 16).replace('T', ' ');
   const idShort = (job.job_id || '').slice(0, 8) + '…';
-  return `<div class="card mt job-card status-${escapeHtml(job.status)}"
-               data-status="${escapeHtml(job.status)}"
-               data-type="${escapeHtml(job.type || '')}"
-               data-job-id="${escapeHtml(job.job_id)}">
+  return `<div class="card mt job-card status-${esc(job.status)}"
+               data-status="${esc(job.status)}"
+               data-type="${esc(job.type || '')}"
+               data-job-id="${esc(job.job_id)}">
     <div class="job-header">
-      <span class="job-type-badge">${escapeHtml(job.type || '')}</span>
-      <span class="badge ${statusCls}">${escapeHtml(job.status)}</span>
-      <span class="job-id-small">${escapeHtml(idShort)}</span>
-      <span class="job-time">${escapeHtml(t)}</span>
+      <span class="job-type-badge">${esc(job.type || '')}</span>
+      <span class="badge ${statusCls}">${esc(job.status)}</span>
+      <span class="job-id-small">${esc(idShort)}</span>
+      <span class="job-time">${esc(t)}</span>
     </div>
-    <div class="job-progress">${escapeHtml(job.progress_text || '')}</div>
+    <div class="job-progress">${esc(job.progress_text || '')}</div>
   </div>`;
 }
 
@@ -155,7 +144,7 @@ async function updateJobLogs(activeJobIds, logBox, options = {}) {
       const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
       const job = await res.json();
       // ジョブ種別とステータスをヘッダーとして表示（progress_text は最後のログ行と重複するので含めない）
-      htmlContent += `<div class="log-job-header">[${escapeHtml(job.type)}] ${escapeHtml(job.status)}</div>`;
+      htmlContent += `<div class="log-job-header">[${esc(job.type)}] ${esc(job.status)}</div>`;
 
       for (const entry of (job.logs || [])) {
         htmlContent += buildLogLine(entry.message, entry.tag, entry.time);

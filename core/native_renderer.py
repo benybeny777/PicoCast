@@ -1,4 +1,3 @@
-import json
 import os
 import gc
 import re
@@ -1198,7 +1197,6 @@ def render_native(
     work_dir = os.path.join(output_dir, "_native_test")
     os.makedirs(work_dir, exist_ok=True)
     _clear_native_work_dir(work_dir)
-    audio_list = os.path.join(work_dir, "audio_concat.txt")
     segment_list = os.path.join(work_dir, "segment_concat.txt")
     video_path = os.path.join(work_dir, "video_with_narration.mp4")
     output_path = _native_output_path(output_dir)

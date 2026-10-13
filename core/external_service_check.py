@@ -151,5 +151,7 @@ def log_external_services() -> None:
         try:
             print(msg, flush=True)
         except UnicodeEncodeError:
+            # コンソールが日本語を表示できない環境。内容はこの直後のデバッグログに残る
+            _logger.debug("コンソールへ日本語を表示できないため置換して表示します", exc_info=True)
             print(msg.encode("ascii", errors="replace").decode("ascii"), flush=True)
         _logger.info(msg)

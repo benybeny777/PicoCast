@@ -4,6 +4,7 @@ BGMアセット管理。
 """
 from __future__ import annotations
 
+from contextlib import closing
 import os
 import shutil
 import sqlite3
@@ -16,9 +17,8 @@ from typing import Any
 from config import config
 from core.channel_profile import get_profile, require_active_profile
 
-from core.runtime_env import app_base_dir as _app_base_dir
-_ROOT = _app_base_dir()  # 永続データ(settings.db)の基準。exe(onefile)では exe と同じフォルダ
-_DB_PATH = os.path.join(_ROOT, "data", "settings.db")
+from core.runtime_env import settings_db_path as _settings_db_path
+_DB_PATH = _settings_db_path()
 _ALLOWED_EXTS = {".mp3", ".wav", ".m4a", ".aac", ".ogg", ".flac"}
 # BGM 実ファイルの既定保存先（プロファイルルート相対）
 _BGM_REL_DIR = os.path.join("000_assets", "bgm")
@@ -76,7 +76,7 @@ def _migrate_paths_to_relative() -> None:
         return
     _MIGRATED_REL = True
     try:
-        with _open() as conn:
+        with closing(_open()) as conn, conn:
             rows = conn.execute("SELECT bgm_id, profile_id, file_path FROM bgm_assets").fetchall()
         updates = []
         for r in rows:
@@ -88,7 +88,7 @@ def _migrate_paths_to_relative() -> None:
                 continue  # 存在しないプロファイルの孤立行は触らない（別途掃除）
             updates.append((_to_rel(prof, fp), r["bgm_id"]))
         if updates:
-            with _open() as conn:
+            with closing(_open()) as conn, conn:
                 conn.executemany("UPDATE bgm_assets SET file_path=? WHERE bgm_id=?", updates)
                 conn.commit()
     except Exception:
@@ -130,7 +130,7 @@ def list_bgm_assets(profile_id: str | None = None, include_disabled: bool = Fals
     if not include_disabled:
         sql += " AND is_enabled=1"
     sql += " ORDER BY is_default DESC, display_name ASC"
-    with _open() as conn:
+    with closing(_open()) as conn, conn:
         rows = conn.execute(sql, params).fetchall()
     return [_resolve_row(row) for row in rows]
 
@@ -138,7 +138,7 @@ def list_bgm_assets(profile_id: str | None = None, include_disabled: bool = Fals
 def get_bgm_asset(bgm_id: str, profile_id: str | None = None, *, require_enabled: bool = True) -> dict[str, Any]:
     profile_id = profile_id or require_active_profile().profile_id
     _migrate_paths_to_relative()
-    with _open() as conn:
+    with closing(_open()) as conn, conn:
         row = conn.execute(
             "SELECT * FROM bgm_assets WHERE bgm_id=? AND profile_id=?",
             (bgm_id, profile_id),
@@ -155,7 +155,7 @@ def get_default_bgm(profile_id: str | None = None) -> dict[str, Any] | None:
     profile_id = profile_id or require_active_profile().profile_id
     _migrate_paths_to_relative()
     ensure_legacy_default(profile_id)
-    with _open() as conn:
+    with closing(_open()) as conn, conn:
         row = conn.execute(
             "SELECT * FROM bgm_assets WHERE profile_id=? AND is_enabled=1 AND is_default=1 LIMIT 1",
             (profile_id,),
@@ -194,7 +194,7 @@ def create_bgm_asset(
     dest_path = os.path.join(dest_dir, f"{bgm_id}{ext}")
     shutil.copy2(source_path, dest_path)
     now = _now_iso()
-    with _open() as conn:
+    with closing(_open()) as conn, conn:
         if is_default:
             conn.execute("UPDATE bgm_assets SET is_default=0 WHERE profile_id=?", (profile_id,))
         conn.execute(
@@ -223,7 +223,7 @@ def update_bgm_asset(bgm_id: str, updates: dict[str, Any], profile_id: str | Non
     default_volume_db = float(updates.get("default_volume_db", current["default_volume_db"]))
     loop_enabled = int(bool(updates.get("loop_enabled", current["loop_enabled"])))
     note = str(updates.get("note", current.get("note") or ""))
-    with _open() as conn:
+    with closing(_open()) as conn, conn:
         conn.execute(
             """
             UPDATE bgm_assets
@@ -239,7 +239,7 @@ def update_bgm_asset(bgm_id: str, updates: dict[str, Any], profile_id: str | Non
 def set_default_bgm(bgm_id: str, profile_id: str | None = None) -> dict[str, Any]:
     profile_id = profile_id or require_active_profile().profile_id
     asset = get_bgm_asset(bgm_id, profile_id)
-    with _open() as conn:
+    with closing(_open()) as conn, conn:
         conn.execute("UPDATE bgm_assets SET is_default=0 WHERE profile_id=?", (profile_id,))
         conn.execute("UPDATE bgm_assets SET is_default=1, updated_at=? WHERE bgm_id=?", (_now_iso(), bgm_id))
         conn.commit()
@@ -251,7 +251,7 @@ def disable_bgm_asset(bgm_id: str, confirmed: bool, profile_id: str | None = Non
         raise ValueError("confirmed=true が必要です")
     profile_id = profile_id or require_active_profile().profile_id
     get_bgm_asset(bgm_id, profile_id, require_enabled=False)
-    with _open() as conn:
+    with closing(_open()) as conn, conn:
         conn.execute(
             "UPDATE bgm_assets SET is_enabled=0, is_default=0, updated_at=? WHERE bgm_id=? AND profile_id=?",
             (_now_iso(), bgm_id, profile_id),
@@ -307,7 +307,7 @@ def resolve_bgm_selection(
 def ensure_legacy_default(profile_id: str | None = None) -> dict[str, Any] | None:
     """旧 BGM_FILE 設定がある環境では、初回だけチャンネル別BGMへ移行する。"""
     profile_id = profile_id or require_active_profile().profile_id
-    with _open() as conn:
+    with closing(_open()) as conn, conn:
         existing = conn.execute(
             "SELECT bgm_id FROM bgm_assets WHERE profile_id=? LIMIT 1",
             (profile_id,),

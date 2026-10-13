@@ -159,17 +159,7 @@ async function confirmPost(historyName, title) {
     if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
     statusBox.textContent = `ジョブ登録: ${data.job_id}`;
 
-    const interval = setInterval(async () => {
-      try {
-        const r2 = await fetch(`/api/jobs/${data.job_id}`);
-        const job = await r2.json();
-        statusBox.textContent = `[${job.status}] ${job.progress_text}`;
-        if (['success','failed','cancelled'].includes(job.status)) {
-          clearInterval(interval);
-          if (job.status === 'success') setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
-        }
-      } catch {}
-    }, window.WEB_JOB_POLL_INTERVAL_MS);
+    pollJobStatus(data.job_id, statusBox);
   } catch(e) {
     statusBox.textContent = '通信エラー: ' + e;
   }

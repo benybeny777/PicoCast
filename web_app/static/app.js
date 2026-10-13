@@ -18,13 +18,15 @@ document.addEventListener('DOMContentLoaded', () => {
  * @param {function} onUpdate - (job) => void
  * @param {function} onDone - (job) => void
  * @param {number} intervalMs
+ * @param {function} onError - (error) => void。通信の失敗時に呼ぶ（ポーリングは続ける）。省略時はコンソールへ出す
  */
-function pollJob(jobId, onUpdate, onDone, intervalMs = null) {
+function pollJob(jobId, onUpdate, onDone, intervalMs = null, onError = null) {
   const pollIntervalMs = intervalMs || window.WEB_JOB_POLL_INTERVAL_MS;
+  const reportError = onError || (e => console.warn(`ジョブ ${jobId} の状態を取得できません（再試行します）`, e));
   const timer = setInterval(async () => {
     try {
       const res = await fetch(`/api/jobs/${jobId}`);
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const job = await res.json();
       if (onUpdate) onUpdate(job);
       if (['success', 'failed', 'cancelled'].includes(job.status)) {
@@ -32,10 +34,34 @@ function pollJob(jobId, onUpdate, onDone, intervalMs = null) {
         if (onDone) onDone(job);
       }
     } catch (e) {
-      // ネットワークエラーはサイレントに無視
+      // 一時的な通信エラーは次の周期で再試行する。黙って捨てずに知らせる
+      reportError(e);
     }
   }, pollIntervalMs);
   return timer;
+}
+
+/**
+ * ジョブの状態を1行で表示し、成功したらページを再読み込みする（固定コメント・画像再生成・Analytics 更新で共用）。
+ * @param {string} jobId
+ * @param {HTMLElement} statusBox
+ * @param {number} reloadDelayMs
+ */
+function pollJobStatus(jobId, statusBox, reloadDelayMs = null) {
+  return pollJob(
+    jobId,
+    job => {
+      const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length - 1].message : '';
+      statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text || ''}`;
+    },
+    job => {
+      if (job.status === 'success') {
+        setTimeout(() => location.reload(), reloadDelayMs || window.WEB_SUCCESS_RELOAD_DELAY_MS);
+      }
+    },
+    null,
+    e => { statusBox.textContent = `通信エラーのため再試行中…（${e.message || e}）`; },
+  );
 }
 
 /**
@@ -56,9 +82,11 @@ function appendLogEntry(container, message, tag = 'info') {
  * HTML エスケープ
  */
 function esc(s) {
-  return String(s || '')
+  // null / undefined は空文字、数値の 0 は "0" のまま表示する。属性値に入れても壊れないよう引用符も変換する
+  return String(s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }

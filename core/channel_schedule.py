@@ -15,9 +15,8 @@ from zoneinfo import ZoneInfo
 
 from config import config as _cfg
 
-from core.runtime_env import app_base_dir as _app_base_dir
-_ROOT = _app_base_dir()  # 永続データ(settings.db)の基準。exe(onefile)では exe と同じフォルダ
-_DB_PATH = os.path.join(_ROOT, "data", "settings.db")
+from core.runtime_env import settings_db_path as _settings_db_path
+_DB_PATH = _settings_db_path()
 _lock = threading.Lock()
 
 _MIGRATION_KEY = "upload_slots_20260606_1221_22"

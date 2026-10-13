@@ -30,6 +30,11 @@ def app_base_dir() -> str:
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def settings_db_path() -> str:
+    """全チャンネル共通の設定DB（data/settings.db）の絶対パス。保存先を決めるのはここだけにする。"""
+    return os.path.join(app_base_dir(), "data", "settings.db")
+
+
 def resource_base_dir() -> str:
     """同梱リソース（templates / static / legal / SEED 等）の基準ディレクトリを返す。
 

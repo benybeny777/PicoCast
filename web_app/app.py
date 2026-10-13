@@ -162,7 +162,7 @@ def _start_job_runner() -> None:
 
 
 def _stop_job_runner() -> None:
-    global _runner_proc, _runner_stop_event
+    global _runner_proc
     if _runner_stop_event is not None:
         _runner_stop_event.set()
     proc = _runner_proc

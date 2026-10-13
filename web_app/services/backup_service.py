@@ -1,6 +1,7 @@
 """製品版バックアップ/復元サービス。"""
 from __future__ import annotations
 
+from contextlib import closing
 import json
 import shutil
 import sqlite3
@@ -9,9 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from core.runtime_env import app_base_dir as _app_base_dir
+from core.runtime_env import settings_db_path as _settings_db_path
 _ROOT = Path(_app_base_dir())  # 永続データの基準。exe(onefile)では exe と同じフォルダ
 _BACKUP_DIR = _ROOT / "output" / "_backups"
-_SETTINGS_DB = _ROOT / "data" / "settings.db"
+_SETTINGS_DB = Path(_settings_db_path())
 _SQLITE_MAGIC = b"SQLite format 3\x00"
 
 
@@ -58,7 +60,7 @@ def _copy_if_exists(src: Path, dst: Path) -> None:
 def _settings_schema_snapshot() -> dict:
     if not _SETTINGS_DB.exists():
         return {}
-    with sqlite3.connect(_SETTINGS_DB) as conn:
+    with closing(sqlite3.connect(_SETTINGS_DB)) as conn, conn:
         tables = [row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
     return {"tables": tables}
 

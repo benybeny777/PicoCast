@@ -23,8 +23,9 @@ _logger = logging.getLogger(__name__)
 # 永続データの基準ディレクトリ（開発=リポジトリルート / exe=exe のあるフォルダ）。
 # exe(onefile)では __file__ が一時展開先になるため app_base_dir() で anchor する。
 from core.runtime_env import app_base_dir
+from core.runtime_env import settings_db_path as _settings_db_path
 _ROOT = app_base_dir()
-_DB_PATH = os.path.join(_ROOT, "data", "settings.db")
+_DB_PATH = _settings_db_path()
 _ENV_PATH = os.path.join(_ROOT, ".env")
 _lock = threading.Lock()
 

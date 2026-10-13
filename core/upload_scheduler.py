@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from config import config as _cfg
+from core.error_codes import AppError
 
 _logger = logging.getLogger(__name__)
 
@@ -122,7 +123,8 @@ def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
 
     チャンネルのアップロードリストを取得し、該当 video_type の
     private/unlisted かつ将来の publishAt を使用済みスロットとして扱う。
-    YouTube API 失敗時はローカルレコードにフォールバック。
+    YouTube から取得できないときは割り当てずに止める（ローカル記録だけで推定すると、
+    記録に無い予約と同じ枠へ重ねて予約してしまうため）。
     """
     from core.youtube_uploader import get_channel_upload_video_statuses
 
@@ -145,10 +147,9 @@ def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
             except Exception:
                 _logger.warning("YouTube予約枠publishAtの解析に失敗しました: publishAt=%s", pub_at_raw, exc_info=True)
                 continue
-    except Exception:
-        _logger.warning("YouTube予約状況の取得に失敗したためローカル記録から予約枠を推定します", exc_info=True)
-        schedule = schedule_from_records().get(video_type, {})
-        used = set(schedule.keys())
+    except Exception as exc:
+        _logger.error("YouTube予約状況の取得に失敗したため予約枠を割り当てません", exc_info=True)
+        raise AppError("E-YOUTUBE-SCHEDULE", "予約枠の割り当て", cause=exc) from exc
 
     return _assign_slots_from_used(count, video_type, used, now)
 
@@ -168,9 +169,10 @@ def schedule_from_youtube() -> dict[str, dict]:
     schedules: dict[str, dict] = {vt: {} for vt in VIDEO_TYPES}
     try:
         statuses = get_channel_upload_video_statuses()
-    except Exception:
-        _logger.warning("YouTube予約一覧の取得に失敗しました", exc_info=True)
-        return schedules
+    except Exception as exc:
+        # 空の一覧を返すと「予約なし」と区別できず、空き枠と誤解されるため止める
+        _logger.error("YouTube予約一覧の取得に失敗しました", exc_info=True)
+        raise AppError("E-YOUTUBE-SCHEDULE", "予約一覧の取得", cause=exc) from exc
     for _vid_id, status in statuses.items():
         vt = str(status.get("video_type") or "").lower()
         if vt not in schedules:
@@ -443,7 +445,7 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
     """YouTubeのステータスを正としてローカルレコード・スケジュールを更新する。"""
     from core.metadata_db import sync_youtube_statuses
     from core.upload_records import load_upload_records
-    from core.youtube_uploader import get_channel_upload_video_statuses, get_video_statuses
+    from core.youtube_uploader import get_channel_upload_video_statuses
 
     def _log(message):
         if progress_callback:
@@ -457,9 +459,10 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
     }
     try:
         statuses = get_channel_upload_video_statuses()
-    except Exception as _e:
-        _log(f"チャンネル全件取得失敗、既知IDのみでフォールバック: {_e}")
-        statuses = get_video_statuses(list(id_to_record.keys()))
+    except Exception as exc:
+        # 既知の動画だけで同期すると、記録に無い予約を見落としたまま「同期済み」になるため止める
+        _logger.error("YouTubeチャンネルの動画一覧を取得できないため同期を中止します", exc_info=True)
+        raise AppError("E-YOUTUBE-SCHEDULE", "予約の同期", cause=exc) from exc
     db_result = sync_youtube_statuses(statuses, delete_missing=False)
     now = datetime.now(_active_timezone())
     changed_records = 0

@@ -371,17 +371,9 @@ class ImageGenerator:
         # SD_WEBUI_MODEL 設定時: インストール確認 → 必要に応じてダウンロード → モデル切り替え
         self._prepare_sd_webui_model()
 
-        # Shorts の場合は縦長サイズに切り替え
-        is_shorts = self.height > self.width
-        if is_shorts:
-            final_width = self.height   # Shorts: 縦長のため幅・高さを入れ替え
-            final_height = self.width
-        else:
-            final_width = self.width
-            final_height = self.height
-
-        gen_width = final_width
-        gen_height = final_height
+        # 幅・高さは呼び出し側が向きどおりに渡す（Shorts は 1080x1920）。ここで入れ替えると縦長が横長になる
+        gen_width = self.width
+        gen_height = self.height
 
         prompt_suffix = _THUMB_PROMPT_SUFFIX if is_thumbnail else _BG_PROMPT_SUFFIX
 

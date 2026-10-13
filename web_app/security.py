@@ -20,7 +20,7 @@ _SECRET_FILES = frozenset({
 
 
 def _get_output_base() -> str:
-    """active profile の output_root を返す。未設定なら config フォールバック。"""
+    """active profile の output_root を返す。未設定なら NoActiveProfileError（フォールバックしない）。"""
     from core.output_paths import get_output_root
     return os.path.realpath(get_output_root())
 
