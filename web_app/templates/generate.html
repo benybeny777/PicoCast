@@ -91,6 +91,11 @@
     </div>
     <div class="action-row">
       <button id="generate-btn-normal" class="btn btn-primary" onclick="startGenerate('normal')">生成開始</button>
+      <button class="btn btn-secondary" onclick="checkReading('normal')" title="VOICEVOX の読みを辞書と比べます（音声は作りません）">読みチェック</button>
+    </div>
+    <div id="reading-check-normal" class="mt" style="display:none">
+      <p id="reading-check-meta-normal" class="hint"></p>
+      <div id="reading-check-list-normal"></div>
     </div>
     <div class="form-group mt">
       <label for="script-input-normal">台本</label>
@@ -280,27 +285,52 @@ async function runPrompt(kind, tab, targetId) {
     const data = await res.json();
     if (!res.ok) { meta.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
     const started = Date.now();
-    while (true) {
-      const sec = Math.round((Date.now() - started) / 1000);
-      meta.textContent = `${data.backend_label} で作成中... ${sec}秒`;
-      await new Promise(r => setTimeout(r, 3000));
-      const jr = await fetch(`/api/jobs/${data.job_id}`);
-      const job = await jr.json();
-      if (!jr.ok) { meta.textContent = 'エラー: ' + (job.detail || jr.status); return; }
-      if (job.status === 'success') {
-        target.value = job.result.text;
-        meta.textContent = `${data.backend_label} で作成しました（${sec}秒）。内容を確認してから生成してください。`;
-        return;
-      }
-      if (job.status === 'failed' || job.status === 'cancelled') {
-        meta.textContent = 'エラー: ' + (job.error || job.status);
-        return;
-      }
-    }
+    const seconds = () => Math.round((Date.now() - started) / 1000);
+    meta.textContent = `${data.backend_label} で作成中...`;
+    await new Promise(resolve => pollJob(
+      data.job_id,
+      () => { meta.textContent = `${data.backend_label} で作成中... ${seconds()}秒`; },
+      job => {
+        if (job.status === 'success') {
+          target.value = job.result.text;
+          meta.textContent = `${data.backend_label} で作成しました（${seconds()}秒）。内容を確認してから生成してください。`;
+        } else {
+          meta.textContent = 'エラー: ' + (job.error || job.status);
+        }
+        resolve();
+      },
+    ));
   } catch (e) {
     meta.textContent = '通信エラー: ' + e;
   } finally {
     buttons.forEach(b => b.disabled = false);
+  }
+}
+
+// ─── 読みチェック（VOICEVOX の読みと辞書の読みを比べる。音声は作らない） ───
+async function checkReading(tab) {
+  const box = document.getElementById(`reading-check-${tab}`);
+  const meta = document.getElementById(`reading-check-meta-${tab}`);
+  const list = document.getElementById(`reading-check-list-${tab}`);
+  const script = document.getElementById(`script-input-${tab}`).value;
+  box.style.display = 'block';
+  list.innerHTML = '';
+  if (!script.trim()) { meta.textContent = '台本を入力してください'; return; }
+  meta.textContent = 'VOICEVOX の読みを確認中...';
+  try {
+    const res = await fetch('/api/reading-check', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({script}),
+    });
+    const data = await res.json();
+    if (!res.ok) { meta.textContent = 'エラー: ' + (data.detail || res.status); return; }
+    pollJob(data.job_id, null, job => {
+      if (job.status !== 'success') { meta.textContent = 'エラー: ' + (job.error || job.status); return; }
+      const r = job.result;
+      meta.textContent = `${r.checked}文を確認しました。読み違いの可能性: ${r.findings.length}件。登録した読みは次の生成から使われます。`;
+      renderReadingFindings(list, r.findings);
+    });
+  } catch (e) {
+    meta.textContent = '通信エラー: ' + e;
   }
 }
 

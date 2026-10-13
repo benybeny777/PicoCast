@@ -59,8 +59,11 @@ class ReadingNormalizer:
         reading_dictionary_store.save_dict("user", self.user_dict)
         reading_dictionary_store.save_candidates(self.candidates)
 
-    def normalize_batch(self, texts: list[str]) -> dict[str, str]:
-        """複数テキストを一括でよみがな補正する。"""
+    def normalize_batch(self, texts: list[str], save: bool = True) -> dict[str, str]:
+        """複数テキストを一括でよみがな補正する。
+
+        save=False は確認だけの用途（生成前の読みチェック）で、辞書・候補を書き換えない。
+        """
         if not self._available:
             return {t: t for t in texts}
 
@@ -68,7 +71,7 @@ class ReadingNormalizer:
         for t in texts:
             result[t] = self._normalize_single(t)
             
-        if self.mode == "safe_auto":
+        if self.mode == "safe_auto" and save:
             self._save_dicts()
             
         return result

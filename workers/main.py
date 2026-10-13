@@ -1495,6 +1495,18 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         )
         return finish_result(f"❌ 音声クエリ失敗のため処理を中止しました\n理由: {_query_error}")
 
+    # 読み違いの可能性: VOICEVOX が返した読み（kana）と辞書の読みを比べて知らせる（合成は続ける）
+    if _queries:
+        from core.reading_check import check_and_record, describe
+        _reading_findings = check_and_record(
+            [(_voicevox_chunks[i]["speech_text"], kana) for i, (_q, kana) in sorted(_queries.items())],
+            source=os.path.basename(theme_dir),
+        )
+        if _reading_findings:
+            update_status(f"🔎 読み違いの可能性 {len(_reading_findings)}件（設定画面「よみがな辞書」で確認・登録できます）", "warning")
+            for _f in _reading_findings[:10]:
+                update_status(f"  - {describe(_f)}", "warning")
+
     # フェーズ1c: VOICEVOX synthesis を並列実行
     _SYNTH_WORKERS = min(VOICEVOX_SYNTH_WORKERS, len(_voicevox_chunks)) if _voicevox_chunks else 1
     update_status(f"🎤 VOICEVOX音声合成並列開始（{len(_voicevox_chunks)}件、{_SYNTH_WORKERS}並列）...")

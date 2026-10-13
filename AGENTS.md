@@ -184,6 +184,7 @@
 | `core/ai_generator.py` | 台本・タイトルA/B/C案の生成（使う AI は `core/text_llm.py`） |
 | `core/text_llm.py` | 文章生成AIの窓口（Gemini / Claude Code CLI / Codex CLI / Ollama）。CLI は読み取り専用の安全指定で起動し、プロンプトは標準入力で渡す |
 | `core/comfyui_generator.py` | ComfyUI（ローカル・Krea 2 Turbo）画像生成 |
+| `core/reading_check.py` | VOICEVOX の kana と辞書の読みを比べ、読み違いの可能性を検出（生成時・生成前チェック） |
 | `core/codex_image.py` | Codex CLI の画像生成。専用一時フォルダだけ書き込み可・`OPENAI_API_KEY` を外して起動 |
 | `core/local_image_compose.py` | ローカル画像の文字入れ・サムネの立ち絵合成（画像AIに日本語を描かせない） |
 | `core/voicevox.py` | VOICEVOX音声生成 |
