@@ -15,7 +15,7 @@ from core.reading_normalizer import ReadingNormalizer
 from core.parser import ScriptParser
 from core.ai_generator import AIGenerator
 from core.ng_words import apply_ng_word_replacements
-from core.image_generator import ImageGenerator, ImageGenerationError
+from core.image_generator import ImageGenerator, ImageGenerationError, thumbnail_engine
 from core.opening_quality import (
     apply_opening_rewrite_to_script,
     check_openai_final_review_connection,
@@ -262,8 +262,11 @@ def _report_thumbnail_failure(err, topic, theme_dir, update_status):
 
 
 def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, update_status=None,
-                       script_content=None, debug_mode=False, long_thumbnail_ab_test=None):
-    """台本内容をもとにサムネイル画像を生成する（IMAGE_BACKEND に従い Nano Banana または Stable Diffusion WebUI を使用）。"""
+                       script_content=None, debug_mode=False, long_thumbnail_ab_test=None, engine=None):
+    """台本内容をもとにサムネイル画像を生成する。
+
+    使うエンジンは engine（画面で明示指定したとき）→ THUMBNAIL_IMAGE_BACKEND → 背景と同じ、の順に決める。
+    """
     def _log(msg):
         if update_status: update_status(msg)
         else: print(msg, flush=True)
@@ -291,9 +294,8 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
     except Exception:
         raise
 
-    # サムネイルは IMAGE_BACKEND に従う（sd_webui の場合は Stable Diffusion WebUI で生成）
-    # background_engine を明示的に渡すことでバックエンドを固定する
-    thumb_engine = img_gen.background_engine
+    # 例: 背景は ComfyUI（ローカル）、サムネは Codex。background_engine を明示して生成器を固定する
+    thumb_engine = engine or thumbnail_engine(img_gen.background_engine)
     thumb_img_gen = ImageGenerator(
         width=img_gen.width, height=img_gen.height,
         debug=img_gen.debug, image_style=img_gen.image_style,
@@ -304,7 +306,27 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
         thumb_img_gen.close()
         return value
 
-    def _generate_one(one_prompt, final_path, label):
+    # ComfyUI（ローカル）は台本全文から構図を考えられず日本語も描けないため、題材だけの短い指示で
+    # 文字なしの絵を作り、立ち絵とサムネ文字を後から重ねる（core/local_image_compose.py）。
+    is_local = thumb_img_gen.background_engine == "comfyui"
+    thumbnail_text = ""
+    try:
+        thumbnail_text = next(
+            (it["text"] for it in ScriptParser.parse_string(script_content or "") if it["type"] == "thumbnail_text"),
+            "",
+        ).strip()
+    except Exception:
+        _logger.warning("サムネイル用テキストの抽出に失敗しました", exc_info=True)
+        thumbnail_text = ""
+
+    def _local_prompt(extra=""):
+        layout = "縦長の構図" if is_shorts else "横長の構図。左下と右下にキャラクターを重ねるので、主題は中央に大きく"
+        return (
+            f"「{topic}」を象徴する、YouTubeサムネイル向けの迫力ある漫画風イラスト。{layout}。"
+            f"{extra} 文字・ロゴは一切描かない。人物・キャラクターは描かない。鮮烈な色彩、強いコントラスト。"
+        )
+
+    def _generate_one(one_prompt, final_path, label, overlay_text=None):
         _log(f"サムネイル生成中: {label}")
         if thumb_img_gen.background_engine == "nanobanana":
             _log(f"  🖼 {thumb_img_gen.nanobanana_request_summary()}")
@@ -316,6 +338,7 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             raw=True,
             reference_image_paths=char_refs,
             is_thumbnail=True,
+            overlay_text=overlay_text,
         )
         if not generated_name:
             return None
@@ -329,7 +352,10 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
 
     if is_shorts:
         try:
-            saved_path = _generate_one(prompt, thumb_path, "thumbnail")
+            if is_local:
+                saved_path = _generate_one(_local_prompt(), thumb_path, "thumbnail", overlay_text=thumbnail_text or topic)
+            else:
+                saved_path = _generate_one(prompt, thumb_path, "thumbnail")
             if not saved_path:
                 raise ImageGenerationError(
                     "サムネイル画像が生成されませんでした。",
@@ -345,15 +371,6 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
 
     manifest_variants = []
     first_variant_path = None
-    thumbnail_text = ""
-    try:
-        thumbnail_text = next(
-            (it["text"] for it in ScriptParser.parse_string(script_content or "") if it["type"] == "thumbnail_text"),
-            "",
-        ).strip()
-    except Exception:
-        _logger.warning("サムネイル用テキストの抽出に失敗しました", exc_info=True)
-        thumbnail_text = ""
     common_rules = (
         "\n\nLong video thumbnail A/B test rules: 16:9 landscape. "
         "Put the food large in the center. Place Zundamon at lower left and Shikoku Metan at lower right. "
@@ -369,8 +386,14 @@ def generate_thumbnail(img_gen, topic, is_shorts, theme_dir, theme_bg_dir, updat
             variant_id = variant["variant"]
             filename = _thumbnail_variant_filename(theme_dir, variant_id)
             variant_path = os.path.join(thumbs, filename)
-            variant_prompt = f"{prompt}{common_rules}\n\n{variant['prompt']}"
-            saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
+            if is_local:
+                saved_path = _generate_one(
+                    _local_prompt(variant["prompt"]), variant_path, f"variant {variant_id}",
+                    overlay_text=thumbnail_text or topic,  # variant["text"] は英語の説明文なので画像に載せない
+                )
+            else:
+                variant_prompt = f"{prompt}{common_rules}\n\n{variant['prompt']}"
+                saved_path = _generate_one(variant_prompt, variant_path, f"variant {variant_id}")
             if not saved_path:
                 raise ImageGenerationError(
                     "サムネイル画像が生成されませんでした。",
@@ -523,7 +546,8 @@ def regenerate_thumbnail_only(output_dir, image_style="通常", debug=False, pro
     try:
         thumb_path = generate_thumbnail(img_gen, topic, is_shorts, output_dir, theme_bg_dir,
                                         update_status, script_content=script_content, debug_mode=debug,
-                                        long_thumbnail_ab_test=long_thumbnail_ab_test)
+                                        long_thumbnail_ab_test=long_thumbnail_ab_test,
+                                        engine=(background_engine or "").strip() or None)
         if not thumb_path:
             raise Exception("サムネイル生成に失敗しました")
         return thumb_path

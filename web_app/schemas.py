@@ -15,7 +15,7 @@ from config import (
 class GenerateRequest(BaseModel):
     script: str
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
+    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui" / "comfyui" / "codex_cli"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
@@ -37,7 +37,7 @@ class GenerateRequest(BaseModel):
 class BatchGenerateRequest(BaseModel):
     scripts: list[str]
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
+    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui" / "comfyui" / "codex_cli"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
@@ -51,7 +51,7 @@ class BatchGenerateRequest(BaseModel):
 class HistoryRegenerateRequest(BaseModel):
     history_names: list[str]
     image_style: str = WEB_DEFAULT_IMAGE_STYLE
-    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui"
+    background_engine: str = ""  # "" = IMAGE_BACKEND 設定に従う / "nanobanana" / "sd_webui" / "comfyui" / "codex_cli"
     reuse_backgrounds: bool = WEB_DEFAULT_REUSE_BACKGROUNDS
     reuse_audio: bool = False
     long_thumbnail_ab_test: bool = WEB_DEFAULT_LONG_THUMBNAIL_AB_TEST
@@ -87,7 +87,7 @@ class ImageRegenerateRequest(BaseModel):
     history_name: str
     image_keys: list[str]          # "backgrounds/bg_NNN_001.png" / "thumbnails/..." 等
     prompts: dict[str, str] = {}   # key → テキスト（未保存のプロンプト上書き用）
-    background_engine: str = ""    # "" = configデフォルト / "nanobanana" / "sd_webui"
+    background_engine: str = ""    # "" = configデフォルト / "nanobanana" / "sd_webui" / "comfyui" / "codex_cli"
 
 
 # ── アップロード ──────────────────────────────────────

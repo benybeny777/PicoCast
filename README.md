@@ -84,6 +84,7 @@ graph TD
 - 🗣 VOICEVOX / AquesTalk系 音声合成＋よみがな自動補正
 - 🖼 AI 画像生成（Gemini ⇄ Stable Diffusion WebUI 切替）
 - 🧠 台本の品質レビュー・自動リライト
+- 💻 Claude Code / Codex のコマンドで台本・タイトル案を生成（API キー不要）、ComfyUI でローカル画像生成
 - 📅 YouTube 連携（予約投稿・再生リスト登録・固定コメント投稿）
 - 📊 Analytics 連携（視聴データを次の台本に反映）
 - 🔀 複数チャンネル対応
@@ -99,7 +100,10 @@ graph TD
 | **AquesTalk系エンジン** | ゆっくり音声合成 | 任意。利用時はA-Quest公式ライセンス確認が必要 |
 | **ffmpeg** | 動画レンダリング | `h264_nvenc`（GPU）または `libx264`（CPU）|
 | **Ollama** | 品質レビュー等 | デフォルトモデル: `qwen3:8b` |
-| **Google AI Studio** | 台本・Gemini画像生成 | APIキーは設定画面で登録 |
+| **Google AI Studio** | 台本・Gemini画像生成 | 任意。APIキーは設定画面で登録 |
+| **Claude Code / Codex** | 台本・タイトル案の生成 | 任意。ログイン済みの `claude` / `codex` コマンドをそのまま使う（API キー不要） |
+| **ComfyUI** | ローカル画像生成（Krea 2 Turbo） | 任意。NVIDIA RTX 50系・VRAM 8GB以上で確認済み |
+| **Codex（画像）** | サムネイル等の画像生成 | 任意。`codex` コマンドの画像生成を ChatGPT の使用枠で使う（API キー不要・OpenAI 側で生成） |
 
 ### 必須構成 早見表
 
@@ -111,6 +115,10 @@ graph TD
 | 手書き台本 ＋ Gemini 画像 | ✅ | ✅ | ✅ | — | △ |
 | AI台本生成 ＋ Gemini 画像 | ✅ | ✅ | ✅ | — | △ |
 | AI台本生成 ＋ Stable Diffusion WebUI 画像 | ✅ | ✅ | ✅（台本用） | ✅ | ✅ |
+| **Claude Code / Codex 台本 ＋ ComfyUI 画像（ローカル中心）** | ✅ | ✅ | — | — | △ |
+
+- **ローカル中心の構成**：設定画面「AI / 文章生成」で文章生成AIを `Claude Code` か `Codex` に、「AI / 画像生成」で画像生成バックエンドを `ComfyUI` にします。生成画面の **「AIで台本を作る」** でテーマから台本を作れます（コピー＆貼り付け不要）。ComfyUI には Krea 2 Turbo のモデル（約13.2GB）を入れて起動しておきます。文字は画像AIに描かせず、生成後に重ねるので崩れません。
+- **サムネイルだけ Codex**：「サムネイルの画像生成」を `Codex` にすると、背景はローカル、サムネイルは Codex の画像生成（キャラ・文字入り）にできます。画像1枚で使用枠を多く使うため、背景の大量生成には向きません。
 
 - **YouTube 認証**：YouTube へアップロードする場合のみ必須（生成だけなら不要）。
 - **Ollama**：Stable Diffusion WebUI 画像のプロンプト英訳に必須。台本の品質レビューは任意。

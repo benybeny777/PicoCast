@@ -84,6 +84,19 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
     # ディスク
     "E-DISK": ErrorDef("E-DISK", "ディスクの空き容量が不足している可能性があります。", "system", False,
                        "出力先ドライブの空き容量を確保してから再実行してください。"),
+    "E-IMG-FONT": ErrorDef("E-IMG-FONT", "画像の文字入れに使うフォントが見つかりません。", "config", False,
+                           "設定画面「AI / 画像生成」の IMAGE_TEXT_FONT_PATH に、太字の日本語フォントファイル（例: C:\\Windows\\Fonts\\YuGothB.ttc）を指定してください。"),
+    "E-CODEX-IMAGE-MISSING": ErrorDef("E-CODEX-IMAGE-MISSING", "Codex が画像を保存しませんでした。", "pipeline", True,
+                                      "ターミナルで codex を起動し、ChatGPT の有料プランでログインしていることと、画像生成の使用枠が残っていることを確認してください。詳細は app_debug_*.log を確認してください。"),
+    # 文章生成AI（core/text_llm.py）
+    "E-LLM-BACKEND": ErrorDef("E-LLM-BACKEND", "文章生成AIの設定が正しくありません。", "config", False,
+                              "設定画面「AI / 文章生成」で文章生成AI（gemini / claude_cli / codex_cli / ollama）とモデル名を確認してください。"),
+    "E-LLM-CLI-MISSING": ErrorDef("E-LLM-CLI-MISSING", "文章生成に使う CLI が見つかりません。", "config", False,
+                                  "Claude Code（claude）または Codex（codex）をインストールしてログインし、設定画面で実行ファイルのパスを確認してください。"),
+    "E-LLM-FAILED": ErrorDef("E-LLM-FAILED", "文章生成AIが失敗しました。", "pipeline", True,
+                             "CLI の場合はターミナルで一度起動してログイン状態と利用上限を確認してください。詳細は app_debug_*.log を確認してください。"),
+    "E-LLM-TIMEOUT": ErrorDef("E-LLM-TIMEOUT", "文章生成AIが時間内に終わりませんでした。", "pipeline", True,
+                              "設定画面の TEXT_LLM_TIMEOUT_SEC を延ばすか、時間を置いて再実行してください。"),
     # 固定コメント
     "E-FIXED-COMMENT-AUTO": ErrorDef("E-FIXED-COMMENT-AUTO", "固定コメントの自動投稿に失敗しました。", "youtube", True,
                                      "固定コメント画面から該当動画を手動投稿して原因を確認してください。YouTube の認証切れなら設定画面「認証情報」で再認証し、詳細は app_debug_fixed_comment.log を確認してください。"),
@@ -112,6 +125,8 @@ _BACKEND_LABELS = {
     "nanobanana": "Gemini",
     "gemini":     "Gemini",
     "sd_webui":   "Stable Diffusion WebUI",
+    "comfyui":    "ComfyUI（ローカル）",
+    "codex_cli":  "Codex CLI",
 }
 
 

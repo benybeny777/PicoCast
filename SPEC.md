@@ -107,7 +107,11 @@ yukkurijidou/
 │   ├── pipeline_models.py  # 生成結果モデル・Long用バリアント定義
 │   └── runner.py           # DB queue から生成・レンダージョブを実行する常駐 runner
 ├── core/
-│   ├── ai_generator.py     # Gemini台本生成
+│   ├── ai_generator.py     # 台本・タイトルA/B/C案生成（text_llm 経由）
+│   ├── text_llm.py         # 文章生成AIの窓口（Gemini / Claude Code CLI / Codex CLI / Ollama）
+│   ├── comfyui_generator.py # ComfyUI（ローカル・Krea 2 Turbo）画像生成
+│   ├── codex_image.py      # Codex CLI の画像生成（ChatGPT の使用枠）
+│   ├── local_image_compose.py # ローカル画像の文字入れ・サムネの立ち絵合成
 │   ├── voicevox.py         # VOICEVOX音声生成
 │   ├── reading_normalizer.py # よみがな正規化（Ollama）
 │   ├── image_generator.py  # 背景・サムネ画像生成（IMAGE_BACKEND に基づきバックエンドを選択）
@@ -294,10 +298,45 @@ for idx, item in enumerate(dialogue_items):
 |:---|:---|:---|:---|:---:|
 | `gemini`（デフォルト） | `nanobanana` | Nano Banana / Gemini | Nano Banana / Gemini | ✅ |
 | `sd_webui` | `sd_webui` | Stable Diffusion WebUI | Stable Diffusion WebUI | ❌ |
+| `comfyui` | `comfyui` | ComfyUI（Krea 2 Turbo・ローカル） | ComfyUI＋立ち絵合成＋文字入れ（ローカル） | ❌ |
+| `codex_cli` | `codex_cli` | Codex CLI の画像生成（gpt-image・ChatGPT の使用枠） | Codex CLI（立ち絵を参照画像として添付） | ❌ |
+
+- `THUMBNAIL_IMAGE_BACKEND`（空=背景と同じ）でサムネイルだけ別のバックエンドにできる（例: 枚数の多い背景はローカルの ComfyUI、1本に1〜3枚のサムネは Codex）。決定順は「画像画面・履歴詳細で明示したエンジン → `THUMBNAIL_IMAGE_BACKEND` → 背景と同じ」（`workers/main.py: generate_thumbnail(engine=...)`、`core/image_generator.py: thumbnail_engine()`）。
 
 - `IMAGE_BACKEND=gemini` のとき、背景エンジンは常に `nanobanana` に固定される。
 - `background_engine` を明示的に渡したときは `IMAGE_BACKEND` より優先される（再生成画面からの個別指定用）。
 - `Auto` や自動切替設定は持たない（フォールバック禁止）。
+
+### 文章生成AI（TEXT_LLM_BACKEND）
+
+- `core/text_llm.py: generate()` が台本生成（`AIGenerator.generate_script`）・タイトルA/B/C案（`generate_title_variants`）・生成画面の「AIで台本を作る」「AIでShorts/Longタイトル案」「AIでネタ会議台本を作る」の共通窓口。失敗時に別の AI へ切り替えない（`E-LLM-BACKEND` / `E-LLM-CLI-MISSING` / `E-LLM-FAILED` / `E-LLM-TIMEOUT`）。
+- `claude_cli` / `codex_cli` は手元の CLI をログイン済みのサブスクリプションで動かす。起動オプションは PicoAgent（`src-tauri/src/providers/agent_cli.rs`）で検証済みの安全指定に揃える。
+  - Claude: `claude -p --safe-mode --tools <空 または WebSearch> --permission-mode plan --no-session-persistence [--model M]`。ファイル編集・コマンド実行ツールは渡さない。
+  - Codex: `codex exec --ignore-user-config --sandbox read-only --ephemeral --skip-git-repo-check [--model M] -`。モデル未指定時は `~/.codex/config.toml`（`CODEX_HOME`、profile 指定を含む）の model を引き継ぐ。Codex では Web 検索を使わない。
+  - **プロンプトは標準入力で渡す。** Windows の `claude.cmd` / `codex.cmd` は cmd.exe 経由で起動されるため、引数に台本の記号・改行を入れると誤解釈され、コマンドライン長の上限にも当たる。モデル名は記号を制限して検証する。
+  - 時間切れは子孫プロセスごと停止する（psutil）。stderr はデバッグログだけに残し、画面には出さない。
+- 生成画面のボタンは `POST /api/prompt/run`（`kind` = script / title / title-long / meeting、`theme` = 台本のテーマ）でジョブ（`prompt_run`）を登録し、`GET /api/jobs/{id}` の `result.text` を台本欄（タイトル案はプロンプト欄）へ入れる。テーマは「「テーマ」で台本を作ってください。」として手作業と同じ形でプロンプトの前に付ける。`GET /api/prompt/backends` は選択中の AI と各 CLI の有無を返す。
+- 生成パイプラインは台本取得後も同じ設定でタイトルA/B/C案を作る（以前は Gemini クライアントを閉じた後に呼んでいたため常に既定案になっていた）。
+
+### ComfyUI 背景・サムネイル生成（ローカル）
+
+- `core/comfyui_generator.py: ComfyUIGenerator` が、利用者が起動した ComfyUI（`COMFYUI_BASE_URL`、既定 `http://127.0.0.1:8188`）へ `POST /prompt` → `GET /history/{id}` → `GET /view` で1枚生成する。時間切れ（`COMFYUI_TIMEOUT_SEC`）は `POST /interrupt` で止めてから失敗にする。
+- 内蔵ワークフローは Krea 2 Turbo NVFP4（`COMFYUI_KREA_UNET` / `COMFYUI_KREA_TEXT_ENCODER` / `COMFYUI_KREA_VAE`、8ステップ・CFG 1・`VAEDecodeTiled`）。PicoAgent（`character-maker/sidecar/media/generate.py`）で RTX 5060 Laptop 8GB・RAM 34GB の実機生成を確認した構成と同じ。モデルの取得条件・ライセンス（Krea 2 Community License）は PicoAgent の `docs/models.md` を参照。NVFP4 は NVIDIA Blackwell（RTX 50系）以降が必要。
+- テキストエンコーダーが Qwen3-VL のため日本語プロンプトをそのまま渡す（Stable Diffusion WebUI のような Ollama 英訳は行わない）。
+- `COMFYUI_WORKFLOW_PATH` に ComfyUI の「API形式で保存」した JSON を指定すると、入力値がちょうど `{{PROMPT}}` / `{{WIDTH}}` / `{{HEIGHT}}` / `{{SEED}}` / `{{STEPS}}` の箇所へ値を入れて使う。`{{PROMPT}}` が無いワークフローは拒否する。
+- 生成解像度は最終解像度と同じ向きで `COMFYUI_GEN_LONG_EDGE` × `COMFYUI_GEN_SHORT_EDGE`（16の倍数）。保存時に最終解像度へ合わせる（Nano Banana と同じ扱い）。シードは毎回ランダムで、デバッグ時は `image_prompts.txt` に記録する。
+- **文字は画像AIに描かせない。** 背景プロンプトの「」（キャッチコピー）と `merge_telops_into_backgrounds()` が足す【テロップ演出】を `core/local_image_compose.py: split_overlay_text()` で取り除いて文字なしで生成し、生成後に Pillow で上部中央へ重ねる（テロップがあればテロップ、無ければ最初の「」）。見た目は Nano Banana への指示と同じ白文字・極太黒縁・影。フォントは `IMAGE_TEXT_FONT_PATH`（Windows 既定 `C:\Windows\Fonts\YuGothB.ttc`、macOS 既定 ヒラギノ角ゴシック W8）。見つからなければ `E-IMG-FONT` で停止する。位置と大きさは `IMAGE_TEXT_*` 設定。
+- サムネイルは台本全文ではなく題材（サムネタイトル）だけの短い指示で文字なしの絵を作り、`THUMBNAIL_CHARACTER_PNGS` の先頭2体を左下・右下へ合成（高さ `THUMBNAIL_CHARACTER_HEIGHT_RATIO`）し、台本の `サムネ文字` またはタイトルを重ねる。Long の A/B/C では各案の構図指示（英語）をそのまま使う。
+- 接続失敗・ComfyUI の実行エラー・出力なしは `ImageGenerationError(backend="comfyui")` で止める。他エンジンへの自動フォールバックは行わない。
+
+### Codex CLI 画像生成
+
+- `core/codex_image.py: generate_png()` が、ChatGPT のサブスクリプションでログイン済みの `codex exec` に内蔵の画像生成（`image_generation` 機能、codex-cli 0.162.1 で既定有効を確認）で1枚作らせ、作業フォルダの `output.png` を受け取る。API キーは使わない。生成は OpenAI のサーバーで行われ、ローカル生成ではない。
+- 起動: `codex exec --ignore-user-config --sandbox workspace-write --ephemeral --skip-git-repo-check --cd <専用一時フォルダ> [--model M] [--image=<参照画像>...] -`。保存のため書き込みを許可するが、書ける場所は専用一時フォルダ（と Codex 既定の /tmp）だけ。参照画像は一時フォルダへ複製してから `--image=` で1枚ずつ渡す（`--image a b` の形は後ろの `-` まで画像として読まれうるため）。プロンプトは標準入力。
+- **`OPENAI_API_KEY` を外して起動する。** 残っていると API の従量課金に切り替わるため。
+- プロンプトは Nano Banana と同じ `_build_full_prompt()`（日本語の文字も画像AIに描かせる）。参照画像があれば `_reference_instruction()` を前に置く（Nano Banana と共通）。保存時に最終解像度へ合わせる。
+- `output.png` が無ければ `E-CODEX-IMAGE-MISSING`、CLI の失敗は `E-LLM-FAILED`、時間切れ（`CODEX_IMAGE_TIMEOUT_SEC`）は `E-LLM-TIMEOUT`。別の場所を探して代わりに使わない。一時フォルダは成功・失敗とも削除する。
+- 使用枠: 画像1枚で文章の数倍の使用枠を使うという報告があり、5時間・週ごとの上限がある。背景を何十枚も作る用途には向かない。
 
 ### Stable Diffusion WebUI 背景生成
 
@@ -1064,7 +1103,17 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `NATIVE_CHARACTER_SIDE_MARGIN_SHORTS` | -120 | Shorts の左右マージン(px)。負値で画面外へ出す。設定DB / 設定画面で変更 |
 | `NATIVE_CHARACTER_SIDE_MARGIN_LONG` | -90 | Long の左右マージン(px)。負値で画面外へ出す。設定DB / 設定画面で変更 |
 | `VOICE_READING_MODE` | `safe_auto` | よみがな補正モード（`off` / `dictionary` / `safe_auto`）。`safe_auto` は SudachiPy + 自前辞書。Ollama は使わない |
-| `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル |
+| `GEMINI_MODEL` | `gemini-3.1-pro-preview` | 台本生成モデル（`TEXT_LLM_BACKEND=gemini` のとき） |
+| `TEXT_LLM_BACKEND` | `gemini` | 文章生成AI（`gemini` / `claude_cli` / `codex_cli` / `ollama`）。台本・タイトルA/B/C案・生成画面の「AIで〜」ボタンが使う |
+| `TEXT_LLM_WEB_SEARCH` | `1` | 台本作成時に Web 検索で事実確認させる（Gemini は google_search、Claude CLI は WebSearch ツールだけを許可） |
+| `TEXT_LLM_TIMEOUT_SEC` | `900` | 文章生成1回の上限秒数（CLI・Ollama） |
+| `CLAUDE_CLI_PATH` / `CLAUDE_CLI_MODEL` | `claude` / 空 | Claude Code CLI の実行ファイルとモデル（空=CLI の既定） |
+| `CODEX_CLI_PATH` / `CODEX_CLI_MODEL` | `codex` / 空 | Codex CLI の実行ファイルとモデル（空=`~/.codex/config.toml` の model） |
+| `OLLAMA_TEXT_MODEL` | `qwen3:8b` | 文章生成AIを `ollama` にしたときのモデル |
+| `COMFYUI_*` | — | ComfyUI（ローカル画像生成）。「ComfyUI 背景・サムネイル生成」節を参照 |
+| `THUMBNAIL_IMAGE_BACKEND` | 空 | サムネイルの画像生成バックエンド（空=背景と同じ / `gemini` / `sd_webui` / `comfyui` / `codex_cli`） |
+| `CODEX_IMAGE_TIMEOUT_SEC` | `600` | Codex CLI の画像1枚の生成待ち上限(秒) |
+| `IMAGE_TEXT_FONT_PATH` / `IMAGE_TEXT_*` | OS 別の太字ゴシック | ローカル画像の文字入れ |
 | `OLLAMA_REVIEW_MODEL` | `qwen3:8b` | 冒頭レビューモデル |
 | `OLLAMA_REWRITE_MODEL` | `qwen3:8b` | 冒頭リライトモデル |
 | `OLLAMA_TRANSLATE_MODEL` | `qwen3:8b` | Stable Diffusion WebUI プロンプト日→英翻訳モデル |

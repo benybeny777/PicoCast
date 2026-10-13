@@ -1,5 +1,6 @@
 import ast
 import os
+import sys
 import logging
 from dotenv import load_dotenv
 load_dotenv()
@@ -175,7 +176,9 @@ OLLAMA_PLAYLIST_NUM_PREDICT  = int(os.environ.get("OLLAMA_PLAYLIST_NUM_PREDICT",
 # ───────────────────────────────────────────────
 # 画像生成バックエンド統合設定
 # ───────────────────────────────────────────────
-IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "gemini").strip().lower()  # 画像生成バックエンド（gemini / sd_webui）
+IMAGE_BACKEND = os.environ.get("IMAGE_BACKEND", "gemini").strip().lower()  # 画像生成バックエンド（gemini / sd_webui / comfyui / codex_cli）
+THUMBNAIL_IMAGE_BACKEND = _setting_value("THUMBNAIL_IMAGE_BACKEND", "").strip().lower()  # サムネイルの画像生成バックエンド（空=背景と同じ）
+CODEX_IMAGE_TIMEOUT_SEC = int(_setting_value("CODEX_IMAGE_TIMEOUT_SEC", "600"))         # Codex CLI の画像1枚の生成待ち上限(秒)
 SD_WEBUI_BASE_URL = os.environ.get("SD_WEBUI_BASE_URL", "http://127.0.0.1:7860")  # Stable Diffusion WebUI / A1111 API URL
 SD_WEBUI_TIMEOUT_SEC = int(os.environ.get("SD_WEBUI_TIMEOUT_SEC", "180"))          # Stable Diffusion WebUI API タイムアウト(秒)
 SD_WEBUI_MODEL = os.environ.get("SD_WEBUI_MODEL", "")                              # Stable Diffusion WebUI で使用するモデル名（空=起動中モデルをそのまま使用）
@@ -190,6 +193,31 @@ SD_WEBUI_NEGATIVE_PROMPT = os.environ.get(                                      
     "bad anatomy, blurry, low quality, watermark, signature, logo, "
     "unreadable text, garbled text",
 )
+# ComfyUI（ローカル画像生成）。PicoAgent で RTX 5060 Laptop 8GB の動作を確認した Krea 2 Turbo を既定にする。
+COMFYUI_BASE_URL     = _setting_value("COMFYUI_BASE_URL", "http://127.0.0.1:8188").strip()  # ComfyUI API URL（利用者が起動した ComfyUI）
+COMFYUI_TIMEOUT_SEC  = int(_setting_value("COMFYUI_TIMEOUT_SEC", "900"))                    # ComfyUI 1枚の生成待ち上限(秒)
+COMFYUI_WORKFLOW_PATH = _setting_value("COMFYUI_WORKFLOW_PATH", "").strip()                # 独自ワークフロー（API形式JSON）のパス。空=内蔵の Krea 2 Turbo
+COMFYUI_KREA_UNET    = _setting_value("COMFYUI_KREA_UNET", "krea2_turbo_nvfp4.safetensors").strip()   # Krea 2 Turbo 本体（models/diffusion_models）
+COMFYUI_KREA_TEXT_ENCODER = _setting_value("COMFYUI_KREA_TEXT_ENCODER", "qwen3vl_4b_fp8_scaled.safetensors").strip()  # Krea 2 テキストエンコーダー（models/text_encoders）
+COMFYUI_KREA_VAE     = _setting_value("COMFYUI_KREA_VAE", "qwen_image_vae.safetensors").strip()  # Krea 2 の VAE（models/vae）
+COMFYUI_STEPS        = int(_setting_value("COMFYUI_STEPS", "8"))                            # 生成ステップ数（Krea 2 Turbo は 8 前後）
+COMFYUI_GEN_LONG_EDGE  = int(_setting_value("COMFYUI_GEN_LONG_EDGE", "1344"))               # 生成時の長辺(px)。16の倍数。最終解像度へは保存時に合わせる
+COMFYUI_GEN_SHORT_EDGE = int(_setting_value("COMFYUI_GEN_SHORT_EDGE", "768"))               # 生成時の短辺(px)。16の倍数
+COMFYUI_VAE_TILE_SIZE  = int(_setting_value("COMFYUI_VAE_TILE_SIZE", "256"))                # VAEタイル復号の大きさ（VRAM 8GB は 256、16GB 以上は 512）
+
+# ローカル画像（ComfyUI）の文字入れ。画像AIに日本語を描かせると崩れるため、生成後に文字を重ねる。
+_DEFAULT_TEXT_FONT = (
+    r"C:\Windows\Fonts\YuGothB.ttc" if sys.platform == "win32"
+    else "/System/Library/Fonts/ヒラギノ角ゴシック W8.ttc" if sys.platform == "darwin"
+    else ""
+)
+IMAGE_TEXT_FONT_PATH = _setting_value("IMAGE_TEXT_FONT_PATH", _DEFAULT_TEXT_FONT).strip()  # 背景のキャッチコピー・サムネ文字のフォントファイル（太字ゴシック推奨）
+IMAGE_TEXT_MAX_WIDTH_RATIO = float(_setting_value("IMAGE_TEXT_MAX_WIDTH_RATIO", "0.86"))    # 文字の最大幅（画像幅に対する割合）
+IMAGE_TEXT_HEIGHT_RATIO_LONG = float(_setting_value("IMAGE_TEXT_HEIGHT_RATIO_LONG", "0.13"))      # 横長: 文字の高さ（画像の高さに対する割合）
+IMAGE_TEXT_HEIGHT_RATIO_SHORTS = float(_setting_value("IMAGE_TEXT_HEIGHT_RATIO_SHORTS", "0.06"))  # 縦長: 文字の高さ（画像の高さに対する割合）
+IMAGE_TEXT_TOP_RATIO_LONG = float(_setting_value("IMAGE_TEXT_TOP_RATIO_LONG", "0.06"))      # 横長: 文字の上端位置（画像の高さに対する割合）
+IMAGE_TEXT_TOP_RATIO_SHORTS = float(_setting_value("IMAGE_TEXT_TOP_RATIO_SHORTS", "0.30"))  # 縦長: 文字の上端位置（上30%のセーフゾーンの直下）
+THUMBNAIL_CHARACTER_HEIGHT_RATIO = float(_setting_value("THUMBNAIL_CHARACTER_HEIGHT_RATIO", "0.62"))  # ローカルサムネに合成する立ち絵の高さ（画像の高さに対する割合）
 SD_WEBUI_ROOT = os.environ.get("SD_WEBUI_ROOT", "")                                # Stable Diffusion WebUI 本体ルートディレクトリ（例: C:\sd.webui\webui）
 SD_MODEL_MANIFEST_PATH = os.environ.get(                                            # Stable Diffusion WebUI モデルマニフェストパス（空=同梱既定値を使用）
     "SD_MODEL_MANIFEST_PATH",
@@ -226,6 +254,18 @@ VOICE_READING_MODE = os.environ.get("VOICE_READING_MODE", "safe_auto")  # 読み
 GEMINI_MODEL          = os.environ.get("GEMINI_MODEL",          "gemini-3.1-pro-preview")       # 台本生成モデル
 NANOBANANA_PRO_MODEL  = os.environ.get("NANOBANANA_PRO_MODEL",  "gemini-3-pro-image-preview")   # 背景・サムネ生成（高品質）
 NANOBANANA_FLASH_MODEL = os.environ.get("NANOBANANA_FLASH_MODEL", "gemini-3.1-flash-image-preview")  # 背景・サムネ生成（高速）
+
+# ───────────────────────────────────────────────
+# 文章生成AI（台本・章マーカー・固定コメント・タイトル案・背景プロンプト強化）
+# ───────────────────────────────────────────────
+TEXT_LLM_BACKEND        = _setting_value("TEXT_LLM_BACKEND", "gemini").strip().lower()  # 文章生成AI（gemini / claude_cli / codex_cli / ollama）
+TEXT_LLM_TIMEOUT_SEC    = int(_setting_value("TEXT_LLM_TIMEOUT_SEC", "900"))            # 文章生成1回の上限秒数（CLI・Ollama）
+TEXT_LLM_WEB_SEARCH     = _setting_value("TEXT_LLM_WEB_SEARCH", "1").strip() in ("1", "true", "yes", "on")  # 台本作成時にWeb検索で事実確認させる（Gemini・Claude CLI）
+CLAUDE_CLI_PATH         = _setting_value("CLAUDE_CLI_PATH", "claude").strip()          # Claude Code CLI の実行ファイル（PATH上の名前または絶対パス）
+CLAUDE_CLI_MODEL        = _setting_value("CLAUDE_CLI_MODEL", "").strip()               # Claude Code CLI のモデル（空=CLIの既定）
+CODEX_CLI_PATH          = _setting_value("CODEX_CLI_PATH", "codex").strip()            # Codex CLI の実行ファイル（PATH上の名前または絶対パス）
+CODEX_CLI_MODEL         = _setting_value("CODEX_CLI_MODEL", "").strip()                # Codex CLI のモデル（空=~/.codex/config.toml の model）
+OLLAMA_TEXT_MODEL       = _setting_value("OLLAMA_TEXT_MODEL", "qwen3:8b").strip()      # 文章生成AIを ollama にしたときのモデル
 
 
 # ───────────────────────────────────────────────
