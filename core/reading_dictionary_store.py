@@ -345,7 +345,7 @@ def accept_finding(word: str, reading: str) -> None:
 
 
 def dismiss_finding(word: str, voicevox_reading: str) -> bool:
-    """VOICEVOX の読みで正しいとして、同じ組み合わせを今後表示しない。"""
+    """今の読みのままでよい語として、同じ語・同じ VOICEVOX の読みの組み合わせを今後表示しない。"""
     ensure_initialized()
     with _connect() as conn:
         cur = conn.execute(

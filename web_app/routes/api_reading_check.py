@@ -49,7 +49,7 @@ def api_accept_finding(req: AcceptRequest):
 
 @router.post("/findings/dismiss")
 def api_dismiss_finding(req: DismissRequest):
-    """VOICEVOX の読みで正しいとして、今後表示しない。"""
+    """今の読みのままでよい語として、同じ組み合わせを今後表示しない。"""
     from core import reading_dictionary_store
     if not reading_dictionary_store.dismiss_finding(req.word, req.voicevox_reading):
         raise HTTPException(status_code=404, detail=f"'{req.word}' は一覧にありません")

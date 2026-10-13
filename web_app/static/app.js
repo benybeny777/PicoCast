@@ -64,7 +64,7 @@ function esc(s) {
 }
 
 /**
- * 読み違いの可能性（VOICEVOX の読みと辞書の読みの食い違い）の一覧を描画する。
+ * 読み違いの可能性（VOICEVOX と形態素解析で読みが分かれた語）の一覧を描画する。
  * 生成画面の読みチェックと、設定画面「よみがな辞書」で共用する。
  * @param {HTMLElement} container
  * @param {Array} findings - {word, voicevox_reading, expected_reading, text|example}
@@ -77,7 +77,7 @@ function renderReadingFindings(container, findings, onChanged) {
   }
   container.innerHTML = `
     <table class="status-table">
-      <tr><th>語</th><th>VOICEVOX の読み</th><th>正しい読み（ひらがな）</th><th>例文</th><th></th></tr>
+      <tr><th>語</th><th>VOICEVOX の読み</th><th>形態素解析の読み → 正しい読み（ひらがな）</th><th>例文</th><th></th></tr>
       ${findings.map((f, i) => `
         <tr>
           <td><strong>${esc(f.word)}</strong></td>
@@ -86,7 +86,7 @@ function renderReadingFindings(container, findings, onChanged) {
           <td class="hint" style="font-size:12px">${esc(f.text || f.example || '')}</td>
           <td style="white-space:nowrap">
             <button class="btn btn-xs btn-primary" data-act="accept" data-i="${i}">この読みで登録</button>
-            <button class="btn btn-xs btn-secondary" data-act="dismiss" data-i="${i}">VOICEVOXの読みで正しい</button>
+            <button class="btn btn-xs btn-secondary" data-act="dismiss" data-i="${i}" title="今の読みのままでよい語。今後この組み合わせは表示しません">問題なし</button>
           </td>
         </tr>`).join('')}
     </table>`;

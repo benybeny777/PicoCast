@@ -1,8 +1,7 @@
-"""生成前の読みチェック（台本を貼った段階で VOICEVOX の読み違いの可能性を調べる）。
+"""生成前の読みチェック（台本を貼った段階で、読みが分かれる語を調べる）。
 
-生成時と同じ手順（読み補正 → VOICEVOX audio_query）で VOICEVOX の読みを取り、
-core/reading_check.py で辞書の読みと比べる。音声の合成はしないので数秒で終わる。
-読み補正の辞書・候補は書き換えない（normalize_batch(save=False)）。
+台本の元の文（漢字のまま）を VOICEVOX の audio_query に渡して VOICEVOX の読みを取り、
+core/reading_check.py で形態素解析の読みと比べる。音声の合成はしないので数秒で終わる。
 """
 from __future__ import annotations
 
@@ -47,13 +46,11 @@ def _run_script_check(job: Job, script: str) -> dict:
     from config import config as cfg
     from core.error_codes import AppError
     from core.reading_check import check_and_record, describe
-    from core.reading_normalizer import ReadingNormalizer
     from core.voicevox import VoicevoxAPI
 
     chunks = _voicevox_chunks(script)
     if not chunks:
         return {"checked": 0, "findings": []}
-    reading_map = ReadingNormalizer().normalize_batch([c["text"] for c in chunks], save=False)
     vv = VoicevoxAPI()
     if not vv.check_connection():
         _logger.error("読みチェック: VOICEVOX に接続できません: url=%s", cfg.VOICEVOX_URL)
@@ -61,9 +58,8 @@ def _run_script_check(job: Job, script: str) -> dict:
     _log(job, f"VOICEVOX の読みを取得中...（{len(chunks)}文）", "info")
 
     def query(chunk):
-        speech_text = reading_map.get(chunk["text"], chunk["text"])
-        _query, kana = vv.audio_query_only(speech_text, chunk["speaker_id"])
-        return speech_text, kana
+        _query, kana = vv.audio_query_only(chunk["text"], chunk["speaker_id"])
+        return chunk["text"], kana
 
     workers = max(1, min(cfg.VOICEVOX_QUERY_WORKERS, len(chunks)))
     with ThreadPoolExecutor(max_workers=workers) as pool:

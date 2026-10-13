@@ -1,12 +1,14 @@
-"""VOICEVOX の読み間違い候補を、音声合成の前に見つける。
+"""読みが分かれる語（読み違いの可能性）を、音声合成の前に見つける。
 
-VOICEVOX の audio_query は、実際にどう読むかを AquesTalk 風のカタカナ（`kana`。例: `ツ'ライノダ`）で返す。
-これを形態素解析（Sudachi）の辞書の読みと比べ、漢字を含む語で読みが食い違う箇所を
-「読み違いの可能性」として出す。音声を聞き直す（Whisper など）必要がなく、
-合成前に一瞬で調べられ、文字起こし側の聞き間違いも混ざらない。
+台本の元の文（漢字のまま）を VOICEVOX の audio_query に渡すと、VOICEVOX がどう読むかを
+AquesTalk 風のカタカナ（`kana`。例: `カ'ライノダ`）で返す。これを形態素解析（Sudachi）の読みと比べ、
+漢字を含む語で2つの解析の読みが分かれる箇所を「読み違いの可能性」として出す。
+音声を聞き直す（Whisper など）必要がなく、合成前に一瞬で調べられる。
 
-どちらが正しいかは決めない（Sudachi の辞書の読みが文脈に合わない語もある）。
-利用者が画面で確認し、正しい読みをユーザー辞書へ登録する（core/reading_dictionary_store.py）。
+読み補正が full_hiragana（全部ひらがな）のとき、音声は Sudachi の読みで作られる。分かれた語は
+Sudachi の読みが文脈に合っていない（例: 辛いカレー → つらい）おそれがあるため確認が要る。
+どちらが正しいかは決めない。利用者が画面で確認し、正しい読みを基本辞書へ登録する
+（core/reading_dictionary_store.py）。基本辞書に登録済みの語は出さない。
 
 比較は発音に寄せて揃える。辞書の読みは表記どおり（トウキョウ・助詞のハ）で、VOICEVOX は
 発音どおり（トーキョー・ワ）のため、長音・助詞・ヲ/ヅ/ヂを1文字ずつ置き換えて比べる
@@ -131,15 +133,21 @@ class ReadingChecker:
         return findings
 
 
+def covered_by_base_dict(word: str, base_dict: dict[str, str]) -> bool:
+    """基本辞書（利用者が確認した読み）で読みが決まる語か。基本辞書は部分一致で置換される。"""
+    return any(key and key in word for key in base_dict)
+
+
 def check_and_record(pairs: list[tuple[str, str]], source: str) -> list[Finding]:
-    """(VOICEVOX へ渡した文, VOICEVOX の kana) の組を比べ、見つかったものを記録して返す。"""
+    """(台本の元の文, その文の VOICEVOX の kana) の組を比べ、見つかったものを記録して返す。"""
     from core import reading_dictionary_store
 
     checker = ReadingChecker()
+    base_dict = reading_dictionary_store.load_dict("base")
     findings: list[Finding] = []
     for text, kana in pairs:
         for finding in checker.compare(text, kana):
-            if finding not in findings:
+            if finding not in findings and not covered_by_base_dict(finding.word, base_dict):
                 findings.append(finding)
     reading_dictionary_store.record_findings(findings, source)
     return findings
@@ -147,4 +155,4 @@ def check_and_record(pairs: list[tuple[str, str]], source: str) -> list[Finding]
 
 def describe(finding: Finding) -> str:
     """ログ・画面向けの1行。"""
-    return f"{finding.word}（VOICEVOX: {finding.voicevox_reading} / 辞書: {finding.expected_reading}）"
+    return f"{finding.word}（VOICEVOX: {finding.voicevox_reading} / 形態素解析: {finding.expected_reading}）"

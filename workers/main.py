@@ -1301,7 +1301,9 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     
     reading_normalizer = ReadingNormalizer()
     
-    if reading_normalizer.mode == "safe_auto":
+    if reading_normalizer.mode == "full_hiragana":
+        update_status("🔤 読み補正: full_hiragana (漢字を含む語をすべてひらがなで渡す)")
+    elif reading_normalizer.mode == "safe_auto":
         update_status("🔤 読み補正: safe_auto (Sudachi形態素解析)")
     elif reading_normalizer.mode == "dictionary":
         update_status("🔤 読み補正: dictionary (辞書のみ)")
@@ -1309,11 +1311,14 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
     reading_map = reading_normalizer.normalize_batch(_all_chunks)
     _changed_map = {k: v for k, v in reading_map.items() if k != v}
     
-    if _changed_map:
+    if _changed_map and reading_normalizer.mode == "full_hiragana":
+        # ほぼ全文が変わるため、文ごとの置換は reading_map.json にだけ残す
+        update_status(f"🔤 ひらがな化: {len(_changed_map)}文（読みは meta/reading_map.json）")
+    elif _changed_map:
         _replacements = [f"{k}→{v}" for k, v in _changed_map.items()]
         update_status(f"🔤 読み置換: {', '.join(_replacements)}")
     
-    if reading_normalizer.mode in ("dictionary", "safe_auto"):
+    if reading_normalizer.mode in ("dictionary", "safe_auto", "full_hiragana"):
         # メタ情報保存
         _reading_map_path = os.path.join(_meta_dir(theme_dir), "reading_map.json")
         try:
@@ -1495,13 +1500,21 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         )
         return finish_result(f"❌ 音声クエリ失敗のため処理を中止しました\n理由: {_query_error}")
 
-    # 読み違いの可能性: VOICEVOX が返した読み（kana）と辞書の読みを比べて知らせる（合成は続ける）
+    # 読み違いの可能性: 元の文（漢字のまま）を VOICEVOX がどう読むかと形態素解析の読みを比べて知らせる（合成は続ける）。
+    # 読み補正で文が変わっていなければ取得済みの kana を使い、変わった文だけ元の文の kana を追加で取る。
     if _queries:
         from core.reading_check import check_and_record, describe
-        _reading_findings = check_and_record(
-            [(_voicevox_chunks[i]["speech_text"], kana) for i, (_q, kana) in sorted(_queries.items())],
-            source=os.path.basename(theme_dir),
-        )
+
+        def _original_kana(idx: int) -> tuple[str, str]:
+            c = _voicevox_chunks[idx]
+            if c["speech_text"] == c["chunk_text"]:
+                return c["chunk_text"], _queries[idx][1]
+            _q, kana = vv.audio_query_only(c["chunk_text"], c["speaker_id"])
+            return c["chunk_text"], kana
+
+        with ThreadPoolExecutor(max_workers=_QUERY_WORKERS) as _ex:
+            _check_pairs = list(_ex.map(_original_kana, sorted(_queries)))
+        _reading_findings = check_and_record(_check_pairs, source=os.path.basename(theme_dir))
         if _reading_findings:
             update_status(f"🔎 読み違いの可能性 {len(_reading_findings)}件（設定画面「よみがな辞書」で確認・登録できます）", "warning")
             for _f in _reading_findings[:10]:

@@ -56,3 +56,31 @@ def test_safe_auto_initializes_with_sudachipy(monkeypatch, tmp_path):
     normalizer = ReadingNormalizer()
     result = normalizer.normalize_batch(["東京の話"])["東京の話"]
     assert result
+
+
+def test_full_hiragana_converts_every_kanji_word(monkeypatch, tmp_path):
+    """動詞・形容詞・1文字の漢字も含めて、漢字を含む語をすべてひらがなで渡す。"""
+    from config import config
+    from core import reading_dictionary_store
+    from core.reading_normalizer import ReadingNormalizer
+
+    _set_paths(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "VOICE_READING_MODE", "full_hiragana")
+    reading_dictionary_store.upsert_entry("base", "辛", "から")  # 利用者が確認した読みが優先される
+
+    result = ReadingNormalizer().normalize_batch(["辛いカレーを食べに行く。東京の方が人が多い。3人でVOICEVOX"])
+    text = next(iter(result.values()))
+    assert text == "からいカレーをたべにいく。とうきょうのほうがひとがおおい。3にんでVOICEVOX"
+    # 形態素解析の読みを自動学習辞書へ書き足さない（確認前の読みを固定しない）
+    assert "食べ" not in reading_dictionary_store.load_dict("user")
+
+
+def test_unknown_reading_mode_is_rejected(monkeypatch, tmp_path):
+    import pytest
+    from config import config
+    from core.reading_normalizer import ReadingNormalizer
+
+    _set_paths(monkeypatch, tmp_path)
+    monkeypatch.setattr(config, "VOICE_READING_MODE", "all_kana")
+    with pytest.raises(RuntimeError, match="未対応の VOICE_READING_MODE"):
+        ReadingNormalizer()

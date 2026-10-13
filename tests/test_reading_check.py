@@ -8,6 +8,13 @@ from core import reading_dictionary_store as store
 from core.reading_check import Finding, ReadingChecker, clean_voicevox_kana, pronunciation_key
 
 
+@pytest.fixture(autouse=True)
+def _own_dictionary_db(monkeypatch, tmp_path):
+    """辞書・検出結果はテストごとに別の settings.db にする（登録したものが次のテストへ残らないように）。"""
+    import core.settings_store as settings_store
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+
+
 @pytest.fixture(scope="module")
 def checker():
     return ReadingChecker()
@@ -100,8 +107,7 @@ def _fake_voicevox(monkeypatch, kana_by_text, *, up=True):
 
 
 def test_script_check_finds_misreading_without_synthesis(client, monkeypatch):
-    from config import config as cfg
-    monkeypatch.setattr(cfg, "VOICE_READING_MODE", "off")  # 台本の文をそのまま VOICEVOX へ渡す
+    # 元の文（漢字のまま）を VOICEVOX へ渡して読みを取る
     _fake_voicevox(monkeypatch, {"辛いのだ。": "カ'ライノダ", "東京へ行く！": "トーキョーエ/イ'ク"})
     script = "ずんだもん(ノーマル): 辛いのだ。東京へ行く！\n背景: 夜の街"
     job = _wait(client, client.post("/api/reading-check", json={"script": script}).json()["job_id"])
@@ -125,3 +131,11 @@ def test_script_check_requires_voicevox(client, monkeypatch):
 def test_empty_script_and_unknown_dismiss(client):
     assert client.post("/api/reading-check", json={"script": " "}).status_code == 400
     assert client.post("/api/reading-check/findings/dismiss", json={"word": "無い", "voicevox_reading": "ない"}).status_code == 404
+
+
+def test_words_fixed_by_base_dictionary_are_not_reported(monkeypatch):
+    from core.reading_check import check_and_record
+
+    store.upsert_entry("base", "辛", "から")
+    found = check_and_record([("辛いのだ。", "カ'ライノダ"), ("今日は生物の話", "キョ'ーワ/ナマモノノ/ハナシ")], "動画")
+    assert [f.word for f in found] == ["生物"]
