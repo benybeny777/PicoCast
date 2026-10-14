@@ -7,6 +7,12 @@
 
 ## 2026-10-15
 
+### PicoCast のRust共通基盤（R0）
+
+- GitHubリポジトリをPicoCastへ改名し、Rustワークスペース、型付きチャンネルID、UTC日時、エラー・設定・ファイル・HTTP・プロセス管理の共通部品を追加した。
+- SQLiteの整合性確認・移行前バックアップと、Windows DPAPI＋AES-GCMによるチャンネル別暗号化保存を追加した。
+- clippy禁止設定・ASTガード・最後にまとめる `xtask verify` とWindows CIを用意した。Python 3.12の依存ロックも用意し、既存環境と実データは保持している。
+
 ### ローカル API 保護（T29）
 
 - 全HTTP要求でローカルHostと実待受ポートを検証し、外部サイトからの変更操作をOrigin・起動ごとのトークンで拒否する。

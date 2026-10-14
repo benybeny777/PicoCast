@@ -5,6 +5,10 @@
 
 ---
 
+## Rust版の基盤（R0）
+
+完成形は `DESIGN_rust_rewrite.md`、実装・移行の現状は `docs/r0-foundation.md` を正本とする。新規RustコードはCargoワークスペースの `picocast-core` と `picocast-store` に集約する。チャンネルID、UTC日時、エラー、設定、プロセス、HTTP、原子的保存、SQLite・暗号化保存を実装し、clippyとASTガードで共通部品の迂回を検出する。旧Pythonアプリの置換、旧データ取込み、Tauri画面はまだ未完了。以下はPython旧版の仕様で、パスはPython版のルートからの相対表記とする。
+
 ## 概要
 
 複数のYouTubeチャンネル向けに、台本生成・VOICEVOX音声・画像生成・native MP4・YouTubeアップロード・Analytics確認までを行うローカルWebツール。チャンネルごとの設定は channel profile で管理し、Web UI上でいつでも切り替えられる。

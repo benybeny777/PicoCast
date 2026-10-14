@@ -28,3 +28,18 @@ dist/
 *.onefile-build/
 core/_build_version.py
 temp/
+
+# Rust の生成物と旧 Python 環境の退避
+target/
+.venv-311-backup/
+legacy/.venv/
+legacy/.venv-311-backup/
+legacy/data/
+legacy/output/
+legacy/dev/
+legacy/temp/
+legacy/dist/
+legacy/.env
+legacy/client_secrets.json
+legacy/token.json
+legacy/token_analytics.json

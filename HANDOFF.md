@@ -1,6 +1,6 @@
 # 引き継ぎ（未マージ作業と再開方法）
 
-最終更新: 2026-10-15（Codex: T29 ローカルAPI保護を追加）
+最終更新: 2026-10-15（Codex: Rust R0基盤を実装・検証済み、旧環境移行は未完了）
 > **方針（2026-10-15 利用者決定）: 全部 Rust（PicoAgent と同じ構成）で作り直す。今のフォルダ（`C:\00_PG\22_PicoCast` へ改名）とリポジトリ（`benybeny777/PicoCast` へ改名）をそのまま使い、Python 版は `legacy/` に移して凍結（本番の不具合修正だけ）。** 正本は [DESIGN_rust_rewrite.md](DESIGN_rust_rewrite.md)。画面の見た目は [DESIGN_ui.md](DESIGN_ui.md)＋見本 `docs/design/picocast-ui-mockup.html`。Python は 3.12 に固定し、CUDA は GPU に合わせて 1 組だけ選ぶ（`DESIGN_rust_rewrite.md` §12）。
 >
 > **方針（2026-10-15 利用者決定）: 販売・配布はしない。製品として出せるレベルの品質にする。** 優先順位と保留項目は [DESIGN_quality.md](DESIGN_quality.md) §0・§8 が正本。販売・配布向けのタスク（ライセンス、インストーラ、署名、パック販売など）は保留。
@@ -11,7 +11,7 @@
 
 1. `AGENTS.md` → このファイル → `DESIGN_picocast_v3.md`（§12 マイルストーン）→ `DESIGN_product_v2.md`（該当タスクカード）の順に読む。
 2. `git fetch origin` し、作業ブランチ `codex/license-v2-rebrand-design`（PR #36）をチェックアウトする。
-3. `./.venv/Scripts/python.exe -m pytest -q` を実行する。今回の作業ツリーでは **618 passed, 1 skipped**（既存未コミットテストを含む）。`node tests/test_license_gas.mjs --python .venv/Scripts/python.exe` と `node --test tests/test_license_ui.mjs` も確認する。
+3. `docs/r0-foundation.md` と `.agents/skills/implement-picocast-r0/SKILL.md` を読む。修正中は必要な単体テストだけを実行し、全体検証は変更がまとまった最後に行う。Python旧版の直前の全体確認は656件成功・1件skip（既存未コミット差分を含む）。開始時に全体テストを繰り返さない。
 4. 下の「タスク状態」で最初の「未着手」かつ依存が満たされたカードから着手する。カードの仕様は `DESIGN_product_v2.md` §4。
 
 ## ブランチと PR
@@ -24,6 +24,14 @@
 - 以後の実装（T1〜）は #36 のブランチに積むか、カード単位で #36 から派生したブランチ＋PR にする。どちらにしても PR 本文に「対象カード・変更内容・検証・未確認」を書く。
 
 ## 現在のマイルストーン
+
+- GitHubは `benybeny777/PicoCast` に改名済み。origin更新済み。ローカルのフォルダ名とCodexプロジェクト表示名はまだ旧名。Windows画面操作はアクセス拒否（0x80070005）で停止した。
+- エディター用は `PicoCast.code-workspace` に改名し、表示名もPicoCastにした。Codexの登録名とは別なので変更済みと混同しない。
+- R0コード: Cargoワークスペース、core/store、型付きチャンネルID、検証ガード、`xtask verify`、Windows CIを追加した。`cargo xtask verify` は整形・clippy・ガード・単体テスト20件成功。Windows DPAPIとプロセス終了も単体検証した。UI無しによるNodeテストskip、CI実行とmacOS実機は未確認。
+- Python3.12用の `pyproject.toml`・`.python-version`・`uv.lock` は用意済み。旧3.11環境、Pythonソース、保存データは移動していない。
+- 設定・metadata DB3件をオンラインバックアップし、旧認証ファイル・マスターキー・未コミット差分とともに `~/.codex/backups/picocast-r0/` へ退避済み。DB整合性はすべて確認した。
+- 事前確認: 自動運用ONは0、Web/runnerは0。6月に残ったrunning記録10件はPID記録と対応プロセスが無いため、実行中とは区別する。履歴を勝手に削除・キャンセルしない。
+- 次は §2.2 のCodex参照先更新・フォルダ改名・legacy移行・3.12への切替。稼働中セッションの参照先を失う変更は、アプリでの参照先更新と再開方法が確保できてから行う。バックアップ済みでも切替直前に実行状態を再確認する。R0の完了とはまだ扱わない。
 
 **R0 土台**（`DESIGN_rust_rewrite.md` §10）: **改名のメンテナンス（§2.2 の 10 手順。Python 3.12 化を同時に行う）** → Cargo ワークスペース → `xtask verify` と CI → clippy の禁止設定と走査ガード → `picocast-core`（clock・AppError・settings・proc・http・fsutil・tracing）→ `picocast-store`（DB・マイグレーション・バックアップ・秘密値）→ AGENTS.md・HANDOFF・スキル。
 **R0 と並行して可能な作業**: 旧アプリの Python 3.12＋`uv.lock` への固定（§12.4。本番の自動運用が止まっている時間帯に、退避してから行う）。

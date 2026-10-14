@@ -1,0 +1,41 @@
+[workspace]
+members = ["crates/picocast-core", "crates/picocast-store", "xtask"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+publish = false
+
+[workspace.dependencies]
+picocast-core = { path = "crates/picocast-core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "=0.4.45", features = ["serde"] }
+chrono-tz = "=0.10.4"
+tokio = { version = "=1.53.2", features = ["macros", "rt-multi-thread", "process", "time", "io-util", "net"] }
+reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls"] }
+tracing = "0.1"
+tempfile = "=3.27.0"
+rusqlite = { version = "0.37", features = ["bundled", "backup"] }
+aes-gcm = "0.10"
+getrandom = "=0.3.4"
+zeroize = "1"
+syn = { version = "=2.0.119", features = ["full", "visit"] }
+anyhow = "1"
+libc = "0.2"
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Cryptography", "Win32_System_Memory", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp", "Win32_Storage_FileSystem"] }
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+disallowed_methods = "deny"
+disallowed_types = "deny"
+disallowed_macros = "deny"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

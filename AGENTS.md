@@ -116,7 +116,17 @@
 - スキルを使うたびに、記載されたパス・コマンド・成果物を現行コードと照合し、古ければ同じ作業でスキルを更新してから続ける。
 - スキル名は英小文字・数字・ハイフンの動詞始まり。frontmatter は `name` と「何をするか・どの依頼で使うか」を含む `description` だけ。本文は日本語・命令形・500行未満を目安にする。
 
-## チャンネルプロファイル・DB正本
+## Rust版の共通基盤
+
+- Rust版の仕様は `DESIGN_rust_rewrite.md`、画面は `DESIGN_ui.md` を正本とする。以下のPython固有規則は旧版へ適用し、Rustの本番ではローカルHTTPサーバーを作らない。
+- チャンネルは `picocast_core::ChannelId` で引数に明示する。現在のチャンネルを暗黙の共有状態から探さない。
+- 時刻は `picocast_core::clock`、HTTPは `http`、外部プロセスは `proc`、ファイル書込みは `fsutil`、型付き設定は `settings`、DBと暗号化保存は `picocast-store` の共通処理だけを通す。
+- UTC日時型・安定した `AppError`・対処手順を使い、秘密値や内部トレースを利用者へ出さない。ログは `tracing` で `channel_id` / `job_id` の文脈を付ける。
+- Rustの調整可能値は設定の型で検証し、共通設定から呼出時に明示注入する。環境変数を新しい設定の正本にしない。
+- 禁止API・本番の `unwrap` / `expect` / `panic` はclippyとASTガードで検査する。例外は持ち主のモジュールに限定し、ガードを弱めて検証を通さない。
+- Rustの最終検証は `cargo xtask verify` にまとめる。修正中の必要な単体テストと、最後の広範囲の検証を分ける。再開手順は `.agents/skills/implement-picocast-r0/SKILL.md`。
+
+## チャンネルプロファイル・DB正本（Python旧版）
 
 - 複数チャンネル・ジャンルは `data/settings.db:channel_profiles` で管理する。`is_active=1` が active profile。
 - `profile_id` / `genre_profile` / `output_root` はチャンネルハンドルから `@` を除いた値に統一する。既存値が違う場合は関連テーブル・prompt seed フォルダ・output フォルダも移行する。

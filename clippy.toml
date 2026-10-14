@@ -1,0 +1,28 @@
+# 所有モジュールのみ allow を付け、走査ガードで所有パスを検証する。
+disallowed-methods = [
+  { path = "chrono::Utc::now", reason = "時刻は picocast_core::clock に集約する" },
+  { path = "chrono::Local::now", reason = "時刻は picocast_core::clock に集約する" },
+  { path = "std::time::SystemTime::now", reason = "時刻は picocast_core::clock に集約する" },
+  { path = "reqwest::Client::new", reason = "HTTP は picocast_core::http に集約する" },
+  { path = "reqwest::Client::builder", reason = "HTTP は picocast_core::http に集約する" },
+  { path = "reqwest::get", reason = "HTTP は picocast_core::http に集約する" },
+  { path = "rusqlite::Connection::open", reason = "DB は picocast_store に集約する" },
+  { path = "rusqlite::Connection::open_in_memory", reason = "DB は picocast_store に集約する" },
+  { path = "rusqlite::Connection::open_with_flags", reason = "DB は picocast_store に集約する" },
+  { path = "rusqlite::Connection::open_with_flags_and_vfs", reason = "DB は picocast_store に集約する" },
+  { path = "std::fs::write", reason = "書き込みは picocast_core::fsutil に集約する" },
+  { path = "std::fs::File::create", reason = "書き込みは picocast_core::fsutil に集約する" },
+  { path = "std::fs::File::create_new", reason = "書き込みは picocast_core::fsutil に集約する" },
+  { path = "std::env::var", reason = "環境変数は picocast_core::settings に集約する" },
+  { path = "std::env::var_os", reason = "環境変数は picocast_core::settings に集約する" },
+]
+disallowed-types = [
+  { path = "std::process::Command", reason = "プロセスは picocast_core::proc に集約する" },
+  { path = "tokio::process::Command", reason = "プロセスは picocast_core::proc に集約する" },
+  { path = "chrono::NaiveDateTime", reason = "保存日時は UTC の型を使う" },
+]
+disallowed-macros = [
+  { path = "std::println", reason = "出力は tracing に集約する" },
+  { path = "std::eprintln", reason = "出力は tracing に集約する" },
+  { path = "std::dbg", reason = "出力は tracing に集約する" },
+]
