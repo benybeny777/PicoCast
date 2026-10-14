@@ -295,7 +295,7 @@ def record_findings(findings, source: str) -> int:
     ensure_initialized()
     now = _now_jst()
     active = 0
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         for f in findings:
             conn.execute(
                 """
@@ -323,7 +323,7 @@ def record_findings(findings, source: str) -> int:
 def list_findings() -> list[dict]:
     """未対応（無視していない）の読み違いの可能性。よく出る順。"""
     ensure_initialized()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         rows = conn.execute(
             """
             SELECT word, voicevox_reading, expected_reading, example, source, seen_count, updated_at
@@ -340,7 +340,7 @@ def accept_finding(word: str, reading: str) -> None:
     基本辞書は形態素解析の前に文字列置換されるため、動詞・形容詞や1文字の漢字にも効く。
     """
     upsert_entry("base", word, reading)
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         conn.execute("DELETE FROM reading_check_findings WHERE word=?", (word,))
         conn.commit()
 
@@ -348,7 +348,7 @@ def accept_finding(word: str, reading: str) -> None:
 def dismiss_finding(word: str, voicevox_reading: str) -> bool:
     """今の読みのままでよい語として、同じ語・同じ VOICEVOX の読みの組み合わせを今後表示しない。"""
     ensure_initialized()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         cur = conn.execute(
             "UPDATE reading_check_findings SET dismissed=1, updated_at=? WHERE word=? AND voicevox_reading=?",
             (_now_jst(), word, voicevox_reading),
