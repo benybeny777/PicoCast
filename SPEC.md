@@ -801,6 +801,11 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 
 ### セキュリティ方針
 
+- ローカルAPI保護（T29）: `web_app/local_api_security.py` を最外周のミドルウェアとして適用する。すべてのHTTP要求で Host が実際の待受ポートの `127.0.0.1` / `localhost` であることを確認し、不一致は400で拒否する。
+- POST / PUT / PATCH / DELETE は同じ Origin（未送信時のみ同じ Referer）と `X-PicoCast-Token` を必須にする。不一致・欠落・重複ヘッダーは403で拒否し、`E-WEB-REQUEST` と画面の再読み込み手順を返す。拒否理由は値を含めずデバッグログに残す。
+- トークンは起動ごとにメモリ上で生成し、DBやログへ保存しない。`base.html` と共通 `web_app/static/api.js` で既存の fetch 操作へ付与する。外部URLへ付与せず、変更要求のリダイレクトも禁止する。トークン付きHTMLは `Cache-Control: no-store` とする。G13のJSON解析・タイムアウト・二重送信防止・直接fetch禁止ガードは共通基盤の作業で追加する。
+- 自動選択ポートでも実待受ポートに従う。HTTPを使わないOSタスクのCLI経路には影響しない。
+
 - `127.0.0.1` のみバインド
 - output/ 配下のみファイルアクセス可（`security.py` で検証）
 - `.env` / `client_secrets.json` / `token.json` / `token_analytics.json` の内容は返さない

@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from conftest import local_api_client as TestClient
 
 from core import machine_id
 from core.error_codes import AppError

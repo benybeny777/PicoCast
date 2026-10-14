@@ -219,6 +219,9 @@ app = FastAPI(
     description=f"{config.WEB_APP_NAME} ローカルWeb UI",
     lifespan=_lifespan,
 )
+import secrets
+from web_app.local_api_security import LocalApiSecurityMiddleware
+app.state.local_api_token = secrets.token_urlsafe(32)
 
 # 静的ファイル
 # onefile(exe)では本モジュールはエントリのためルートに平坦化され __file__ が展開先直下を指す。
@@ -248,6 +251,9 @@ async def setup_redirect_middleware(request: Request, call_next):
         if get_active_profile() is None:
             return RedirectResponse(url="/setup", status_code=303)
     return await call_next(request)
+
+# 最後に登録したミドルウェアが最外周になる。リダイレクトや静的配信も検査する。
+app.add_middleware(LocalApiSecurityMiddleware, token=app.state.local_api_token)
 
 # ── ルート登録 ────────────────────────────────────────────────────────────
 from web_app.routes.pages import router as pages_router

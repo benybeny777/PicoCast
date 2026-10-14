@@ -15,7 +15,7 @@ if _ROOT not in sys.path:
 # ── FastAPI テストクライアント ───────────────────────────────────────────────
 @pytest.fixture(scope="module")
 def client():
-    from fastapi.testclient import TestClient
+    from conftest import local_api_client as TestClient
     os.environ["NVF_DISABLE_JOB_RUNNER"] = "1"
     from web_app.app import app
     with TestClient(app, raise_server_exceptions=False) as c:

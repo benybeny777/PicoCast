@@ -29,6 +29,8 @@ class ErrorDef:
 # 「原因不明・対処不明」のエラーをユーザーに出さないことを方針とする。
 # ─────────────────────────────────────────────────────────────────────────────
 ERROR_CATALOG: dict[str, ErrorDef] = {
+    "E-WEB-REQUEST": ErrorDef("E-WEB-REQUEST", "この画面からの操作を確認できないため拒否しました。", "auth", False,
+                              "アプリの起動時に表示されたローカルURLを開き、画面を再読み込みしてから操作してください。"),
     # 画像生成（Gemini / Nano Banana / Stable Diffusion WebUI）
     "E-IMG-BUSY":  ErrorDef("E-IMG-BUSY",  "一時的に混雑しています（提供元サーバー側の高負荷）。残高・APIキー・台本やプロンプトの問題ではありません。", "api_busy", True,
                             "数分おいてから履歴の再生成（背景再利用）で未生成分だけ作り直してください。"),

@@ -1,7 +1,7 @@
 """自動運用APIの確認・チャンネル隔離・入力制約を実通信なしで検証する。"""
 import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from conftest import local_api_client as TestClient
 
 from core.error_codes import AppError
 from web_app.routes import api_autopilot as api
