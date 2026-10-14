@@ -144,11 +144,11 @@ PicoCast/
 
 ## 8. 画面（`ui/`）
 
-`DESIGN_picocast_v3.md` §2 の構成（ホーム／つくる 3 ステップ／スタジオ／自動運用／ライブラリ／分析／設定）を、PicoAgent と同じ素の JS で作る。ストアと購入関連は作らない（販売しないため）。
+`DESIGN_picocast_v3.md` §2 の構成（ホーム／つくる 3 ステップ／スタジオ／自動運用／ライブラリ／分析／設定）を、PicoAgent と同じ素の JS で作る。**見た目は `DESIGN_ui.md` と見本 `docs/design/picocast-ui-mockup.html` が正本**（トークン・部品・画面の配置）。ストアと購入関連は作らない（販売しないため）。
 
 - 共通部品: 呼び出し（Tauri の `invoke` を包み、エラーコードと対処を表示）、時刻表示（`time.js`）、トースト、確認ダイアログ、ジョブ進捗、読み込み中・空・エラー状態。
 - スタジオ: シーン一覧＋プレビュー（低解像度の即時レンダー）＋台詞・読み・表情・背景・BGM の編集＋その部分だけの再生成。
-- デザイントークン（色・余白・文字）を PicoAgent と共有し、ライト／ダーク対応。
+- デザイントークン（色・余白・文字）は `DESIGN_ui.md` §2。ライト／ダーク対応。部品の作り方（`ui/components/`）は PicoAgent と共通化できるものを共有する。
 
 ---
 
@@ -191,7 +191,7 @@ PicoCast/
 
 | M | 内容 | 完了条件 |
 |---|---|---|
-| **R0 土台** | 新リポジトリ、ワークスペース、`xtask verify`、CI、clippy の禁止設定と走査ガード、`core`（clock・AppError・settings・proc・http・fsutil・tracing）、`store`（DB・マイグレーション・バックアップ・秘密値）、AGENTS.md・HANDOFF・スキル | `xtask verify` が CI で緑。ガードが「違反を入れると落ちる」ことをテストで確認 |
+| **R0 土台** | 新リポジトリ、ワークスペース、Python 3.12 と `uv.lock` の固定（§12）、`xtask verify`、CI、clippy の禁止設定と走査ガード、`core`（clock・AppError・settings・proc・http・fsutil・tracing）、`store`（DB・マイグレーション・バックアップ・秘密値）、AGENTS.md・HANDOFF・スキル | `xtask verify` が CI で緑。ガードが「違反を入れると落ちる」ことをテストで確認 |
 | **R1 取り込みと棚卸し** | `docs/migration-inventory.md`、`xtask import-legacy`、立ち絵の PNG 化 | 本番データのコピーを取り込み、照合が全件一致 |
 | **R2 生成エンジン** | `voice`（VOICEVOX・読みの正規化）、`ai`（Gemini・Ollama・再試行・費用）、`media`（音声ミックス・字幕組版・キャラ合成・レンダー）、`pipeline`（工程キャッシュ・永続ジョブ・事前点検・QA ゲート） | §9.3 の読み・音声・動画の同等性。`DESIGN_quality.md` §1 の完成動画の指標 |
 | **R3 YouTube** | アップロード・メタデータ・再生リスト・固定コメント・Analytics・クォータ | §9.3 の投稿・分析の同等性（影運用で要求内容を比較） |
@@ -214,7 +214,60 @@ PicoCast/
 
 ---
 
-## 12. 決定待ち
+## 12. Python の扱い（CUDA を考慮した版の固定）
+
+利用者決定（2026-10-15）: Python は CUDA の影響を考えた版に固定する。
+
+### 12.1 Python が残る場所
+
+Rust に作り直しても、次の 3 か所には Python が残る。
+
+| 場所 | 用途 | CUDA |
+|---|---|---|
+| 旧アプリ（yukkurijidou、凍結） | 移行完了まで本番を動かす。旧データの取り込み（§9.2）と立ち絵 PSD の書き出しにも使う | 使わない（エンコードは外部 ffmpeg の NVENC） |
+| PicoCast が管理する機械学習ランタイム（任意機能） | ローカル AI 作曲（ACE-Step 等）、将来のローカル音声合成など PyTorch を使う機能 | 使う |
+| 利用者が別に入れた Stable Diffusion WebUI・Ollama | 画像生成・ローカル LLM | 各ソフトが自分で管理。**PicoCast は環境を共有しない・触らない** |
+
+### 12.2 基準の版
+
+- **Python 3.12 に固定する**（PicoAgent と同じ基準）。理由: PyTorch・CUDA 拡張（xformers・bitsandbytes など）の公式 wheel が揃っている版を優先し、最新の Python へ先行しない。PyTorch の最新安定版（2026-10 時点で 2.14 系）は Python 3.10 以上に対応しており、3.12 はどの CUDA 版の wheel でも揃っている。
+- `requires-python = ">=3.12,<3.13"`。`.python-version` に `3.12` を置き、Python 本体は `uv` で取得した 3.12 系の最新パッチを使う。
+- 依存はすべて `uv.lock` で版とハッシュまで固定する（今の `config/requirements.txt` は版の指定が 0 件）。
+
+### 12.3 CUDA の選び方（機械学習ランタイム）
+
+- 取得前に GPU を判定し、組み合わせを 1 つだけ選ぶ。
+
+| GPU | 選ぶもの |
+|---|---|
+| NVIDIA・Turing（GeForce RTX 20 系）以降・ドライバが CUDA 13 に対応 | PyTorch の CUDA 13.0 版（PyPI の既定） |
+| NVIDIA・Maxwell / Pascal、またはドライバが古い | CUDA 12.6 版（`download.pytorch.org` の `cu126`）。ドライバ更新で 13.0 にできる場合はその案内も出す |
+| NVIDIA 以外・GPU なし | その機能が CPU を正式に支えている場合だけ CPU 版。支えていなければ機能を無効にし、理由を表示 |
+
+- 選んだ組み合わせ（Python・PyTorch・CUDA・GPU 世代）を管理用のマニフェストに記録し、合わない環境の再利用を止める。1 つの機能に複数の CUDA 版を同時に入れない。
+- Python 本体は 1 つだけ持ち、機能ごとに仮想環境だけを分ける（PicoAgent の規則）。古い本体・仮想環境・取得キャッシュは、新しい組み合わせの検証が成功したら同じ作業内で消す。
+- 大容量（PyTorch＋モデルで数 GB〜十数 GB）のため、取得は利用者の明示操作のときだけ。容量と所要時間を事前に表示する。
+- PyTorch と CUDA の具体的な版は、`uv.lock` と専用のインデックス指定（`cu130` / `cu126`）で固定する。版を上げるときは、全 CUDA 機能の公式 wheel が揃っていることを確認し、起動と実処理を新しい組み合わせで検証してから切り替える（毎月の依存監査スキルで点検）。
+
+### 12.4 旧アプリ（yukkurijidou）の固定手順
+
+旧アプリは今 Python 3.11.9 の仮想環境で動いている。凍結中も、取り込みツールと同じ基準にそろえる。
+
+1. `pyproject.toml`（`requires-python = ">=3.12,<3.13"`）と `.python-version`（`3.12`）を追加し、今の `config/requirements.txt` の実際の版（`pip freeze`）を元に `uv.lock` を作る。
+2. 今の `.venv` を `.venv-311-backup` に退避してから、3.12 の `.venv` を作り直す。
+3. 全テスト（`pytest -q`）と、サンプル台本 1 本の生成・レンダーで同等であることを確認する（SudachiPy・psd-tools・cryptography など C 拡張を含む部品の動作確認）。
+4. 問題なければ退避した 3.11 環境を消す。問題があれば退避から戻し、原因を記録する。
+5. `start.ps1`・`README.md` の起動手順を `uv` 前提に更新する。
+
+- これは凍結中の Python 版で行う例外的な作業（環境の固定であり、機能追加ではない）。本番の自動運用が止まっている時間帯に行う。
+
+### 12.5 出典（2026-10-15 時点）
+
+- PyTorch 2.13 リリースブログ: https://pytorch.org/blog/pytorch-2-13-release-blog/
+- PyPI の CUDA wheel を 13.0 へ移行（2.11）: https://dev-discuss.pytorch.org/t/transitioning-pypi-cuda-wheels-to-cuda-13-0-as-the-stable-release-2-11/3325
+- PyTorch のリリース一覧: https://github.com/pytorch/pytorch/releases
+
+## 13. 決定待ち
 
 | 項目 | 推奨 |
 |---|---|
@@ -224,7 +277,7 @@ PicoCast/
 | 影運用の期間 | 2 週間 |
 | 切り替え後に Python 版を残す期間 | 30 日 |
 
-## 13. 出典（ライブラリ調査 2026-10-15）
+## 14. 出典（ライブラリ調査 2026-10-15）
 
 - sudachi.rs（Works Applications、Apache-2.0）: https://www.freshports.org/japanese/sudachi ・ https://pub.dev/packages/sudachi_dart
 - budoux-phf-rs（Apache-2.0）: https://docs.rs/budoux-phf-rs

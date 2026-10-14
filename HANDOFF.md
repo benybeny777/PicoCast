@@ -1,7 +1,7 @@
 # 引き継ぎ（未マージ作業と再開方法）
 
 最終更新: 2026-10-15（Codex: T29 ローカルAPI保護を追加）
-> **方針（2026-10-15 利用者決定）: 全部 Rust（PicoAgent と同じ構成）で新リポジトリ `benybeny777/PicoCast` に作り直す。この Python 版は凍結（本番の不具合修正だけ）。** 正本は [DESIGN_rust_rewrite.md](DESIGN_rust_rewrite.md)。
+> **方針（2026-10-15 利用者決定）: 全部 Rust（PicoAgent と同じ構成）で新リポジトリ `benybeny777/PicoCast` に作り直す。この Python 版は凍結（本番の不具合修正だけ）。** 正本は [DESIGN_rust_rewrite.md](DESIGN_rust_rewrite.md)。画面の見た目は [DESIGN_ui.md](DESIGN_ui.md)＋見本 `docs/design/picocast-ui-mockup.html`。Python は 3.12 に固定し、CUDA は GPU に合わせて 1 組だけ選ぶ（`DESIGN_rust_rewrite.md` §12）。
 >
 > **方針（2026-10-15 利用者決定）: 販売・配布はしない。製品として出せるレベルの品質にする。** 優先順位と保留項目は [DESIGN_quality.md](DESIGN_quality.md) §0・§8 が正本。販売・配布向けのタスク（ライセンス、インストーラ、署名、パック販売など）は保留。
 
@@ -26,6 +26,7 @@
 ## 現在のマイルストーン
 
 **R0 土台（新リポジトリ）**（`DESIGN_rust_rewrite.md` §10）: 新リポジトリ作成（利用者の承認待ち）→ Cargo ワークスペース → `xtask verify` と CI → clippy の禁止設定と走査ガード → `picocast-core`（clock・AppError・settings・proc・http・fsutil・tracing）→ `picocast-store`（DB・マイグレーション・バックアップ・秘密値）→ AGENTS.md・HANDOFF・スキル。
+**R0 と並行して可能な作業**: 旧アプリの Python 3.12＋`uv.lock` への固定（§12.4。本番の自動運用が止まっている時間帯に、退避してから行う）。
 次は R1（旧データの取り込みと機能の棚卸し）→ R2（生成エンジン）→ R3（YouTube）→ R4（画面）→ R5（影運用と切り替え）→ R6（伸ばす）。各 M の着手前に詳細設計を PR 本文に書き、利用者の承認を得る（R0 は設計書で足りる）。
 
 **この Python 版での作業**: PR #35（自動運用）と #36 はマージしてよい。下のタスク表の未着手タスクは **Python では実施しない**（Rust 版の要件として R0〜R6 に取り込む）。本番で実害が出た不具合だけ Python 版でも直す。
@@ -110,6 +111,8 @@
 - 製品名は **PicoCast**（Pico シリーズ）。ディレクトリ（`C:\00_PG\22_PicoCast`）とリポジトリ（`benybeny777/PicoCast`）も変える。
 - 多言語対応をしたい。YouTube メタデータ → 字幕 → 画面 → 他言語チャンネルの順に段階的に進める（設計 §3.5）。
 - 機能は大きく変わってもよい。「完璧になるレベル」で、原型がなくなる作り直しも許容（2026-10-15）。完成形は v3。
+- 画面は「深夜の放送スタジオ」コンセプトで、枝豆グリーン（ずんだもん）とめたんピンクを差し色にする（2026-10-15、`DESIGN_ui.md`）。
+- Python は CUDA を考慮して 3.12 に固定（2026-10-15、PicoAgent と同じ基準）。
 - **全部 Rust で作り直す（2026-10-15）**。PicoAgent と同じ構成（Tauri＋crates＋素の JS＋xtask）。今の運用は止めずに、影運用 → チャンネルごとの切り替えで移行する。
 - **販売・配布はしない。製品レベルの品質にする（2026-10-15）**。販売向けの決定事項（BOOTH・エディション・端末固定・Apps Script 発行など）は保留扱い。
 - 時刻は共通の部品だけで扱い、漏れが出ないようにする。同じように設計が微妙な箇所も一本化してガードで守る（2026-10-15、`DESIGN_foundations.md`）。
