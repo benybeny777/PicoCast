@@ -96,7 +96,9 @@ async function loadStats() {
     const d = await r.json();
     document.getElementById('db-stats').textContent =
       `DB: 計${d.total}本 | アップロード済み${d.uploaded}本 | 公開済み${d.published}本 | 予約中${d.scheduled}本 | PL登録${d.playlist_registered}本`;
-  } catch {}
+  } catch (e) {
+    document.getElementById('db-stats').textContent = `DB の集計を取得できませんでした（${e.message || e}）`;
+  }
 }
 
 async function loadVideos() {
@@ -254,20 +256,19 @@ async function importAll() {
 }
 
 function pollImportJob(jobId, log) {
-  const iv = setInterval(async () => {
-    try {
-      const r = await fetch(`/api/jobs/${jobId}`);
-      const job = await r.json();
-      const lines = (job.logs || []).map(l => l.message).join('\n');
-      log.textContent = lines;
+  pollJob(
+    jobId,
+    job => {
+      log.textContent = (job.logs || []).map(l => l.message).join('\n');
       log.scrollTop = log.scrollHeight;
-      if (job.status === 'success' || job.status === 'failed') {
-        clearInterval(iv);
-        await loadStats();
-        await loadVideos();
-      }
-    } catch {}
-  }, 2000);
+    },
+    async () => {
+      await loadStats();
+      await loadVideos();
+    },
+    2000,
+    e => { log.textContent += `\n通信エラーのため再試行中…（${e.message || e}）`; },
+  );
 }
 
 (async () => {

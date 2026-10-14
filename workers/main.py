@@ -55,7 +55,6 @@ from config import (
     OLLAMA_REWRITE_FALLBACK_MODEL,
     OLLAMA_REWRITE_MODEL,
     OPENING_SCORE_HARD_ABORT_THRESHOLD,
-    OPENING_SCORE_ABORT_THRESHOLD,
     OPENING_REWRITE_MAX_FALLBACKS,
     LONG_THUMBNAIL_AB_TEST,
     THUMBNAIL_CHARACTER_PNGS,
@@ -75,18 +74,14 @@ from core.cta_policy import (
     check_shorts_navigation_ng,
     write_policy_file,
 )
-from workers.output_locks import OutputDirectoryLockedError, find_locking_process
+from workers.output_locks import find_locking_process
 from workers.pipeline_models import (
     GenerationReport,
     LONG_THUMBNAIL_VARIANTS,
     fallback_title_variants as _fallback_title_variants,
 )
 from workers.pipeline_metadata import (
-    build_audio_credit_block as _build_audio_credit_block,
-    build_channel_footer as _build_channel_footer,
-    character_names_for_credits as _character_names_for_credits,
     normalize_metadata as _normalize_meta,
-    strip_voicevox_credit as _strip_voicevox_credit,
 )
 from workers.pipeline_helpers import (
     background_filename as _background_filename,
@@ -723,6 +718,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
             try:
                 os.replace(theme_dir, backup_dir)
             except Exception as _e:
+                _logger.error("既存テーマフォルダのバックアップ移動に失敗しました: %s -> %s", theme_dir, backup_dir, exc_info=True)
                 _replace_result["error"] = _e
             finally:
                 _replace_result["done"] = True
@@ -1354,8 +1350,6 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
         update_status(f"🖼  Stable Diffusion WebUI 生成: 解像度: {_resolution_label(width, height)}")
     update_status(f"🎬 アセット生成を開始します...")
 
-    voice_num = 0
-    audio_num = 0
     bg_num = 0
     total_voices = len(dialogue_items)
     total_bgs = len(bg_items)
@@ -1471,6 +1465,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                     _queries[idx] = (q, kana)
                 except Exception as _e:
                     from core.error_codes import AppError
+                    _logger.error("VOICEVOX audio_query に失敗しました: chunk=%s", _voicevox_chunks[_futs[_fut]]["chunk_text"][:40], exc_info=True)
                     _query_error = _e.user_message() if isinstance(_e, AppError) else str(_e)
                     _query_error_chunk = _voicevox_chunks[_futs[_fut]]
                     break
@@ -1542,6 +1537,7 @@ def run_pipeline(topic, reference_script=None, debug_mode=False,
                         f" {_sc['char_key']}({_sc['emotion']}) x{_sc['speed_scale']:g}「{_pv}」"
                     )
                 except Exception as _se:
+                    _logger.error("VOICEVOX 音声合成に失敗しました: chunk=%s", _sc["chunk_text"][:40], exc_info=True)
                     with _report_lock:
                         report.voices_failed += 1
                         if _synth_first_err is None:

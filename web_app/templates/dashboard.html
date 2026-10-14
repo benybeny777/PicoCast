@@ -177,7 +177,7 @@
 {% block scripts %}
 <script>
 function _badge(cls, text) {
-  return `<span class="badge ${cls}">${escapeHtml(text)}</span>`;
+  return `<span class="badge ${cls}">${esc(text)}</span>`;
 }
 
 async function refreshAppStatus() {
@@ -219,7 +219,7 @@ async function refreshAppStatus() {
     const sd = s.sd_webui || {};
     if (s.image_backend === 'sd_webui') {
       document.getElementById('st-sd-webui').innerHTML = sd.ok
-        ? _badge('badge-ok', '接続OK') + (sd.model ? `<br><small style="color:var(--text-muted)">${escapeHtml(sd.model)}</small>` : '')
+        ? _badge('badge-ok', '接続OK') + (sd.model ? `<br><small style="color:var(--text-muted)">${esc(sd.model)}</small>` : '')
         : _badge('badge-ng', '未接続');
     } else {
       document.getElementById('st-sd-webui').innerHTML = _badge('badge-warn', '非アクティブ');

@@ -522,14 +522,15 @@ Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook`
 - チャンネル詳細フォームで Shorts / Long の投稿予約スロットとタイムゾーンを編集できる。既存チャンネルに設定がない場合は自動作成する。2026-06-06 の既定値変更では既存の個別設定も Shorts 12:00 / 21:00、Long 22:00 へ更新する。2026-06-23 に Shorts の既定スロットを 21:00 の1枠へ変更し、マイグレーション `upload_slots_20260623_shorts_21` で既存チャンネルの Shorts スロットも全件 21:00 へ更新する（config 既定の変更は既存チャンネルのDB値に自動反映されないため）。
 - スロット割当範囲: 最大90日先まで探索
 - アップロード実行後:
-  1. `assign_slots_from_youtube()` で YouTube 予約済み一覧を正として次の空きスロットを取得
+  1. `assign_slots_from_youtube()` で YouTube 予約済み一覧を正として次の空きスロットを取得。YouTube から取得できないときはローカル記録で推定せず `E-YOUTUBE-SCHEDULE` で止める（記録に無い予約と同じ枠へ重ねないため）。アップロード処理はこの失敗を受けて非公開のまま続ける
   2. `update_video_publish_time()` で YouTube API に公開予定を設定（`_slot_lock` で複数本同時アップロード時の競合を防止）
   3. `metadata.db` の `youtube_status` テーブルに書き込む（`video_id` / `title` / `video_type` / `uploaded_at` / `publish_status=scheduled` / `publish_at=JST isoformat`）。スロット取得失敗時は `publish_status=private`。
   4. フォルダを `output/{profile_id}/000_uploaded/<フォルダ名>/` へ移動する。履歴画面は `videos/` と `000_uploaded/` の両方を走査するため、移動後も履歴に表示される
   5. `output/{profile_id}/000_backups/` 内の同テーマバックアップ（`<フォルダ名>` または `<フォルダ名>_*` にマッチするもの）をすべて削除する
 - スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。アップロード状態は `metadata.db` の `youtube_status` テーブルが正本
-- `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す
-- `sync_schedule_from_youtube()`: YouTube API を正として `youtube_status` テーブルへ書き戻す。チャンネル全件取得に失敗した場合は既知 video_id の照会に限定して同期する。
+- `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す。取得できないときは空の一覧を返さず `E-YOUTUBE-SCHEDULE` で止め、スケジュール画面にエラーを表示する（空だと「予約なし」と区別できないため）
+- `sync_schedule_from_youtube()`: YouTube API を正として `youtube_status` テーブルへ書き戻す。チャンネル全件取得に失敗した場合は `E-YOUTUBE-SCHEDULE` で止める（既知 video_id だけで同期すると、記録に無い予約を見落としたまま同期済みになるため）。
+- 割当・一覧・詰め直し・同期の予約取得と検証は共通化する。取得失敗や予約日時の破損・タイムゾーン欠損を「予約なし」として続けず、`E-YOUTUBE-SCHEDULE` で止める。同期は全予約の検証完了後にDBへ書き戻す。
 - 投稿予約スロットと `publish_at` はチャンネル設定のタイムゾーンで扱う。既定は `Asia/Tokyo`。
 - `infer_video_type()`: タイトルプレフィックス優先。タイトルなしの場合は duration ≤ 60s を shorts と推定
 
@@ -579,6 +580,8 @@ python -m web_app.app [--open-browser] [--port 58080] [--auto-port]
 - ジョブ管理: `job_manager.py` でバックグラウンド実行・ステータス追跡
 
 ### ジョブ管理 (`job_manager.py`)
+
+画面のジョブ取得はHTTP成功・要求したjob_id・既知状態を共通検証する。通信失敗では直前ログを維持し、理由を表示する。監視停止後は通信中の応答から再始動しない。キャンセル要求の受付は処理終了とみなさず、終了状態まで監視を続ける。アップロードの監視が通信失敗で中断した場合は、完了と表示せず履歴確認を案内する。初回起動時にチャンネル未登録であればprofile別DBの初期化を行わず、セットアップ画面へ進める。
 
 長時間処理（生成・チェック・アップロード・Analytics等）はすべてジョブ化する。
 

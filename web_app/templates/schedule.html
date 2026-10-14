@@ -124,7 +124,7 @@ async function syncSchedule() {
     const res = await fetch('/api/schedule/sync', {method: 'POST'});
     const data = await res.json();
     statusBox.textContent = `ジョブ登録: ${data.job_id}`;
-    pollJob(data.job_id, statusBox, true);
+    pollScheduleJob(data.job_id, statusBox, true);
   } catch(e) {
     statusBox.textContent = 'エラー: ' + e;
   }
@@ -138,7 +138,7 @@ async function rebalanceCalc() {
   try {
     const res = await fetch('/api/schedule/rebalance', {method: 'POST'});
     const data = await res.json();
-    pollJob(data.job_id, statusBox, false);
+    pollScheduleJob(data.job_id, statusBox, false);
   } catch(e) {
     statusBox.textContent = 'エラー: ' + e;
   }
@@ -157,13 +157,13 @@ async function rebalanceApply() {
     });
     const data = await res.json();
     if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
-    pollJob(data.job_id, statusBox, true);
+    pollScheduleJob(data.job_id, statusBox, true);
   } catch(e) {
     statusBox.textContent = 'エラー: ' + e;
   }
 }
 
-function pollJob(jobId, statusBox, reloadOnSuccess) {
+function pollScheduleJob(jobId, statusBox, reloadOnSuccess) {
   let _polling = false;
   const interval = setInterval(async () => {
     if (_polling) return;
@@ -176,7 +176,10 @@ function pollJob(jobId, statusBox, reloadOnSuccess) {
           setTimeout(() => location.reload(), 1200);
         }
       }
-    } catch {} finally {
+    } catch (e) {
+      // 一時的な通信エラーは次の周期で再試行する
+      statusBox.textContent = `通信エラーのため再試行中…（${e.message || e}）`;
+    } finally {
       _polling = false;
     }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
@@ -252,7 +255,7 @@ async function confirmUpdateSchedule() {
     const data = await res.json();
     if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || JSON.stringify(data)); return; }
     statusBox.textContent = `ジョブ登録: ${data.job_id}`;
-    pollJob(data.job_id, statusBox, true);
+    pollScheduleJob(data.job_id, statusBox, true);
   } catch(e) {
     statusBox.textContent = '通信エラー: ' + e;
   }

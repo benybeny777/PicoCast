@@ -22,6 +22,8 @@ def find_locking_process(path: str) -> str | None:
                     if opened_file.path.lower() == target:
                         return f"{proc.info['name']} (PID {proc.info['pid']})"
             except (psutil.NoSuchProcess, psutil.AccessDenied):
+                # 調べている間に終了したプロセスや権限外のプロセスは対象外
+                _logger.debug("プロセスのファイル一覧を取得できません: pid=%s", proc.info.get("pid"), exc_info=True)
                 continue
     except Exception:
         _logger.warning("プロセスロック情報の確認に失敗しました", exc_info=True)

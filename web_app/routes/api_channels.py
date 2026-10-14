@@ -20,7 +20,6 @@ from pydantic import BaseModel
 from core.channel_profile import (
     ChannelProfile,
     ChannelProfileError,
-    NoActiveProfileError,
     ProfileNotFoundError,
     ProfileValidationError,
     activate_profile,
@@ -210,6 +209,7 @@ def api_validate_channel(profile_id: str):
     try:
         validate_profile(profile)
     except ProfileValidationError as e:
+        _logger.warning("チャンネルプロファイルの検証で問題が見つかりました: profile_id=%s", profile_id, exc_info=True)
         errors.append(str(e))
 
     # genre_profile の存在チェック

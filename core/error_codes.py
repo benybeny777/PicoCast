@@ -97,6 +97,9 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
                              "CLI の場合はターミナルで一度起動してログイン状態と利用上限を確認してください。詳細は app_debug_*.log を確認してください。"),
     "E-LLM-TIMEOUT": ErrorDef("E-LLM-TIMEOUT", "文章生成AIが時間内に終わりませんでした。", "pipeline", True,
                               "設定画面の TEXT_LLM_TIMEOUT_SEC を延ばすか、時間を置いて再実行してください。"),
+    # YouTube 予約投稿
+    "E-YOUTUBE-SCHEDULE": ErrorDef("E-YOUTUBE-SCHEDULE", "YouTube から予約投稿の状況を取得できません。", "network", True,
+                                   "ネットワーク接続と YouTube の認証（設定画面「認証情報」）を確認して再実行してください。予約の重複を避けるため、取得できるまで予約枠の割り当てと同期は行いません。"),
     # 固定コメント
     "E-FIXED-COMMENT-AUTO": ErrorDef("E-FIXED-COMMENT-AUTO", "固定コメントの自動投稿に失敗しました。", "youtube", True,
                                      "固定コメント画面から該当動画を手動投稿して原因を確認してください。YouTube の認証切れなら設定画面「認証情報」で再認証し、詳細は app_debug_fixed_comment.log を確認してください。"),

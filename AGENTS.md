@@ -147,7 +147,10 @@
 - テストは `tests/` 配下に置く（Web UI は `tests/test_web.py`）。外部API実通信が必要なテストはモックまたはskip可能にする。
 - **テストは利用者の実データに触れない。** `tests/conftest.py` が `app_base_dir()` をテスト専用の一時フォルダへ差し替え、active profile を1件用意する。実キーや実DBに依存するテストを書かず、APIキーが要る初期化は `dummy_google_api_key` のようなダミーの fixture を使う。`tests/test_test_isolation.py` が保存先の隔離を検査する。
 - **作業完了前の検証は `python tools/verify.py` にまとめる。** pytest（ルール検査を含む）と `git diff --check` を途中失敗後も最後まで実行し、末尾に結果を表示する。
-- **ルールは `tests/test_rule_guards.py` で機械検査する。** `os.environ` 参照・ログも再送出もしない `except` 節・`script.txt` への言及は、ファイルごとの現在件数を上限として増加だけを止める。違反を直して件数が減ったら、同じ作業で上限表も下げる。`config.py` 公開定数のコメント、日本語を含む `.ps1` のBOM、`.agents/skills` と `.claude/skills` の対応、traceback の文字列化禁止も同じファイルで検査する。新しい恒久ルールを足すときは、機械検査できるならここへ検査も足す。
+- **ルールは `tests/test_rule_guards.py` で機械検査する。** `os.environ` 参照・`script.txt` への言及は、ファイルごとの現在件数を上限として増加だけを止める。違反を直して件数が減ったら、同じ作業で上限表も下げる。次は0件を維持する: ログも再送出もしない `except` 節（`raise_api_error` など記録してから報告する共通関数の呼び出しと Ctrl+C の処理は除く）、`closing()` で囲まない sqlite 接続、未使用・未定義の名前（pyflakes）、画面 JavaScript の空の `catch`、画面スクリプトによる `app.js` / `job_poll.js` 共通関数の上書き、traceback の文字列化。`config.py` 公開定数のコメント、日本語を含む `.ps1` のBOM、`.agents/skills` と `.claude/skills` の対応も同じファイルで検査する。新しい恒久ルールを足すときは、機械検査できるならここへ検査も足す。
+- **sqlite の接続は `with closing(接続) as conn, conn:` で使う。** `with 接続 as conn:` は確定・取消しかせず接続を閉じないため、Windows では `settings.db` を掴み続けてバックアップの復元などに失敗する。
+- **`data/settings.db` の場所は `core.runtime_env.settings_db_path()` だけで決める。** モジュールごとに `app_base_dir()` から組み立てない。
+- **画面の JavaScript でジョブの完了を待つときは `app.js` の `pollJob()`（状態1行の表示なら `pollJobStatus()`）を使い、`setInterval` で写さない。** HTML のエスケープは `esc()` だけを使う。
 - Claude Code on the web などのリモート環境では、`.claude/hooks/session-start.sh` がセッション開始時に `config/requirements-dev.txt` を導入する。利用者のPCでは何もしない。
 - Starlette 1.1.0以降: `TemplateResponse(request, name, context)` の引数順に従う。
 - 設定画面で保存した値はアプリ再起動なしで即時反映する。`config_service._apply_runtime_updates()` で `setattr(cfg, key, value)` と `sys.modules` 全走査による伝搬を行う。`WEB_UI_PORT` など「アプリ起動時に固定されるパラメータ」だけを例外とし、それらは EDITABLE_CONFIG から除外する。UI上に「再起動後に反映」という文言を出さない。
