@@ -120,7 +120,7 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "SD_MODEL_MANIFEST_PATH",     "type": "str",   "label": "モデルマニフェストパス",                      "default": str(cfg.SD_MODEL_MANIFEST_PATH),                                 "group": "Stable Diffusion WebUI"},
     {"key": "AUTO_DOWNLOAD_SD_MODELS",    "type": "bool",  "label": "モデル自動ダウンロード",                      "default": "1" if cfg.AUTO_DOWNLOAD_SD_MODELS else "0",                     "group": "Stable Diffusion WebUI"},
     # ── よみがな ──
-    {"key": "VOICE_READING_MODE",         "type": "select", "label": "よみがな補正モード", "default": str(cfg.VOICE_READING_MODE), "choices": [("off", "無効 (off)"), ("dictionary", "自前辞書のみ (dictionary)"), ("safe_auto", "安全自動補正 (safe_auto)")], "group": "よみがな"},
+    {"key": "VOICE_READING_MODE",         "type": "select", "label": "よみがな補正モード", "default": str(cfg.VOICE_READING_MODE), "choices": [("off", "無効 (off)"), ("dictionary", "自前辞書のみ (dictionary)"), ("safe_auto", "安全自動補正 (safe_auto)"), ("full_hiragana", "全部ひらがな (full_hiragana)")], "group": "よみがな"},
     # ── Web UI ──
     {"key": "WEB_APP_NAME",                       "type": "str",   "label": "Web UI 表示名",             "default": str(cfg.WEB_APP_NAME),                                              "group": "Web UI", "admin": True},
     {"key": "WEB_AUTO_OPEN_BROWSER",              "type": "bool",  "label": "起動時にブラウザを自動で開く", "default": "1" if cfg.WEB_AUTO_OPEN_BROWSER else "0",                         "group": "Web UI"},

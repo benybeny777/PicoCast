@@ -93,3 +93,50 @@ function esc(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/**
+ * 読み違いの可能性（VOICEVOX と形態素解析で読みが分かれた語）の一覧を描画する。
+ * 生成画面の読みチェックと、設定画面「よみがな辞書」で共用する。
+ * @param {HTMLElement} container
+ * @param {Array} findings - {word, voicevox_reading, expected_reading, text|example}
+ * @param {function} onChanged - 登録・無視のあとに呼ぶ
+ */
+function renderReadingFindings(container, findings, onChanged) {
+  if (!findings.length) {
+    container.innerHTML = '<p class="hint">読み違いの可能性はありません。</p>';
+    return;
+  }
+  container.innerHTML = `
+    <table class="status-table">
+      <tr><th>語</th><th>VOICEVOX の読み</th><th>形態素解析の読み → 正しい読み（ひらがな）</th><th>例文</th><th></th></tr>
+      ${findings.map((f, i) => `
+        <tr>
+          <td><strong>${esc(f.word)}</strong></td>
+          <td>${esc(f.voicevox_reading)}</td>
+          <td><input type="text" class="form-input" data-i="${i}" value="${esc(f.expected_reading)}" style="width:140px"></td>
+          <td class="hint" style="font-size:12px">${esc(f.text || f.example || '')}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-xs btn-primary" data-act="accept" data-i="${i}">この読みで登録</button>
+            <button class="btn btn-xs btn-secondary" data-act="dismiss" data-i="${i}" title="今の読みのままでよい語。今後この組み合わせは表示しません">問題なし</button>
+          </td>
+        </tr>`).join('')}
+    </table>`;
+  container.querySelectorAll('button[data-act]').forEach(btn => {
+    btn.onclick = async () => {
+      const f = findings[Number(btn.dataset.i)];
+      const accept = btn.dataset.act === 'accept';
+      const reading = container.querySelector(`input[data-i="${btn.dataset.i}"]`).value.trim();
+      const res = await fetch(`/api/reading-check/findings/${accept ? 'accept' : 'dismiss'}`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(accept ? {word: f.word, reading} : {word: f.word, voicevox_reading: f.voicevox_reading}),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert('保存できませんでした: ' + (data.detail || res.status));
+        return;
+      }
+      btn.closest('tr').remove();
+      if (onChanged) onChanged();
+    };
+  });
+}

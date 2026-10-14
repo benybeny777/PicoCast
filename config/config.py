@@ -246,7 +246,7 @@ AUTO_FULL_REWRITE_ENABLED    = os.environ.get("AUTO_FULL_REWRITE_ENABLED",   "0"
 # VOICE_READING_NORMALIZE_OLLAMA_URL = os.environ.get("VOICE_READING_NORMALIZE_OLLAMA_URL", "http://localhost:11434")
 
 # 新しい読み補正モード: "off", "dictionary", "safe_auto"
-VOICE_READING_MODE = os.environ.get("VOICE_READING_MODE", "safe_auto")  # 読み補正モード
+VOICE_READING_MODE = os.environ.get("VOICE_READING_MODE", "full_hiragana")  # 読み補正モード（off / dictionary / safe_auto / full_hiragana）
 
 # ───────────────────────────────────────────────
 # Google AI モデル（Nano Banana Suite）

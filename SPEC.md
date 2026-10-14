@@ -113,7 +113,8 @@ yukkurijidou/
 │   ├── codex_image.py      # Codex CLI の画像生成（ChatGPT の使用枠）
 │   ├── local_image_compose.py # ローカル画像の文字入れ・サムネの立ち絵合成
 │   ├── voicevox.py         # VOICEVOX音声生成
-│   ├── reading_normalizer.py # よみがな正規化（Ollama）
+│   ├── reading_normalizer.py # よみがな正規化（Sudachi・辞書）
+│   ├── reading_check.py    # VOICEVOX の読み違いの可能性を検出
 │   ├── image_generator.py  # 背景・サムネ画像生成（IMAGE_BACKEND に基づきバックエンドを選択）
 │   ├── sd_webui_generator.py  # Stable Diffusion WebUI / A1111互換APIクライアント
 │   ├── sd_model_manager.py    # Stable Diffusion WebUI モデルのインストール確認・ダウンロード
@@ -939,7 +940,8 @@ register_shutdown_hook("my_module", my_close_function)
 
 VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防ぐため、音声合成前に SudachiPy と自前辞書で読み補正する。
 
-- `VOICE_READING_MODE` は `off` / `dictionary` / `safe_auto` から選択する
+- `VOICE_READING_MODE` は `off` / `dictionary` / `safe_auto` / `full_hiragana`（既定）から選択する
+- `full_hiragana`: 漢字を含む語をすべて（動詞・形容詞・1文字の漢字も）ひらがなにして渡し、VOICEVOX に漢字の読みを判断させない。読みは 基本辞書（形態素解析前の文字列置換）→ ユーザー辞書（語の表記一致）→ Sudachi の読み の順。Sudachi の読みを自動学習辞書へは書き足さない（確認前の読みを固定しないため）。読みが文脈に合わない語（例: 辛いカレー → つらい）は下の読みチェックで見つけて基本辞書へ登録する。ひらがなのみのため、VOICEVOX のアクセント（抑揚）推定が漢字入りより粗くなる場合がある
 - `dictionary`: `data/settings.db` の `reading_dictionary_entries`（`dict_type=base/user`）の単純置換だけを使う
 - `safe_auto`: SudachiPy / `sudachidict_core` で形態素解析し、安全な名詞類だけを自動でひらがな化する
 - 補正後テキスト → VOICEVOX へ渡す（読み上げ用）
@@ -951,6 +953,22 @@ VOICEVOX が固有名詞・専門用語・難読漢字を誤読するのを防�
 ```
 VOICE_READING_MODE = "safe_auto"
 ```
+
+### 読み違いの可能性の検出 (`core/reading_check.py`)
+
+- **台本の元の文（漢字のまま）**を VOICEVOX の `audio_query` に渡したときの `kana`（VOICEVOX ならどう読むか。例: `カ'ライノダ`）と、同じ文を Sudachi で解析した読みを比べ、**漢字を含む語で2つの解析の読みが分かれるもの**を「読み違いの可能性」として出す。`full_hiragana` では音声は Sudachi の読みで作られるため、分かれた語は Sudachi の読みが文脈に合っていないおそれがある。音声を聞き直す方式（Whisper 等）は採らない。合成前に一瞬で調べられ、モデル取得も不要で、文字起こし側の聞き間違いも混ざらないため。
+- 基本辞書で読みが決まる語（基本辞書のキーを含む語）は出さない。
+- 比較は発音に寄せて揃える: `kana` の記号（`' / 、 _ ？`）を除き、両側で ー→直前の母音、オ段・ウ段の後のウ→オ/ウ、エ段の後のイ→エ、ヲ→オ、ヅ→ズ、ヂ→ジ、辞書側の助詞 は/へ/を→ワ/エ/オ。置き換えは1文字ずつなので、食い違った位置から元の読みをそのまま表示できる。英数字など辞書に読みが無い語は比べない。
+- どちらが正しいかは決めない（Sudachi の読みが文脈に合わない語もある）。利用者が確認して登録する。
+- 実行箇所:
+  - 動画生成: VOICEVOX の audio_query 取得直後に比べる。読み補正で文が変わっていなければ取得済みの kana を使い、変わった文だけ元の文の audio_query を追加で行う（合成より十分軽い）。見つかれば生成ログに警告として出し（最大10件）、合成は続ける。
+  - 生成画面の「読みチェック」: `POST /api/reading-check`（ジョブ `reading_check`）。元の文の `audio_query` だけを行い、音声は作らない。辞書は書き換えない。AquesTalk のセリフは対象外。VOICEVOX 未起動は `E-VOICEVOX-DOWN`。
+- 記録: `settings.db:reading_check_findings`（下表）。同じ語・同じ VOICEVOX の読みは件数を増やす。設定画面「よみがな辞書」の「読み違いの可能性」と、読みチェックの結果に一覧を出す（共通部品 `renderReadingFindings()`、`web_app/static/app.js`）。
+  - 「この読みで登録」→ `POST /api/reading-check/findings/accept`: 基本辞書（`dict_type=base`）へ登録して、その語の項目を消す。基本辞書は形態素解析の前に文字列置換されるため、動詞・形容詞・1文字の漢字にも効く。
+  - 「問題なし」→ `POST /api/reading-check/findings/dismiss`: 今の読みのままでよい語として、同じ語・同じ VOICEVOX の読みを今後表示しない。
+    設定の一覧だけでなく、再チェックの結果・生成時の警告にも再表示しない。再検出時の件数は記録する。
+  - 生成前チェックは受付時の `job.profile_id` に話者を固定する。受付後にチャンネルを切り替えても、切替先の音声設定を使わない。active profile 未設定では受け付けない。
+  - 一覧は `GET /api/reading-check/findings`。
 
 ---
 
@@ -2370,6 +2388,19 @@ PRIMARY KEY は `(dict_type, word)`。同じ表記が `base` と `user` に重�
 | `source` | TEXT | 由来 |
 | `auto_applied` | INTEGER | 自動適用済みフラグ |
 | `review_required` | INTEGER | 確認要否 |
+| `updated_at` | TEXT | 更新日時 |
+
+#### `reading_check_findings` — 読み違いの可能性
+
+| 列 | 型 | 説明 |
+|---|---|---|
+| `word` | TEXT | 表記（PK の一部） |
+| `voicevox_reading` | TEXT | VOICEVOX の読み（ひらがな。PK の一部） |
+| `expected_reading` | TEXT | 形態素解析（Sudachi）の読み（ひらがな） |
+| `example` | TEXT | 見つかった文 |
+| `source` | TEXT | 見つかった動画フォルダ名、または `生成前チェック` |
+| `seen_count` | INTEGER | 見つかった回数 |
+| `dismissed` | INTEGER | 「問題なし」にしたか |
 | `updated_at` | TEXT | 更新日時 |
 
 `reading_dictionary_seed_state` は初期 seed 投入済みかを記録する内部テーブル。新規DBでは `core/reading_dictionary_seed.py` の初期データを投入し、既存DBでは既存データを尊重する。

@@ -42,6 +42,19 @@ def _connect() -> sqlite3.Connection:
         )
     """)
     conn.execute("""
+        CREATE TABLE IF NOT EXISTS reading_check_findings (
+            word             TEXT NOT NULL,
+            voicevox_reading TEXT NOT NULL,
+            expected_reading TEXT NOT NULL,
+            example          TEXT NOT NULL DEFAULT '',
+            source           TEXT NOT NULL DEFAULT '',
+            seen_count       INTEGER NOT NULL DEFAULT 1,
+            dismissed        INTEGER NOT NULL DEFAULT 0,
+            updated_at       TEXT NOT NULL,
+            PRIMARY KEY(word, voicevox_reading)
+        )
+    """)
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS reading_dictionary_seed_state (
             seed_name TEXT PRIMARY KEY,
             seeded_at TEXT NOT NULL,
@@ -268,3 +281,77 @@ def save_candidates(candidates: dict[str, dict]) -> None:
             ],
         )
         conn.commit()
+
+
+# ── 読み違いの可能性（core/reading_check.py が見つけたもの） ─────────────────────
+
+def record_findings(findings, source: str) -> int:
+    """見つかった読み違いの可能性を記録する。同じ語・同じ VOICEVOX の読みは件数だけ増やす。
+
+    「無視」にしたもの（dismissed）は再表示しない。記録した（無視されていない）件数を返す。
+    """
+    if not findings:
+        return 0
+    ensure_initialized()
+    now = _now_jst()
+    active = 0
+    with closing(_connect()) as conn, conn:
+        for f in findings:
+            conn.execute(
+                """
+                INSERT INTO reading_check_findings(
+                    word, voicevox_reading, expected_reading, example, source, seen_count, dismissed, updated_at
+                ) VALUES(?,?,?,?,?,1,0,?)
+                ON CONFLICT(word, voicevox_reading) DO UPDATE SET
+                    expected_reading=excluded.expected_reading,
+                    example=excluded.example,
+                    source=excluded.source,
+                    seen_count=reading_check_findings.seen_count + 1,
+                    updated_at=excluded.updated_at
+                """,
+                (f.word, f.voicevox_reading, f.expected_reading, f.text, source, now),
+            )
+            dismissed = conn.execute(
+                "SELECT dismissed FROM reading_check_findings WHERE word=? AND voicevox_reading=?",
+                (f.word, f.voicevox_reading),
+            ).fetchone()[0]
+            active += 0 if dismissed else 1
+        conn.commit()
+    return active
+
+
+def list_findings() -> list[dict]:
+    """未対応（無視していない）の読み違いの可能性。よく出る順。"""
+    ensure_initialized()
+    with closing(_connect()) as conn, conn:
+        rows = conn.execute(
+            """
+            SELECT word, voicevox_reading, expected_reading, example, source, seen_count, updated_at
+            FROM reading_check_findings WHERE dismissed=0
+            ORDER BY seen_count DESC, updated_at DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def accept_finding(word: str, reading: str) -> None:
+    """正しい読みを辞書（基本辞書）へ登録し、その語の読み違いの可能性を片付ける。
+
+    基本辞書は形態素解析の前に文字列置換されるため、動詞・形容詞や1文字の漢字にも効く。
+    """
+    upsert_entry("base", word, reading)
+    with closing(_connect()) as conn, conn:
+        conn.execute("DELETE FROM reading_check_findings WHERE word=?", (word,))
+        conn.commit()
+
+
+def dismiss_finding(word: str, voicevox_reading: str) -> bool:
+    """今の読みのままでよい語として、同じ語・同じ VOICEVOX の読みの組み合わせを今後表示しない。"""
+    ensure_initialized()
+    with closing(_connect()) as conn, conn:
+        cur = conn.execute(
+            "UPDATE reading_check_findings SET dismissed=1, updated_at=? WHERE word=? AND voicevox_reading=?",
+            (_now_jst(), word, voicevox_reading),
+        )
+        conn.commit()
+        return bool(cur.rowcount)

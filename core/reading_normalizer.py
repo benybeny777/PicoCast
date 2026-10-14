@@ -22,8 +22,10 @@ def _kata_to_hira(text: str) -> str:
 
 class ReadingNormalizer:
     def __init__(self):
-        self.mode = getattr(_cfg, "VOICE_READING_MODE", "safe_auto")
-        self._available = self.mode in ("dictionary", "safe_auto")
+        self.mode = getattr(_cfg, "VOICE_READING_MODE", "full_hiragana")
+        if self.mode not in ("off", "dictionary", "safe_auto", "full_hiragana"):
+            raise RuntimeError(f"未対応の VOICE_READING_MODE です: {self.mode}")
+        self._available = self.mode in ("dictionary", "safe_auto", "full_hiragana")
         
         self.base_dict = {}
         self.user_dict = {}
@@ -38,7 +40,7 @@ class ReadingNormalizer:
         if self._available:
             self._load_dicts()
             
-            if self.mode == "safe_auto":
+            if self.mode in ("safe_auto", "full_hiragana"):
                 try:
                     from sudachipy import dictionary, tokenizer
                     self.tokenizer_obj = dictionary.Dictionary().create()
@@ -90,16 +92,13 @@ class ReadingNormalizer:
                         self.applied_user.add(k)
             return res
 
+        if self.mode == "full_hiragana":
+            return self._normalize_full_hiragana(text)
+
         # safe_auto
         # base_dictをトークン化前に前処理置換（長い順に優先）。
         # 「黒い」のような活用形も「黒」→「くろ」に展開できる。
-        pre_text = text
-        for k in sorted(self.base_dict.keys(), key=len, reverse=True):
-            if k in pre_text:
-                pre_text = pre_text.replace(k, self.base_dict[k])
-                self.applied_base.add(k)
-
-        tokens = self.tokenizer_obj.tokenize(pre_text)
+        tokens = self.tokenizer_obj.tokenize(self._apply_base_dict(text))
             
         res_text = []
         has_kanji = re.compile(r'[\u4E00-\u9FFF]')
@@ -164,6 +163,41 @@ class ReadingNormalizer:
             res_text.append(surface)
             
         return "".join(res_text)
+
+    def _apply_base_dict(self, text: str) -> str:
+        """基本辞書を形態素解析の前に文字列置換する（長い語から）。活用形（黒い→くろい）にも効く。"""
+        for k in sorted(self.base_dict.keys(), key=len, reverse=True):
+            if k in text:
+                text = text.replace(k, self.base_dict[k])
+                self.applied_base.add(k)
+        return text
+
+    def _normalize_full_hiragana(self, text: str) -> str:
+        """漢字を含む語をすべてひらがなにする（動詞・形容詞・1文字の漢字も）。
+
+        VOICEVOX に漢字の読みを判断させない。読みは 基本辞書 → ユーザー辞書 → 形態素解析（Sudachi）の順で決める。
+        形態素解析の読みが文脈に合わない語は、読みチェック（core/reading_check.py）で見つけて辞書へ登録する。
+        safe_auto と違い、形態素解析の読みを自動学習辞書へ書き足さない（確認前の読みを固定しないため）。
+        """
+        has_kanji = re.compile(r'[\u4E00-\u9FFF々〆ヵヶ]')
+        result = []
+        for token in self.tokenizer_obj.tokenize(self._apply_base_dict(text), self.split_mode):
+            surface = token.surface()
+            if surface in self.user_dict:
+                result.append(self.user_dict[surface])
+                self.applied_user.add(surface)
+                continue
+            if not has_kanji.search(surface):
+                result.append(surface)
+                continue
+            reading = token.reading_form()
+            if not reading or not re.fullmatch(r'[ァ-ヶー]+', reading):
+                self.skipped_terms.add(surface)
+                result.append(surface)
+                continue
+            result.append(_kata_to_hira(reading))
+            self.applied_auto.add(surface)
+        return "".join(result)
 
     def load_cache(self, saved: dict[str, str]) -> None:
         pass  # 互換性維持

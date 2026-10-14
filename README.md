@@ -81,7 +81,7 @@ graph TD
 ## ✨ 主な機能・特徴
 
 - 🎬 台本から動画を全自動生成（音声・背景・字幕・BGM・サムネイル・MP4）
-- 🗣 VOICEVOX / AquesTalk系 音声合成＋よみがな自動補正
+- 🗣 VOICEVOX / AquesTalk系 音声合成＋よみがな自動補正（既定は漢字をすべてひらがなで渡す）＋読みが分かれる語の自動検出（合成前に VOICEVOX と形態素解析の読みを照合）
 - 🖼 AI 画像生成（Gemini ⇄ Stable Diffusion WebUI 切替）
 - 🧠 台本の品質レビュー・自動リライト
 - 💻 Claude Code / Codex のコマンドで台本・タイトル案を生成（API キー不要）、ComfyUI でローカル画像生成

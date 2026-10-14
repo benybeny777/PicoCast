@@ -262,6 +262,7 @@ from web_app.routes.api_schedule import router as schedule_router
 from web_app.routes.api_upload import router as upload_router
 from web_app.routes.api_playlist_classifier import router as playlist_classifier_router
 from web_app.routes.api_fixed_comment import router as fixed_comment_router
+from web_app.routes.api_reading_check import router as reading_check_router
 from web_app.routes.api_settings import router as settings_router
 from web_app.routes.api_prompt import router as prompt_router
 from web_app.routes.api_sd_models import router as sd_models_router
@@ -285,6 +286,7 @@ app.include_router(schedule_router)
 app.include_router(upload_router)
 app.include_router(playlist_classifier_router)
 app.include_router(fixed_comment_router)
+app.include_router(reading_check_router)
 app.include_router(settings_router)
 app.include_router(prompt_router)
 app.include_router(sd_models_router)
