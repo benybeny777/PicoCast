@@ -21,6 +21,6 @@
 - フォルダ名、Pythonの `legacy/` への移動、3.12環境への切替は未実施。実データと既存の3.11環境は保持している。
 - 設定・metadata DBのオンラインバックアップ3件と、元の暗号化キー・旧認証ファイル・未コミット差分を `~/.codex/backups/picocast-r0/` に退避した。退避したDBの整合性はすべて確認した。内容はGitやログへ出さない。
 - 事前確認では自動運用ONは0、Web/runnerプロセスは0。既存metadataに6月の `running` 記録が10件あるが、PIDの記録と対応プロセスが無いため、実行中の処理とは区別する。履歴は削除・キャンセルしない。
-- `cargo xtask verify` は整形・clippy・走査ガード・単体テスト20件すべて成功した（core 7 / store 8 / guard 5）。Windows DPAPIの往復と既存キー保持、プロセスの正常終了・異常終了・時間切れ・出力超過、SQLiteのWALバックアップと破損保持を単体検証した。UIはまだ無いためNodeテストは明示スキップ。CI実行とmacOS実機は未確認。
+- `cargo xtask verify` は整形・clippy・走査ガード・単体テスト20件すべて成功した（core 7 / store 8 / guard 5）。Windows DPAPIの往復と既存キー保持、プロセスの正常終了・異常終了・時間切れ・出力超過、SQLiteのWALバックアップと破損保持を単体検証した。UIはまだ無いためNodeテストは明示スキップ。[Windows CI](https://github.com/benybeny777/PicoCast/actions/runs/38655962015) も成功（コードコミット `55f93c7`）。macOS実機は未確認。
 - Pythonロックは準備段階で、稼働中の3.11環境を置換していない。`uv sync` は旧環境退避と移行の手順を満たしてから行う。
 - フルドメインのDB、旧データ取込み、音声・動画生成、Tauri画面はR1以降。基盤があることと旧アプリの置換完了を混同しない。

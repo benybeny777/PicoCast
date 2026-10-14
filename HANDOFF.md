@@ -27,7 +27,7 @@
 
 - GitHubは `benybeny777/PicoCast` に改名済み。origin更新済み。ローカルのフォルダ名とCodexプロジェクト表示名はまだ旧名。Windows画面操作はアクセス拒否（0x80070005）で停止した。
 - エディター用は `PicoCast.code-workspace` に改名し、表示名もPicoCastにした。Codexの登録名とは別なので変更済みと混同しない。
-- R0コード: Cargoワークスペース、core/store、型付きチャンネルID、検証ガード、`xtask verify`、Windows CIを追加した。`cargo xtask verify` は整形・clippy・ガード・単体テスト20件成功。Windows DPAPIとプロセス終了も単体検証した。UI無しによるNodeテストskip、CI実行とmacOS実機は未確認。
+- R0コード: Cargoワークスペース、core/store、型付きチャンネルID、検証ガード、`xtask verify`、Windows CIを追加した。`cargo xtask verify` は整形・clippy・ガード・単体テスト20件成功。Windows DPAPIとプロセス終了も単体検証した。[Windows CI](https://github.com/benybeny777/PicoCast/actions/runs/38655962015) も成功（`55f93c7`）。UI無しによるNodeテストskip、macOS実機は未確認。
 - Python3.12用の `pyproject.toml`・`.python-version`・`uv.lock` は用意済み。旧3.11環境、Pythonソース、保存データは移動していない。
 - 設定・metadata DB3件をオンラインバックアップし、旧認証ファイル・マスターキー・未コミット差分とともに `~/.codex/backups/picocast-r0/` へ退避済み。DB整合性はすべて確認した。
 - 事前確認: 自動運用ONは0、Web/runnerは0。6月に残ったrunning記録10件はPID記録と対応プロセスが無いため、実行中とは区別する。履歴を勝手に削除・キャンセルしない。
