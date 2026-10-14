@@ -530,6 +530,7 @@ Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook`
 - スケジュールの正は YouTube Data API の `privacyStatus` / `publishAt`。`rebalance_slots()` はYouTube側の予約状態を参照する。アップロード状態は `metadata.db` の `youtube_status` テーブルが正本
 - `list_schedule()` はページ表示のたびに `get_channel_upload_video_statuses()` を直接呼び出し、YouTube から最新状態を返す。`publish_at` はJST isoformat で返す。取得できないときは空の一覧を返さず `E-YOUTUBE-SCHEDULE` で止め、スケジュール画面にエラーを表示する（空だと「予約なし」と区別できないため）
 - `sync_schedule_from_youtube()`: YouTube API を正として `youtube_status` テーブルへ書き戻す。チャンネル全件取得に失敗した場合は `E-YOUTUBE-SCHEDULE` で止める（既知 video_id だけで同期すると、記録に無い予約を見落としたまま同期済みになるため）。
+- 割当・一覧・詰め直し・同期の予約取得と検証は共通化する。取得失敗や予約日時の破損・タイムゾーン欠損を「予約なし」として続けず、`E-YOUTUBE-SCHEDULE` で止める。同期は全予約の検証完了後にDBへ書き戻す。
 - 投稿予約スロットと `publish_at` はチャンネル設定のタイムゾーンで扱う。既定は `Asia/Tokyo`。
 - `infer_video_type()`: タイトルプレフィックス優先。タイトルなしの場合は duration ≤ 60s を shorts と推定
 
