@@ -22,12 +22,13 @@ import hashlib
 _logger = logging.getLogger(__name__)
 
 from core.runtime_env import app_base_dir, resource_base_dir
+from core.runtime_env import settings_db_path as _settings_db_path
 
 # 永続データ(settings.db / output)の基準。exe(onefile)では exe と同じフォルダ。
 _ROOT = app_base_dir()
 # 同梱リソース(config/prompt_profiles / config/SEED)の基準。exe では展開先フォルダ。
 _RES_ROOT = resource_base_dir()
-_DB_PATH = os.path.join(_ROOT, "data", "settings.db")
+_DB_PATH = _settings_db_path()
 _lock = threading.Lock()
 _profile_context = threading.local()
 

@@ -24,7 +24,6 @@ def profile_db(tmp_path, monkeypatch):
     monkeypatch.setattr(cp, "_ROOT", str(tmp_path))
     monkeypatch.setattr(cp, "_RES_ROOT", str(tmp_path))
     monkeypatch.setattr(cs, "_DB_PATH", str(tmp_path / "settings.db"))
-    monkeypatch.setattr(cs, "_ROOT", str(tmp_path))
     yield cp
 
 

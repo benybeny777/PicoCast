@@ -202,18 +202,7 @@ async function savePrompts() {
 }
 
 async function pollRegenJob(jobId, statusBox) {
-  const interval = setInterval(async () => {
-    try {
-      const res = await fetch(`/api/jobs/${jobId}`);
-      const job = await res.json();
-      const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length - 1].message : '';
-      statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
-      if (['success','failed','cancelled'].includes(job.status)) {
-        clearInterval(interval);
-        if (job.status === 'success') setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
-      }
-    } catch {}
-  }, window.WEB_JOB_POLL_INTERVAL_MS);
+  pollJobStatus(jobId, statusBox);
 }
 
 function openLightbox(src, caption) {
@@ -274,7 +263,8 @@ async function pasteReplace(key) {
       alert('クリップボードに画像がありません。画像をコピーしてから押してください。');
       return;
     } catch (e) {
-      // 権限拒否などは Ctrl+V フォールバックへ
+      // クリップボードの読み取り権限が無い場合は、Ctrl+V で貼り付ける操作へ切り替える（下の案内を表示）
+      console.warn('クリップボードを直接読めないため Ctrl+V での貼り付けを案内します', e);
     }
   }
   // フォールバック: このキーを貼り付け待ちにして Ctrl+V を促す

@@ -207,18 +207,7 @@ async function refreshAnalytics() {
     const data = await res.json();
     if (!res.ok) { statusBox.textContent = 'エラー: ' + (data.detail || ''); return; }
     statusBox.textContent = `ジョブ登録: ${data.job_id}`;
-    const interval = setInterval(async () => {
-      try {
-        const r2 = await fetch(`/api/jobs/${data.job_id}`);
-        const job = await r2.json();
-        const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length-1].message : '';
-        statusBox.textContent = `[${job.status}] ${lastLog || job.progress_text}`;
-        if (['success','failed','cancelled'].includes(job.status)) {
-          clearInterval(interval);
-          if (job.status === 'success') setTimeout(() => location.reload(), 1000);
-        }
-      } catch {}
-    }, 3000);
+    pollJobStatus(data.job_id, statusBox);
   } catch(e) {
     statusBox.textContent = '通信エラー: ' + e;
   }
@@ -322,10 +311,13 @@ function sortTable(col) {
   applyFilters();
 }
 
-// 初期表示件数
-applyFilters();
-// 初期ソート（公開日降順）
-sortTable('published_at');
+// データが無いとき（新しいチャンネルなど）は表と絞り込み欄を出さないので、初期表示の処理もしない
+if (document.getElementById('analytics-tbody')) {
+  // 初期表示件数
+  applyFilters();
+  // 初期ソート（公開日降順）
+  sortTable('published_at');
+}
 
 // ── 行選択 ──────────────────────────────────────────────────────────────────
 let _selectedRow = null;
@@ -392,7 +384,7 @@ async function showRetention() {
       const rel = r.relative_retention != null ? r.relative_retention.toFixed(3) : '—';
       const memo = r.memo || '';
       const warn = memo.includes('⚠') ? ' style="color:#e67e22"' : memo.includes('★') ? ' style="color:#27ae60"' : '';
-      html += `<tr><td>${pct}%</td><td>${r.second}</td><td${warn}>${ret}%</td><td>${rel}</td><td${warn}>${escapeHtml(memo)}</td></tr>`;
+      html += `<tr><td>${pct}%</td><td>${r.second}</td><td${warn}>${ret}%</td><td>${rel}</td><td${warn}>${esc(memo)}</td></tr>`;
     }
     html += '</tbody></table>';
     document.getElementById('retention-table-wrap').innerHTML = html;

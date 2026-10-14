@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from config import config as _cfg
+from core.error_codes import AppError
 
 _logger = logging.getLogger(__name__)
 
@@ -117,38 +118,48 @@ def assign_slots(count: int, video_type: str) -> list[datetime]:
     return _assign_slots_from_used(count, video_type, set(schedule.keys()))
 
 
+def _youtube_schedule_statuses(context: str) -> dict[str, dict]:
+    """予約取得と日時検証をまとめ、部分的な一覧で割当・同期しない。"""
+    from core.youtube_uploader import get_channel_upload_video_statuses
+
+    try:
+        statuses = get_channel_upload_video_statuses()
+        for status in statuses.values():
+            if str(status.get("privacyStatus") or "").lower() not in ("private", "unlisted"):
+                continue
+            publish_at = str(status.get("publishAt") or "").strip()
+            if publish_at:
+                dt = datetime.fromisoformat(publish_at.replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    raise ValueError("YouTubeの予約日時にタイムゾーンがありません")
+        return statuses
+    except Exception as exc:
+        _logger.error("YouTube予約状況の取得・検証に失敗しました: 処理=%s", context, exc_info=True)
+        raise AppError("E-YOUTUBE-SCHEDULE", context, cause=exc) from exc
+
+
 def assign_slots_from_youtube(count: int, video_type: str) -> list[datetime]:
     """YouTube予約動画を正として空きスロットを返す。
 
     チャンネルのアップロードリストを取得し、該当 video_type の
     private/unlisted かつ将来の publishAt を使用済みスロットとして扱う。
-    YouTube API 失敗時はローカルレコードにフォールバック。
+    YouTube から取得できないときは割り当てずに止める（ローカル記録だけで推定すると、
+    記録に無い予約と同じ枠へ重ねて予約してしまうため）。
     """
-    from core.youtube_uploader import get_channel_upload_video_statuses
-
     now = _as_jst(datetime.now(_active_timezone()))
     used: set[str] = set()
-    try:
-        statuses = get_channel_upload_video_statuses()
-        for _vid_id, status in statuses.items():
-            privacy = str(status.get("privacyStatus") or "").lower()
-            pub_at_raw = str(status.get("publishAt") or "").strip()
-            vt = str(status.get("video_type") or "").lower()
-            if vt != video_type:
-                continue
-            if privacy not in ("private", "unlisted") or not pub_at_raw:
-                continue
-            try:
-                dt = _as_jst(datetime.fromisoformat(pub_at_raw.replace("Z", "+00:00")))
-                if dt > now + timedelta(minutes=5):
-                    used.add(dt.isoformat())
-            except Exception:
-                _logger.warning("YouTube予約枠publishAtの解析に失敗しました: publishAt=%s", pub_at_raw, exc_info=True)
-                continue
-    except Exception:
-        _logger.warning("YouTube予約状況の取得に失敗したためローカル記録から予約枠を推定します", exc_info=True)
-        schedule = schedule_from_records().get(video_type, {})
-        used = set(schedule.keys())
+    statuses = _youtube_schedule_statuses("予約枠の割り当て")
+    for status in statuses.values():
+        privacy = str(status.get("privacyStatus") or "").lower()
+        pub_at_raw = str(status.get("publishAt") or "").strip()
+        vt = str(status.get("video_type") or "").lower()
+        if vt != video_type:
+            continue
+        if privacy not in ("private", "unlisted") or not pub_at_raw:
+            continue
+        dt = _parse_slot(pub_at_raw.replace("Z", "+00:00"))
+        if dt > now + timedelta(minutes=5):
+            used.add(dt.isoformat())
 
     return _assign_slots_from_used(count, video_type, used, now)
 
@@ -162,15 +173,9 @@ def schedule_from_youtube() -> dict[str, dict]:
     """YouTube APIを正としてスケジュールを構築する。
     {"shorts": {iso: title, ...}, "long": {...}} を返す。
     """
-    from core.youtube_uploader import get_channel_upload_video_statuses
-
     now = _as_jst(datetime.now(_active_timezone()))
     schedules: dict[str, dict] = {vt: {} for vt in VIDEO_TYPES}
-    try:
-        statuses = get_channel_upload_video_statuses()
-    except Exception:
-        _logger.warning("YouTube予約一覧の取得に失敗しました", exc_info=True)
-        return schedules
+    statuses = _youtube_schedule_statuses("予約一覧の取得")
     for _vid_id, status in statuses.items():
         vt = str(status.get("video_type") or "").lower()
         if vt not in schedules:
@@ -179,17 +184,11 @@ def schedule_from_youtube() -> dict[str, dict]:
         pub_at_raw = str(status.get("publishAt") or "").strip()
         if privacy not in ("private", "unlisted") or not pub_at_raw:
             continue
-        try:
-            dt = _as_jst(datetime.fromisoformat(pub_at_raw.replace("Z", "+00:00")))
-            if dt <= now:
-                continue
-            iso = dt.isoformat()
-        except Exception:
-            _logger.warning("YouTube予約一覧publishAtの解析に失敗しました: video_id=%s publishAt=%s", _vid_id, pub_at_raw, exc_info=True)
+        dt = _parse_slot(pub_at_raw.replace("Z", "+00:00"))
+        if dt <= now:
             continue
-        title = str(status.get("title") or "").strip()
-        if not title:
-            continue
+        iso = dt.isoformat()
+        title = str(status.get("title") or "").strip() or _vid_id
         if iso not in schedules[vt]:
             schedules[vt][iso] = title
     return schedules
@@ -197,15 +196,9 @@ def schedule_from_youtube() -> dict[str, dict]:
 
 def _scheduled_entries_from_youtube(video_type: str) -> list[dict]:
     """リバランス用にYouTubeから予約済みエントリを取得する。"""
-    from core.youtube_uploader import get_channel_upload_video_statuses
-
     now = datetime.now(_active_timezone())
     entries = []
-    try:
-        statuses = get_channel_upload_video_statuses()
-    except Exception:
-        _logger.warning("YouTube予約済みエントリの取得に失敗しました", exc_info=True)
-        return entries
+    statuses = _youtube_schedule_statuses("予約枠の詰め直し")
     for video_id, status in statuses.items():
         vt = str(status.get("video_type") or "").lower()
         if vt != video_type:
@@ -214,12 +207,8 @@ def _scheduled_entries_from_youtube(video_type: str) -> list[dict]:
         pub_at_raw = str(status.get("publishAt") or "").strip()
         if privacy not in ("private", "unlisted") or not pub_at_raw:
             continue
-        try:
-            iso = _as_jst(datetime.fromisoformat(pub_at_raw.replace("Z", "+00:00"))).isoformat()
-            slot_dt = _parse_slot(iso)
-        except Exception:
-            _logger.warning("YouTube予約済みエントリpublishAtの解析に失敗しました: video_id=%s publishAt=%s", video_id, pub_at_raw, exc_info=True)
-            continue
+        slot_dt = _parse_slot(pub_at_raw.replace("Z", "+00:00"))
+        iso = slot_dt.isoformat()
         if slot_dt <= now:
             continue
         title = str(status.get("title") or "").strip()
@@ -443,7 +432,6 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
     """YouTubeのステータスを正としてローカルレコード・スケジュールを更新する。"""
     from core.metadata_db import sync_youtube_statuses
     from core.upload_records import load_upload_records
-    from core.youtube_uploader import get_channel_upload_video_statuses, get_video_statuses
 
     def _log(message):
         if progress_callback:
@@ -455,11 +443,7 @@ def sync_schedule_from_youtube(progress_callback=None) -> dict:
         for record in records
         if str(record.get("video_id") or "").strip()
     }
-    try:
-        statuses = get_channel_upload_video_statuses()
-    except Exception as _e:
-        _log(f"チャンネル全件取得失敗、既知IDのみでフォールバック: {_e}")
-        statuses = get_video_statuses(list(id_to_record.keys()))
+    statuses = _youtube_schedule_statuses("予約の同期")
     db_result = sync_youtube_statuses(statuses, delete_missing=False)
     now = datetime.now(_active_timezone())
     changed_records = 0

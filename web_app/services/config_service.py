@@ -291,6 +291,7 @@ def _validate(updates: dict[str, str]) -> list[str]:
                     try:
                         sanitize_path_value(raw_val, allow_command_name=(key == "FFMPEG_BIN"))
                     except ValueError as exc:
+                        _logger.warning("設定値のパスが不正です: key=%s", key, exc_info=True)
                         errors.append(f"{key}: {exc}")
                 if spec["type"] == "bgm_file" and raw_val.strip():
                     if os.path.sep in raw_val or "/" in raw_val or "\\" in raw_val:

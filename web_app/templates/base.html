@@ -142,7 +142,10 @@ async function navShutdown() {
   try {
     const r = await fetch('/api/shutdown/status');
     statusData = await r.json();
-  } catch {}
+  } catch (e) {
+    // 実行中ジョブを確認できなくても終了の確認は続ける（確認ダイアログで利用者が判断する）
+    console.warn('実行中ジョブの確認に失敗しました', e);
+  }
 
   const running = statusData.running_jobs || [];
   let force = false;

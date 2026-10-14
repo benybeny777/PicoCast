@@ -417,7 +417,7 @@ pip install --upgrade -r config/requirements-dev.txt
 
 ```powershell
 python -m pip install -r config/requirements-dev.txt
-python tools/verify.py   # pytest（ルール検査を含む）と git diff --check をまとめて実行
+python tools/verify.py   # pytest・Node.jsの回帰テストとJS構文・git diff --check をまとめて実行
 ```
 
 テストは一時フォルダだけを使い、`data/settings.db` や `output/` など利用者の実データを読み書きしません。

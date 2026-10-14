@@ -1845,13 +1845,6 @@ async function deleteDictEntry(dictType, word) {
   } catch(e) { statusBox.textContent = '通信エラー: ' + e; statusBox.style.color = 'var(--error)'; }
 }
 
-function esc(str) {
-  return String(str)
-    .replace(/&/g,'&amp;')
-    .replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;');
-}
 
 async function testAquesTalk() {
   const out = document.getElementById('aquestalk-test-result');

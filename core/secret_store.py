@@ -31,8 +31,9 @@ _logger = logging.getLogger(__name__)
 # exe(onefile)では __file__ が一時展開先になるため、ここで anchor しないと
 # settings.db / マスターキーが終了時に消える一時領域に書かれてしまう。
 from core.runtime_env import app_base_dir
+from core.runtime_env import settings_db_path as _settings_db_path
 _ROOT = app_base_dir()
-_DB_PATH = os.path.join(_ROOT, "data", "settings.db")
+_DB_PATH = _settings_db_path()
 _MASTER_KEY_PATH = os.path.join(_ROOT, "data", "secret_master.key")
 
 _KEY_VERSION = 1

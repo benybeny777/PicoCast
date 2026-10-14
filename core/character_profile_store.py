@@ -27,9 +27,8 @@ from datetime import datetime, timezone
 _logger = logging.getLogger(__name__)
 
 from core.path_refs import to_storable_path_ref
-from core.runtime_env import app_base_dir as _app_base_dir
-_ROOT = _app_base_dir()  # 永続データ(settings.db)の基準。exe(onefile)では exe と同じフォルダ
-_DB_PATH = os.path.join(_ROOT, "data", "settings.db")
+from core.runtime_env import settings_db_path as _settings_db_path
+_DB_PATH = _settings_db_path()
 _lock = threading.Lock()
 
 _CHARACTER_NAME_ALIASES = {

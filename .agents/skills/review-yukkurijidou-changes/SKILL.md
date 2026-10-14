@@ -82,7 +82,7 @@ description: yukkurijidouの差分・PR・直近コミット・指定範囲を�
 
 1. 変更したモジュールに対応するテスト: `python -m pytest tests/<対象>.py -q`
 2. Web UI・API を変えたら `python -m pytest tests/test_web.py -q`
-3. 最終確認は `python -m pytest -q` と `git diff --check`。
+3. 最終確認は `python tools/verify.py`（pytest・Node.js回帰テスト・共通JS構文・差分検査）。既に同じ段を実行済みなら重複実行しない。画面を変更したら実ブラウザで表示と対象操作も確認する。
 4. 実機（VOICEVOX・SD WebUI・YouTube・Windows exe）が要る確認は、この環境で実行できなければ未確認として分けて書く。
 
 ## 記録する

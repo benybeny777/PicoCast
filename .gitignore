@@ -14,6 +14,7 @@ __pycache__/
 *.pyo
 output/
 dev/
+temp/
 data/reading_dictionary_user.json
 data/reading_candidates.json
 data/settings.db

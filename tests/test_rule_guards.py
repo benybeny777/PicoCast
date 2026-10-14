@@ -30,26 +30,6 @@ ENV_ACCESS_LIMITS = {
     "core/codex_image.py": 1,  # 子プロセスへ渡す環境変数から OPENAI_API_KEY を外す（設定値ではない）
 }
 
-# ログも再送出もしない except 節の件数の上限（AGENTS.md「エラーはすべて上位に伝播」「失敗時はデバッグログへ出力」）。
-SILENT_EXCEPT_LIMITS = {
-    "web_app/routes/api_channels.py": 9,
-    "web_app/routes/api_prompt_templates.py": 9,
-    "web_app/routes/api_sd_models.py": 6,
-    "web_app/routes/api_bgm.py": 4,
-    "workers/main.py": 4,
-    "web_app/routes/api_analytics.py": 3,
-    "web_app/routes/api_history.py": 3,
-    "web_app/routes/api_images.py": 3,
-    "web_app/app.py": 2,
-    "web_app/routes/api_character_profiles.py": 2,
-    "web_app/routes/api_settings.py": 2,
-    "core/external_service_check.py": 1,
-    "core/upload_scheduler.py": 1,
-    "web_app/services/config_service.py": 1,
-    "web_app/services/playlist_classifier_service.py": 1,
-    "workers/output_locks.py": 1,
-}
-
 # `script.txt` への言及件数の上限。台本本文の正本は metadata.db の videos.script_content
 # （AGENTS.md「Web UI 作業時の注意点」）。既存は旧フォルダ取り込みの後方互換と説明コメント。
 SCRIPT_TXT_LIMITS = {
@@ -60,6 +40,8 @@ SCRIPT_TXT_LIMITS = {
 }
 
 _LOG_METHODS = {"debug", "info", "warning", "error", "exception", "critical", "log"}
+# デバッグログへ記録してから利用者向けに報告する共通関数（中で _logger.error する）
+_REPORTING_HELPERS = {"raise_api_error", "error_payload", "_raise_classification_failure", "_report_thumbnail_failure"}
 
 
 def _tracked(pattern: str) -> list[str]:
@@ -80,12 +62,16 @@ def _app_sources() -> dict[str, str]:
 
 
 def _handler_reports(handler: ast.ExceptHandler) -> bool:
-    """except 節がログ出力か再送出を含むか。"""
+    """except 節がログ出力・再送出・報告用の共通関数の呼び出しを含むか。Ctrl+C の処理は対象外。"""
+    if isinstance(handler.type, ast.Name) and handler.type.id == "KeyboardInterrupt":
+        return True
     for node in ast.walk(handler):
         if isinstance(node, ast.Raise):
             return True
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in _LOG_METHODS:
-            return True
+        if isinstance(node, ast.Call):
+            name = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
+            if name in _LOG_METHODS or name in _REPORTING_HELPERS:
+                return True
     return False
 
 
@@ -134,13 +120,28 @@ def _assert_within_limits(actual: Counter, limits: dict[str, int], rule: str) ->
     ("counter", "limits", "rule"),
     [
         (_env_access, ENV_ACCESS_LIMITS, "os.environ / getenv の参照"),
-        (_silent_except, SILENT_EXCEPT_LIMITS, "ログも再送出もしない except 節"),
         (_script_txt, SCRIPT_TXT_LIMITS, "script.txt への言及"),
     ],
-    ids=["env", "silent_except", "script_txt"],
+    ids=["env", "script_txt"],
 )
 def test_rule_violations_do_not_increase(counter, limits, rule):
     _assert_within_limits(_count(counter), limits, rule)
+
+
+def test_no_silent_except():
+    """ログも再送出もしない except 節を作らない（AGENTS.md「エラーはすべて上位に伝播」「失敗時はデバッグログへ出力」）。"""
+    silent = _count(_silent_except)
+    assert not silent, f"ログも再送出もしない except 節: {dict(silent)}"
+
+
+def test_sqlite_connections_are_closed():
+    """`with sqlite3.connect(...) as conn:` は確定するだけで接続を閉じない。closing() で閉じる（AGENTS.md「リソースの解放」）。
+
+    Windows では閉じていない接続が settings.db を掴み続け、バックアップの復元などに失敗する。
+    """
+    pattern = re.compile(r"with\s+(?:sqlite3\.connect|_connect|_open)\(")
+    hits = [p for p, src in _app_sources().items() if pattern.search(src)]
+    assert not hits, f"closing() で囲まれていない sqlite 接続: {hits}"
 
 
 def test_no_traceback_text_in_app_code():
@@ -200,3 +201,59 @@ def test_claude_skill_entries_match_shared_skills():
         entry_text = open(entry_md, encoding="utf-8").read()
         assert f".agents/skills/{name}/SKILL.md" in entry_text, f"入口が正本を参照していません: {entry_md}"
         assert len(entry_text.splitlines()) <= 15, f"入口へ手順を複製しないでください: {entry_md}"
+
+
+def test_no_unused_or_undefined_names():
+    """使われていない import・変数と未定義の名前（dead code・打ち間違い）を残さない（AGENTS.md「dead code はその場で直す」）。"""
+    from pyflakes import api, messages
+
+    checked = (messages.UnusedImport, messages.UnusedVariable, messages.UndefinedName, messages.RedefinedWhileUnused)
+    found = []
+
+    class _Reporter:
+        def flake(self, message):
+            # パッケージの __init__.py の import は再公開のためなので対象外
+            if message.filename.endswith("__init__.py") and isinstance(message, messages.UnusedImport):
+                return
+            if isinstance(message, checked):
+                found.append(f"{message.filename}:{message.lineno}: {message.message % message.message_args}")
+
+        def syntaxError(self, filename, msg, lineno, offset, text):
+            found.append(f"{filename}:{lineno}: 構文エラー {msg}")
+
+        def unexpectedError(self, filename, msg):
+            found.append(f"{filename}: {msg}")
+
+    for path, src in _app_sources().items():
+        api.check(src, path, _Reporter())
+    assert not found, "\n".join(found)
+
+
+def _js_sources() -> dict[str, str]:
+    paths = _tracked("web_app/static/*.js") + _tracked("web_app/templates/*.html")
+    return {p: open(os.path.join(_ROOT, p), encoding="utf-8").read() for p in paths}
+
+
+def test_no_empty_js_catch():
+    """画面の JavaScript で通信エラーなどを空の catch で捨てない。再試行するなら理由と状態を表示する。"""
+    pattern = re.compile(r"catch\s*(\([^)]*\))?\s*\{\s*(//[^\n]*\n\s*)*\}")
+    hits = [p for p, src in _js_sources().items() if pattern.search(src)]
+    assert not hits, f"空の catch: {hits}"
+
+
+def test_page_scripts_do_not_shadow_shared_functions():
+    """画面のスクリプトが app.js / job_poll.js の共通関数と同じ名前の関数を定義しない。
+
+    画面のスクリプトは共通スクリプトの後に読まれるため、同名の関数はその画面全体で共通関数を上書きし、
+    共通関数を呼ぶ他の部品（例: pollJobStatus → pollJob）が別物を呼んでしまう。
+    """
+    define = re.compile(r"^\s*(?:async\s+)?function\s+(\w+)\s*\(", re.M)
+    shared = set()
+    for p in ("web_app/static/app.js", "web_app/static/job_poll.js"):
+        shared |= set(define.findall(open(os.path.join(_ROOT, p), encoding="utf-8").read()))
+    clashes = {
+        p: sorted(set(define.findall(src)) & shared)
+        for p, src in _js_sources().items() if p.endswith(".html")
+    }
+    clashes = {p: names for p, names in clashes.items() if names}
+    assert not clashes, f"共通関数と同名の関数: {clashes}"

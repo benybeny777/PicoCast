@@ -5,7 +5,6 @@ Web UI ルートからの要求を受けてモデルマネージャーへ委譲�
 import logging
 from typing import Any, Callable
 
-from config import config
 from core.sd_model_manager import SDWebUIModelManager
 
 logger = logging.getLogger(__name__)

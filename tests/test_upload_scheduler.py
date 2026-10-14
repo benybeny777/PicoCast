@@ -555,3 +555,57 @@ class UploadSchedulerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+import pytest as _pytest
+
+
+@_pytest.mark.parametrize("call", [
+    lambda us: us.assign_slots_from_youtube(1, "shorts"),
+    lambda us: us.schedule_from_youtube(),
+    lambda us: us.sync_schedule_from_youtube(),
+    lambda us: us.rebalance_slots("shorts"),
+    lambda us: us.rebalance_slots_detailed("shorts"),
+    lambda us: us.count_rebalance_candidates("shorts"),
+])
+def test_youtube_failure_stops_instead_of_guessing_from_local_records(monkeypatch, call):
+    """YouTube から予約状況を取れないとき、ローカル記録だけで推定・同期しない（予約の重複を防ぐ）。"""
+    import core.upload_scheduler as us
+    import core.youtube_uploader as yu
+    from core.error_codes import AppError
+
+    def broken():
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(yu, "get_channel_upload_video_statuses", broken)
+    monkeypatch.setattr(us, "load_upload_records", lambda: [], raising=False)
+    with _pytest.raises(AppError) as exc:
+        call(us)
+    assert exc.value.code == "E-YOUTUBE-SCHEDULE"
+
+
+@_pytest.mark.parametrize("publish_at", ["broken-date", "2099-01-01T12:00:00"])
+@_pytest.mark.parametrize("operation", ["assign", "list", "rebalance", "sync"])
+def test_invalid_youtube_schedule_stops_before_assignment_or_database_write(monkeypatch, publish_at, operation):
+    """壊れた予約を空き枠とみなさず、同期でも検証完了前にDBを書き換えない。"""
+    from unittest.mock import Mock
+    import core.upload_scheduler as us
+    import core.youtube_uploader as yu
+    import core.metadata_db as db
+    from core.error_codes import AppError
+
+    monkeypatch.setattr(yu, "get_channel_upload_video_statuses", lambda: {
+        "v1": {"privacyStatus": "private", "publishAt": publish_at, "video_type": "shorts", "title": "予約"},
+    })
+    writer = Mock()
+    monkeypatch.setattr(db, "sync_youtube_statuses", writer)
+    calls = {
+        "assign": lambda: us.assign_slots_from_youtube(1, "shorts"),
+        "list": us.schedule_from_youtube,
+        "rebalance": lambda: us.rebalance_slots("shorts"),
+        "sync": us.sync_schedule_from_youtube,
+    }
+    with _pytest.raises(AppError) as exc:
+        calls[operation]()
+    assert exc.value.code == "E-YOUTUBE-SCHEDULE"
+    writer.assert_not_called()

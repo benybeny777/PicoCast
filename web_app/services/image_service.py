@@ -7,7 +7,6 @@ import os
 import logging
 from typing import Any
 
-from core.output_paths import get_output_videos_dir
 from web_app.job_manager import Job, _log, get_job_manager
 from web_app.security import find_history_dir
 

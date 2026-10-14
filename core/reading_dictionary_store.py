@@ -1,6 +1,7 @@
 """よみがな辞書を data/settings.db の単一テーブルで管理する。"""
 from __future__ import annotations
 
+from contextlib import closing
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -71,7 +72,7 @@ def _validate_type(dict_type: str) -> None:
 
 def ensure_initialized() -> None:
     """settings.db に必要なテーブルを用意する。"""
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         seeded = conn.execute(
             "SELECT 1 FROM reading_dictionary_seed_state WHERE seed_name='initial'"
         ).fetchone()
@@ -112,7 +113,7 @@ def ensure_initialized() -> None:
 
 def seed_initial_entries(entries: dict[str, dict[str, str]]) -> None:
     """初期データを投入する。既存エントリは上書きしない。"""
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         base_words = set(entries.get("base", {}).keys())
         for dict_type, rows in entries.items():
             _validate_type(dict_type)
@@ -132,7 +133,7 @@ def seed_initial_entries(entries: dict[str, dict[str, str]]) -> None:
 
 def load_all() -> dict[str, dict[str, str]]:
     ensure_initialized()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         rows = conn.execute(
             """
             SELECT dict_type, word, reading
@@ -162,7 +163,7 @@ def save_dict(dict_type: str, entries: dict[str, str]) -> None:
         base_words = set(load_dict("base").keys())
         normalized = {word: reading for word, reading in normalized.items() if word not in base_words}
     now = _now_jst()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         conn.execute("DELETE FROM reading_dictionary_entries WHERE dict_type=?", (dict_type,))
         conn.executemany(
             """
@@ -181,7 +182,7 @@ def upsert_entry(dict_type: str, word: str, reading: str) -> None:
     if not word or not reading:
         raise RuntimeError("word と reading は必須です")
     ensure_initialized()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         if dict_type == "base":
             conn.execute(
                 "DELETE FROM reading_dictionary_entries WHERE dict_type='user' AND word=?",
@@ -210,7 +211,7 @@ def upsert_entry(dict_type: str, word: str, reading: str) -> None:
 def delete_entry(dict_type: str, word: str) -> bool:
     _validate_type(dict_type)
     ensure_initialized()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         cur = conn.execute(
             "DELETE FROM reading_dictionary_entries WHERE dict_type=? AND word=?",
             (dict_type, word),
@@ -221,7 +222,7 @@ def delete_entry(dict_type: str, word: str) -> bool:
 
 def load_candidates() -> dict[str, dict]:
     ensure_initialized()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         rows = conn.execute(
             """
             SELECT word, reading, reason, source, auto_applied, review_required
@@ -258,7 +259,7 @@ def save_candidates(candidates: dict[str, dict]) -> None:
         }
     ensure_initialized()
     now = _now_jst()
-    with _connect() as conn:
+    with closing(_connect()) as conn, conn:
         conn.execute("DELETE FROM reading_candidates")
         conn.executemany(
             """

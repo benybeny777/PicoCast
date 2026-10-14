@@ -176,16 +176,16 @@ function pollJobs(jobIds, names) {
         if (done.has(i)) continue;
         if (errorCount[i] >= MAX_ERRORS) { done.add(i); continue; }
         try {
-          const r = await fetch(`/api/jobs/${jobIds[i]}`);
-          const job = await r.json();
+          const job = await fetchJob(jobIds[i]);
           const lastLog = job.logs?.length ? job.logs[job.logs.length - 1].message : job.progress_text;
           appendLog(`[${names[i]}] ${job.status}: ${lastLog}`, job.status, `job-${i}`);
           if (['success', 'failed', 'cancelled'].includes(job.status)) {
             done.add(i);
             updateRowStatus(names[i], job.status);
           }
-        } catch {
+        } catch (e) {
           errorCount[i]++;
+          appendLog(`[${names[i]}] 状態を取得できません。再試行中: ${e.message || e}`, 'error', `job-${i}`);
           if (errorCount[i] >= MAX_ERRORS) {
             appendLog(`[${names[i]}] 通信エラーが続いたため監視を中断しました`, 'error', `job-${i}`);
           }
@@ -193,6 +193,10 @@ function pollJobs(jobIds, names) {
       }
       if (done.size === jobIds.length) {
         clearInterval(interval);
+        if (errorCount.some(count => count >= MAX_ERRORS)) {
+          appendLog('通信エラーで状態を確認できないジョブがあります。履歴画面で確認してください', 'error');
+          return;
+        }
         appendLog('全ジョブ完了。ページを再読み込みします...', 'info');
         setTimeout(() => location.reload(), window.WEB_SUCCESS_RELOAD_DELAY_MS);
       }

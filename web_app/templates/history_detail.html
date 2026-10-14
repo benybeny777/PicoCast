@@ -326,11 +326,7 @@ function finishGenerate() {
 }
 
 async function cancelGenerate() {
-  for (const jobId of activeJobIds) {
-    try { await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'}); } catch {}
-  }
-  appendLog('キャンセル要求を送信しました', 'warning');
-  finishGenerate();
+  await requestJobCancellation(activeJobIds, appendLog);
 }
 
 function reloadWithLogs() {
@@ -356,12 +352,14 @@ function pollJobs(onSuccess) {
       let hasFailed = false;
       for (const jobId of activeJobIds) {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
-          const job = await res.json();
+          const job = await fetchJob(jobId);
           _updateJobCard(container, job);
           if (!['success', 'failed', 'cancelled'].includes(job.status)) allDone = false;
           if (['failed', 'cancelled'].includes(job.status)) hasFailed = true;
-        } catch(e) { allDone = false; }
+        } catch(e) {
+          allDone = false;
+          appendLog(`ジョブの状態を取得できません。再試行中: ${e.message || e}`, 'error');
+        }
       }
       if (allDone) {
         if (hasFailed) {

@@ -68,7 +68,10 @@ async function pollCheckJob(jobId) {
           renderResults(job.result);
         }
       }
-    } catch {}
+    } catch (e) {
+      // 一時的な通信エラーは次の周期で再試行する
+      document.getElementById('check-status-title').textContent = `チェック: 通信エラーのため再試行中…（${e.message || e}）`;
+    }
   }, window.WEB_JOB_POLL_INTERVAL_MS);
 }
 
@@ -100,9 +103,6 @@ function renderResults(results) {
   }).join('');
 }
 
-function esc(s) {
-  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
 
 function appendCheckLog(msg, tag) {
   const logBox = document.getElementById('check-log');
