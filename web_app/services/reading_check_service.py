@@ -14,22 +14,23 @@ _logger = logging.getLogger(__name__)
 
 
 def submit_script_check(script: str) -> str:
+    from core.channel_profile import require_active_profile
+
     if not script.strip():
         raise ValueError("台本が空です")
+    require_active_profile()
     mgr = get_job_manager()
     job = mgr.create_job("reading_check")
     mgr.submit(job, _run_script_check, script)
     return job.job_id
 
 
-def _voicevox_chunks(script: str) -> list[dict]:
+def _voicevox_chunks(script: str, profile_id: str) -> list[dict]:
     """台本から VOICEVOX で読む文を、生成時と同じ区切りで取り出す。"""
     from core.audio_backends import resolve_audio_speaker
-    from core.channel_profile import require_active_profile
     from workers.pipeline_helpers import split_at_punctuation
     from core.parser import ScriptParser
 
-    profile_id = require_active_profile().profile_id
     chunks = []
     for item in ScriptParser.parse_string(script):
         if item["type"] != "dialogue":
@@ -48,7 +49,9 @@ def _run_script_check(job: Job, script: str) -> dict:
     from core.reading_check import check_and_record, describe
     from core.voicevox import VoicevoxAPI
 
-    chunks = _voicevox_chunks(script)
+    if not job.profile_id:
+        raise AppError("E-PROFILE-MISSING")
+    chunks = _voicevox_chunks(script, job.profile_id)
     if not chunks:
         return {"checked": 0, "findings": []}
     vv = VoicevoxAPI()

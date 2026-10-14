@@ -150,7 +150,9 @@ def check_and_record(pairs: list[tuple[str, str]], source: str) -> list[Finding]
             if finding not in findings and not covered_by_base_dict(finding.word, base_dict):
                 findings.append(finding)
     reading_dictionary_store.record_findings(findings, source)
-    return findings
+    # 件数は記録しつつ、「問題なし」にした組は画面・生成ログにも再表示しない。
+    active = {(row["word"], row["voicevox_reading"]) for row in reading_dictionary_store.list_findings()}
+    return [finding for finding in findings if (finding.word, finding.voicevox_reading) in active]
 
 
 def describe(finding: Finding) -> str:

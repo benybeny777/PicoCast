@@ -963,6 +963,8 @@ VOICE_READING_MODE = "safe_auto"
 - 記録: `settings.db:reading_check_findings`（下表）。同じ語・同じ VOICEVOX の読みは件数を増やす。設定画面「よみがな辞書」の「読み違いの可能性」と、読みチェックの結果に一覧を出す（共通部品 `renderReadingFindings()`、`web_app/static/app.js`）。
   - 「この読みで登録」→ `POST /api/reading-check/findings/accept`: 基本辞書（`dict_type=base`）へ登録して、その語の項目を消す。基本辞書は形態素解析の前に文字列置換されるため、動詞・形容詞・1文字の漢字にも効く。
   - 「問題なし」→ `POST /api/reading-check/findings/dismiss`: 今の読みのままでよい語として、同じ語・同じ VOICEVOX の読みを今後表示しない。
+    設定の一覧だけでなく、再チェックの結果・生成時の警告にも再表示しない。再検出時の件数は記録する。
+  - 生成前チェックは受付時の `job.profile_id` に話者を固定する。受付後にチャンネルを切り替えても、切替先の音声設定を使わない。active profile 未設定では受け付けない。
   - 一覧は `GET /api/reading-check/findings`。
 
 ---

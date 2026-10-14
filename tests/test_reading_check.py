@@ -139,3 +139,33 @@ def test_words_fixed_by_base_dictionary_are_not_reported(monkeypatch):
     store.upsert_entry("base", "辛", "から")
     found = check_and_record([("辛いのだ。", "カ'ライノダ"), ("今日は生物の話", "キョ'ーワ/ナマモノノ/ハナシ")], "動画")
     assert [f.word for f in found] == ["生物"]
+
+
+def test_問題なしにした読みを再チェック結果へ出さない():
+    from core.reading_check import check_and_record
+
+    pairs = [("辛いのだ。", "カ'ライノダ")]
+    assert len(check_and_record(pairs, "最初のチェック")) == 1
+    assert store.dismiss_finding("辛い", "からい")
+    assert check_and_record(pairs, "次のチェック") == []
+    assert store.list_findings() == []
+
+
+def test_読みチェックは受付時のプロファイルを使う(monkeypatch):
+    from web_app.job_manager import Job
+    from web_app.services import reading_check_service as service
+    import core.audio_backends as audio_backends
+
+    _fake_voicevox(monkeypatch, {"辛いのだ": "カ'ライノダ"})
+    used_profiles = []
+
+    def resolve(profile_id, character, emotion):
+        used_profiles.append(profile_id)
+        return SimpleNamespace(backend="voicevox", speaker_id=3)
+
+    monkeypatch.setattr(audio_backends, "resolve_audio_speaker", resolve)
+    monkeypatch.setattr(service, "_log", lambda *args: None)
+    job = Job("isolated-reading-check", "reading_check", profile_id="受付時のチャンネル")
+    result = service._run_script_check(job, "ずんだもん(ノーマル): 辛いのだ")
+    assert result["checked"] == 1
+    assert used_profiles == ["受付時のチャンネル"]
