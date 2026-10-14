@@ -1,7 +1,7 @@
 # 引き継ぎ（未マージ作業と再開方法）
 
 最終更新: 2026-10-15（Codex: T29 ローカルAPI保護を追加）
-> **方針（2026-10-15 利用者決定）: 全部 Rust（PicoAgent と同じ構成）で新リポジトリ `benybeny777/PicoCast` に作り直す。この Python 版は凍結（本番の不具合修正だけ）。** 正本は [DESIGN_rust_rewrite.md](DESIGN_rust_rewrite.md)。画面の見た目は [DESIGN_ui.md](DESIGN_ui.md)＋見本 `docs/design/picocast-ui-mockup.html`。Python は 3.12 に固定し、CUDA は GPU に合わせて 1 組だけ選ぶ（`DESIGN_rust_rewrite.md` §12）。
+> **方針（2026-10-15 利用者決定）: 全部 Rust（PicoAgent と同じ構成）で作り直す。今のフォルダ（`C:\00_PG\22_PicoCast` へ改名）とリポジトリ（`benybeny777/PicoCast` へ改名）をそのまま使い、Python 版は `legacy/` に移して凍結（本番の不具合修正だけ）。** 正本は [DESIGN_rust_rewrite.md](DESIGN_rust_rewrite.md)。画面の見た目は [DESIGN_ui.md](DESIGN_ui.md)＋見本 `docs/design/picocast-ui-mockup.html`。Python は 3.12 に固定し、CUDA は GPU に合わせて 1 組だけ選ぶ（`DESIGN_rust_rewrite.md` §12）。
 >
 > **方針（2026-10-15 利用者決定）: 販売・配布はしない。製品として出せるレベルの品質にする。** 優先順位と保留項目は [DESIGN_quality.md](DESIGN_quality.md) §0・§8 が正本。販売・配布向けのタスク（ライセンス、インストーラ、署名、パック販売など）は保留。
 
@@ -25,7 +25,7 @@
 
 ## 現在のマイルストーン
 
-**R0 土台（新リポジトリ）**（`DESIGN_rust_rewrite.md` §10）: 新リポジトリ作成（利用者の承認待ち）→ Cargo ワークスペース → `xtask verify` と CI → clippy の禁止設定と走査ガード → `picocast-core`（clock・AppError・settings・proc・http・fsutil・tracing）→ `picocast-store`（DB・マイグレーション・バックアップ・秘密値）→ AGENTS.md・HANDOFF・スキル。
+**R0 土台**（`DESIGN_rust_rewrite.md` §10）: **改名のメンテナンス（§2.2 の 10 手順。Python 3.12 化を同時に行う）** → Cargo ワークスペース → `xtask verify` と CI → clippy の禁止設定と走査ガード → `picocast-core`（clock・AppError・settings・proc・http・fsutil・tracing）→ `picocast-store`（DB・マイグレーション・バックアップ・秘密値）→ AGENTS.md・HANDOFF・スキル。
 **R0 と並行して可能な作業**: 旧アプリの Python 3.12＋`uv.lock` への固定（§12.4。本番の自動運用が止まっている時間帯に、退避してから行う）。
 次は R1（旧データの取り込みと機能の棚卸し）→ R2（生成エンジン）→ R3（YouTube）→ R4（画面）→ R5（影運用と切り替え）→ R6（伸ばす）。各 M の着手前に詳細設計を PR 本文に書き、利用者の承認を得る（R0 は設計書で足りる）。
 
@@ -94,8 +94,8 @@
 | デスクトップの技術 | 推奨 Tauri 2 | v3 §12。v2 T12 の pywebview 案より優先 |
 | 画面の技術 | 推奨 TypeScript SPA | v3 §3.1 |
 | DB の統合 | 推奨 `picocast.db` に統合 | v3 §4。M2 で実施 |
-| 新リポジトリ `benybeny777/PicoCast` の作成 | 未決定 | 推奨: 作る（Private）。R0 の前提 |
-| 影運用の期間・切り替え後に Python 版を残す期間 | 未決定 | 推奨: 2 週間・30 日 |
+| リポジトリとフォルダ | **決定（2026-10-15）** | 今のものを改名して使う（フォルダ `C:\00_PG\22_PicoCast`、GitHub `benybeny777/PicoCast`、Python 版は `legacy/`）。手順は `DESIGN_rust_rewrite.md` §2.2。フォルダ改名と GitHub の改名は利用者の操作（GitHub は利用者の承認のうえ Codex でも可） |
+| 影運用の期間・切り替え後に Python 版を残す期間 | **決定（2026-10-15）** | 2 週間・30 日 |
 | 既存のライセンス機能 | Rust 版では作らない（推奨） | Python 版は実装済みのまま（オーナー環境は Pro・無期限で有効） |
 | 改名（PicoCast）・リポジトリ名変更 | 未決定 | 推奨: 続ける。不要なら保留 |
 | デスクトップアプリ化 | **決定（2026-10-15）** | 全部 Rust（Tauri）で作り直す |
