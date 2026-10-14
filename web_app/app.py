@@ -64,7 +64,10 @@ async def _lifespan(app):
     from core.metadata_db import close_all_connections
 
     from core.metadata_db import initialize_db
-    initialize_db()  # 起動時に DB を確実に初期化しログを残す
+    from core.channel_profile import get_active_profile
+    # 初回セットアップ前はprofile別DBの保存先がまだない。登録後の経路で初期化する。
+    if get_active_profile() is not None:
+        initialize_db()
     _start_job_runner()
     register_shutdown_hook("job_runner", _stop_job_runner)
     register_shutdown_hook("metadata_db", close_all_connections)

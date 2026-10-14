@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parent.parent
 
 STEPS: list[tuple[str, list[str]]] = [
     ("テスト（ルール検査を含む）", [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider"]),
+    ("ジョブ監視のJS回帰テスト", ["node", "--test", *[str(p) for p in sorted((ROOT / "tests").glob("*.mjs"))]]),
+    ("共通JSの構文（app.js）", ["node", "--check", "web_app/static/app.js"]),
+    ("共通JSの構文（job_poll.js）", ["node", "--check", "web_app/static/job_poll.js"]),
     ("空白・改行の誤り（git diff --check）", ["git", "diff", "--check", "HEAD"]),
 ]
 

@@ -106,14 +106,17 @@ function createBackoffPoller(fn, initialMs, maxMs) {
   let elapsed = 0;
   let timer = null;
   let _running = false;
+  let stopped = false;
 
   function _schedule() {
+    if (stopped) return;
     timer = setTimeout(async () => {
+      if (stopped) return;
       if (_running) { _schedule(); return; }
       _running = true;
       let done = false;
       try { done = await fn(); } finally { _running = false; }
-      if (done) return;
+      if (done || stopped) return;
       elapsed += currentMs;
       // 30秒経過後、上限に達するまで1.5倍ずつ伸ばす
       if (elapsed >= 30000 && currentMs < maxMs) {
@@ -124,7 +127,34 @@ function createBackoffPoller(fn, initialMs, maxMs) {
   }
 
   _schedule();
-  return { stop: () => { if (timer) { clearTimeout(timer); timer = null; } } };
+  return { stop: () => { stopped = true; if (timer) { clearTimeout(timer); timer = null; } } };
+}
+
+/** 全画面でHTTP・ジョブ識別子・状態の検証を共有する。 */
+async function fetchJob(jobId) {
+  const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, {cache: 'no-store'});
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const job = await res.json();
+  if (job.job_id !== jobId || !['queued', 'running', 'success', 'failed', 'cancelled'].includes(job.status)) {
+    throw new Error('ジョブ情報が不正です。画面を再読み込みしてください');
+  }
+  return job;
+}
+
+/** 要求受付後も終了状態になるまで監視を続ける。 */
+async function requestJobCancellation(jobIds, report) {
+  let failed = false;
+  for (const jobId of jobIds) {
+    try {
+      const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}/cancel`, {method: 'POST'});
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    } catch (e) {
+      failed = true;
+      report(`キャンセル要求を送れませんでした（${jobId.slice(0, 8)}）: ${e.message || e}`, 'error');
+    }
+  }
+  if (!failed) report('キャンセル要求を送信しました。処理の終了を確認中です', 'warning');
+  return !failed;
 }
 
 /**
@@ -138,11 +168,11 @@ async function updateJobLogs(activeJobIds, logBox, options = {}) {
   let allDone = true;
   let hasFailed = false;
   let htmlContent = '';
+  const errors = [];
 
   for (const jobId of activeJobIds) {
     try {
-      const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
-      const job = await res.json();
+      const job = await fetchJob(jobId);
       // ジョブ種別とステータスをヘッダーとして表示（progress_text は最後のログ行と重複するので含めない）
       htmlContent += `<div class="log-job-header">[${esc(job.type)}] ${esc(job.status)}</div>`;
 
@@ -157,11 +187,23 @@ async function updateJobLogs(activeJobIds, logBox, options = {}) {
       }
     } catch(e) {
       allDone = false;
+      errors.push(`通信エラーのため再試行中（${jobId.slice(0, 8)}）: ${e.message || e}`);
     }
   }
 
   const isScrolledToBottom = logBox.scrollHeight - logBox.clientHeight <= logBox.scrollTop + 80;
-  logBox.innerHTML = htmlContent;
+  // 失敗した取得を空のログで上書きしない。復旧すると警告を除いて最新ログへ戻す。
+  let warning = logBox.querySelector('.job-monitor-error');
+  if (!errors.length) {
+    logBox.innerHTML = htmlContent;
+  } else {
+    if (!warning) {
+      warning = document.createElement('div');
+      warning.className = 'job-monitor-error error-text';
+      logBox.appendChild(warning);
+    }
+    warning.textContent = errors.join('\n');
+  }
   if (isScrolledToBottom) logBox.scrollTop = logBox.scrollHeight;
 
   return { allDone, hasFailed };

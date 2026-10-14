@@ -23,11 +23,12 @@ document.addEventListener('DOMContentLoaded', () => {
 function pollJob(jobId, onUpdate, onDone, intervalMs = null, onError = null) {
   const pollIntervalMs = intervalMs || window.WEB_JOB_POLL_INTERVAL_MS;
   const reportError = onError || (e => console.warn(`ジョブ ${jobId} の状態を取得できません（再試行します）`, e));
+  let fetching = false;
   const timer = setInterval(async () => {
+    if (fetching) return;
+    fetching = true;
     try {
-      const res = await fetch(`/api/jobs/${jobId}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const job = await res.json();
+      const job = await fetchJob(jobId);
       if (onUpdate) onUpdate(job);
       if (['success', 'failed', 'cancelled'].includes(job.status)) {
         clearInterval(timer);
@@ -36,6 +37,8 @@ function pollJob(jobId, onUpdate, onDone, intervalMs = null, onError = null) {
     } catch (e) {
       // 一時的な通信エラーは次の周期で再試行する。黙って捨てずに知らせる
       reportError(e);
+    } finally {
+      fetching = false;
     }
   }, pollIntervalMs);
   return timer;

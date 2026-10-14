@@ -410,16 +410,7 @@ function readBgmParams(tab) {
 }
 
 async function cancelGenerate() {
-  for (const jobId of activeJobIds) {
-    try {
-      const res = await fetch(`/api/jobs/${jobId}/cancel`, {method: 'POST'});
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    } catch (e) {
-      appendLog(`キャンセル要求を送れませんでした（${jobId.slice(0, 8)}）: ${e.message || e}`, 'error');
-    }
-  }
-  appendLog('キャンセル要求を送信しました', 'warning');
-  finishGenerate(activeTab);
+  await requestJobCancellation(activeJobIds, appendLog);
 }
 
 function pollJobs(tab) {
@@ -427,15 +418,14 @@ function pollJobs(tab) {
   let _polling = false;
   const container = document.getElementById('job-card-log-container');
   pollTimer = createBackoffPoller(async () => {
-    if (!activeJobIds.length) { clearInterval(pollTimer); return; }
+    if (!activeJobIds.length) return true;
     if (_polling) return;
     _polling = true;
     try {
       let allDone = true;
       for (const jobId of [...activeJobIds]) {
         try {
-          const res = await fetch(`/api/jobs/${jobId}`, {cache: 'no-store'});
-          const job = await res.json();
+          const job = await fetchJob(jobId);
           updateJobCard(container, job);
           if (job.type === 'generate_batch') {
             await trackVisibleGenerateChildren();
@@ -460,7 +450,10 @@ function pollJobs(tab) {
           } else {
             allDone = false;
           }
-        } catch { allDone = false; }
+        } catch (e) {
+          allDone = false;
+          appendLog(`ジョブの状態を取得できません。再試行中: ${e.message || e}`, 'error');
+        }
       }
       if (allDone) { finishGenerate(tab); return true; }
       return false;
