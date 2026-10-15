@@ -11,6 +11,14 @@ on:
       - clippy.toml
       - .cargo/**
       - ui/**
+      - core/**
+      - config/**
+      - tests/**
+      - tools/oracle*.py
+      - pyproject.toml
+      - uv.lock
+      - DESIGN_*.md
+      - HANDOFF.md
       - .github/workflows/rust-verify.yml
 
 permissions:
@@ -26,5 +34,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: 旧版オラクルの固定環境を導入
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: 旧版の固定依存を用意
+        run: uv sync --locked --group dev
       - name: 一括検証
         run: cargo +1.95.0 run --locked -p xtask -- verify
+      - name: 旧版の隔離テスト
+        run: .venv/Scripts/python.exe -m pytest tests -q

@@ -13,7 +13,7 @@
 
 ## 次の作業
 
-- **WP-R0-4（保存先）・WP-R0-5（エラーカタログ）・WP-R1-1（棚卸し）** は統合・提出を進めている。続いてWP-R1-7（旧版テスト隔離とオラクル）とWP-R1-2（ドメインDB）に着手する。同じファイルの同時編集は避ける。
+- **WP-R1-2（ドメインDB）・WP-R1-3（設定の取り込み）・WP-R1-4（動画/素材の取り込み）** の統合を進めている。WP-R1-7はPython3.12/CIでの再現確認が残る。実装済みの範囲と検証は実装計画の状態表を参照する。
 - **WP-R0-2（Python 3.12＋uvへの切り替え）** は、自動運用と予約投稿の無い時間帯に現位置で行う。切り替え直前の実プロセス確認とDBの再バックアップが必要。有料APIは明示指示または運用上の明確な必要がある場合だけ使う。
 - R1以降の全WPの状態と完了条件は実装計画を参照する。
 
@@ -23,6 +23,10 @@
 |---|---|---|---|
 | [#35](https://github.com/benybeny777/PicoCast/pull/35) | `codex/picoagent-job-monitoring` | `main` | Python旧版のチャンネル別自動運用 |
 | [#36](https://github.com/benybeny777/PicoCast/pull/36) | `codex/license-v2-rebrand-design` | `codex/picoagent-job-monitoring` | Rust基盤・旧版安全化・移行設計 |
+| [#38](https://github.com/benybeny777/PicoCast/pull/38) | `codex/wp-r0-3-logging` | `codex/wp-r0-1-doc-consistency` | 共通ログ・異常終了記録 |
+| [#39](https://github.com/benybeny777/PicoCast/pull/39) | `codex/wp-r0-4-storage-safety` | `codex/wp-r0-3-logging` | 保存先の共通化と危険検出 |
+| [#40](https://github.com/benybeny777/PicoCast/pull/40) | `codex/wp-r0-5-error-catalog` | `codex/wp-r0-4-storage-safety` | エラーカタログ・文書検査・スキル |
+| [#41](https://github.com/benybeny777/PicoCast/pull/41) | `codex/wp-r1-1-migration-inventory` | `codex/wp-r0-5-error-catalog` | 全642項目の棚卸し |
 
 WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0-1-doc-consistency` → `codex/license-v2-rebrand-design`）でレビュー待ち。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
 
@@ -30,7 +34,8 @@ WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0
 
 - Pythonの実環境は3.11.9。3.12用の `pyproject.toml`・`.python-version`・`uv.lock` は準備済みだが、環境切り替えとサンプル受入は未実施。
 - RustのフルドメインDB・旧データ取り込み・生成・YouTube・Tauri画面は未実装。共通ログのAPIは実装したが、本番画面・ジョブへの接続は後続WP。NodeテストはUIが無いため明示スキップ。macOS実機は検証対象外。
-- 過去のPython全体確認は656件成功・1件skip。実設定の無い環境での20失敗・39エラーは旧記録であり、現在の全件再検証ではない。WP-R1-7で環境依存を隔離する。
+- 旧版の隔離テストはPython3.11で661件成功・1skip。3.12/CIでの再現と本番のサンプル生成・レンダーは別の確認とする。
+- テスト用一時領域 `temp/legacy-tests/session-f0csi71v` の削除は自動承認レビューに拒否されたため残っている。迂回して削除しない。Git管理・実データには含めない。
 - 設定・metadata DB3件、暗号化キー・認証情報・当時の未コミット差分の退避先は `~/.codex/backups/picocast-r0/`。過去の整合性確認を切り替え直前の再確認の代わりにしない。
 - 6月の対応プロセスの無い `running` 記録10件は履歴として扱い、勝手に削除・キャンセル・再実行しない。取り込み時の区別はWP-R1-4。
 - このチャットの参照先は `C:\00_PG\22_PicoCast`。アプリの保存済みプロジェクト登録・表示名は、現在のチャットの参照先と区別して確認する。

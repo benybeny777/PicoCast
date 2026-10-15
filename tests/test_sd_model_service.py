@@ -7,6 +7,7 @@ import os
 import sys
 
 import pytest
+pytestmark = pytest.mark.usefixtures("configured_test_channel")
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:

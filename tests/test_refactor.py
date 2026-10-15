@@ -1,5 +1,7 @@
 """リファクタリングヘルパーのスモークテスト。"""
 import sys, os
+import pytest
+pytestmark = pytest.mark.usefixtures("configured_test_channel")
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.opening_quality import opening_score_tag, review_human_status, review_warning_text
@@ -184,10 +186,10 @@ def test_fallback_title_variants_are_complete_and_bounded():
 def test_nanobanana_summary_shows_final_size():
     from core.image_generator import ImageGenerator
 
-    assert ImageGenerator(width=1080, height=1920).nanobanana_request_summary() == (
+    assert ImageGenerator(width=1080, height=1920, background_engine="sd_webui").nanobanana_request_summary() == (
         "Google送信設定: Nano Banana 1080x1920"
     )
-    assert ImageGenerator(width=1920, height=1080).nanobanana_request_summary() == (
+    assert ImageGenerator(width=1920, height=1080, background_engine="sd_webui").nanobanana_request_summary() == (
         "Google送信設定: Nano Banana 1920x1080"
     )
 

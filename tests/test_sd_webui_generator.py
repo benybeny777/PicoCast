@@ -258,10 +258,18 @@ class TestImageGeneratorBackendDispatch:
         finally:
             gen.close()
 
-    def test_image_backend_env_gemini(self, monkeypatch):
+    def test_image_backend_env_gemini(self, monkeypatch, configured_test_channel):
         """IMAGE_BACKEND=gemini のとき nanobanana が選ばれる。"""
         from config import config
+        from unittest.mock import MagicMock
+        from core import secret_store
+        import core.image_generator as image_module
         monkeypatch.setattr(config, "IMAGE_BACKEND", "gemini")
+        monkeypatch.setattr(secret_store, "has_secret", lambda *args, **kwargs: True)
+        monkeypatch.setattr(secret_store, "load_secret", lambda *args, **kwargs: "fake-test-key")
+        client = MagicMock()
+        constructor = MagicMock(return_value=client)
+        monkeypatch.setattr(image_module.genai, "Client", constructor)
 
         from core.image_generator import ImageGenerator
 
@@ -270,6 +278,8 @@ class TestImageGeneratorBackendDispatch:
             assert gen.background_engine == "nanobanana"
         finally:
             gen.close()
+        constructor.assert_called_once_with(api_key="fake-test-key")
+        client.close.assert_called_once()
 
     def test_unsupported_image_backend_raises(self, monkeypatch):
         """IMAGE_BACKEND に未対応値を設定すると ValueError になる。"""
