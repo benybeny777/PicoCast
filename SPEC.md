@@ -13,6 +13,8 @@ WP-R0-3の共通ログはチャンネル・ジョブ・工程をJSONLへ記録�
 
 ## 概要
 
+Rust版の保存先は `picocast_core::paths` を正本にし、通常版/開発版を分離する。DB・マスターキー・バックアップは接続や書込みの前に同期フォルダ・ネットワーク・FAT32を検査し、種類ごとの明示許可が無ければ拒否する。詳細は [保存先の安全確認](docs/storage-safety.md)。以下のWeb UI仕様はPython旧版を対象とする。
+
 複数のYouTubeチャンネル向けに、台本生成・VOICEVOX音声・画像生成・native MP4・YouTubeアップロード・Analytics確認までを行うローカルWebツール。チャンネルごとの設定は channel profile で管理し、Web UI上でいつでも切り替えられる。
 
 - **台本生成** → Gemini AI

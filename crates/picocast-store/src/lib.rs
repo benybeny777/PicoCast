@@ -3,59 +3,22 @@
 
 mod secrets;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::time::Duration;
 
 use picocast_core::{clock, fsutil, ids::ChannelId, AppError, Result};
 use rusqlite::{params, Connection, OptionalExtension};
 use zeroize::Zeroizing;
 
+pub use picocast_core::paths::{DataMode, StoragePolicy, StorePaths};
 pub use secrets::MasterKey;
 
 const SCHEMA_VERSION: i64 = 1;
-const DATABASE_NAME: &str = "picocast.db";
-
-/// 呼び出し側で OS のデータ親ディレクトリを解決し、保存モードを明示する。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DataMode {
-    Production,
-    Development,
-}
-
-#[derive(Debug, Clone)]
-pub struct StorePaths {
-    pub root: PathBuf,
-    pub database: PathBuf,
-    pub backups: PathBuf,
-    pub master_key: PathBuf,
-}
-
-impl StorePaths {
-    pub fn new(data_parent: &Path, mode: DataMode) -> Result<Self> {
-        if !data_parent.is_absolute() {
-            return Err(failure(
-                "E-STORE-PATH",
-                "保存先は絶対パスで指定してください。",
-                "OS のデータ保存先を指定してください。",
-            ));
-        }
-        let name = match mode {
-            DataMode::Production => "PicoCast",
-            DataMode::Development => "PicoCast-Dev",
-        };
-        let root = data_parent.join(name);
-        Ok(Self {
-            database: root.join(DATABASE_NAME),
-            backups: root.join("backups"),
-            master_key: root.join("secret_master.key"),
-            root,
-        })
-    }
-}
 
 pub struct Store {
     connection: Connection,
     options: StoreOptions,
+    storage_policy: StoragePolicy,
 }
 
 /// 調整可能な値は呼び出し側の設定正本から注入する。
@@ -85,7 +48,16 @@ impl StoreOptions {
 impl Store {
     /// 破損時は停止する。既存ファイルを空の DB に置き換えない。
     pub fn open(paths: &StorePaths, options: StoreOptions) -> Result<Self> {
+        Self::open_with_policy(paths, options, &StoragePolicy::default())
+    }
+
+    pub fn open_with_policy(
+        paths: &StorePaths,
+        options: StoreOptions,
+        policy: &StoragePolicy,
+    ) -> Result<Self> {
         options.validate()?;
+        paths.validate_storage(policy)?;
         std::fs::create_dir_all(&paths.root).map_err(|error| {
             io_failure(
                 "E-STORE-OPEN",
@@ -117,6 +89,7 @@ impl Store {
         Ok(Self {
             connection,
             options,
+            storage_policy: policy.clone(),
         })
     }
 
@@ -267,6 +240,7 @@ impl Store {
 
     /// SQLite のオンラインバックアップ API で未 checkpoint の WAL も含める。
     pub fn backup_to(&self, destination: &Path) -> Result<()> {
+        picocast_core::paths::validate_storage(destination, &self.storage_policy)?;
         backup_connection(&self.connection, destination, &self.options)
     }
 
@@ -519,6 +493,58 @@ mod tests {
         let development = StorePaths::new(temporary.path(), DataMode::Development).unwrap();
         assert_ne!(production.database, development.database);
         assert_ne!(production.master_key, development.master_key);
+    }
+
+    #[test]
+    fn unsafe_path_is_rejected_without_creating_database() {
+        let temporary = tempfile::tempdir().unwrap();
+        let paths =
+            StorePaths::new(&temporary.path().join("Dropbox"), DataMode::Development).unwrap();
+        let error = Store::open(&paths, options()).err().unwrap();
+        assert_eq!(error.code, "E-STORE-UNSAFE-PATH");
+        assert!(!paths.root.exists());
+        let policy = StoragePolicy {
+            allow_cloud_sync: true,
+            ..Default::default()
+        };
+        let store = Store::open_with_policy(&paths, options(), &policy).unwrap();
+        assert_eq!(store.schema_version().unwrap(), SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn custom_sync_root_and_backup_are_guarded() {
+        let (temporary, _paths, store) = fixture();
+        let synchronized = temporary.path().join("custom-sync");
+        let paths = StorePaths::new(&synchronized, DataMode::Development).unwrap();
+        let policy = StoragePolicy {
+            sync_roots: vec![synchronized],
+            ..Default::default()
+        };
+        assert_eq!(
+            Store::open_with_policy(&paths, options(), &policy)
+                .err()
+                .unwrap()
+                .code,
+            "E-STORE-UNSAFE-PATH"
+        );
+        let backup = temporary.path().join("OneDrive").join("backup.db");
+        assert_eq!(
+            store.backup_to(&backup).unwrap_err().code,
+            "E-STORE-UNSAFE-PATH"
+        );
+        assert!(!backup.exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn unc_path_is_rejected_before_network_access() {
+        let paths = StorePaths::new(
+            Path::new(r"\\picocast-invalid-server\share\data"),
+            DataMode::Development,
+        )
+        .unwrap();
+        let error = Store::open(&paths, options()).err().unwrap();
+        assert_eq!(error.code, "E-STORE-UNSAFE-PATH");
     }
 
     #[test]
