@@ -1,0 +1,297 @@
+{
+  "contract_version": 1,
+  "configuration": "旧版の空DB既定値。各ケース内のプロバイダ・時計・辞書は明示入力。",
+  "cases": [
+    {
+      "id": "reading-dictionary-overlap",
+      "kind": "reading",
+      "input": {
+        "mode": "dictionary",
+        "base": {
+          "東京大学": "とうきょうだいがく",
+          "東京": "とうきょう"
+        },
+        "user": {
+          "東京": "トウキョウ",
+          "図書館": "としょかん"
+        },
+        "texts": [
+          "東京大学の図書館",
+          "東京の話",
+          "句読点。、ABC123"
+        ]
+      }
+    },
+    {
+      "id": "reading-safe-auto",
+      "kind": "reading",
+      "input": {
+        "mode": "safe_auto",
+        "base": {
+          "黒板": "こくばん"
+        },
+        "user": {
+          "東京": "とうきょう"
+        },
+        "texts": [
+          "黒板に東京と書く。",
+          "カタカナと123、記号！？"
+        ]
+      }
+    },
+    {
+      "id": "script-ja-metadata-expression",
+      "kind": "script",
+      "input": {
+        "text": "動画形式: Shorts\n動画タイトル: 仮のテーマ\n説明文: 検証用の説明\nタグ: 検証,台本\n背景: 静かな図書館\nずんだもん(ノーマル)[驚き]: 図書館には分類の仕組みがあるのだ。\n四国めたん(ノーマル): 分類の根拠は何なの？\nテロップ: 分類の仕組み\n固定コメント: どの分類を調べたいですか？"
+      }
+    },
+    {
+      "id": "script-en-chapter",
+      "kind": "script",
+      "input": {
+        "text": "Format: Long\nTitle: Fixture\nChapter: 00:00 導入\nBackground: A quiet room\nずんだもん: 検証なのだ。\n四国めたん: 根拠を聞かせて。"
+      }
+    },
+    {
+      "id": "metadata-profile-explicit",
+      "kind": "metadata",
+      "input": {
+        "hashtags": "#架空 #検証",
+        "default_tags": "架空,検証",
+        "seo": "架空の検証用です。",
+        "title": "  例題  ",
+        "description": "説明本文",
+        "tags": [
+          "検証",
+          "追加",
+          "追加"
+        ],
+        "script": "架空の台本"
+      }
+    },
+    {
+      "id": "slots-used-and-five-minute-boundary",
+      "kind": "schedule",
+      "input": {
+        "timezone": "Asia/Tokyo",
+        "shorts": [
+          12,
+          21
+        ],
+        "long": [
+          22
+        ],
+        "count": 3,
+        "format": "shorts",
+        "used": [
+          "2026-10-16T21:00:00+09:00"
+        ],
+        "now": "2026-10-16T11:56:00+09:00"
+      }
+    },
+    {
+      "id": "slots-long-day-boundary",
+      "kind": "schedule",
+      "input": {
+        "timezone": "Asia/Tokyo",
+        "shorts": [
+          12,
+          21
+        ],
+        "long": [
+          22
+        ],
+        "count": 2,
+        "format": "long",
+        "used": [],
+        "now": "2026-10-16T22:00:00+09:00"
+      }
+    },
+    {
+      "id": "score-data-wait-and-private",
+      "kind": "score",
+      "input": {
+        "videos": [
+          {
+            "title": "架空の例",
+            "published_at": "2026-06-01T12:00:00Z",
+            "duration": 45,
+            "publish_status": "published",
+            "analytics_available": false,
+            "views": 8000,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 160,
+            "comments": 3,
+            "subscribers_gained": 2,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          },
+          {
+            "title": "架空の例",
+            "published_at": "2026-06-01T12:00:00Z",
+            "duration": 45,
+            "publish_status": "private",
+            "analytics_available": true,
+            "views": 8000,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 160,
+            "comments": 3,
+            "subscribers_gained": 2,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          },
+          {
+            "title": "架空の例",
+            "published_at": "2026-06-01T12:00:00Z",
+            "duration": 45,
+            "publish_status": "published",
+            "analytics_available": true,
+            "views": 0,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 0,
+            "comments": 0,
+            "subscribers_gained": 0,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          }
+        ]
+      }
+    },
+    {
+      "id": "expansion-single-strong-not-approved",
+      "kind": "expansion",
+      "input": {
+        "videos": [
+          {
+            "title": "架空の例",
+            "published_at": "2026-06-01T12:00:00Z",
+            "duration": 45,
+            "publish_status": "published",
+            "analytics_available": true,
+            "views": 8000,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 160,
+            "comments": 3,
+            "subscribers_gained": 2,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          }
+        ]
+      }
+    },
+    {
+      "id": "expansion-two-strong-same-pattern",
+      "kind": "expansion",
+      "input": {
+        "videos": [
+          {
+            "title": "比較1",
+            "published_at": "2026-06-01T12:00:00Z",
+            "duration": 45,
+            "publish_status": "published",
+            "analytics_available": true,
+            "views": 8000,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 160,
+            "comments": 3,
+            "subscribers_gained": 2,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          },
+          {
+            "title": "比較2",
+            "published_at": "2026-06-01T12:00:00Z",
+            "duration": 45,
+            "publish_status": "published",
+            "analytics_available": true,
+            "views": 8000,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 160,
+            "comments": 3,
+            "subscribers_gained": 2,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          }
+        ]
+      }
+    },
+    {
+      "id": "expansion-low-views-not-approved",
+      "kind": "expansion",
+      "input": {
+        "videos": [
+          {
+            "title": "架空の例",
+            "published_at": "2026-06-01T12:00:00Z",
+            "duration": 45,
+            "publish_status": "published",
+            "analytics_available": true,
+            "views": 1800,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 60,
+            "comments": 3,
+            "subscribers_gained": 2,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          }
+        ]
+      }
+    },
+    {
+      "id": "score-old-audio-cutoff-boundary",
+      "kind": "score",
+      "input": {
+        "videos": [
+          {
+            "title": "架空の例",
+            "published_at": "2026-05-16T23:59:59Z",
+            "duration": 45,
+            "publish_status": "published",
+            "analytics_available": true,
+            "views": 8000,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 160,
+            "comments": 3,
+            "subscribers_gained": 2,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          },
+          {
+            "title": "架空の例",
+            "published_at": "2026-05-17T00:00:00Z",
+            "duration": 45,
+            "publish_status": "published",
+            "analytics_available": true,
+            "views": 8000,
+            "impressions": 0,
+            "average_view_duration": 40,
+            "average_percentage_viewed": 82,
+            "likes": 160,
+            "comments": 3,
+            "subscribers_gained": 2,
+            "subscribers_lost": 0,
+            "genre_group": "比較構造"
+          }
+        ]
+      }
+    }
+  ]
+}
+

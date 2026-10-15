@@ -1,9 +1,17 @@
 import unittest
+import pytest
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from core import upload_scheduler
+
+
+@pytest.fixture(autouse=True)
+def isolated_metadata(monkeypatch, tmp_path):
+    """枠計算と同期のテストが実チャンネルのDBを参照しないようにする。"""
+    from core import metadata_db
+    monkeypatch.setattr(metadata_db, "get_db_path", lambda: str(tmp_path / "metadata.db"))
 
 
 class UploadSchedulerTests(unittest.TestCase):
