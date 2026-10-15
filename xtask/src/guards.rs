@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use syn::visit::{self, Visit};
 use syn::{Attribute, Item, UseTree};
@@ -84,6 +84,118 @@ fn test_attrs(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| {
         attr.path().is_ident("test") || matches!(&attr.meta, syn::Meta::List(list) if list.path.is_ident("cfg") && list.tokens.to_string() == "test")
     })
+}
+
+/// テスト専用の項目を除外し、マクロ内も含めた本番の文字列リテラルを収集する。
+pub fn production_string_literals(source: &str) -> Result<BTreeSet<String>> {
+    struct Literals {
+        values: BTreeSet<String>,
+        error: Option<syn::Error>,
+    }
+    impl<'ast> Visit<'ast> for Literals {
+        fn visit_item(&mut self, node: &'ast syn::Item) {
+            let attributes: &[Attribute] = match node {
+                syn::Item::Const(item) => &item.attrs,
+                syn::Item::Enum(item) => &item.attrs,
+                syn::Item::ExternCrate(item) => &item.attrs,
+                syn::Item::Fn(item) => &item.attrs,
+                syn::Item::ForeignMod(item) => &item.attrs,
+                syn::Item::Impl(item) => &item.attrs,
+                syn::Item::Macro(item) => &item.attrs,
+                syn::Item::Mod(item) => &item.attrs,
+                syn::Item::Static(item) => &item.attrs,
+                syn::Item::Struct(item) => &item.attrs,
+                syn::Item::Trait(item) => &item.attrs,
+                syn::Item::TraitAlias(item) => &item.attrs,
+                syn::Item::Type(item) => &item.attrs,
+                syn::Item::Union(item) => &item.attrs,
+                syn::Item::Use(item) => &item.attrs,
+                _ => &[],
+            };
+            if !test_attrs(attributes) {
+                visit::visit_item(self, node);
+            }
+        }
+        fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
+            if !test_attrs(&node.attrs) {
+                visit::visit_item_mod(self, node);
+            }
+        }
+        fn visit_item_fn(&mut self, node: &'ast syn::ItemFn) {
+            if !test_attrs(&node.attrs) {
+                visit::visit_item_fn(self, node);
+            }
+        }
+        fn visit_impl_item_fn(&mut self, node: &'ast syn::ImplItemFn) {
+            if !test_attrs(&node.attrs) {
+                visit::visit_impl_item_fn(self, node);
+            }
+        }
+        fn visit_item_const(&mut self, node: &'ast syn::ItemConst) {
+            if !test_attrs(&node.attrs) {
+                visit::visit_item_const(self, node);
+            }
+        }
+        fn visit_item_static(&mut self, node: &'ast syn::ItemStatic) {
+            if !test_attrs(&node.attrs) {
+                visit::visit_item_static(self, node);
+            }
+        }
+        fn visit_lit_str(&mut self, literal: &'ast syn::LitStr) {
+            self.values.insert(literal.value());
+        }
+        fn visit_macro(&mut self, node: &'ast syn::Macro) {
+            // マクロの独自構文を式と解釈せず、括弧をたどって文字列だけ取り出す。
+            match syn::parse2::<MacroStrings>(node.tokens.clone()) {
+                Ok(strings) => self.values.extend(strings.0),
+                Err(error) => self.error = Some(error),
+            }
+        }
+    }
+    struct MacroStrings(BTreeSet<String>);
+    impl syn::parse::Parse for MacroStrings {
+        fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+            let mut values = BTreeSet::new();
+            while !input.is_empty() {
+                if input.peek(syn::LitStr) {
+                    values.insert(input.parse::<syn::LitStr>()?.value());
+                } else if input.peek(syn::token::Paren) {
+                    let group;
+                    syn::parenthesized!(group in input);
+                    values.extend(group.parse::<Self>()?.0);
+                } else if input.peek(syn::token::Brace) {
+                    let group;
+                    syn::braced!(group in input);
+                    values.extend(group.parse::<Self>()?.0);
+                } else if input.peek(syn::token::Bracket) {
+                    let group;
+                    syn::bracketed!(group in input);
+                    values.extend(group.parse::<Self>()?.0);
+                } else {
+                    input.step(|cursor| {
+                        cursor
+                            .token_tree()
+                            .map(|(_, next)| ((), next))
+                            .ok_or_else(|| cursor.error("マクロのトークンを読み取れません"))
+                    })?;
+                }
+            }
+            Ok(Self(values))
+        }
+    }
+    let syntax = syn::parse_file(source)?;
+    if test_attrs(&syntax.attrs) {
+        return Ok(BTreeSet::new());
+    }
+    let mut collector = Literals {
+        values: BTreeSet::new(),
+        error: None,
+    };
+    collector.visit_file(&syntax);
+    if let Some(error) = collector.error {
+        return Err(error.into());
+    }
+    Ok(collector.values)
 }
 
 fn scan_rust(path: &str, source: &str) -> Result<Vec<String>> {
@@ -447,7 +559,10 @@ mod tests {
             "fn f() { Option::unwrap(Some(1)); }",
             "use chrono::Utc; fn f() { <Utc>::now(); }",
         ] {
-            assert!(!violations("crates/picocast-media/src/lib.rs", source).is_empty(), "未検出: {source}");
+            assert!(
+                !violations("crates/picocast-media/src/lib.rs", source).is_empty(),
+                "未検出: {source}"
+            );
         }
     }
 

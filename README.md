@@ -16,6 +16,8 @@ Rust共通ログは日付・総容量で整理し、異常終了の記録を次�
 
 Rust版のDBは、同期フォルダ・ネットワーク・FAT32など危険な保存先を既定で拒否します。開発版との分離と明示許可の境界は [保存先の安全確認](docs/storage-safety.md) を参照してください。
 
+Rust版のエラーは日本語カタログから安定したコード・説明・対処を取得します。`cargo xtask catalog-check` と `docs-check` はコード/文言の欠損や文書リンクを検査し、`verify` にも含まれます。
+
 2026-10-16時点でローカルフォルダは `C:\00_PG\22_PicoCast` へ改名済みです。保管用の `legacy/` は作らず、Rust版への切り替え後は不要な旧コードを削除してGit履歴で参照します。DB・生成物・認証情報は別に保護します。Claude Remote Controlも `PicoCast` 名で新しいフォルダを参照し、既存のログオンタスク `Claude Remote Control - Projects` から起動します。
 
 <br />

@@ -1,6 +1,8 @@
 // 製品の本番コードとは別に、開発用検証ランナーだけが検証コマンドと結果表示を所有する。
 #![allow(clippy::disallowed_types, clippy::disallowed_macros)]
 
+mod catalog;
+mod docs;
 mod guards;
 
 use anyhow::{bail, Context, Result};
@@ -15,7 +17,9 @@ fn main() -> Result<()> {
     match std::env::args().nth(1).as_deref() {
         Some("verify") => verify(&root),
         Some("guard") => guards::check(&root),
-        _ => bail!("使い方: cargo xtask verify | guard"),
+        Some("catalog-check") => catalog::check(&root),
+        Some("docs-check") => docs::check(&root),
+        _ => bail!("使い方: cargo xtask verify | guard | catalog-check | docs-check"),
     }
 }
 
@@ -44,6 +48,8 @@ fn verify(root: &Path) -> Result<()> {
         results.push((label, run(root, "cargo", &args)));
     }
     results.push(("走査ガード", guards::check(root)));
+    results.push(("エラーカタログ", catalog::check(root)));
+    results.push(("文書リンク", docs::check(root)));
     let js = guards::files_under(&root.join("ui")).map(|files| {
         files
             .into_iter()
