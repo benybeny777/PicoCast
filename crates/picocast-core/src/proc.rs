@@ -23,6 +23,16 @@ pub struct RunOptions {
 
 /// 有限処理専用。終了・失敗・中断のいずれでも所有する子孫を回収する。
 pub async fn run(program: &Path, args: &[OsString], options: RunOptions) -> Result<Output> {
+    run_with_environment(program, args, options, &[]).await
+}
+
+/// 外部ツール起動用の一時環境だけを明示注入し、呼出元の環境を変更しない。
+pub async fn run_with_environment(
+    program: &Path,
+    args: &[OsString],
+    options: RunOptions,
+    environment: &[(OsString, OsString)],
+) -> Result<Output> {
     if options.timeout.is_zero() || options.max_output_bytes == 0 {
         return Err(failure(
             "E-PROCESS-LIMIT",
@@ -33,6 +43,7 @@ pub async fn run(program: &Path, args: &[OsString], options: RunOptions) -> Resu
     let mut command = Command::new(program);
     command
         .args(args)
+        .envs(environment.iter().map(|(key, value)| (key, value)))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

@@ -12,6 +12,8 @@
 
 Rust版への移行を進めています。共通基盤は `crates/`、検証入口は `cargo xtask verify` です。現在の運用は下記のPython旧版を使います。フォルダ・旧環境の移行状況と未確認事項は [R0実装状況](docs/r0-foundation.md)、完成形は [Rust作り直し設計](DESIGN_rust_rewrite.md) を参照してください。Rust版だけで動画を生成できる状態にはまだなっていません。
 
+Rust共通ログは日付・総容量で整理し、異常終了の記録を次回起動へ保持します。設定・初期化・通知APIは [共通ログ](docs/logging.md) を参照してください。本番画面への接続は後続WPで行います。
+
 2026-10-16時点でローカルフォルダは `C:\00_PG\22_PicoCast` へ改名済みです。保管用の `legacy/` は作らず、Rust版への切り替え後は不要な旧コードを削除してGit履歴で参照します。DB・生成物・認証情報は別に保護します。Claude Remote Controlも `PicoCast` 名で新しいフォルダを参照し、既存のログオンタスク `Claude Remote Control - Projects` から起動します。
 
 <br />
