@@ -2,6 +2,9 @@
 
 ## 2026-10-16 の更新（以下の旧記録より優先）
 
+- **作業順の正本を [DESIGN_implementation_plan.md](DESIGN_implementation_plan.md) にした。** 全設計書の案（T・G・Q・S〜K）に追加の案 N1〜N31 を足し、R0 の残り〜R6 を作業パッケージ（WP）に分けた。Codex は §5 の WP を上から 1 つずつ（1 WP = 1 PR）実装する。依頼の型は §6.1。下の「タスク状態」の表は旧来の T 番号の記録として残すが、着手順は WP 表に従う。
+- 次に着手する WP: **WP-R0-1（文書の整合）→ WP-R0-3・WP-R0-4・WP-R0-5・WP-R1-1・WP-R1-7（並行可）**。WP-R0-2（Python 3.12 切替）は自動運用と予約投稿の無い時間帯に行う。
+
 - ローカルフォルダは `C:\00_PG\22_PicoCast` に改名済み。このCodexチャットも新しいパスを参照している。
 - 利用者決定: 保管用の `legacy/` は作らない。必要な旧コードはGit履歴から参照する。現在のPython版はRust版への切り替えまで現位置で使い、切り替えの検証後に不要コードを削除する。Git管理外のDB・生成物・認証情報は削除対象に含めない。従来のlegacy移動・30日保管の指示は撤回する。
 - Claude Remote Controlのローカル起動スクリプトは `%LOCALAPPDATA%\ClaudeRemoteControl\Start-Project.ps1` と `Start-All.ps1`。対象を `yukkuri` から `PicoCast`、作業先を新しいフォルダへ更新した。ログオンタスク `Claude Remote Control - Projects` は引き続き同じスクリプトを使う。接続URL・セッションIDは記録しない。
@@ -16,12 +19,10 @@
 
 ## 最初にやること
 
-- フォルダ改名用に `scripts/rename-picocast-folder.ps1` を追加した。関連アプリを閉じ、別のPowerShellでREADMEのコマンドを実行する。`-CheckOnly` は読み取り専用。既存の改名先・実行中のWeb/runner候補・想定外の場所は拒否し、改名後はGit worktree参照を修復する。エージェントは実際の改名をまだ実行していない。
-
-1. `AGENTS.md` → このファイル → `DESIGN_picocast_v3.md`（§12 マイルストーン）→ `DESIGN_product_v2.md`（該当タスクカード）の順に読む。
+1. `AGENTS.md` → このファイル → `DESIGN_implementation_plan.md`（§5 の WP）→ WP の欄にある ID の正本、の順に読む。
 2. `git fetch origin` し、作業ブランチ `codex/license-v2-rebrand-design`（PR #36）をチェックアウトする。
 3. `docs/r0-foundation.md` と `.agents/skills/implement-picocast-r0/SKILL.md` を読む。修正中は必要な単体テストだけを実行し、全体検証は変更がまとまった最後に行う。Python旧版の直前の全体確認は656件成功・1件skip（既存未コミット差分を含む）。開始時に全体テストを繰り返さない。
-4. 下の「タスク状態」で最初の「未着手」かつ依存が満たされたカードから着手する。カードの仕様は `DESIGN_product_v2.md` §4。
+4. `DESIGN_implementation_plan.md` §5 で、最初の未完了かつ依存が満たされた WP から着手する。
 
 ## ブランチと PR
 
@@ -116,6 +117,7 @@
 | 多言語 | YouTube の言語別タイトル・説明と翻訳字幕を en / zh-Hans / ko で行う（既定は OFF、チャンネルごとに ON）。画面の英語化と他言語チャンネルは作らない | 委任で決定 2026-10-15 |
 | 対応 OS | Windows。macOS は動く範囲で保つが検証対象外 | 委任で決定 2026-10-15 |
 | BGM | 内蔵ライブラリは作らない。フリー BGM の取り込み支援＋自動選曲＋ダッキング。ローカル AI 作曲は作らない（後回し） | `DESIGN_quality.md` §7、委任で決定 |
+| 作業順・追加案 N1〜N31・詳細設計（DB・ジョブ・プロバイダ・画面通信・テスト） | `DESIGN_implementation_plan.md` の WP 順。決めた内容は同書 §8 | 委任で決定 2026-10-16 |
 | 追加の改善案（約 60 件） | A は採用して各マイルストーンへ、B は R6、C は余力で。外部へ自動で送る・変えるものは提案と確認ボタンまで | `DESIGN_backlog.md` §10、委任で決定 2026-10-16 |
 | 販売関連（BOOTH・無料アップデート期間・台数上限・コード署名・無料ジャンル） | 対象外（販売しないため） | 2026-10-15 方針 |
 
