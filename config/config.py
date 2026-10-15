@@ -12,6 +12,8 @@ from core.settings_store import get_all as _get_settings_all, initialize as _ini
 _init_settings()
 _SETTINGS_VALUES = _get_settings_all()
 
+PRODUCT_ID = "nvf"  # 端末コードの製品識別子。T5の改名時にPicoCastへ変更する
+
 # 自動運用の初期値。保存値はチャンネル別に設定DBから毎回取得する。
 AUTOPILOT_DAILY_SHORTS = 1  # 1日あたりのShorts生成本数の初期値
 AUTOPILOT_DAILY_LONGS = 0  # 1日あたりのLong生成本数の初期値
@@ -337,7 +339,11 @@ VOICEVOX_DOWNLOAD_URL = os.environ.get("VOICEVOX_DOWNLOAD_URL", "https://voicevo
 FFMPEG_DOWNLOAD_URL   = os.environ.get("FFMPEG_DOWNLOAD_URL",   "https://www.gyan.dev/ffmpeg/builds/")   # ffmpeg Windows ビルド配布
 OLLAMA_DOWNLOAD_URL   = os.environ.get("OLLAMA_DOWNLOAD_URL",   "https://ollama.com/download")           # Ollama 公式ダウンロード
 SD_WEBUI_DOWNLOAD_URL = os.environ.get("SD_WEBUI_DOWNLOAD_URL", "https://github.com/lllyasviel/stable-diffusion-webui-forge/releases")  # Stable Diffusion WebUI 配布
-# 試用→購入の動線。trial 上限到達時や製品管理タブからこのURLへ誘導する（実キー検証はライセンス機能実装時に後付け）。
+# 端末固定証明書の取得・更新。旧失効確認APIは証明書APIと互換性がないため自動移行しない。
+LICENSE_API_URL = _setting_value("LICENSE_API_URL", "")  # アクティベーションAPIのHTTPS URL（旧失効確認URLは自動転用しない）
+LICENSE_LEASE_RENEW_BEFORE_DAYS = float(_setting_value("LICENSE_LEASE_RENEW_BEFORE_DAYS", "7"))  # 証明書期限の何日前から起動時に更新するか
+LICENSE_API_TIMEOUT_SEC = float(_setting_value("LICENSE_API_TIMEOUT_SEC", "10"))  # ライセンスAPIの通信タイムアウト秒数
+# 試用→購入の動線。trial 上限到達時や製品管理タブからこのURLへ誘導する。
 PRODUCT_PURCHASE_URL = os.environ.get("PRODUCT_PURCHASE_URL", "")  # 購入ページURL（空=未設定。設定すると購入導線リンクを表示）
 # サポート導線。設定すると製品管理タブの診断パッケージ付近に問い合わせ先を表示する（空=非表示）。
 PRODUCT_SUPPORT_URL = os.environ.get("PRODUCT_SUPPORT_URL", "")      # サポート/問い合わせページURL（空=非表示）
@@ -421,6 +427,12 @@ ANALYTICS_MIN_VIEWS_FOR_SCORE     = int(os.environ.get("ANALYTICS_MIN_VIEWS_FOR_
 ANALYTICS_REACTION_MIN_LIKES           = int(os.environ.get("ANALYTICS_REACTION_MIN_LIKES", "5"))           # 配布不足動画の「反応あり」判定：最低いいね数
 ANALYTICS_REACTION_STRONG_LIKE_RATE    = float(os.environ.get("ANALYTICS_REACTION_STRONG_LIKE_RATE", "2.5")) # 配布不足動画の「反応強い」判定：最低高評価率(%)
 ANALYTICS_REACTION_STRONG_MIN_LIKES    = int(os.environ.get("ANALYTICS_REACTION_STRONG_MIN_LIKES", "20"))    # 配布不足動画の「反応強い」判定：最低いいね数
+ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS   = int(_setting_value("ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS", "5000"))  # Shorts横展開候補の最低再生数
+ANALYTICS_EXPANSION_VIEWS_MULTIPLIER   = float(_setting_value("ANALYTICS_EXPANSION_VIEWS_MULTIPLIER", "3.0")) # 同期間平均比で横展開候補にできる最低倍率
+ANALYTICS_EXPANSION_MIN_AVG_PCT_SHORTS = float(_setting_value("ANALYTICS_EXPANSION_MIN_AVG_PCT_SHORTS", "75")) # Shorts横展開候補の最低平均視聴率
+ANALYTICS_EXPANSION_MIN_AVG_DURATION_SHORTS = float(_setting_value("ANALYTICS_EXPANSION_MIN_AVG_DURATION_SHORTS", "35")) # Shorts横展開候補の最低平均視聴時間秒数
+ANALYTICS_EXPANSION_MIN_LIKE_RATE      = float(_setting_value("ANALYTICS_EXPANSION_MIN_LIKE_RATE", "1.5")) # 横展開候補で明確に高いと扱う最低高評価率
+ANALYTICS_EXPANSION_MIN_PATTERN_COUNT  = int(_setting_value("ANALYTICS_EXPANSION_MIN_PATTERN_COUNT", "2")) # 同じ構造で横展開候補に必要な適格動画数
 ANALYTICS_BL_MIN_VIEWS_SHORTS     = int(os.environ.get("ANALYTICS_BL_MIN_VIEWS_SHORTS", "3000"))   # Shorts/ShortLong ブラックリスト判定の最低視聴数
 ANALYTICS_BL_MAX_AVG_PCT_SHORTS   = float(os.environ.get("ANALYTICS_BL_MAX_AVG_PCT_SHORTS", "45")) # Shorts ブラックリスト判定の最大平均視聴率
 ANALYTICS_BL_MIN_VIEWS_LONG       = int(os.environ.get("ANALYTICS_BL_MIN_VIEWS_LONG", "1000"))     # Long ブラックリスト判定の最低視聴数

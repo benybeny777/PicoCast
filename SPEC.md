@@ -5,6 +5,10 @@
 
 ---
 
+## Rust版の基盤（R0）
+
+完成形は `DESIGN_rust_rewrite.md`、実装・移行の現状は `docs/r0-foundation.md` を正本とする。新規RustコードはCargoワークスペースの `picocast-core` と `picocast-store` に集約する。チャンネルID、UTC日時、エラー、設定、プロセス、HTTP、原子的保存、SQLite・暗号化保存を実装し、clippyとASTガードで共通部品の迂回を検出する。旧Pythonアプリの置換、旧データ取込み、Tauri画面はまだ未完了。以下はPython旧版の仕様で、パスはPython版のルートからの相対表記とする。
+
 ## 概要
 
 複数のYouTubeチャンネル向けに、台本生成・VOICEVOX音声・画像生成・native MP4・YouTubeアップロード・Analytics確認までを行うローカルWebツール。チャンネルごとの設定は channel profile で管理し、Web UI上でいつでも切り替えられる。
@@ -206,9 +210,10 @@ yukkurijidou/
 
 通常Shorts / Longは「掛け合い」ではなく「説明コンテンツ」として生成する。会話は情報量・理解・疑問解消・展開整理のためだけに使う。
 
-- ずんだもんが事実・理由・背景・経緯・具体例・結論を担当し、2〜5行連続で説明してよい。
+- ずんだもんが事実・理由・背景・経緯・具体例・結論を担当し、2〜4行連続で説明してよい。めたんは毎回返事をせず、次の具体情報を引き出す必要がある時だけ入る。
 - めたんは説明・補足・相槌を担当せず、視聴者目線の疑問、違和感、既知ネタ臭、説明の浅さ、タイトルや構成の弱さを必要な時だけ突く。
 - 機械的な交互会話、意味のない相槌・復唱・同意、驚きだけの行、3往復以上情報が増えない押し問答は禁止。
+- Shortsの尺不足は具体例、昔と今の比較、数字・時代・地域・理由、誤解しやすい点、オチ前の追加事実で補う。相槌・復唱・空会話で補わない。
 - Shortsは24〜27セリフ、本文280〜330文字、平均11.5文字以上、10文字以下4行以内を維持し、中盤に最低3つの具体情報を入れる。
 - Longは章ごとに説明ブロックを作り、各章に背景・経緯・具体例・現代とのつながりのいずれかを入れる。
 - タイトルや導入を毎回「〇〇の理由」へ寄せず、結論や強い違和感から自然に始めてよい。
@@ -466,7 +471,7 @@ Ollama 冒頭レビューでは、GUIログに `overall_score` と `scores.hook`
 - 都市伝説が「怖い」「ゾッとする」だけを繰り返す
 - 食べ物雑学が「実は違った」だけで、なぜそうなったかを説明しない
 
-ずんだもんの2〜5行連続説明は減点しない。同一話者4連続を一律NGにする判定は使用しない。
+ずんだもんの2〜4行連続説明は減点しない。同一話者4連続を一律NGにする判定は使用しない。
 
 78点付近への偏りを検証するため、Ollamaレビュー実行時は `metadata.db` の `script_quality.opening_review_debug`（JSON）に `review_debug` として `model` / `prompt_version` / `raw_response` / `parsed_score` / `parsed_subscores` / `warning_text` / `fix_target` / `created_at` を保存する（`upsert_opening_review` 経由、取得は `get_opening_review_debug`）。ローカルJSONファイルでのデータ管理は行わない。
 
@@ -616,11 +621,29 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 
 ### ライセンス管理
 
-- ライセンス情報は `data/settings.db:settings` を正本とする。`LICENSE_EDITION` 未設定時は `trial`。
-- edition は `trial` / `personal` / `pro` / `studio`。秘密情報や購入者情報をログ・レスポンスへ出さない。
-- 制限項目: Trial 透かし、1日生成本数、最大 channel profile 数、YouTubeアップロード可否、Analytics可否、テンプレート数上限。
+- edition は `trial`（体験版・キー不要）/ `standard` / `pro`。DB に edition は保存せず、`settings.LICENSE_KEY` の購入キーと `settings.LICENSE_ACTIVATION` の端末証明書を毎回検証して決める。旧 `LICENSE_EDITION` は無視する。キーだけでは `not_activated`（体験版）。
+- キー形式: `NVF1.<payload>.<signature>`。payload は `{v, lid, ed, buyer, iat, upd, packs}` の JSON を URL-safe base64 にしたもの、signature は payload 文字列への RSA-SHA256（PKCS#1 v1.5）署名。アプリは `core/license_public_key.py` の公開鍵だけを持ち、オフラインで検証する。秘密鍵はリポジトリに置かない。
+- 発行は Google スプレッドシート＋Apps Script（`tools/license/gas/Code.gs`）が自動で行う。BOOTH 購入通知メールを Gmail から取り込み、購入者がフォームに送った注文番号と照合してキーをメール送信する。手動発行・鍵生成は `tools/license/license_tool.py`。手順は `tools/license/README.md`。`tools/` は配布物に含めない。
+- 制限:
+
+  | | trial | standard | pro |
+  |---|---|---|---|
+  | 透かし | あり | なし | なし |
+  | 1日生成本数 | 3 | 無制限 | 無制限 |
+  | channel profile 数 | 1 | 1 | 無制限 |
+  | YouTubeアップロード | 可 | 可 | 可 |
+  | Analytics | 不可 | 可 | 可 |
+  | 自動運用 | 不可 | 可 | 可 |
+
+- 自動運用は有効化保存時（`POST /api/autopilot/settings`、403）と各工程の実行時（`E-LICENSE-LIMIT` で保留）に確認する。
+- 証明書形式: `NVA1.<payload>.<signature>`。payload は購入キーと同じ権利に `mid`（32桁の端末コード）と `exp`（UTCオフセット付きISO日時、手動の空文字は無期限）を加える。署名・端末・期限・キーとの license_id / edition / packs / buyer / upd 一致を検証する。公開鍵PEMのSHA-256を固定し、差し替えを拒否する。
+- チャンネル未登録の初回起動ではprofile別metadata.dbの初期化を行わず、セットアップ画面を起動する。登録済みprofileがある場合のみ起動時に初期化する。
+- 状態 `status` / `activation_status`: `unregistered` / `not_activated` / `active` / `expired` / `machine_mismatch` / `invalid` / `revoked`。`active` 以外は体験版とし理由を表示する。Windows保存は既存DPAPIで利用者別に保護し、復号失敗は停止する。macOSは署名証明書をbase64で保持し、署名・端末照合で改変と流用を拒否する。
+- 端末コードは `sha256(PRODUCT_ID + ":" + raw_id)` の先頭32hex。Windowsの64bitレジストリ `MachineGuid`、macOSの `IOPlatformUUID` から計算する。生IDは保存・送信・ログ出力しない。取得失敗・非対応OSは `E-LICENSE-MACHINE` で停止する。`PRODUCT_ID` は現在 `nvf`（T5で改名する固定識別子）。
+- `LICENSE_API_URL`（HTTPS、空は手動登録）、`LICENSE_LEASE_RENEW_BEFORE_DAYS`（既定7日）、`LICENSE_API_TIMEOUT_SEC`（既定10秒）を設定DBと管理者設定画面で管理し、保存後は即時反映する。旧失効URLはAPI形式が異なるため自動転用しない。Standard 2台 / Pro 3台・30日間の暫定運用値はGASのCONFIGで管理する。起動時は期限が近い証明書だけ更新する。通信失敗は画面に残し、期限内のみ製品版を維持する。期限切れは体験版。失効を受信したライセンスは旧証明書を貼り付けても解除できない。
 - Trial は native MP4 の最終出力へ `Native Video Factory Trial` の小さな透かしを焼き込む。
-- 試用→購入の動線（UX先行）: `get_license_info()` は `purchase_url`（`config.PRODUCT_PURCHASE_URL`）と `upgrade_available`（edition が studio 以外）を返す。上限到達エラー（生成本数・profile 数・アップロード・Analytics・テンプレート）の文言には購入導線を付ける。設定画面「製品管理」のライセンスカードに購入リンクとライセンスキー入力欄を表示し、`POST /api/settings/license` で即時反映する。実ライセンスキーの署名検証は未実装（後付け予定）。
+- `GET /api/settings/license` は edition・状態・購入者・license_id・更新期限・有効なパック・制限・端末コード・証明書期限・処理エラー・上限時の端末末尾6桁を返す（購入キー・証明書は返さない）。`GET /license/machine-code` は端末コードのみ。`POST /license` は `{license_key}` でオンライン登録を試み、失敗時はキーを保存し手動登録を案内する。`POST /license/activation {activation}` は手動登録、`POST /license/renew` は更新、`POST /license/deactivate {confirmed:true}` は確認付き解除。各パスの先頭は `/api/settings`。
+- `current_limits()`・native透かし判定・手動アップロード直前・自動投稿直前で `verify_activation_now()` を呼び、キャッシュによる検証省略をしない。自動投稿直前に体験版へ降格した場合は投稿を保留する。体験版の手動アップロードは従来どおり可能。
 
 ### 診断パッケージ
 
@@ -664,7 +687,7 @@ Web UI は生成・レンダーを直接実行しない。`app.py` が起動時�
 - 詳細: ＋ よみがな辞書 / Stable Diffusion WebUI 詳細（モデル選択）。
 - 開発者: ＋ 管理者設定（ジョブ並列数・ログ保持・DB診断・危険操作）。
 - 隠れたタブへの URL ハッシュ遷移時は必要なモードまで自動で引き上げる。破壊的操作は従来どおり `confirmed=true` と確認ダイアログを必須にする。
-- 販売版では `DEVELOPER_TOOLS_ENABLED=0`（`config/config.py`）にすることで、管理者設定タブ・「開発者」モード・edition切替などの開発者向けUIをサーバー側で描画しない。あわせて `admin` 指定の設定項目は `get_editable_config()` から除外し、`save_config()` も拒否する（HTML非表示だけでなくAPIでも保護する）。表示モードは localStorage 依存のため、秘匿はこのフラグで行う。
+- 販売版では `DEVELOPER_TOOLS_ENABLED=0`（`config/config.py`）にすることで、管理者設定タブ・「開発者」モードなどの開発者向けUIをサーバー側で描画しない。あわせて `admin` 指定の設定項目は `get_editable_config()` から除外し、`save_config()` も拒否する（HTML非表示だけでなくAPIでも保護する）。表示モードは localStorage 依存のため、秘匿はこのフラグで行う。
 
 ### 主要画面
 
@@ -782,6 +805,11 @@ GET  /api/shutdown/status           # 終了処理中フラグを返す
 ```
 
 ### セキュリティ方針
+
+- ローカルAPI保護（T29）: `web_app/local_api_security.py` を最外周のミドルウェアとして適用する。すべてのHTTP要求で Host が実際の待受ポートの `127.0.0.1` / `localhost` であることを確認し、不一致は400で拒否する。
+- POST / PUT / PATCH / DELETE は同じ Origin（未送信時のみ同じ Referer）と `X-PicoCast-Token` を必須にする。不一致・欠落・重複ヘッダーは403で拒否し、`E-WEB-REQUEST` と画面の再読み込み手順を返す。拒否理由は値を含めずデバッグログに残す。
+- トークンは起動ごとにメモリ上で生成し、DBやログへ保存しない。`base.html` と共通 `web_app/static/api.js` で既存の fetch 操作へ付与する。外部URLへ付与せず、変更要求のリダイレクトも禁止する。トークン付きHTMLは `Cache-Control: no-store` とする。G13のJSON解析・タイムアウト・二重送信防止・直接fetch禁止ガードは共通基盤の作業で追加する。
+- 自動選択ポートでも実待受ポートに従う。HTTPを使わないOSタスクのCLI経路には影響しない。
 
 - `127.0.0.1` のみバインド
 - output/ 配下のみファイルアクセス可（`security.py` で検証）
@@ -1118,6 +1146,12 @@ WAV 末尾には `max(0.1, 0.1 × speed_scale)` 秒の無音を直接書き込�
 | `LONG_UPLOAD_PLAYLIST_NAME` | `ロング動画` | Longアップロード後に自動追加する再生リスト名。空なら無効 |
 | `PLAYLIST_CLASSIFIER_SCRIPT_CHARS` | 1600 | 単体再生リスト振り分けでOllamaへ渡す台本本文の最大文字数 |
 | `TOPIC_REQUEST_CTA_EVERY_N` | 5 | Shorts新規/横展開のネタ募集CTAを通算何本に1本許可するか。0なら自動付与しない |
+| `ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS` | 5000 | Shorts横展開候補の最低再生数 |
+| `ANALYTICS_EXPANSION_VIEWS_MULTIPLIER` | 3.0 | 最低再生数未満でも候補にできる同期間平均比 |
+| `ANALYTICS_EXPANSION_MIN_AVG_PCT_SHORTS` | 75 | Shorts横展開候補の最低平均視聴率(%) |
+| `ANALYTICS_EXPANSION_MIN_AVG_DURATION_SHORTS` | 35 | Shorts横展開候補の最低平均視聴時間(秒) |
+| `ANALYTICS_EXPANSION_MIN_LIKE_RATE` | 1.5 | 横展開候補の最低高評価率(%) |
+| `ANALYTICS_EXPANSION_MIN_PATTERN_COUNT` | 2 | 同じ構造で横展開候補に必要な適格動画数 |
 | `HF_TOKEN` | `""` | Hugging Face アクセストークン（`requires_auth=true` モデルのダウンロードに使用。`.env` に記載。値はレスポンス・ログに含めない） |
 | `JOB_LOG_MAX_JOBS` | 300 | 保持する最大ジョブ件数。`metadata.db` の `jobs` テーブルに保存し、超過分は `delete_old_jobs` で古い順に削除する |
 | `JOB_MAX_CONCURRENT_WORKERS` | 1 | job-runner の同時実行数。2以上で生成・レンダーを並列処理する |
@@ -1416,7 +1450,7 @@ output/{profile_id}/videos/{テーマ名}/
 - Shorts案は15〜30秒地点に2つ目の驚き、逆転、具体例を入れられる構造を加点する
 - コメントしやすい質問（どっち派 / 他にも知ってる / これ知ってた）へ自然につながる案を加点する
 - 3選・クイズ形式は実験枠として許可するが、通常の1ネタ深掘りを主力にする
-- `analysis_status=data_wait` の動画は優先度A止まり（views 3000以上・likes 30以上・comments 3以上のみ暫定S可）。実績根拠には `暫定` と明記する
+- `analysis_status=data_wait` の動画は横展開根拠に使わない。重複除外と参考観察にのみ使う
 - 改善再挑戦枠: views 1000以上かつ平均視聴率30〜49%（条件A）、またはviews 500以上かつlike_rate 1.5%以上（条件B）の既存食材は最大2案まで再挑戦可
 - 新規開拓枠は採点7点未満を出力しない
 - タイトルは30文字超の場合「意外な」「知られざる」「本当の」「ヤバすぎた」等を優先削除
@@ -1568,20 +1602,18 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 - **ShortLong**: Shortsより緩いしきい値でA〜E判定（Long扱いを避ける）
 - **Long**: CTR + 平均視聴率でA〜E判定
 
-補正ルール（ベーススコア算出後に適用）：
+補正ルール（ベーススコアは観察用。横展開判定は別の厳格条件で行う）：
 
 | 条件 | 効果 |
 |---|---|
-| Shorts `avg_percent < 45` / ShortLong `avg_percent < 50` | `横展開` に昇格させず `テーマ有望・構成改善` にする |
-| Long `ctr < 8` または `avg_percent < 40` | 登録者増だけでは `横展開` にしない |
+| 単体スコアで旧来の横展開条件を満たす | actionを `参考観察` に留める |
 | `subscribers_net >= 2` かつスコアが C 未満 | スコアを C に引き上げ・action `登録者増・改善候補` |
-| `subscribers_net >= 2` かつ最低視聴率ライン以上 | Shorts / ShortLong は action `横展開` |
-| `subscribers_net >= 2` かつ Long の横展開条件未達 | action `登録者増・構成改善` |
+| `subscribers_net >= 2` | 登録反応として参考観察するが、単独では横展開にしない |
 | `subscribers_net >= 1` かつ弱いスコア | action に `登録導線あり` を補足 |
 | `like_rate >= 1.5%` かつ最低視聴率ライン未達 | action `テーマ有望・構成改善` |
 | `like_rate >= 1.5%` かつ `score in (D, E)` | action `テーマ有望・冒頭/構成改善` |
 | `comments >= 1` かつ弱いスコア | action に `反応あり` を補足 |
-| `views < 500` かつ公開後24時間未満 | `is_provisional = true`。横展開系actionには `(判定保留)` を付ける |
+| `views < 500` かつ公開後24時間未満 | `is_provisional = true`。横展開判定対象外 |
 | `audio_cutoff_risk = true` かつ公開済み・分析可能な Shorts / ShortLong で `views >= 1000`、`average_percentage_viewed >= 55`、`like_rate >= 1.0`、`comments >= 1`、`subscribers_net >= 1` のいずれか | score は変えず、既存 action に `音切れ改善候補` を補足 |
 
 ブラックリスト候補判定（`_mark_blacklist_candidate`）：
@@ -1595,14 +1627,18 @@ Analytics APIは期間内に再生のある動画しか返さないため、YouT
 - `avoid_pattern` フィールドにタイトルから推定したネタ型パターン（歴史・由来説明型、有名ネタ消耗型、抽象理由型、驚き不足型）を付与する。
 - スワイプ率データ（Viewed vs Swiped Away）は現状取得不能のため、入口診断はスキップする。
 
-`AI分析用にコピー` / `Shortsタイトル案` / `Longタイトル案` ボタンでそれぞれのテキストをクリップボードにコピーできます。AI分析用コピーには弱い動画ランキング・ブラックリスト候補・避けるべきネタ型が含まれます。タイトル案プロンプトにはブラックリスト候補と横展開強い動画の実績が含まれ、同じネタ型・切り口を繰り返しにくくします。
+`AI分析用にコピー` / `Shortsタイトル案` / `Longタイトル案` ボタンでそれぞれのテキストをクリップボードにコピーできます。AI分析用コピーには弱い動画ランキング・ブラックリスト候補・避けるべきネタ型が含まれます。タイトル案は新規開拓枠を主軸にし、弱い実績は仮説強化枠・参考観察として扱います。
 
-views 上位20% ルール（`score_items` でまとめて適用）：
+横展開の厳格条件（`score_items` でまとめて適用）：
 
-- analyzable 動画の views 80パーセンタイル以上 かつ `avg_percent >= 65` → action `横展開・微改善`
-- ただし `is_provisional = true` の動画は昇格しない
-- Shorts / ShortLong は最低視聴率ライン未満なら昇格しない
-- ただし action が `横展開` の場合は維持
+- `analysis_status=analyzable` かつ `is_provisional=false` だけを対象にする。`data_wait` は対象外
+- Shorts / ShortLong は再生数5,000以上または同じ動画種別の期間平均3倍以上、平均視聴率75%以上、平均視聴時間35秒以上、高評価率1.5%以上、コメント1件以上または登録者純増1以上をすべて確認する
+- `genre_group` / `generation_purpose` / `character_pattern` のいずれかで同じ構造を明示し、適格動画が2本以上ある場合だけ action `横展開候補`
+- 適格でも同じ構造が1本だけなら action `参考観察・単発`
+- 条件未達なら横展開対象なしとし、企画提案は新規開拓枠、仮説強化枠、横展開枠の順で扱う
+- Long は CTR 8% 以上かつ平均視聴率 40% 以上を視聴指標の条件にし、再生数・反応・同じ構造の本数の条件は Shorts と同じ
+- タイトル案・ネタ会議のプロンプトに入れる条件文は `core/analytics_score.py:expansion_criteria_lines()` が現在の設定値から生成する（唯一の持ち主）。ジャンルの `title_context.md` には数値を書かず、プロンプト末尾の【横展開判定】を参照させる
+- 既存チャンネルのデフォルトの台本・タイトルテンプレートへの品質ルールの同期は、起動時に版の目印（`prompt_template_seeder._SCRIPT_RULES_MARKER` / `_TITLE_RULES_MARKER`）が無い場合だけ行う。設定画面で編集したテンプレートは上書きしない
 
 TSVには `publish_status` / `analysis_status` / `is_provisional` / `render_engine` 列を含むため、AIへのプロンプト差し込み時に予約中テーマの重複や判定保留を考慮できます。`render_engine` は `metadata.db` から取得されます。
 TSVには `audio_cutoff_risk` 列も含み、2026-05-16以前の動画を品質改善版候補として再評価できるようにします。

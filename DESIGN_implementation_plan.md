@@ -1,0 +1,359 @@
+# PicoCast 改修の実装計画（Codex 作業パッケージ）
+
+最終更新: 2026-10-16
+位置づけ: 利用者要望（2026-10-16）「改修の案出しを出し切って設計にして。Codex で作業はやる」。
+これまでの設計書の案を**1 本の作業順**にまとめ、まだどこにも無い案（§3 の N 系列）を足し、R1 以降で必要になる**詳細設計**（DB・型・ジョブ・プロバイダ・画面通信・テスト）を決める。Codex は本書の作業パッケージ（WP）を上から 1 つずつ実装する。
+
+判断: 利用者指示（AGENTS.md「確認を求めない」）により、迷う点は推奨で決めて §8 に記録した。利用者が後から直す。
+
+## 0. 読み方と正本の関係
+
+| 知りたいこと | 正本 |
+|---|---|
+| **何を・どの順で作るか、完了条件** | **本書**（§5 の WP） |
+| 構成・移行・マイルストーン R0〜R6 の考え方 | `DESIGN_rust_rewrite.md` |
+| 品質の物差し・Q1〜Q5・R1〜R6（信頼性） | `DESIGN_quality.md` |
+| 画面構成・データモデル・QA ゲート・グロースエンジンの中身 | `DESIGN_picocast_v3.md` |
+| 画面の見た目 | `DESIGN_ui.md`＋`docs/design/picocast-ui-mockup.html` |
+| 唯一の持ち主＋ガードの考え方 | `DESIGN_foundations.md`（Rust での手段は `DESIGN_rust_rewrite.md` §6） |
+| 個別機能の細かい仕様（T 番号） | `DESIGN_product_v2.md` |
+| 追加の改善案（S・V・P・Y・D・O・U・E・K 番号） | `DESIGN_backlog.md` |
+| 今どこまで進んだか | `HANDOFF.md` |
+
+- 本書は案の**中身を書き写さない**。WP の欄に ID（例: `Q2`・`T32`・`S3`・`N6`）を書き、中身は上の正本を読む。食い違えば本書の §2 の解消方針に従い、正本側を直す。
+- ID の接頭辞: `T` = v2 タスク、`G` = 共通基盤、`Q`/`R`（品質の R1〜R6）/`C` = 品質設計、`S`/`V`/`P`/`Y`/`D`/`O`/`U`/`E`/`K` = バックログ、`N` = 本書で追加、`WP-` = 本書の作業パッケージ。品質設計の `R1`〜`R6` はマイルストーン名と紛らわしいため、本書では `QR1`〜`QR6` と書く。
+
+---
+
+## 1. 現状（2026-10-16 にコードと文書を確認した事実）
+
+| 領域 | 状態 |
+|---|---|
+| Rust | `crates/picocast-core`（clock・error・fsutil・http・ids・logging・proc・settings、約 820 行）と `crates/picocast-store`（DB・マイグレーション・バックアップ・秘密値、約 880 行）、`xtask`（verify・AST ガード）、Windows CI（`.github/workflows/rust-verify.yml`）。単体テスト 20 件成功 |
+| Rust の未着手 | `media`・`voice`・`ai`・`youtube`・`pipeline`・`growth`、`src-tauri/`、`ui/`、旧データの取り込み。`logging.rs` は 4 行で中身が無い |
+| Python 旧版 | 本番で稼働中（`core/` 約 60 モジュール、`web_app/routes` 23 ファイル、画面 19 枚、テスト約 60 ファイル）。Python 3.11.9 のまま。3.12＋`uv.lock` は用意済みで未切替 |
+| 旧版のテスト | 全体 656 件成功・1 件 skip（実環境）。実設定の無い環境では 20 失敗・39 エラー（profile・設定・モデル素材への依存） |
+| 旧データ | 設定・metadata DB はバックアップ済み（`~/.codex/backups/picocast-r0/`）。6 月の `running` のままのジョブ記録が 10 件（対応プロセス無し） |
+| フォルダとリポジトリ | `C:\00_PG\22_PicoCast`、`benybeny777/PicoCast` へ改名済み |
+| 横展開判定 | 2026-10-16 に厳格化を確定（コミット `d949061`）。閾値は設定 DB、条件文は `core/analytics_score.py:expansion_criteria_lines()` が唯一の持ち主。Rust 版（WP-R3-6・WP-R6-1）でも同じ条件と持ち主の考え方を移す |
+
+旧版に既にあるのに、バックログの「現状」欄で「無い」とされていたもの（§2 で訂正）:
+
+- Shorts のループ構成（`SPEC.md`「Shortsループ構成」）→ `S4` は「台本ルールとしてある。構成の検査は無い」
+- 長尺のチャプター生成（`SPEC.md`「チャプターマーカー自動生成」）→ `S5` は「LLM で生成している。シーン構成の時刻からの生成は無い」
+- サムネ・タイトルの A/B/C 案（`SPEC.md`「サムネイルA/Bテスト」「タイトルA/Bテスト」）→ `P4` の前提（3 案）は既にある
+- キャラクターのクレジット（`VOICEVOX:ずんだもん` など、`character_profiles_seed.py`）
+
+---
+
+## 2. 設計書の食い違いと解消
+
+| # | 食い違い | 解消（本書の決定） |
+|---|---|---|
+| X1 | `DESIGN_rust_rewrite.md` §2.1・§2.2・§9.1・§12.4 は Python 版を `legacy/` へ移すとするが、`HANDOFF.md`（2026-10-16 利用者決定）は `legacy/` を作らないとした | **利用者決定を正とする**。Python 版は現位置のまま本番に使い、R5 の切り替えの検証後に不要コードを削除する。Git 管理外の DB・生成物・認証情報は削除しない。`DESIGN_rust_rewrite.md` に注記を入れた |
+| X2 | `DESIGN_picocast_v3.md` は Python エンジン＋TypeScript SPA、`DESIGN_rust_rewrite.md` は全部 Rust＋素の JS | 後者を正とする（v3 の冒頭に既に注記あり）。v3 は中身（画面・データ・QA・グロース）だけを使う |
+| X3 | `DESIGN_quality.md` §5（ruff・pyright・Python の CI）・§8（Q-M0〜Q-M4） | Python では実施しない。Rust の `xtask verify` と本書 §5 の WP に置き換える |
+| X4 | `HANDOFF.md` の「最初にやること」に改名前の手順が残っている | 本書の WP-R0-1 で HANDOFF を整理する（本書と同じコミットで最小限を直した） |
+| X5 | バックログ `S4`・`S5`・`P4` の現状欄（§1 の訂正） | `DESIGN_backlog.md` の現状欄を直した |
+| X6 | 旧版と Rust 版が同じチャンネルへ同時に投稿する危険への言及が無い | `N30`（二重運用の防止）として追加し、R5 の必須条件にした |
+
+---
+
+## 3. 追加の改善案（N 系列。既存の設計書に無いもの）
+
+優先度は `DESIGN_backlog.md` と同じ（A = R1〜R5 で入れる、B = R6、C = 余力）。
+
+### 3.1 移行・検証
+
+| ID | 案 | 理由 | 優先 | 入れる WP |
+|---|---|---|---|---|
+| N1 | **旧版オラクル**: Python 旧版の純粋な関数（読みの正規化・メタデータの組み立て・投稿枠の計算・分析スコア・量産判定・台本記法の解析）を固定の入力コーパスで実行し、結果を JSON に記録する `xtask oracle record`。Rust 側は同じ入力で記録と比べる | `DESIGN_rust_rewrite.md` §9.3 の同等性を、人の目視ではなく自動テストで判定するため | A | WP-R1-7 |
+| N2 | **旧版テストの環境隔離**: 実設定・profile・モデル素材に依存して落ちる 20 失敗・39 エラーを fixture に隔離し、空の環境で全件緑にする | N1 を空の環境（CI）で回すため。凍結中でもテストだけの変更は機能追加に当たらない | A | WP-R1-7 |
+| N3 | **放置された実行中ジョブの区別**: 取り込み時に、対応プロセスの無い `running` を `abandoned`（放置）として取り込み、削除もやり直しもしない | 6 月の 10 件のような記録を「実行中」と誤認しないため | A | WP-R1-4 |
+| N4 | **文書の自動点検**: `xtask docs-check` で、設計書間のリンク切れ・本書に無い ID の参照・`HANDOFF.md` の完了済み行の残りを検出 | 「ドキュメント常時最新化」のルールを機械で守るため | B | WP-R0-5 |
+
+### 3.2 データと保存
+
+| ID | 案 | 理由 | 優先 | 入れる WP |
+|---|---|---|---|---|
+| N5 | **生成来歴**: すべての成果物（台本・音声・画像・動画・メタデータ）に、モデル ID・プロンプトテンプレートの版・シード・設定のハッシュ・外部ソフトの版を記録する | 再現・不具合調査・Insight の効果測定（どの版が伸びたか）に必要 | A | WP-R2-10 |
+| N6 | **プロンプトテンプレートの版管理**: テンプレートを編集するたびに版を残し、差分表示と戻す操作を付ける。Project は使った版を記録する（N5） | テンプレート改修で伸びが落ちたときに戻せない | A | WP-R2-2・WP-R4-9 |
+| N7 | **保存先の危険検出**: データ・素材の保存先がクラウド同期フォルダ（OneDrive・Google ドライブ・Dropbox）・ネットワークドライブ・FAT32 のとき、起動時に警告して DB を開かない（利用者が明示的に許可した場合だけ開く） | 同期ソフトが SQLite の WAL を壊す事故を防ぐ | A | WP-R0-4 |
+| N8 | **PC 移行用の暗号化書き出し**: DPAPI はその PC・利用者に結びつくため、パスフレーズで暗号化した全体の書き出し（DB・秘密値・素材の目録）と取り込みを用意する | PC の買い替え・再インストールで秘密値を失わないため | A | WP-R1-8 |
+| N9 | **復元の訓練**: 自動バックアップから一時領域へ実際に復元して整合性検査を行う処理を週 1 回動かし、失敗したら通知する | 「バックアップはあるが戻せない」を事前に見つけるため | A | WP-R1-8 |
+| N10 | **ログの保存期間と容量上限**: 構造化ログを日ごとに分け、保存日数と合計容量の上限（設定値）で古いものから消す。完了ジョブの詳細ログは 90 日で圧縮 | 長期無人運用でディスクを使い切らないため | A | WP-R0-3 |
+
+### 3.3 生成
+
+| ID | 案 | 理由 | 優先 | 入れる WP |
+|---|---|---|---|---|
+| N11 | **構造化出力**: LLM に JSON スキーマ（Project / Scene / Line）で台本を返させ、独自記法の文字列解析を本番経路から外す。独自記法は取り込みと書き出しの形式として残す | 解析の失敗・取り違えをなくし、スタジオの部分編集と直結させる | A | WP-R2-2 |
+| N12 | **開発用の偽プロバイダ**: LLM・音声・画像・YouTube の全プロバイダに偽の実装を用意し、API キー・VOICEVOX・GPU なしで「企画 → 投稿要求の作成」まで通せるようにする。画面撮影検査用のデモチャンネルも同じ仕組みで作る | CI・画面撮影・新人エージェントの動作確認を費用ゼロで行うため | A | WP-R2-1 |
+| N13 | **外部ソフトの版の固定と記録**: ffmpeg・VOICEVOX・Stable Diffusion WebUI・Ollama の版を起動時に取得して記録し、ゴールデンテストの基準に版を含める。基準と違う版では警告する | 外部ソフトの更新で出力が変わったことを検出するため | A | WP-R2-7 |
+| N14 | **費用の見積もり**: 生成の開始前に、工程ごとの予定費用（過去の実績の中央値）を出し、チャンネルの費用上限（`T25`）を超えるなら開始しない | 途中で上限に達して中途半端な成果物が残るのを防ぐ | A | WP-R2-15 |
+| N15 | **ネット断の扱い**: 接続が切れたら外部 API を使う工程を待機状態にし、回復したら続ける。待機は失敗回数に数えない | 一時的な回線断で自動運用が保留だらけになるのを防ぐ | A | WP-R2-10 |
+| N16 | **キャラクター別の利用規約の検査**: 音声キャラクターごとに規約で禁じられた用途の分類（例: 過度な暴力・性的表現・政治宗教など、各キャラクターの公式ガイドラインから設定）を持ち、台本の QA で照合する | キャラクターの利用規約違反を投稿前に止める（クレジットの検査は既存） | A | WP-R2-12 |
+| N17 | **Shorts の形式の検査**: 縦 9:16・解像度・尺の上限（YouTube の現行の上限を採用時に公式で確認し、確認日を設定の説明に残す）を QA で検査 | 尺の超過で Shorts 扱いされない事故を防ぐ | A | WP-R2-12 |
+| N18 | **プロンプトの評価セット**: 固定のネタ 20 件で台本を作り、QA の点数・冒頭レビューの点数・文字数を旧テンプレートと比べる `xtask prompt-eval`。既定はローカル LLM（費用ゼロ）、有料 API は明示指定時だけ | テンプレート改修の良し悪しを数字で判断するため | B | WP-R2-15 |
+
+### 3.4 投稿・YouTube
+
+| ID | 案 | 理由 | 優先 | 入れる WP |
+|---|---|---|---|---|
+| N19 | **二重投稿の防止**: 再開可能アップロードのセッション URI と送信済みバイト数を DB に保存し、落ちたら続きから送る。状態が不明なときは、自分のチャンネルのアップロード再生リスト（`playlistItems.list`、1 ユニット）を照合し、YouTube 側を正として判断する | 異常終了後の再送で同じ動画が 2 本上がる事故を防ぐ（ローカルの記録で投稿を止めない規則とも両立） | A | WP-R3-2 |
+| N20 | **投稿後の処理状態の監視**: 投稿後に `status.uploadStatus`・`failureReason`・`rejectionReason`・`processingDetails` を確認し、処理失敗・却下（著作権・規約）を通知する | 今は投稿 API が成功すれば完了扱いで、YouTube 側の却下に気づけない | A | WP-R3-5 |
+| N21 | **OAuth の失効の事前検知**: Google Cloud の OAuth 同意画面が「テスト」のままだと更新トークンが 7 日で失効する。健康診断でトークンの取得日と更新失敗を見て、失効前に警告し、公開状態の変更手順を案内する | 自動運用が 1 週間で止まる典型的な原因 | A | WP-R3-1 |
+| N22 | **PC の時計のずれ検出**: HTTP 応答の `Date` と PC の時刻を比べ、大きくずれていれば警告する | 予約投稿の時刻・OAuth の有効期限が狂うため | B | WP-R3-2 |
+| N23 | **日本語字幕トラックの投稿**: 焼き込み字幕とは別に、タイムラインの正確な時刻から字幕ファイルを作って投稿する（任意。`captions.insert` は 1 回 400 ユニットのため、クォータ台帳で残量を確認してから） | 検索・字幕表示・翻訳字幕（`T13` L2）の元になる | B | WP-R3-4 |
+| N24 | **メタデータの上限検査**: タイトル 100 文字・説明 5,000 バイト・タグ合計 500 文字・使えない文字（`<` `>`）を、要求を作る段階で検査する | API に拒否されてから気づくのを防ぐ | A | WP-R3-3 |
+
+### 3.5 運用
+
+| ID | 案 | 理由 | 優先 | 入れる WP |
+|---|---|---|---|---|
+| N25 | **緊急停止**: ホームのボタン 1 つで、全チャンネルの自動運用と実行中・待機中のジョブを止める。YouTube 側に予約済みの動画は止まらないことを画面で明示し、その一覧と非公開へ戻す操作（確認付き）を出す | 不具合・炎上時にすぐ止めるため | A | WP-R4-3 |
+| N26 | **チャンネルごとの自動停止**: 連続失敗 N 回・QA 不合格率・費用の急増（いずれも設定値）で、そのチャンネルの自動運用だけを一時停止して通知する | 1 つの原因で失敗と費用が積み上がるのを防ぐ | A | WP-R2-15 |
+| N27 | **チャンネルの複製**: チャンネルの設定・テンプレート・キャラクター・投稿枠を、別チャンネルの初期値として複製する（秘密値と実績は複製しない） | 新しいチャンネルの立ち上げを速くする | B | WP-R4-9 |
+| N28 | **季節・記念日のカレンダー**: 祝日・記念日・季節行事を内蔵し、締切付きネタ（v3 §8-4）の元にする。祝日は政府の公開データを取り込む | 季節ネタを取りこぼさないため | B | WP-R6-2 |
+| N29 | **チャンネル横断の重複検査**: 同じネタが複数のチャンネルで近い時期に出ないよう、量産判定（`T10`）をチャンネル横断にも広げる | 自分のチャンネル同士で食い合わないため | B | WP-R6-2 |
+| N30 | **二重運用の防止**: チャンネルの運用元（旧版 / Rust 版）を DB の 1 か所に持ち、運用元でない側はそのチャンネルの投稿・自動運用を拒否する。旧版側には、切り替え時に自動運用を OFF にする処理だけを加える（本番の安全のための最小変更） | 影運用・切り替え中に同じ動画が両方から投稿される事故を防ぐ | A | WP-R5-3 |
+| N31 | **AI 生成の来歴の埋め込み**: 書き出した動画・サムネのメタデータに、AI 生成であることと生成ツールを記録する（C2PA などの標準は採用時に調査） | 申告（`T18`）の裏付けを成果物に残す | C | R6 以降 |
+
+---
+
+## 4. 詳細設計（R1 以降の前提）
+
+### 4.1 クレートと依存
+
+`DESIGN_rust_rewrite.md` §3 の構成をそのまま使う。追加と明確化:
+
+- `picocast-pipeline` の中に `qa`（検査カタログ）を置く。QA は工程の 1 つであり、独立クレートにしない。
+- `picocast-testkit`（`dev-dependencies` 専用）: 偽プロバイダ（N12）、録画・再生（E1）、旧版オラクルの読み込み（N1）、固定時計、一時 DB。本番のクレートから参照するとビルドに失敗するよう、`xtask` のガードで依存関係を検査する。
+- 依存の向き: `core` ← `store` ← (`media`・`voice`・`ai`・`youtube`) ← (`pipeline`・`growth`) ← `src-tauri`。`media` と `voice` は `ai` に依存しない（音声合成は `voice` のプロバイダ、LLM で読みを点検する V6 は `pipeline` で両者を組み合わせる）。
+
+### 4.2 DB（`picocast.db` スキーマ v1）
+
+全テーブルの日時は UTC の ISO 8601 文字列（`...Z`）。金額は整数のマイクロ米ドル（`*_micros`）。`channel_id` を持つテーブルは外部キーで `channels` を参照し、`ON DELETE RESTRICT`（チャンネル削除は論理削除 `archived_at` のみ）。
+
+| グループ | テーブル（主な列） |
+|---|---|
+| 管理 | `schema_migrations(version, checksum, applied_at)`、`audit_log(at, actor, action, target, detail_json)`、`crash_reports(id, at, version, step, summary_json, acknowledged_at)` |
+| 設定 | `app_settings(key, value_json, updated_at)`、`channel_settings(channel_id, key, value_json, updated_at)`、`secrets`（R0 実装済みの形式） |
+| チャンネル | `channels(id, name, handle, language, timezone, genre_pack_id, character_set_id, youtube_channel_id, operator: legacy|rust, archived_at, created_at, updated_at)`（`operator` は N30） |
+| キャラクター | `characters(id, channel_id, name, voice_provider, speaker_id, style_map_json, credit_text, usage_rules_json, layer_manifest_sha256)`（`usage_rules_json` は N16） |
+| テンプレート | `prompt_templates(id, channel_id, kind, name, is_default)`、`prompt_template_versions(template_id, version, body, created_at, author, reason)`（N6） |
+| ネタ | `topics(id, channel_id, title, source: suggest|trend|comment|series|calendar|manual, source_ref, priority, due_at, status, created_at)` |
+| プロジェクト | `projects(id, channel_id, format, language, status, topic_id, title, description, tags_json, publish_at, synthetic_media, youtube_video_id, current_revision, created_at, updated_at)`、`project_revisions(project_id, revision, snapshot_json, author: user|ai|import, reason, created_at)`（`U2`）、`scenes(id, project_id, ord, background_sha256, background_prompt, camera_json, mood, notes)`、`lines(id, scene_id, ord, speaker_id, text, reading_override, accent_json, expression, style_id, emphasis_json, pause_after_ms)` |
+| 素材 | `assets(sha256, kind, ext, bytes, created_at, provenance_json)`（N5）、`asset_refs(owner_kind, owner_id, sha256, role)`（参照数 0 で掃除）、`asset_licenses(sha256, provider, terms_url, credit_text, commercial_ok, checked_at)`、`music_tags(sha256, mood, tempo_bpm, duration_ms, loop_start_ms, loop_end_ms, manual)` |
+| ジョブ | `jobs(id, channel_id, project_id, kind, status, priority, not_before, attempts, max_attempts, lease_owner, lease_until, heartbeat_at, wait_reason, error_code, created_at, started_at, finished_at)`、`job_steps(job_id, step, step_version, inputs_hash, status, output_json, started_at, finished_at, duration_ms, cost_micros)`、`step_cache(step, step_version, inputs_hash, outputs_json, created_at, last_used_at)` |
+| QA | `qa_results(project_id, revision, check_id, result: pass|warn|fail, value_json, created_at)` |
+| YouTube | `uploads(id, project_id, channel_id, request_json, session_uri, bytes_sent, video_id, status, processing_status, failure_reason, created_at, updated_at)`（N19・N20）、`youtube_videos(video_id, channel_id, project_id, title, privacy, published_at, synced_at)`、`quota_ledger(day_pt, channel_id, endpoint, units)` |
+| 分析 | `analytics_daily(video_id, date, views, watch_seconds, avg_view_pct, impressions, ctr, subs_gained, revenue_micros, fetched_at)`（`D1`・`Y5`）、`retention_curves(video_id, fetched_on, curve_json)` |
+| 成長 | `insights(id, channel_id, kind, pattern_json, evidence_json, score, status, created_at)`、`insight_usage(project_id, insight_id)`、`experiments(id, channel_id, factor, variants_json, status)`、`experiment_assignments(project_id, experiment_id, variant)` |
+| 運用 | `autopilot_policies(channel_id, enabled, daily_count, quality_threshold, budget_micros, window_json, paused_reason, paused_at)`（N26）、`schedule_slots(channel_id, weekday, local_time)`、`cost_ledger(id, channel_id, project_id, job_id, provider, model, units_json, cost_micros, at)`、`notifications(id, channel_id, kind, severity, dedupe_key, message_key, args_json, created_at, resolved_at)` |
+| 読み | `reading_entries(surface, reading, accent_json, source, updated_at)`、`reading_candidates(...)`（全チャンネル共通。旧版と同じ） |
+
+- マイグレーションは `crates/picocast-store/migrations/NNNN_name.sql`。適用前に自動バックアップ（R0 実装済み）。適用済みの SQL を書き換えたら `checksum` の不一致で起動を止める。
+- 旧データの取り込みは**このスキーマへの写像**で行い、旧テーブルを持ち込まない。写像表は `docs/migration-inventory.md`（WP-R1-1）に置く。
+
+### 4.3 ジョブと工程（`picocast-pipeline`）
+
+- **工程**は `trait Step { const NAME; const VERSION: u32; type Input: Serialize; type Output: Serialize+DeserializeOwned; async fn run(&self, input, ctx: &StepCtx) -> Result<Output, AppError>; }`。
+- **キャッシュキー** = SHA-256（工程名・工程の版・正規化した入力 JSON・使うモデル ID・工程が読む設定値）。入力に素材を含むときは素材の SHA-256 を入れる（内容でなくパスを入れない）。工程の処理を変えたら `VERSION` を上げる（`xtask` で、工程のソースが変わったのに版が同じなら警告）。
+- **DAG**: 企画 → 台本 → 読み → 音声（行ごと）→ 画像（シーンごと）→ BGM・効果音 → タイムライン → レンダー → QA → 投稿 → 分析。1 行を直すとその行の音声とタイムライン以降だけが再実行される。
+- **リース**: 実行者は `UPDATE jobs SET lease_owner=?, lease_until=? WHERE id=? AND (lease_until IS NULL OR lease_until < ?)` で取る。画面のプロセスと `--tick` のプロセスは同じ仕組みで排他される。心拍（`heartbeat_at`）が設定値より古い実行中ジョブは固着（`QR3`）として、その工程の先頭からやり直す。
+- **待機理由**（`wait_reason`）: `offline`（N15）・`gpu_busy`（`O4`）・`quota`（`T26`）・`budget`（`T25`・N14）・`window`（`O5`）。待機は失敗回数に数えない。
+- **GPU**: GPU を使う工程（画像生成・ローカル LLM・NVENC レンダー）は、プロセス内のセマフォ（既定 1）と空き VRAM の確認を通ってから始める（`O4`）。
+- **キャンセル**: 全工程が `ctx.cancel` を確認し、外部プロセスは `picocast_core::proc` でツリーごと止める。キャンセルのテストを工程ごとに付ける。
+- **スリープ抑止**（`T20`）: 実行中のジョブが 1 件以上ある間だけ有効にする（Windows の `SetThreadExecutionState`。持ち主は `src-tauri`）。
+
+### 4.4 プロバイダ（`ai`・`voice`・`youtube`）
+
+- 種類ごとの trait: `LlmProvider`・`ImageProvider`・`TtsProvider`・`MusicProvider`（任意）・`VideoPlatform`。各 trait の呼び出しは必ず**ゲートウェイ**を通る。
+- **ゲートウェイ**（`picocast_ai::Gateway`）の順序: モデルの解決（工程ごとの明示設定 `O1`、モデル一覧で存在確認 `T31`）→ 費用上限の確認（`T25`）→ 結果キャッシュの確認 → 呼び出し（共通再試行 `T32`: 429・503 と接続断だけ、指数バックオフ、`Retry-After` を尊重、回数上限は設定値）→ 費用台帳への記録 → 来歴（N5）の付与。
+- プロバイダの選択はチャンネル設定で明示する。失敗時に別のプロバイダへ自動で切り替えない（AGENTS.md）。
+- **構造化出力**（N11）: 台本・タイトル案・レビューは JSON スキーマ付きで要求し、`serde` で検証する。検証に失敗したら同じ要求を 1 回だけやり直し、それでも失敗なら `E-AI-SCHEMA`（新設）で止める。
+- 偽プロバイダ（N12）は `picocast-testkit` に置き、本番の設定画面には出さない。開発版（`PicoCast-Dev`）だけで選べる。
+
+### 4.5 画面とエンジンの通信（`src-tauri` ↔ `ui`）
+
+- 呼び出し口（Tauri の command）は `領域_動詞`（例: `project_get`・`project_update_line`・`job_cancel`）。入力と出力は `serde` の構造体で、`channel_id` を必ず入力に含める（G3 の Rust 版）。
+- 型の受け渡し: Rust の型から JSDoc の型定義（`ui/types.gen.js`）を `xtask gen-types` で生成し、生成物の差分が残っていたら `xtask verify` を失敗させる。生成の手段（`specta` など）は採用時にクレートの保守状況を確認して決め、決定を `docs/decisions/` に残す。
+- 失敗は `{code, message_key, args, fix_key}` で返し、画面は文言カタログで表示する。内部の例外文字列・スタックトレースは返さない。
+- 進捗は Tauri のイベント（`job:progress`・`job:finished`・`notify`）で送る。画面は購読するだけで、ポーリングしない。
+- `ui/app/invoke.js` だけが `invoke` を呼ぶ（走査ガード。旧版の `api.js` と同じ考え方）。
+
+### 4.6 エラーコード
+
+- 旧版の `core/error_codes.py` の全コードは**同じコード・同じ意味**で `picocast_core::error` のカタログへ移す（対処手順の文言はカタログのキーへ）。新しいコードは同じ命名規則（`E-領域-内容`）で追加する。
+- カタログの全コードに対処手順があること、未使用のコードが無いことを `xtask verify` で検査する。
+
+### 4.7 設定
+
+- R0 の `settings` レジストリへ、旧版の `EDITABLE_CONFIG` と `config.py` の全定数を棚卸しして移す（WP-R1-1 の棚卸し表に「移す・やめる」を書く）。
+- 設定画面のフォーム・`SPEC.md` の設定一覧は、レジストリから生成する（G2）。
+
+### 4.8 テストの層
+
+| 層 | 内容 | 費用 |
+|---|---|---|
+| 単体 | 各クレートの関数。固定時計・一時 DB | 0 |
+| 性質 | 字幕の組版・タイムライン合成を `proptest` で（はみ出さない・重ならない・時刻が単調増加。`E2`） | 0 |
+| 契約 | 各プロバイダの実装が trait の約束を守るか（偽・本物共通の検査） | 0 |
+| 録画再生 | 実 API の応答を一度記録し、テストでは再生（`E1`）。秘密値・個人情報は記録時に除き、除けていなければ記録を拒否 | 記録時だけ |
+| 同等性 | 旧版オラクル（N1）の JSON と Rust の結果を比べる | 0 |
+| ゴールデン | 固定の台本・素材・シードで動画を作り、尺・ラウドネス・字幕位置・代表フレームの特徴量を基準と比べる（`QR6`）。外部ソフトの版も基準に含める（N13） | 0（ffmpeg が必要） |
+| 画面 | Playwright の撮影検査（PicoAgent の `tools/screenshots` 方式）。偽プロバイダのデモチャンネルで撮る | 0 |
+
+---
+
+## 5. 作業パッケージ（WP）
+
+- **1 つの WP = 1 つのブランチ＋1 つの PR**（小さい WP はまとめてよい）。依存が満たされたものから上から順に着手する。
+- 完了条件を満たし、`cargo xtask verify` が緑になるまで「完了」にしない。旧版に触る WP は、旧版の関連テストも実行する。
+- 「取り込む ID」の中身は §0 の正本を読む。
+
+### R0 の残り（土台）
+
+| WP | 内容（取り込む ID） | 依存 | 完了条件 |
+|---|---|---|---|
+| WP-R0-1 | 文書の整合: §2 の X1〜X5 を各設計書と HANDOFF に反映し、HANDOFF のタスク表を本書の WP 表への参照に置き換える | なし | 設計書間に矛盾する記述が無い。HANDOFF に完了済みの行が残っていない |
+| WP-R0-2 | 旧版の Python 3.12＋`uv` への切替（`DESIGN_rust_rewrite.md` §12.4。パスは現位置） | なし。自動運用と予約投稿の無い時間帯 | 旧版の全テストが切替前と同数成功。サンプル 1 本の生成・レンダー。`start.ps1`・`README.md` が `uv` 前提 |
+| WP-R0-3 | ログの中身: `tracing` の初期化（`channel_id`・`job_id`・工程名の文脈、日ごとのファイル、秘密値を出さない）、ログの保存期間と容量上限（N10）、異常終了の記録と次回起動時の通知（`E5`） | なし | パニックを起こすテストで記録が残り、次回起動の関数が検出する。上限を超えたログが消える |
+| WP-R0-4 | 保存先の危険検出（N7）とデータの置き場（`%APPDATA%\PicoCast` / `PicoCast-Dev`）の確定 | なし | 同期フォルダ・ネットワークドライブを模したパスで開くのを拒否するテスト |
+| WP-R0-5 | エラーコードのカタログ移植（§4.6）、文言カタログの土台（`ui/i18n/ja.json`）、スキルの追加（`E8`: プロバイダの追加・QA 検査の追加・ゴールデンの基準更新・旧データの取り込み。中身は該当 WP の完了時に書き足す）、文書の自動点検（N4、B） | なし | 旧版の全コードが同じ意味で引ける。カタログ検査が `xtask verify` に入っている |
+
+### R1 取り込みと棚卸し
+
+| WP | 内容（取り込む ID） | 依存 | 完了条件 |
+|---|---|---|---|
+| WP-R1-1 | 機能の棚卸し `docs/migration-inventory.md`: `SPEC.md` の全節・`web_app/routes` の全 API・画面 19 枚・`config.py` の全定数・旧 DB の全テーブルを 1 行ずつ「移す / 作り直す / やめる」と、移す先（WP 番号・新テーブル）で分類（`DESIGN_rust_rewrite.md` §9.4） | なし | 表に無い機能が無い（`xtask` で routes の関数一覧・config の定数一覧と表を突き合わせる） |
+| WP-R1-2 | `picocast.db` スキーマ v1（§4.2）とリポジトリ層（テーブルごとの読み書き関数。SQL は `picocast-store` の中だけ） | WP-R1-1 | 全テーブルの往復テスト。古い版の DB からのマイグレーションテスト（`QR5`）の仕組み |
+| WP-R1-3 | 取り込み（設定側）`xtask import-legacy --settings`: チャンネル・設定・テンプレート（版 1 として）・キャラクター・読み辞書と候補・BGM・投稿枠・自動運用・秘密値（旧版の AAD なし暗号を復号して、Rust 版の方式で暗号化し直す） | WP-R1-2 | 本番のコピーで件数と主要な値が全件一致。取り込み元を書き換えていない（取り込み前後でハッシュが同じ） |
+| WP-R1-4 | 取り込み（チャンネル側）: 各チャンネルの `metadata.db`（動画・台本・YouTube の状態・分析）と `output/` の素材を内容アドレスへ。放置ジョブの区別（N3）。台本記法は WP-R2-2 の解析器で Project / Scene / Line に変換（それまでは原文を `project_revisions` に保存） | WP-R1-2 | 同上。素材の SHA-256 がすべて照合できる。何度実行しても同じ結果（冪等） |
+| WP-R1-5 | 立ち絵 PSD のレイヤー PNG＋JSON 書き出し（`tools/export_psd_layers.py`。旧版の `psd-tools` を使う一度きりの道具）と、`characters.layer_manifest_sha256` への登録 | WP-R1-4 | 全キャラクター・全表情で、旧版の合成結果と画素が一致（許容差は設定値） |
+| WP-R1-6 | 照合レポート: 取り込み結果の件数・主要な値・不一致を一覧で出し、不一致があれば終了コードで失敗 | WP-R1-3・4 | 本番のコピーで不一致 0 |
+| WP-R1-7 | 旧版テストの環境隔離（N2）と旧版オラクル（N1）: 入力コーパス（`tests/oracle/inputs/`。個人データを含めない）と記録（`tests/oracle/expected/*.json`）。対象は読みの正規化・台本記法の解析・メタデータの組み立て・投稿枠の計算・分析スコア・量産判定 | なし（WP-R0-2 の後が望ましい） | 空の環境で旧版の全テストが緑。オラクルの記録が CI で再現する。分析スコアは横展開判定の厳格化（`d949061`）を含めた現行の結果を記録する |
+| WP-R1-8 | 安全網: PC 移行用の暗号化書き出しと取り込み（N8）、復元の訓練（N9）、バックアップの別置き（`O7`） | WP-R1-2 | 書き出し → 別の一時環境へ取り込み → 照合が一致。壊したバックアップで訓練が失敗を通知 |
+
+### R2 生成エンジン
+
+| WP | 内容（取り込む ID） | 依存 | 完了条件 |
+|---|---|---|---|
+| WP-R2-1 | `picocast-ai`: ゲートウェイ（§4.4）、Gemini・Ollama・OpenAI のプロバイダ、モデル一覧の検証（`T31`）、工程ごとのモデル設定（`O1`）、録画再生（`E1`）、偽プロバイダと `picocast-testkit`（N12） | R0 | 録画した応答で全プロバイダの契約テストが緑。429・503 の再試行と費用台帳のテスト |
+| WP-R2-2 | 台本: 構造化出力（N11）、台本記法の解析と書き出し（旧版 `core/parser.py` 互換。N1 で一致確認）、プロンプトの組み立て（旧版 `core/script_prompts.py` 相当。テンプレートは DB の版から。N6）、掛け合い規則（AGENTS.md）の組み込み | WP-R2-1・WP-R1-7 | 記法の解析がオラクルと一致。偽プロバイダで台本 → Project が作れる |
+| WP-R2-3 | `picocast-voice`: 読みの正規化（`sudachi.rs`＋共通辞書）、VOICEVOX プロバイダ（末尾 0.5 秒の無音付加を含む）、アクセントの上書き（`V1`）、感情からのスタイル選択（`V2`）、読みの点検（`V6`、LLM 部分は `pipeline` 側） | WP-R1-7 | 読みがオラクルと一致（差分は意図した改善だけを一覧で認める）。VOICEVOX への要求パラメータが旧版と一致（録画） |
+| WP-R2-4 | `picocast-media` 字幕: 文節分割（BudouX）＋禁則＋`cosmic-text` の実測で改行（`Q2`）、強調語、表示時間の下限、性質テスト（`E2`） | R0 | はみ出し 0・1 文字だけの行 0・禁則違反 0 を性質テストで保証 |
+| WP-R2-5 | 音声ミックス: 2 パスのラウドネス補正（-14 LUFS / -1 dBTP）、ダッキング、話者交代・句読点の間とジャンルごとの間の型（`Q1`・`V5`）、`ebur128` による測定 | R0 | 固定素材で -14 ±1 LUFS、True Peak -1 dBTP 以下 |
+| WP-R2-6 | キャラクター合成: レイヤー PNG の合成、表情、音素に合わせた口の形（`V3`）、まばたき、話者の軽い動き（`P3`）。表情 PNG 使用中は口パク・まばたきの差分を無効にする規則（AGENTS.md） | WP-R1-5・WP-R2-3 | 旧版と同じ台詞で口の開閉の時刻が音声と ±1 フレーム。二重口・二重目が出ない回帰テスト |
+| WP-R2-7 | 背景のズーム・パンとトランジション（`Q3`）、タイムライン合成、レンダー（エンコーダの自動選定 `T15`、プレビュー用の低解像度レンダー）、外部ソフトの版の記録（N13） | WP-R2-4〜6 | 同じ台本で尺 ±0.1 秒・字幕の数と表示時間が旧版と一致（`DESIGN_rust_rewrite.md` §9.3）。プレビューが 60 秒の Shorts で 10 秒以内 |
+| WP-R2-8 | 画像: Gemini 画像・Stable Diffusion WebUI のプロバイダ、チャンネルの画風プロファイル（`P5`）、画像の自動検査と上限付きの再生成（`Q3`）、有名キャラクターに似せない指定と検査（`P6`） | WP-R2-1 | 録画で契約テスト。検査の不合格が上限回数で保留になる |
+| WP-R2-9 | サムネ: チャンネルのテンプレート、煽り文の生成、実測で文字を収める（字幕と同じ部品）、縮小表示の読みやすさの検査、3 案（`Q4`） | WP-R2-4・8 | 3 案が作られ、文字のはみ出し 0 |
+| WP-R2-10 | パイプライン: 工程・キャッシュ・DAG・永続ジョブ・リース・心拍・固着の検出（`QR3`）・キャンセル・待機理由（N15・`O4`）・スリープ抑止（`T20`）・来歴（N5）（§4.3） | WP-R1-2 | 1 行を直したときの再レンダーが全体の 1/5 以下の時間。強制終了のテストで続きから再開 |
+| WP-R2-11 | 事前点検（`QR1`）と外部サービスの起動管理（`QR2`。起動したものだけを止める） | WP-R2-10 | 欠けたサービスがあると開始前に、エラーコード付きで止まる |
+| WP-R2-12 | QA ゲート: 検査カタログ（音声・映像・字幕・内容・規約・メタデータ。v3 §7）に、事実と創作の区別（`S7`）・実在の人や事件の検出（`S8`）・広告に向く表現の採点（`S9`）・キャラクターの規約（N16）・Shorts の形式（N17）・量産判定（`T10`）・AI 申告（`T18`）・BGM と画像のライセンス（`T39`）を含める | WP-R2-7・9 | 各検査に「合格する例・落ちる例」のテスト。自動運用は不合格で保留 |
+| WP-R2-13 | 台本の質: 冒頭の 3 案と採点での選択（`S3`）、台本全体のレビュー（`Q5`。掛け合い規則の採点・根拠 URL の保存・構成の型）、Shorts のループ構成の検査（`S4`） | WP-R2-2・12 | 偽プロバイダで 3 案の選択が動く。録画で採点の解析が動く |
+| WP-R2-14 | ゴールデンテスト（`QR6`）と、読み・音声・動画の同等性（§9.3）の自動判定。`xtask golden --update` は理由の記録を必須にする | WP-R2-7 | CI で緑。描画を 1 画素ずらすと落ちることを確認 |
+| WP-R2-15 | 費用の見積もりと上限（N14・`T25`）、チャンネルごとの自動停止（N26）、Gemini の一括処理とキャッシュ（`O2`・`O3`、B。料金と条件は採用時に公式で確認し、確認日を残す）、プロンプトの評価セット（N18、B） | WP-R2-10 | 上限を超える見積もりで開始しない。連続失敗で自動停止して通知 |
+
+### R3 YouTube
+
+| WP | 内容（取り込む ID） | 依存 | 完了条件 |
+|---|---|---|---|
+| WP-R3-1 | OAuth（ループバック方式＋PKCE）、チャンネルごとのトークン保存と更新後の再保存、失効の事前検知（N21） | R0 | 録画で更新・失効のテスト。「テスト」状態の 7 日失効の警告が出る |
+| WP-R3-2 | 再開可能アップロードと二重投稿の防止（N19）、クォータ台帳（太平洋時間の日付。`T26`）、時計のずれ検出（N22、B） | WP-R3-1 | 送信途中で止めたテストで続きから送れる。状態不明時に YouTube 側の照合で判断 |
+| WP-R3-3 | メタデータ: タイトル・説明・タグ（上限検査 N24）、構成からのチャプター（`S5`）、クレジットの自動挿入、AI 申告（`T18`）、子ども向けでない設定の常時送信（`Y4`）、言語別のタイトルと説明（`T13` L1）、関連動画への誘導文（`Y7`、C） | WP-R2-2・WP-R1-7 | オラクルと同じ要求が作られる（影運用の比較の土台） |
+| WP-R3-4 | 再生リスト、固定コメント（返信を促す質問 `Y2`）、サムネの設定、字幕（翻訳字幕 `T13` L2、日本語字幕 N23 は B） | WP-R3-2 | 録画で各 API の契約テスト |
+| WP-R3-5 | 投稿後の処理状態の監視（N20）と通知 | WP-R3-2 | 却下・処理失敗の録画で通知が出る |
+| WP-R3-6 | Analytics: 日次の指標の保存（`D1`）、視聴維持率、旧版と同じスコアと横展開候補（オラクル）、収益指標（`Y5`。追加の権限は採用時に公式で確認） | WP-R3-1・WP-R1-7 | 同じ期間でスコアがオラクルと一致 |
+
+### R4 画面
+
+| WP | 内容（取り込む ID） | 依存 | 完了条件 |
+|---|---|---|---|
+| WP-R4-1 | `src-tauri`: 単一起動・トレイ・Windows 通知・呼び出し口（§4.5）・型の生成・イベント・`--tick`（画面なしで 1 工程進めて終了） | WP-R2-10 | `--tick` と画面の同時起動で排他される |
+| WP-R4-2 | `ui` の土台: 見本の `:root` を `ui/styles/tokens.css` へ、共通部品（呼び出し・時刻・トースト・確認・ジョブ進捗・読み込み中/空/エラー）、文言カタログ、コントラスト検査、キーボード操作とラベル（`U7`、C） | WP-R4-1 | `node --test` で部品の契約テスト。コントラスト検査が `xtask verify` に入る |
+| WP-R4-3 | ホーム: 今日の予定・進行中・保留・投稿済み、通知欄（`QR4`）、緊急停止（N25） | WP-R4-2 | 撮影検査。緊急停止のテスト（実行中ジョブが止まる） |
+| WP-R4-4 | つくる（3 ステップ） | WP-R4-2・WP-R2-13 | 偽プロバイダで 3 ステップを通せる |
+| WP-R4-5 | スタジオ: シーン一覧・プレビュー・台詞と読みとアクセント（`V1`）と表情と背景と BGM の編集・その部分だけの再生成・版の履歴と戻す（`U2`）・シーンの並べ替えとつながりの点検（`U5`）・ショートカット | WP-R4-2・WP-R2-10 | 1 行修正 → プレビューの更新が撮影検査で確認できる |
+| WP-R4-6 | 自動運用: チャンネルごとの方針・保留一覧と承認・カレンダー（`U4`）・まとめて操作（`U3`）・夜間の時間帯（`O5`、C） | WP-R4-2 | 撮影検査 |
+| WP-R4-7 | ライブラリ: 動画・素材・BGM の取り込み支援と規約プリセット・自動タグ付け・自動選曲（`DESIGN_quality.md` §7・`T39`） | WP-R4-2 | ドラッグ取り込みでライセンスとクレジットが入る |
+| WP-R4-8 | 分析: 伸びた動画・伸びない動画・横展開候補（R6 で勝ちパターンを追加） | WP-R3-6・WP-R4-2 | 撮影検査 |
+| WP-R4-9 | 設定: レジストリから生成するフォーム、チャンネル、接続、健康診断（`T23`）、データ管理（バックアップ・書き出し N8）、テンプレートの版（N6）、チャンネルの複製（N27、B） | WP-R4-2 | 棚卸し表の設定項目がすべて画面にある |
+| WP-R4-10 | 画面全体の撮影検査（Playwright）、コマンドパレット（`U1`、B）、Discord への通知（`O8`、B） | WP-R4-3〜9 | 主要画面の撮影検査が緑。棚卸し表の「移す・作り直す」がすべて Rust 版で操作できる |
+
+### R5 影運用と切り替え
+
+| WP | 内容（取り込む ID） | 依存 | 完了条件 |
+|---|---|---|---|
+| WP-R5-1 | 影運用: 本番データのコピーで Rust 版を動かし、投稿は要求の作成までで止める。旧版と生成結果・QA の値・投稿要求を毎日比べる差分レポート | R2〜R4 | 2 週間で重大な差分 0 |
+| WP-R5-2 | OS タスクの登録と `--tick`（`T19`）、ディスクの自動管理（`T22`）と完成動画の退避（`O6`、C） | WP-R4-1 | 画面を閉じた状態・PC 再起動直後でも予定どおり進む |
+| WP-R5-3 | 二重運用の防止（N30）とチャンネルごとの切り替え・戻し。旧版側は「運用元が Rust 版のチャンネルでは自動運用と投稿を拒否する」最小変更だけを入れる | WP-R5-1 | 両方から同じチャンネルへ投稿できないことをテストで確認 |
+| WP-R5-4 | 30 日の無人試験（`DESIGN_quality.md` §1）→ 旧版の不要コードの削除（Git 管理外のデータは消さない） | WP-R5-3 | §1 の指標をすべて満たす |
+
+### R6 伸ばす
+
+| WP | 内容（取り込む ID） |
+|---|---|
+| WP-R6-1 | 勝ちパターン（Insight）の抽出・企画への反映・効果の追跡（v3 §8）、離脱箇所とシーンの対応（`D3`）、サムネのクリック率予測（`P4`） |
+| WP-R6-2 | ネタ在庫: コメントからのネタ（`S1`）、参考チャンネルの観測（`S2`）、シリーズ化（`S6`）、季節・記念日（N28）、チャンネル横断の重複検査（N29） |
+| WP-R6-3 | 投稿時刻の提案（`Y1`）、投稿後の差し替え提案（`Y6`）、コメント返信の下書き（`Y3`）。いずれも提案と確認ボタンまで（自動では変えない） |
+| WP-R6-4 | 実験の仕組み（`D2`）、週次・月次レポート（`D4`・`DESIGN_quality.md` §6） |
+| WP-R6-5 | 残りの B・C: 効果音の自動配置（`V4`）、実写素材（`P1`）、図解（`P2`）、Shorts のループの改善、計測（`E3`・`E4`）、段階公開（`E6`）、変更履歴の下書き（`E7`）、シーンの型（`U6`）、Pico シリーズ連携（`K1`〜`K3`）、来歴の埋め込み（N31） |
+
+---
+
+## 6. Codex への渡し方
+
+### 6.1 1 回の依頼の型
+
+```
+PicoCast の作業。AGENTS.md → HANDOFF.md → DESIGN_implementation_plan.md の順に読み、
+§5 の WP-xx-n を実装して。取り込む ID の中身は §0 の正本を読むこと。
+完了条件を満たし、cargo xtask verify が緑になったら、ブランチを push して PR を作り、
+HANDOFF.md の進捗を更新すること。判断が要る点は推奨で決めて HANDOFF の決定事項に書くこと。
+```
+
+### 6.2 PR 本文の型
+
+```
+## 対象
+WP-xx-n（取り込んだ ID: ...）
+## 変更内容
+## 詳細設計（型・DB・呼び出し口・画面の構成。新しく決めたもの）
+## 検証（実行したコマンドと結果）
+## 未確認・残り（次の WP へ送るもの）
+```
+
+### 6.3 Codex が止まってよい条件
+
+AGENTS.md の例外（利用者のアカウント・外部への操作、課金、取り消せない破壊的操作）だけ。それ以外は推奨で決めて進める。特に次は**実行の直前に 1 行で知らせて進める**:
+
+- 旧版の Python 3.12 への切替（WP-R0-2）と本番データを使う取り込み（WP-R1-3・4。取り込み元は読み取りだけ）
+- 有料 API の録画（WP-R2-1・8、WP-R3。録画は 1 回だけ、費用の見込みを先に書く）
+- チャンネルの切り替え（WP-R5-3）
+
+### 6.4 並行してよい WP
+
+依存が無いため、別々の Codex に同時に渡してよい組: WP-R0-3 / WP-R0-4 / WP-R0-5 / WP-R1-1 / WP-R1-7。R2 では WP-R2-3・WP-R2-4・WP-R2-5 が互いに独立。同じファイル（特に `picocast-store` のマイグレーション）を触る WP は同時に渡さない。
+
+---
+
+## 7. 完了の判定
+
+- マイルストーンの完了条件は `DESIGN_rust_rewrite.md` §10、数値の物差しは `DESIGN_quality.md` §1。
+- 本書の WP がすべて完了しても、棚卸し表（WP-R1-1）に「移す」で残っている行があれば移行完了と認めない。
+
+---
+
+## 8. 本書で決めたこと（確認なしで決定。利用者が後から直す）
+
+| 項目 | 決定 | 理由 |
+|---|---|---|
+| Python 版の置き場 | 現位置のまま。`legacy/` は作らない（2026-10-16 利用者決定を設計書にも反映） | HANDOFF の利用者決定 |
+| 同等性の判定 | 旧版オラクル（N1）による自動判定を基本にし、目視は差分の確認だけ | 人の確認に頼らない |
+| QA の置き場 | `picocast-pipeline` の中（独立クレートにしない） | QA は工程の 1 つで、DAG・キャッシュと一体 |
+| 構造化出力 | 台本は JSON スキーマで生成し、独自記法は取り込み・書き出しだけ | 解析の失敗をなくし、スタジオと直結 |
+| 旧版への変更 | WP-R0-2（3.12）・WP-R1-7（テストの隔離・オラクル）・WP-R5-3（二重運用の拒否）だけ。いずれも機能追加ではない | 凍結の方針を守りつつ、移行の安全に必要な最小限 |
+| N 系列の優先度 | §3 の表のとおり | 動画の伸び・運用の安定・データの安全に直結するものを A |
+| 料金・規約の確認 | `O2`・`O3`・`P1`・`Y5`・N17・N23 は採用時に公式で確認し、確認日を設定の説明か PR に残す | 情報が変わるため |

@@ -29,6 +29,8 @@ class ErrorDef:
 # 「原因不明・対処不明」のエラーをユーザーに出さないことを方針とする。
 # ─────────────────────────────────────────────────────────────────────────────
 ERROR_CATALOG: dict[str, ErrorDef] = {
+    "E-WEB-REQUEST": ErrorDef("E-WEB-REQUEST", "この画面からの操作を確認できないため拒否しました。", "auth", False,
+                              "アプリの起動時に表示されたローカルURLを開き、画面を再読み込みしてから操作してください。"),
     # 画像生成（Gemini / Nano Banana / Stable Diffusion WebUI）
     "E-IMG-BUSY":  ErrorDef("E-IMG-BUSY",  "一時的に混雑しています（提供元サーバー側の高負荷）。残高・APIキー・台本やプロンプトの問題ではありません。", "api_busy", True,
                             "数分おいてから履歴の再生成（背景再利用）で未生成分だけ作り直してください。"),
@@ -81,6 +83,16 @@ ERROR_CATALOG: dict[str, ErrorDef] = {
                                   "active channel profile の genre_profile と profile.yaml を確認してください。"),
     "E-LICENSE-LIMIT": ErrorDef("E-LICENSE-LIMIT", "現在のライセンスエディションの利用上限に達しました。", "license", False,
                                 "設定画面「製品管理」で上位エディションに切り替えるか、上限の範囲内で実行してください。"),
+    "E-LICENSE-MACHINE": ErrorDef("E-LICENSE-MACHINE", "このPCの端末コードを取得できませんでした。", "license", False,
+                                  "対応OS（Windows / macOS）で実行し、端末情報の読み取り権限を確認してください。解決しない場合はエラーコードを添えてサポートへ連絡してください。"),
+    "E-LICENSE-INVALID": ErrorDef("E-LICENSE-INVALID", "ライセンスキーまたは証明書を確認できませんでした。", "license", False,
+                                  "購入キー（NVF1.）またはこのPC用の証明書（NVA1.）を、それぞれの欄へ先頭から末尾まで省略せず貼り付けてください。解決しない場合は注文番号を添えてサポートへ連絡してください。"),
+    "E-LICENSE-LIMIT-DEVICES": ErrorDef("E-LICENSE-LIMIT-DEVICES", "ライセンスの登録台数上限に達しました。", "license", False,
+                                       "使っていないPCで「このPCの登録を解除」を実行してください。故障などで解除できない場合は注文番号を添えてサポートへ連絡してください。"),
+    "E-LICENSE-EXPIRED": ErrorDef("E-LICENSE-EXPIRED", "アクティベーション証明書の期限が切れています。", "license", False,
+                                 "インターネット接続を確認して設定画面から証明書を更新してください。オフライン専用の場合は手動証明書をサポートへ申請してください。"),
+    "E-LICENSE-API": ErrorDef("E-LICENSE-API", "ライセンス認証サーバーでの処理に失敗しました。", "license", True,
+                             "接続を確認して設定画面から再試行してください。API未設定・オフライン専用の場合は手動アクティベーション証明書を申請し、貼り付けてください。"),
     # ディスク
     "E-DISK": ErrorDef("E-DISK", "ディスクの空き容量が不足している可能性があります。", "system", False,
                        "出力先ドライブの空き容量を確保してから再実行してください。"),

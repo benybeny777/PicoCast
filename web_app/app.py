@@ -62,7 +62,10 @@ async def _lifespan(app):
     from core.metadata_db import close_all_connections
 
     from core.metadata_db import initialize_db
-    initialize_db()  # 起動時に DB を確実に初期化しログを残す
+    from core.channel_profile import get_active_profile
+    # 初回セットアップ前はprofile別DBの保存先がまだない。登録後の経路で初期化する。
+    if get_active_profile() is not None:
+        initialize_db()
     _start_job_runner()
     register_shutdown_hook("job_runner", _stop_job_runner)
     register_shutdown_hook("metadata_db", close_all_connections)
@@ -100,6 +103,9 @@ async def _lifespan(app):
 
     # 固定コメント投稿タスクが exe 移動などでズレていれば起動時に自動修正する
     threading.Thread(target=_self_heal_fixed_comment_task, daemon=True, name="fixed-comment-task-heal").start()
+    # 証明書期限が近い場合だけ更新し、通信失敗は設定画面に表示する。
+    from core.license_manager import renew_activation_if_due
+    threading.Thread(target=renew_activation_if_due, daemon=True, name="license-activation-renew").start()
     yield
     # ── shutdown フェーズ（Ctrl+C / SIGTERM / /api/shutdown すべてここを通る） ──
     run_lifespan_shutdown()
@@ -213,6 +219,9 @@ app = FastAPI(
     description=f"{config.WEB_APP_NAME} ローカルWeb UI",
     lifespan=_lifespan,
 )
+import secrets
+from web_app.local_api_security import LocalApiSecurityMiddleware
+app.state.local_api_token = secrets.token_urlsafe(32)
 
 # 静的ファイル
 # onefile(exe)では本モジュールはエントリのためルートに平坦化され __file__ が展開先直下を指す。
@@ -242,6 +251,9 @@ async def setup_redirect_middleware(request: Request, call_next):
         if get_active_profile() is None:
             return RedirectResponse(url="/setup", status_code=303)
     return await call_next(request)
+
+# 最後に登録したミドルウェアが最外周になる。リダイレクトや静的配信も検査する。
+app.add_middleware(LocalApiSecurityMiddleware, token=app.state.local_api_token)
 
 # ── ルート登録 ────────────────────────────────────────────────────────────
 from web_app.routes.pages import router as pages_router

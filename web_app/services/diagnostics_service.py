@@ -27,6 +27,7 @@ _SECRET_PATTERNS = (
     "credential",
     "password",
     "license_id",
+    "license_activation",
     "buyer",
     "purchaser",
     "email",

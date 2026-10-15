@@ -285,7 +285,7 @@ def test_claim_not_released_when_already_posted(tmp_path):
 # ── API ───────────────────────────────────────────────────────────────────────
 
 def test_api_fixed_comment_task_status_and_toggle(monkeypatch):
-    from fastapi.testclient import TestClient
+    from conftest import local_api_client as TestClient
     from web_app.app import app
     import core.fixed_comment_task as t
 

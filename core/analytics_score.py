@@ -59,6 +59,24 @@ def _append_action_suffix(action: str, suffix: str) -> str:
     return f"{action}・{suffix}"
 
 
+def _expansion_pattern_key(item: dict[str, Any]) -> str:
+    """横展開の同一構造判定に使う明示メタデータを返す。"""
+    for key in ("genre_group", "generation_purpose", "character_pattern"):
+        value = str(item.get(key) or "").strip()
+        if value:
+            return f"{key}:{value}"
+    return ""
+
+
+def _replace_expansion_action_with_observation(action: str) -> str:
+    """単体スコアによる横展開表現を参考観察へ降格する。"""
+    text = str(action or "")
+    if "横展開" not in text:
+        return text
+    suffixes = [part for part in text.split("・") if part and "横展開" not in part]
+    return "・".join(["参考観察", *suffixes])
+
+
 def _should_mark_audio_cutoff_improvement(item: dict[str, Any]) -> bool:
     if item.get("analysis_status") != "analyzable":
         return False
@@ -378,7 +396,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
     else:
         min_pct_expansion = 40.0  # Long は CTR >= 8 と平均視聴率 40%以上で横展開
     above_expansion_min = avg_percent >= min_pct_expansion
-    long_expansion_ready = video_type == "Long" and ctr_value >= 8 and avg_percent >= 40
+    long_expansion_ready = video_type == "Long" and _long_expansion_metrics_ok(ctr_value, avg_percent)
 
     # ルール2: 動画種別ごとのベーススコア
     if video_type == "Shorts":
@@ -406,7 +424,7 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
             score, action = "E", "要見直し"
     else:
         # Long（180秒+）
-        if ctr_value >= 8 and avg_percent >= 40:
+        if _long_expansion_metrics_ok(ctr_value, avg_percent):
             score, action = "A", "横展開"
         elif ctr_value >= 5 and avg_percent >= 30:
             score, action = "B", "継続"
@@ -484,33 +502,73 @@ def score_item(item: dict[str, Any]) -> dict[str, Any]:
         "action": action,
         "blacklist_candidate": False, "weak_reason": "", "avoid_pattern": "",
     })
+    result["action"] = _replace_expansion_action_with_observation(result["action"])
+    result["expansion_eligible"] = False
+    result["expansion_pattern_key"] = _expansion_pattern_key(result)
     return apply_audio_cutoff_improvement_action(result)
 
 
 def score_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     scored = [score_item(item) for item in items]
 
-    # views 上位20% かつ avg_percent >= 65 → action = 横展開・微改善
-    # viewsだけで横展開しない: 最低視聴率ライン(Shorts:45% / ShortLong:50%)も必須
-    # 判定保留(is_provisional)は昇格しない
-    analyzable_views = sorted(
-        _int(item.get("views")) for item in scored
-        if item.get("analysis_status") == "analyzable"
-    )
-    _EXPANSION_MIN = {"Shorts": 45.0, "ShortLong": 50.0}
-    if analyzable_views:
-        top20_threshold = analyzable_views[max(0, int(len(analyzable_views) * 0.8))]
-        for item in scored:
-            vtype = item.get("video_type", "Long")
-            min_pct = _EXPANSION_MIN.get(vtype, 0.0)
-            if (
-                item.get("analysis_status") == "analyzable"
-                and not item.get("is_provisional")
-                and _int(item.get("views")) >= top20_threshold
-                and _num(item.get("average_percentage_viewed")) >= max(65, min_pct)
-                and item.get("action") != "横展開"
-            ):
-                item["action"] = "横展開・微改善"
+    from config import config as _cfg_expansion
+
+    analyzable = [
+        item for item in scored
+        if item.get("analysis_status") == "analyzable" and not item.get("is_provisional")
+    ]
+    views_by_type: dict[str, list[int]] = {}
+    for item in analyzable:
+        views_by_type.setdefault(str(item.get("video_type") or ""), []).append(_int(item.get("views")))
+    average_views = {
+        video_type: sum(values) / len(values)
+        for video_type, values in views_by_type.items()
+        if values
+    }
+
+    eligible_by_pattern: dict[str, list[dict[str, Any]]] = {}
+    for item in analyzable:
+        video_type = str(item.get("video_type") or "")
+        views = _int(item.get("views"))
+        cohort_average = average_views.get(video_type, 0.0)
+        distribution_ok = (
+            views >= _cfg_expansion.ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS
+            or (
+                cohort_average > 0
+                and views >= cohort_average * _cfg_expansion.ANALYTICS_EXPANSION_VIEWS_MULTIPLIER
+            )
+        )
+        reaction_ok = (
+            _num(item.get("like_rate")) >= _cfg_expansion.ANALYTICS_EXPANSION_MIN_LIKE_RATE
+            and (
+                _int(item.get("comments")) >= 1
+                or _int(item.get("subscribers_net")) >= 1
+            )
+        )
+        if video_type in ("Shorts", "ShortLong"):
+            metrics_ok = (
+                _num(item.get("average_percentage_viewed"))
+                >= _cfg_expansion.ANALYTICS_EXPANSION_MIN_AVG_PCT_SHORTS
+                and _num(item.get("average_view_duration"))
+                >= _cfg_expansion.ANALYTICS_EXPANSION_MIN_AVG_DURATION_SHORTS
+            )
+        else:
+            metrics_ok = _long_expansion_metrics_ok(
+                _num(item.get("ctr")), _num(item.get("average_percentage_viewed"))
+            )
+        pattern_key = _expansion_pattern_key(item)
+        item["expansion_eligible"] = bool(distribution_ok and metrics_ok and reaction_ok and pattern_key)
+        item["expansion_pattern_key"] = pattern_key
+        if item["expansion_eligible"]:
+            eligible_by_pattern.setdefault(pattern_key, []).append(item)
+
+    for pattern_items in eligible_by_pattern.values():
+        if len(pattern_items) < _cfg_expansion.ANALYTICS_EXPANSION_MIN_PATTERN_COUNT:
+            for item in pattern_items:
+                item["action"] = "参考観察・単発"
+            continue
+        for item in pattern_items:
+            item["action"] = "横展開候補"
 
     for item in scored:
         apply_audio_cutoff_improvement_action(item)
@@ -589,10 +647,7 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
     # 実績ありのみ分析対象（予約中・データ待ち・対象外は除外）
     scored = [item for item in items if item.get("analysis_status") == "analyzable"]
     data_wait = [item for item in items if item.get("analysis_status") == "data_wait"]
-    strong = [
-        item for item in scored
-        if item.get("score") in ("A", "B") or _num(item.get("average_percentage_viewed")) >= 70
-    ]
+    expansion = [item for item in scored if "横展開候補" in str(item.get("action") or "")]
     top_views = sorted(scored, key=lambda x: _int(x.get("views")), reverse=True)[:limit]
     top_retention = sorted(scored, key=lambda x: _num(x.get("average_percentage_viewed")), reverse=True)[:limit]
     top_like_rate = sorted(
@@ -614,7 +669,7 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
         reverse=True,
     )[:limit]
 
-    lines = ["今回の実績データから見える優先横展開:"]
+    lines = ["今回の実績データは勝ちパターンではなく参考観察として扱う:"]
     if meta:
         lines.append("・" + analytics_period_label(
             days=meta.get("days"),
@@ -629,7 +684,12 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
             from config import ANALYTICS_CHANNEL_LEGACY_NOTE, ANALYTICS_CHANNEL_REMAKE_DATE
             lines.append(f"・チャンネル登録者増減: +{ch_gained} -{ch_lost} 純増{ch_net}")
             lines.append(f"・注記: {ANALYTICS_CHANNEL_LEGACY_NOTE}（リメイク開始: {ANALYTICS_CHANNEL_REMAKE_DATE}）")
-    lines.append(f"・対象動画: {len(scored)}件 / 強い候補: {len(strong)}件 / データ待ち: {len(data_wait)}件")
+    lines.append(f"・対象動画: {len(scored)}件 / 横展開候補: {len(expansion)}件 / データ待ち: {len(data_wait)}件")
+    if expansion:
+        lines.append("・横展開対象: " + " / ".join(_fmt_title(item) for item in expansion[:3]))
+    else:
+        lines.append("・横展開対象: なし")
+        lines.append("・理由: 現時点では、積極的に真似するほど強い数値と同一構造2本以上の再現性が確認できないため")
     if top_views:
         lines.append("・再生数上位: " + " / ".join(
             f"{_fmt_title(item)} views{_int(item.get('views'))}" for item in top_views[:3]
@@ -643,17 +703,25 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
             f"{_fmt_title(item)} {_num(item.get('like_rate')):.2f}%" for item in top_like_rate[:3]
         ))
     if data_wait_notable:
-        lines.append("・data_wait注目: " + " / ".join(
+        lines.append("・data_wait参考観察: " + " / ".join(
             f"{_fmt_title(item)} views{_int(item.get('views'))} likes{_int(item.get('likes'))} comments{_int(item.get('comments'))}"
             for item in data_wait_notable[:3]
         ))
-    lines.append("・viewsだけで判断せず、平均視聴率、平均視聴時間、登録者増減、高評価率を合わせて横展開する。")
-    lines.append("・data_waitは平均視聴率未取得のため暫定扱いにし、views / likes / like_rate / comments が強い動画には必ず短いコメントを付ける。")
+    lines.append("・参考観察: 比較的反応のある方向性も勝ちパターン認定せず、仮説強化枠として扱う。")
+    lines.append("・今回の主軸: 新規開拓枠を中心に提案する。")
+    lines.append("・data_waitは横展開根拠に使用しない。重複除外と参考観察だけに使う。")
     lines.append("・views 1000未満は配布不足扱いで評価対象外。ネタ失敗と誤判定しないこと。")
 
     # 弱い動画ランキング（views>=1000、analyzable）
     weak_candidates = sorted(
-        [item for item in scored if not item.get("is_provisional")],
+        [
+            item for item in scored
+            if not item.get("is_provisional")
+            and (
+                item.get("score") in ("D", "E")
+                or item.get("blacklist_candidate")
+            )
+        ],
         key=lambda x: (
             _num(x.get("average_percentage_viewed")),
             _num(x.get("average_view_duration")),
@@ -690,47 +758,42 @@ def build_performance_summary(items: list[dict[str, Any]], limit: int = 5, meta:
     return "\n".join(lines)
 
 
-_ANALYTICS_RULES_TEXT = """\
-━━━━━━━━━━━━━━━━━━
-Analytics/vidIQ実績ルール（最新）
-━━━━━━━━━━━━━━━━━━
+def _long_expansion_metrics_ok(ctr_value: float, avg_percent: float) -> bool:
+    """Long の横展開に必要な CTR と平均視聴率を満たすか。"""
+    return ctr_value >= 8 and avg_percent >= 40
 
-【穴シリーズ優先横展開】
-バウムクーヘン・マカロニ・ベーグルで成立確認済み。穴・空洞・形状の理由系は高優先横展開候補。
-ただし「○○に穴がある本当の理由」の連発は避け、タイトル表現を変える。
-次候補: ちくわ、ドーナツ、れんこん、アイスの棒、ストロー菓子など。
 
-【配布不足・反応強い動画の扱い】
-views < 1000 でも like_rate >= 2.5% または likes >= 20 の動画は失敗扱いにしない。
-action に「反応強い」が付いている動画は横展開起点として優先検討する。
-例: ジンジャーエール → 薬っぽい飲み物シリーズの起点候補。
+def expansion_criteria_lines() -> list[str]:
+    """横展開の厳格条件を現在の設定値から文にする。プロンプトへ入れる条件文の唯一の持ち主。"""
+    from config import config as _cfg
 
-【腐らない・長持ち系の採用基準】
-ハチミツのような一般食材単体は既知感・科学説明化で弱くなりやすい。
-マックポテトのように、自分も食べている身近な商品・ブランド・店に紐づく場合は優先度を上げる。
-腐らない系は「外食チェーン・コンビニ・日常購入品」に寄せて採用すること。
+    return [
+        "現在の実績は勝ちパターンではなく参考観察として扱う",
+        "data_waitは横展開根拠にしない。再生数だけ少し高い動画など、条件に届かない動画も横展開元にしない",
+        (
+            f"Shortsは再生数{_cfg.ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS:,}以上"
+            f"または同期間平均の{_cfg.ANALYTICS_EXPANSION_VIEWS_MULTIPLIER:g}倍以上、"
+            f"平均視聴率{_cfg.ANALYTICS_EXPANSION_MIN_AVG_PCT_SHORTS:g}%以上、"
+            f"平均視聴時間{_cfg.ANALYTICS_EXPANSION_MIN_AVG_DURATION_SHORTS:g}秒以上、"
+            f"高評価率{_cfg.ANALYTICS_EXPANSION_MIN_LIKE_RATE:g}%以上、"
+            "かつコメントまたは登録者増がある動画だけを適格とする"
+        ),
+        "LongはCTR8%以上かつ平均視聴率40%以上で、再生数と反応の条件はShortsと同じ",
+        f"同じ構造で{_cfg.ANALYTICS_EXPANSION_MIN_PATTERN_COUNT}本以上の適格動画がある場合だけ横展開候補とする",
+        "条件未達なら「横展開対象: なし」「今回の主軸: 新規開拓枠」と書く",
+        "少し可能性がある方向性は「仮説強化枠」「参考観察」とし、横展開とは呼ばない",
+        "TOP5へ弱い横展開元や存在しない実績数値を無理に書かない",
+    ]
 
-【昔は違った系の採用基準】
-現在のイメージとの落差が大きいものだけ採用する。
-・サーモン型（優先）: 現在の人気・高級感が強く、昔の低評価とのギャップが大きいもの
-・トロ型（優先度下げ）: 既知情報になりやすいものは優先度を下げる
-次候補: ロブスター・カニカマ・チキン・タコ・サーモン系横展開。
 
-【弱動画の分類（即ブラックリストにしない）】
-・ハチミツ: 有名ネタ・科学説明型 → リベンジは歴史エピソード型で切り口を変える
-・人参: 反応は強いので入口改善候補。ネタ自体は捨てない
-・納豆フィルム: 自分事化できなければブラックリスト候補
-・プリン: 具体エピソード化すれば改善余地あり
-・メロンパン: 有名すぎる名前ネタ消耗型。通常切り口は避ける
-
-【次回タイトル案 優先候補】
-以下を最優先候補として扱う（既存タイトルと重複しないか確認すること）:
-・ちくわに穴がないと作れない理由
-・オムライスは日本生まれだった
-・昔のロブスターは貧乏人の食べ物だった
-・ドクターペッパーが薬っぽく作られた理由
-・ドーナツに穴がある本当の理由
-"""
+def _analytics_rules_text() -> str:
+    lines = "\n".join(f"・{line}" for line in expansion_criteria_lines())
+    return (
+        "━━━━━━━━━━━━━━━━━━\n"
+        "Analytics/vidIQ実績ルール（最新）\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        f"{lines}\n"
+    )
 
 
 def _build_title_prompt_base(items: list[dict[str, Any]], video_type_filter: str | None = None) -> str:
@@ -745,22 +808,22 @@ def _build_title_prompt_base(items: list[dict[str, Any]], video_type_filter: str
         title = str(item.get("title") or "").strip()
         return title[:50] + ("..." if len(title) > 50 else "")
 
-    strong = sorted(
-        [item for item in scored if item.get("score") in ("A", "B")],
-        key=lambda x: _num(x.get("average_percentage_viewed")),
-        reverse=True,
-    )[:5]
+    expansion = [item for item in scored if "横展開候補" in str(item.get("action") or "")][:5]
     blacklist = [item for item in scored if item.get("blacklist_candidate")]
 
     lines = []
-    if strong:
-        lines.append("【横展開できる強い動画】")
-        for item in strong:
+    if expansion:
+        lines.append("【厳格条件を満たした横展開候補】")
+        for item in expansion:
             lines.append(
                 f"・{_fmt(item)} "
                 f"avg_pct{_num(item.get('average_percentage_viewed')):.1f}% "
                 f"views{_int(item.get('views'))}"
             )
+    else:
+        lines.append("【横展開対象】なし")
+        lines.append("理由: 現時点では、積極的に真似するほど強い数値と同一構造2本以上の再現性がないため")
+        lines.append("今回の主軸: 新規開拓枠。過去実績は参考観察と仮説強化にのみ使う")
     if blacklist:
         lines.append("\n【避けるべきネタ型（ブラックリスト）】")
         for item in blacklist:
@@ -781,7 +844,7 @@ def build_shorts_title_prompt(items: list[dict[str, Any]]) -> str:
         "主KPI: 平均視聴率（維持率）。ブラックリスト候補と同じネタ型・切り口は原則NGです。\n"
         "改善再挑戦は切り口を明確に変える場合のみ最大2案まで許可。\n\n"
     )
-    return header + _ANALYTICS_RULES_TEXT + "\n" + (base if base else "（実績データなし）")
+    return header + _analytics_rules_text() + "\n" + (base if base else "（実績データなし）")
 
 
 def build_long_title_prompt(items: list[dict[str, Any]]) -> str:
@@ -791,7 +854,7 @@ def build_long_title_prompt(items: list[dict[str, Any]]) -> str:
         "以下の実績データをもとに、ずんだもんとめたんの食べ物雑学Long動画タイトル案を3〜5個考えてください。\n"
         "主KPI: CTR × 平均視聴率。ブラックリスト候補と同じネタ型・切り口は原則NGです。\n\n"
     )
-    return header + _ANALYTICS_RULES_TEXT + "\n" + (base if base else "（実績データなし）")
+    return header + _analytics_rules_text() + "\n" + (base if base else "（実績データなし）")
 
 
 def save_score_files(items: list[dict[str, Any]], days: int, output_dir=None, summary: dict[str, Any] | None = None) -> int:

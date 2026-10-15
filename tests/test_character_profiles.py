@@ -97,6 +97,9 @@ def test_common_script_rules_excludes_character_block():
     assert "native Shorts 台本量" in rules or "分量ルール" in rules
     assert "説明密度・掛け合い品質ルール" in rules
     assert "機械的な交互会話" in rules
+    assert "2〜4行連続" in rules
+    assert "めたんは毎回返事をしなくてよい" in rules
+    assert "相槌・復唱・空会話で増やさない" in rules
     assert "ずんだもんが事実・理由・背景" in rules
 
 

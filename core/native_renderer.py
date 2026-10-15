@@ -128,8 +128,8 @@ def _trial_watermark_filter(width: int, height: int) -> str | None:
     `-vf` / `-filter_complex` に畳み込んで使うことで、透かし用の追加エンコード
     パスを発生させない。
     """
-    from core.license_manager import should_watermark
-    if not should_watermark():
+    from core.license_manager import verify_activation_now
+    if not verify_activation_now().watermark:
         return None
     text = _drawtext_escape(TRIAL_WATERMARK_TEXT)
     font_size = max(TRIAL_WATERMARK_FONT_MIN_PX, int(min(width, height) * TRIAL_WATERMARK_FONT_SCALE))

@@ -15,7 +15,7 @@ if _ROOT not in sys.path:
 # ── FastAPI テストクライアント ───────────────────────────────────────────────
 @pytest.fixture(scope="module")
 def client():
-    from fastapi.testclient import TestClient
+    from conftest import local_api_client as TestClient
     os.environ["NVF_DISABLE_JOB_RUNNER"] = "1"
     from web_app.app import app
     with TestClient(app, raise_server_exceptions=False) as c:
@@ -765,6 +765,21 @@ def test_voicevox_worker_limits_accept_safe_values(tmp_path, monkeypatch):
     assert errors == []
     assert settings_store.get_all()["VOICEVOX_QUERY_WORKERS"] == "4"
     assert settings_store.get_all()["VOICEVOX_SYNTH_WORKERS"] == "1"
+
+
+def test_analytics_expansion_threshold_applies_without_restart(tmp_path, monkeypatch):
+    import config.config as cfg
+    import core.settings_store as settings_store
+    import web_app.services.config_service as cs
+
+    monkeypatch.setattr(settings_store, "_DB_PATH", str(tmp_path / "settings.db"))
+    monkeypatch.setattr(cfg, "ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS", cfg.ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS)
+
+    errors = cs.save_config({"ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS": "6000"})
+
+    assert errors == []
+    assert settings_store.get_all()["ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS"] == "6000"
+    assert cfg.ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS == 6000
 
 
 def test_refresh_runtime_settings_normalizes_legacy_voicevox_workers(tmp_path, monkeypatch):
