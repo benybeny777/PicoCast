@@ -1,0 +1,513 @@
+[
+  {
+    "code": "E-WEB-REQUEST",
+    "category": "auth",
+    "retry_recommended": false,
+    "message_key": "errors.E-WEB-REQUEST.message",
+    "fix_key": "errors.E-WEB-REQUEST.fix"
+  },
+  {
+    "code": "E-IMG-BUSY",
+    "category": "api_busy",
+    "retry_recommended": true,
+    "message_key": "errors.E-IMG-BUSY.message",
+    "fix_key": "errors.E-IMG-BUSY.fix"
+  },
+  {
+    "code": "E-IMG-AUTH",
+    "category": "auth",
+    "retry_recommended": false,
+    "message_key": "errors.E-IMG-AUTH.message",
+    "fix_key": "errors.E-IMG-AUTH.fix"
+  },
+  {
+    "code": "E-IMG-QUOTA",
+    "category": "quota",
+    "retry_recommended": true,
+    "message_key": "errors.E-IMG-QUOTA.message",
+    "fix_key": "errors.E-IMG-QUOTA.fix"
+  },
+  {
+    "code": "E-IMG-FAIL",
+    "category": "generic",
+    "retry_recommended": false,
+    "message_key": "errors.E-IMG-FAIL.message",
+    "fix_key": "errors.E-IMG-FAIL.fix"
+  },
+  {
+    "code": "E-SECRET-MISSING",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-SECRET-MISSING.message",
+    "fix_key": "errors.E-SECRET-MISSING.fix"
+  },
+  {
+    "code": "E-SCRIPT-MISSING",
+    "category": "pipeline",
+    "retry_recommended": false,
+    "message_key": "errors.E-SCRIPT-MISSING.message",
+    "fix_key": "errors.E-SCRIPT-MISSING.fix"
+  },
+  {
+    "code": "E-VOICE-FAIL",
+    "category": "pipeline",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-FAIL.message",
+    "fix_key": "errors.E-VOICE-FAIL.fix"
+  },
+  {
+    "code": "E-RENDER-FAIL",
+    "category": "pipeline",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-FAIL.message",
+    "fix_key": "errors.E-RENDER-FAIL.fix"
+  },
+  {
+    "code": "E-VOICEVOX-DOWN",
+    "category": "config",
+    "retry_recommended": true,
+    "message_key": "errors.E-VOICEVOX-DOWN.message",
+    "fix_key": "errors.E-VOICEVOX-DOWN.fix"
+  },
+  {
+    "code": "E-FFMPEG-MISSING",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-FFMPEG-MISSING.message",
+    "fix_key": "errors.E-FFMPEG-MISSING.fix"
+  },
+  {
+    "code": "E-OLLAMA-DOWN",
+    "category": "config",
+    "retry_recommended": true,
+    "message_key": "errors.E-OLLAMA-DOWN.message",
+    "fix_key": "errors.E-OLLAMA-DOWN.fix"
+  },
+  {
+    "code": "E-NET",
+    "category": "network",
+    "retry_recommended": true,
+    "message_key": "errors.E-NET.message",
+    "fix_key": "errors.E-NET.fix"
+  },
+  {
+    "code": "E-UPLOAD-AUTH",
+    "category": "auth",
+    "retry_recommended": false,
+    "message_key": "errors.E-UPLOAD-AUTH.message",
+    "fix_key": "errors.E-UPLOAD-AUTH.fix"
+  },
+  {
+    "code": "E-UPLOAD-FAIL",
+    "category": "pipeline",
+    "retry_recommended": true,
+    "message_key": "errors.E-UPLOAD-FAIL.message",
+    "fix_key": "errors.E-UPLOAD-FAIL.fix"
+  },
+  {
+    "code": "E-SETUP-INCOMPLETE",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-SETUP-INCOMPLETE.message",
+    "fix_key": "errors.E-SETUP-INCOMPLETE.fix"
+  },
+  {
+    "code": "E-PROFILE-MISSING",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-PROFILE-MISSING.message",
+    "fix_key": "errors.E-PROFILE-MISSING.fix"
+  },
+  {
+    "code": "E-PLAYLIST-CONFIG",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-PLAYLIST-CONFIG.message",
+    "fix_key": "errors.E-PLAYLIST-CONFIG.fix"
+  },
+  {
+    "code": "E-PLAYLIST-CLASSIFY",
+    "category": "pipeline",
+    "retry_recommended": true,
+    "message_key": "errors.E-PLAYLIST-CLASSIFY.message",
+    "fix_key": "errors.E-PLAYLIST-CLASSIFY.fix"
+  },
+  {
+    "code": "E-PLAYLIST-TARGET",
+    "category": "pipeline",
+    "retry_recommended": false,
+    "message_key": "errors.E-PLAYLIST-TARGET.message",
+    "fix_key": "errors.E-PLAYLIST-TARGET.fix"
+  },
+  {
+    "code": "E-PLAYLIST-SAVE",
+    "category": "pipeline",
+    "retry_recommended": true,
+    "message_key": "errors.E-PLAYLIST-SAVE.message",
+    "fix_key": "errors.E-PLAYLIST-SAVE.fix"
+  },
+  {
+    "code": "E-METADATA-CONFIG",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-METADATA-CONFIG.message",
+    "fix_key": "errors.E-METADATA-CONFIG.fix"
+  },
+  {
+    "code": "E-LICENSE-LIMIT",
+    "category": "license",
+    "retry_recommended": false,
+    "message_key": "errors.E-LICENSE-LIMIT.message",
+    "fix_key": "errors.E-LICENSE-LIMIT.fix"
+  },
+  {
+    "code": "E-LICENSE-MACHINE",
+    "category": "license",
+    "retry_recommended": false,
+    "message_key": "errors.E-LICENSE-MACHINE.message",
+    "fix_key": "errors.E-LICENSE-MACHINE.fix"
+  },
+  {
+    "code": "E-LICENSE-INVALID",
+    "category": "license",
+    "retry_recommended": false,
+    "message_key": "errors.E-LICENSE-INVALID.message",
+    "fix_key": "errors.E-LICENSE-INVALID.fix"
+  },
+  {
+    "code": "E-LICENSE-LIMIT-DEVICES",
+    "category": "license",
+    "retry_recommended": false,
+    "message_key": "errors.E-LICENSE-LIMIT-DEVICES.message",
+    "fix_key": "errors.E-LICENSE-LIMIT-DEVICES.fix"
+  },
+  {
+    "code": "E-LICENSE-EXPIRED",
+    "category": "license",
+    "retry_recommended": false,
+    "message_key": "errors.E-LICENSE-EXPIRED.message",
+    "fix_key": "errors.E-LICENSE-EXPIRED.fix"
+  },
+  {
+    "code": "E-LICENSE-API",
+    "category": "license",
+    "retry_recommended": true,
+    "message_key": "errors.E-LICENSE-API.message",
+    "fix_key": "errors.E-LICENSE-API.fix"
+  },
+  {
+    "code": "E-DISK",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-DISK.message",
+    "fix_key": "errors.E-DISK.fix"
+  },
+  {
+    "code": "E-AUTO-CONFIG",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-AUTO-CONFIG.message",
+    "fix_key": "errors.E-AUTO-CONFIG.fix"
+  },
+  {
+    "code": "E-AUTO-BUDGET",
+    "category": "quota",
+    "retry_recommended": false,
+    "message_key": "errors.E-AUTO-BUDGET.message",
+    "fix_key": "errors.E-AUTO-BUDGET.fix"
+  },
+  {
+    "code": "E-AUTO-HOLD",
+    "category": "pipeline",
+    "retry_recommended": false,
+    "message_key": "errors.E-AUTO-HOLD.message",
+    "fix_key": "errors.E-AUTO-HOLD.fix"
+  },
+  {
+    "code": "E-JOB-MONITOR",
+    "category": "network",
+    "retry_recommended": true,
+    "message_key": "errors.E-JOB-MONITOR.message",
+    "fix_key": "errors.E-JOB-MONITOR.fix"
+  },
+  {
+    "code": "E-UNKNOWN",
+    "category": "generic",
+    "retry_recommended": false,
+    "message_key": "errors.E-UNKNOWN.message",
+    "fix_key": "errors.E-UNKNOWN.fix"
+  },
+  {
+    "code": "E-CATALOG-CODE",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-CATALOG-CODE.message",
+    "fix_key": "errors.E-CATALOG-CODE.fix"
+  },
+  {
+    "code": "E-CATALOG-INVALID",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-CATALOG-INVALID.message",
+    "fix_key": "errors.E-CATALOG-INVALID.fix"
+  },
+  {
+    "code": "E-TIME-INVALID",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-TIME-INVALID.message",
+    "fix_key": "errors.E-TIME-INVALID.fix"
+  },
+  {
+    "code": "E-TIME-ZONE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-TIME-ZONE.message",
+    "fix_key": "errors.E-TIME-ZONE.fix"
+  },
+  {
+    "code": "E-FILE-RESERVE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-FILE-RESERVE.message",
+    "fix_key": "errors.E-FILE-RESERVE.fix"
+  },
+  {
+    "code": "E-FILE-WRITE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-FILE-WRITE.message",
+    "fix_key": "errors.E-FILE-WRITE.fix"
+  },
+  {
+    "code": "E-HTTP-TIMEOUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-HTTP-TIMEOUT.message",
+    "fix_key": "errors.E-HTTP-TIMEOUT.fix"
+  },
+  {
+    "code": "E-HTTP-CLIENT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-HTTP-CLIENT.message",
+    "fix_key": "errors.E-HTTP-CLIENT.fix"
+  },
+  {
+    "code": "E-CHANNEL-ID",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-CHANNEL-ID.message",
+    "fix_key": "errors.E-CHANNEL-ID.fix"
+  },
+  {
+    "code": "E-PROCESS-LIMIT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PROCESS-LIMIT.message",
+    "fix_key": "errors.E-PROCESS-LIMIT.fix"
+  },
+  {
+    "code": "E-PROCESS-EXIT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PROCESS-EXIT.message",
+    "fix_key": "errors.E-PROCESS-EXIT.fix"
+  },
+  {
+    "code": "E-PROCESS-TIMEOUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PROCESS-TIMEOUT.message",
+    "fix_key": "errors.E-PROCESS-TIMEOUT.fix"
+  },
+  {
+    "code": "E-PROCESS-OUTPUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PROCESS-OUTPUT.message",
+    "fix_key": "errors.E-PROCESS-OUTPUT.fix"
+  },
+  {
+    "code": "E-PROCESS-IO",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PROCESS-IO.message",
+    "fix_key": "errors.E-PROCESS-IO.fix"
+  },
+  {
+    "code": "E-SETTING-INVALID",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SETTING-INVALID.message",
+    "fix_key": "errors.E-SETTING-INVALID.fix"
+  },
+  {
+    "code": "E-SETTING-LOCK",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SETTING-LOCK.message",
+    "fix_key": "errors.E-SETTING-LOCK.fix"
+  },
+  {
+    "code": "E-STORE-OPTIONS",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-OPTIONS.message",
+    "fix_key": "errors.E-STORE-OPTIONS.fix"
+  },
+  {
+    "code": "E-STORE-OPEN",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-OPEN.message",
+    "fix_key": "errors.E-STORE-OPEN.fix"
+  },
+  {
+    "code": "E-STORE-SETTING",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-SETTING.message",
+    "fix_key": "errors.E-STORE-SETTING.fix"
+  },
+  {
+    "code": "E-SECRET-VERSION",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SECRET-VERSION.message",
+    "fix_key": "errors.E-SECRET-VERSION.fix"
+  },
+  {
+    "code": "E-STORE-CHANNEL",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-CHANNEL.message",
+    "fix_key": "errors.E-STORE-CHANNEL.fix"
+  },
+  {
+    "code": "E-STORE-VERSION",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-VERSION.message",
+    "fix_key": "errors.E-STORE-VERSION.fix"
+  },
+  {
+    "code": "E-STORE-BACKUP",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-BACKUP.message",
+    "fix_key": "errors.E-STORE-BACKUP.fix"
+  },
+  {
+    "code": "E-STORE-CORRUPT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-CORRUPT.message",
+    "fix_key": "errors.E-STORE-CORRUPT.fix"
+  },
+  {
+    "code": "E-STORE-IDENTITY",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-IDENTITY.message",
+    "fix_key": "errors.E-STORE-IDENTITY.fix"
+  },
+  {
+    "code": "E-STORE-DB",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-DB.message",
+    "fix_key": "errors.E-STORE-DB.fix"
+  },
+  {
+    "code": "E-SECRET-RANDOM",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SECRET-RANDOM.message",
+    "fix_key": "errors.E-SECRET-RANDOM.fix"
+  },
+  {
+    "code": "E-SECRET-KEY",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SECRET-KEY.message",
+    "fix_key": "errors.E-SECRET-KEY.fix"
+  },
+  {
+    "code": "E-SECRET-ENCRYPT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SECRET-ENCRYPT.message",
+    "fix_key": "errors.E-SECRET-ENCRYPT.fix"
+  },
+  {
+    "code": "E-SECRET-DECRYPT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SECRET-DECRYPT.message",
+    "fix_key": "errors.E-SECRET-DECRYPT.fix"
+  },
+  {
+    "code": "E-SECRET-PLATFORM",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SECRET-PLATFORM.message",
+    "fix_key": "errors.E-SECRET-PLATFORM.fix"
+  },
+  {
+    "code": "E-STORE-PATH",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-PATH.message",
+    "fix_key": "errors.E-STORE-PATH.fix"
+  },
+  {
+    "code": "E-STORE-UNSAFE-PATH",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-UNSAFE-PATH.message",
+    "fix_key": "errors.E-STORE-UNSAFE-PATH.fix"
+  },
+  {
+    "code": "E-LOG-CONFIG",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-LOG-CONFIG.message",
+    "fix_key": "errors.E-LOG-CONFIG.fix"
+  },
+  {
+    "code": "E-LOG-LOCK",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-LOG-LOCK.message",
+    "fix_key": "errors.E-LOG-LOCK.fix"
+  },
+  {
+    "code": "E-LOG-INIT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-LOG-INIT.message",
+    "fix_key": "errors.E-LOG-INIT.fix"
+  },
+  {
+    "code": "E-LOG-IO",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-LOG-IO.message",
+    "fix_key": "errors.E-LOG-IO.fix"
+  },
+  {
+    "code": "E-LOG-CRASH",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-LOG-CRASH.message",
+    "fix_key": "errors.E-LOG-CRASH.fix"
+  },
+  {
+    "code": "E-SETTING-ENV",
+    "category": "config",
+    "retry_recommended": false,
+    "message_key": "errors.E-SETTING-ENV.message",
+    "fix_key": "errors.E-SETTING-ENV.fix"
+  }
+]
