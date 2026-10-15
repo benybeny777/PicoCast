@@ -9,6 +9,8 @@
 
 ## 最初にやること
 
+- フォルダ改名用に `scripts/rename-picocast-folder.ps1` を追加した。関連アプリを閉じ、別のPowerShellでREADMEのコマンドを実行する。`-CheckOnly` は読み取り専用。既存の改名先・実行中のWeb/runner候補・想定外の場所は拒否し、改名後はGit worktree参照を修復する。エージェントは実際の改名をまだ実行していない。
+
 1. `AGENTS.md` → このファイル → `DESIGN_picocast_v3.md`（§12 マイルストーン）→ `DESIGN_product_v2.md`（該当タスクカード）の順に読む。
 2. `git fetch origin` し、作業ブランチ `codex/license-v2-rebrand-design`（PR #36）をチェックアウトする。
 3. `docs/r0-foundation.md` と `.agents/skills/implement-picocast-r0/SKILL.md` を読む。修正中は必要な単体テストだけを実行し、全体検証は変更がまとまった最後に行う。Python旧版の直前の全体確認は656件成功・1件skip（既存未コミット差分を含む）。開始時に全体テストを繰り返さない。
