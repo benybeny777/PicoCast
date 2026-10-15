@@ -24,7 +24,7 @@
 | [#35](https://github.com/benybeny777/PicoCast/pull/35) | `codex/picoagent-job-monitoring` | `main` | Python旧版のチャンネル別自動運用 |
 | [#36](https://github.com/benybeny777/PicoCast/pull/36) | `codex/license-v2-rebrand-design` | `codex/picoagent-job-monitoring` | Rust基盤・旧版安全化・移行設計 |
 
-WP-R0-1は `codex/wp-r0-1-doc-consistency` から、設計の土台である `codex/license-v2-rebrand-design` 向けのPRにする。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
+WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0-1-doc-consistency` → `codex/license-v2-rebrand-design`）でレビュー待ち。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
 
 ## 移行前に残る確認
 
