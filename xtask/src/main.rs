@@ -4,6 +4,7 @@
 mod catalog;
 mod docs;
 mod guards;
+mod inventory;
 
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -17,9 +18,10 @@ fn main() -> Result<()> {
     match std::env::args().nth(1).as_deref() {
         Some("verify") => verify(&root),
         Some("guard") => guards::check(&root),
+        Some("inventory") => inventory::check(&root),
         Some("catalog-check") => catalog::check(&root),
         Some("docs-check") => docs::check(&root),
-        _ => bail!("使い方: cargo xtask verify | guard | catalog-check | docs-check"),
+        _ => bail!("使い方: cargo xtask verify | guard | inventory | catalog-check | docs-check"),
     }
 }
 
@@ -48,6 +50,7 @@ fn verify(root: &Path) -> Result<()> {
         results.push((label, run(root, "cargo", &args)));
     }
     results.push(("走査ガード", guards::check(root)));
+    results.push(("移行棚卸し", inventory::check(root)));
     results.push(("エラーカタログ", catalog::check(root)));
     results.push(("文書リンク", docs::check(root)));
     let js = guards::files_under(&root.join("ui")).map(|files| {

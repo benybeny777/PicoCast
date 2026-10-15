@@ -18,6 +18,8 @@ Rust版のDBは、同期フォルダ・ネットワーク・FAT32など危険な
 
 Rust版のエラーは日本語カタログから安定したコード・説明・対処を取得します。`cargo xtask catalog-check` と `docs-check` はコード/文言の欠損や文書リンクを検査し、`verify` にも含まれます。
 
+旧版の機能・API・画面・設定・DB表の対応先は [移行棚卸し](docs/migration-inventory.md) に集約しています。`cargo xtask inventory` はソースと642項目の一致を確認します。
+
 2026-10-16時点でローカルフォルダは `C:\00_PG\22_PicoCast` へ改名済みです。保管用の `legacy/` は作らず、Rust版への切り替え後は不要な旧コードを削除してGit履歴で参照します。DB・生成物・認証情報は別に保護します。Claude Remote Controlも `PicoCast` 名で新しいフォルダを参照し、既存のログオンタスク `Claude Remote Control - Projects` から起動します。
 
 <br />
