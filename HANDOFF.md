@@ -1,5 +1,12 @@
 # 引き継ぎ（未マージ作業と再開方法）
 
+## 2026-10-16 の更新（以下の旧記録より優先）
+
+- ローカルフォルダは `C:\00_PG\22_PicoCast` に改名済み。このCodexチャットも新しいパスを参照している。
+- 利用者決定: 保管用の `legacy/` は作らない。必要な旧コードはGit履歴から参照する。現在のPython版はRust版への切り替えまで現位置で使い、切り替えの検証後に不要コードを削除する。Git管理外のDB・生成物・認証情報は削除対象に含めない。従来のlegacy移動・30日保管の指示は撤回する。
+- Claude Remote Controlのローカル起動スクリプトは `%LOCALAPPDATA%\ClaudeRemoteControl\Start-Project.ps1` と `Start-All.ps1`。対象を `yukkuri` から `PicoCast`、作業先を新しいフォルダへ更新した。ログオンタスク `Claude Remote Control - Projects` は引き続き同じスクリプトを使う。接続URL・セッションIDは記録しない。
+- `.claude/settings.local.json` の追加出力ディレクトリも新パスへ更新した。Python実環境は3.11.9のままで、3.12への切り替えは未実施。
+
 最終更新: 2026-10-15（Codex: Rust R0基盤を実装・検証済み、旧環境移行は未完了）
 > **方針（2026-10-15 利用者決定）: 全部 Rust（PicoAgent と同じ構成）で作り直す。今のフォルダ（`C:\00_PG\22_PicoCast` へ改名）とリポジトリ（`benybeny777/PicoCast` へ改名）をそのまま使い、Python 版は `legacy/` に移して凍結（本番の不具合修正だけ）。** 正本は [DESIGN_rust_rewrite.md](DESIGN_rust_rewrite.md)。画面の見た目は [DESIGN_ui.md](DESIGN_ui.md)＋見本 `docs/design/picocast-ui-mockup.html`。Python は 3.12 に固定し、CUDA は GPU に合わせて 1 組だけ選ぶ（`DESIGN_rust_rewrite.md` §12）。
 >
