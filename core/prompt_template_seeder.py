@@ -239,6 +239,11 @@ def seed_all_profiles() -> dict[str, int]:
     return results
 
 
+# 現行の品質ルールの版を表す目印。ルールを改訂したら、新しい版にしかない文言へ更新する。
+_SCRIPT_RULES_MARKER = "めたんは毎回返事をしなくてよい"
+_TITLE_RULES_MARKER = "【横展開判定】"
+
+
 def sync_quality_rules_for_profile(profile_id: str, genre_profile: str) -> int:
     """未移行のデフォルト台本・ネタ会議テンプレートへ現行品質ルールを同期する。"""
     if genre_profile == "zundamon_kowai":
@@ -248,8 +253,9 @@ def sync_quality_rules_for_profile(profile_id: str, genre_profile: str) -> int:
 
     updated = 0
     script_template = get_default_template(profile_id, "script")
+    # 内容の不一致ではなく版の目印で判定する。不一致で上書きすると、設定画面で編集したテンプレートが起動のたびに消える。
     needs_script_sync = script_template is not None and (
-        "説明密度・掛け合い品質ルール" not in script_template.script_rules
+        _SCRIPT_RULES_MARKER not in script_template.script_rules
         or (
             genre_profile in {"zunkami", "food_trivia"}
             and "食べ物雑学専用の具体性" not in script_template.system_rules
@@ -265,6 +271,20 @@ def sync_quality_rules_for_profile(profile_id: str, genre_profile: str) -> int:
             profile_id,
             system_rules=_read_genre_file(genre_profile, "script_context.md"),
             script_rules=_load_common_script_rules(genre_profile),
+        )
+        updated += 1
+
+    title_template = get_default_template(profile_id, "title")
+    title_context = _read_genre_file(genre_profile, "title_context.md")
+    if (
+        title_template is not None
+        and title_context
+        and _TITLE_RULES_MARKER not in title_template.system_rules
+    ):
+        update_template(
+            title_template.template_id,
+            profile_id,
+            system_rules=title_context,
         )
         updated += 1
 

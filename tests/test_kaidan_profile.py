@@ -173,3 +173,32 @@ def test_old_kowai_templates_are_preserved_and_new_defaults_are_added(tmp_path, 
     assert store.get_default_template("zundamon_kowai", "script").template_name == "怪談・都市伝説 怪談寄りShorts台本"
     assert "怪談チャンネル安全表現ルール" in store.get_default_template("zundamon_kowai", "title").ng_rules
     assert sync_quality_rules_for_profile("zundamon_kowai", "zundamon_kowai") == 0
+
+
+def test_quality_rule_sync_keeps_user_edited_templates(tmp_path, monkeypatch):
+    import core.prompt_template_store as store
+    from core.prompt_template_seeder import sync_quality_rules_for_profile
+
+    db_path = tmp_path / "settings.db"
+    with sqlite3.connect(db_path) as conn:
+        conn.execute("CREATE TABLE channel_profiles (profile_id TEXT PRIMARY KEY)")
+        conn.execute("INSERT INTO channel_profiles(profile_id) VALUES ('food')")
+        conn.commit()
+    monkeypatch.setattr(store, "_DB_PATH", str(db_path))
+
+    old_title = store.create_template(
+        profile_id="food",
+        template_name="旧タイトル",
+        template_kind="title",
+        system_rules="横展開元と実績根拠を必ず書く",
+        is_default=True,
+    )
+    assert sync_quality_rules_for_profile("food", "food_trivia") == 1
+    synced = store.get_default_template("food", "title")
+    assert synced.template_id == old_title.template_id
+    assert "【横展開判定】" in synced.system_rules
+
+    edited = synced.system_rules + "\n利用者が追記したルール"
+    store.update_template(synced.template_id, "food", system_rules=edited)
+    assert sync_quality_rules_for_profile("food", "food_trivia") == 0
+    assert store.get_default_template("food", "title").system_rules == edited

@@ -121,6 +121,12 @@ EDITABLE_CONFIG: list[dict[str, Any]] = [
     {"key": "JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC",    "type": "float", "label": "runner停止判定タイムアウト(秒)", "default": str(cfg.JOB_RUNNER_HEARTBEAT_TIMEOUT_SEC),    "min": 10.0, "max": 600.0, "group": "タイムアウト", "admin": True},
     {"key": "JOB_LOG_MAX_JOBS",                    "type": "int",   "label": "ジョブ履歴保持件数",             "default": str(cfg.JOB_LOG_MAX_JOBS),                    "min": 50,   "max": 5000,  "group": "ジョブログ", "admin": True},
     {"key": "JOB_LOG_MAX_ENTRIES",                 "type": "int",   "label": "1ジョブのログ保持行数",          "default": str(cfg.JOB_LOG_MAX_ENTRIES),                 "min": 100,  "max": 20000, "group": "ジョブログ", "admin": True},
+    {"key": "ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS",   "type": "int",   "label": "横展開 Shorts最低再生数",          "default": str(cfg.ANALYTICS_EXPANSION_MIN_VIEWS_SHORTS), "min": 1000, "max": 1000000, "group": "Analytics", "admin": True},
+    {"key": "ANALYTICS_EXPANSION_VIEWS_MULTIPLIER",   "type": "float", "label": "横展開 期間平均比",                "default": str(cfg.ANALYTICS_EXPANSION_VIEWS_MULTIPLIER), "min": 1.0, "max": 20.0, "group": "Analytics", "admin": True},
+    {"key": "ANALYTICS_EXPANSION_MIN_AVG_PCT_SHORTS", "type": "float", "label": "横展開 Shorts最低平均視聴率",      "default": str(cfg.ANALYTICS_EXPANSION_MIN_AVG_PCT_SHORTS), "min": 0.0, "max": 200.0, "group": "Analytics", "admin": True},
+    {"key": "ANALYTICS_EXPANSION_MIN_AVG_DURATION_SHORTS", "type": "float", "label": "横展開 Shorts最低平均視聴秒数", "default": str(cfg.ANALYTICS_EXPANSION_MIN_AVG_DURATION_SHORTS), "min": 0.0, "max": 300.0, "group": "Analytics", "admin": True},
+    {"key": "ANALYTICS_EXPANSION_MIN_LIKE_RATE",      "type": "float", "label": "横展開 最低高評価率(%)",           "default": str(cfg.ANALYTICS_EXPANSION_MIN_LIKE_RATE), "min": 0.0, "max": 100.0, "group": "Analytics", "admin": True},
+    {"key": "ANALYTICS_EXPANSION_MIN_PATTERN_COUNT",  "type": "int",   "label": "横展開 同一構造の最低本数",         "default": str(cfg.ANALYTICS_EXPANSION_MIN_PATTERN_COUNT), "min": 2, "max": 20, "group": "Analytics", "admin": True},
     # ── ffmpeg ──
     {"key": "FFMPEG_BIN",                  "type": "str",   "label": "ffmpeg バイナリパス",           "default": str(cfg.FFMPEG_BIN),                                           "group": "ffmpeg"},
     {"key": "NATIVE_FFMPEG_TIMEOUT_SEC",   "type": "float", "label": "ffmpegタイムアウト(秒)",        "default": str(cfg.NATIVE_FFMPEG_TIMEOUT_SEC),  "min": 30,  "max": 7200,  "group": "タイムアウト", "admin": True},
