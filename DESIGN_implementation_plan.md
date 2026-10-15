@@ -50,10 +50,10 @@
 
 | # | 食い違い | 解消（本書の決定） |
 |---|---|---|
-| X1 | `DESIGN_rust_rewrite.md` §2.1・§2.2・§9.1・§12.4 は Python 版を `legacy/` へ移すとするが、`HANDOFF.md`（2026-10-16 利用者決定）は `legacy/` を作らないとした | **利用者決定を正とする**。Python 版は現位置のまま本番に使い、R5 の切り替えの検証後に不要コードを削除する。Git 管理外の DB・生成物・認証情報は削除しない。`DESIGN_rust_rewrite.md` に注記を入れた |
-| X2 | `DESIGN_picocast_v3.md` は Python エンジン＋TypeScript SPA、`DESIGN_rust_rewrite.md` は全部 Rust＋素の JS | 後者を正とする（v3 の冒頭に既に注記あり）。v3 は中身（画面・データ・QA・グロース）だけを使う |
-| X3 | `DESIGN_quality.md` §5（ruff・pyright・Python の CI）・§8（Q-M0〜Q-M4） | Python では実施しない。Rust の `xtask verify` と本書 §5 の WP に置き換える |
-| X4 | `HANDOFF.md` の「最初にやること」に改名前の手順が残っている | 本書の WP-R0-1 で HANDOFF を整理する（本書と同じコミットで最小限を直した） |
+| X1 | `DESIGN_rust_rewrite.md` §2.1・§2.2・§9.1・§12.4 は Python 版を `legacy/` へ移すとするが、`HANDOFF.md`（2026-10-16 利用者決定）は `legacy/` を作らないとした | **利用者決定を正とする**。Python 版は現位置のまま本番に使い、R5 の切り替えの検証後に不要コードを削除する。Git 管理外の DB・生成物・認証情報は削除しない。WP-R0-1で配置図・移行手順・保管期間・スキル本文を現方針へ修正した |
+| X2 | `DESIGN_picocast_v3.md` は Python エンジン＋TypeScript SPA、`DESIGN_rust_rewrite.md` は全部 Rust＋素の JS | 後者を正とする。WP-R0-1でv3の構成本文をRust＋Tauri＋素のJSへ修正した。v3の画面・データ・QA・グロースの仕様は継続 |
+| X3 | `DESIGN_quality.md` §5（ruff・pyright・Python の CI）・§8（Q-M0〜Q-M4） | Pythonでは実施しない。WP-R0-1で品質設計の本文をRustの `xtask verify` と本書 §5のWPへの参照に置き換えた |
+| X4 | `HANDOFF.md` の「最初にやること」に改名前の手順が残っている | WP-R0-1で旧手順・重複タスク表・完了済み実装の経緯を取り除き、未マージ作業と再開条件に絞った |
 | X5 | バックログ `S4`・`S5`・`P4` の現状欄（§1 の訂正） | `DESIGN_backlog.md` の現状欄を直した |
 | X6 | 旧版と Rust 版が同じチャンネルへ同時に投稿する危険への言及が無い | `N30`（二重運用の防止）として追加し、R5 の必須条件にした |
 
@@ -212,6 +212,8 @@
 - **1 つの WP = 1 つのブランチ＋1 つの PR**（小さい WP はまとめてよい）。依存が満たされたものから上から順に着手する。
 - 完了条件を満たし、`cargo xtask verify` が緑になるまで「完了」にしない。旧版に触る WP は、旧版の関連テストも実行する。
 - 「取り込む ID」の中身は §0 の正本を読む。
+
+WP-R0-1（文書の整合）は実施済み（2026-10-16）。`cargo xtask verify` は整形・clippy・単体テスト20件・ASTガードが成功し、UI無しのNodeテストは明示スキップ。変更文書10件の相対リンク切れは0。改名前の絶対パスを埋め込んだ古いxtaskキャッシュは `cargo clean -p xtask` で再生成した。以下の行には範囲と完了条件を残し、再実装しない。他WPは未完了。
 
 ### R0 の残り（土台）
 
