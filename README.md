@@ -8,11 +8,7 @@
   ![ffmpeg](https://img.shields.io/badge/ffmpeg-Native_Render-black?style=for-the-badge&logo=ffmpeg)
 </div>
 
-フォルダの改名用コマンドを用意しています。Web UI・runner・Codex・Claude・エディターを閉じてから、別のPowerShellで以下を実行し、完了後は `C:\00_PG\22_PicoCast` をCodexで開き直してください。既存の改名先は上書きせず、Git worktreeの参照も修復します。`-CheckOnly` を末尾に付けると、改名せず事前確認だけを行います。Pythonのlegacy移行・環境切替はこのコマンドでは行いません。
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\00_PG\00_yukkurijidou\scripts\rename-picocast-folder.ps1"
-```
+フォルダは `C:\00_PG\22_PicoCast` へ改名済みです。改名コマンドの再実行や旧フォルダの作り直しは不要です。作業の再開は [HANDOFF.md](HANDOFF.md)、着手順と完了条件は [実装計画](DESIGN_implementation_plan.md) を参照してください。
 
 Rust版への移行を進めています。共通基盤は `crates/`、検証入口は `cargo xtask verify` です。現在の運用は下記のPython旧版を使います。フォルダ・旧環境の移行状況と未確認事項は [R0実装状況](docs/r0-foundation.md)、完成形は [Rust作り直し設計](DESIGN_rust_rewrite.md) を参照してください。Rust版だけで動画を生成できる状態にはまだなっていません。
 

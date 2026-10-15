@@ -1,6 +1,6 @@
 # PicoCast 全面 Rust 作り直し設計
 
-最終更新: 2026-10-15
+最終更新: 2026-10-16
 利用者決定（2026-10-15）: **画面の外枠も動画生成の中身も、PicoAgent と同じく全部 Rust で作り直す。** 販売・配布はしない。目標は製品レベルの品質（`DESIGN_quality.md`）。
 実装は Codex。この文書は設計のみ。進捗と決定待ちは `HANDOFF.md`。
 
@@ -8,9 +8,9 @@
 
 | 文書 | 扱い |
 |---|---|
-| `DESIGN_quality.md` | **品質の目標と受入基準の正本**。Q1〜Q5・R1〜R6・UX の中身は Rust 版で実装する。§5（Python のリンター・依存固定・CI）と §8（Python 版の Q-M0〜）は本書 §10 のマイルストーンに置き換える |
+| `DESIGN_quality.md` | **品質の目標と受入基準の正本**。Q1〜Q5・R1〜R6・UXの中身をRust版で実装する。開発検査は同書§5、着手順は実装計画§5を参照する |
 | `DESIGN_foundations.md` | **考え方（唯一の持ち主＋ガード）は継続**。実装手段は本書 §6（clippy の禁止設定＋走査ガード）に置き換える |
-| `DESIGN_picocast_v3.md` | 画面構成・データモデル・パイプライン・QA ゲート・グロースエンジンの**中身は継続**。構成（Python エンジン＋Tauri シェル）は本書 §3 に置き換える |
+| `DESIGN_picocast_v3.md` | 画面構成・データモデル・パイプライン・QAゲート・グロースエンジンの**中身は継続**。構成は本書§3のRust＋Tauri＋素のJSに統一する |
 | `DESIGN_product_v2.md` | 個別タスクの仕様のうち、続行するもの（`DESIGN_quality.md` §0）は Rust 版の各クレートの要件として使う。Python へ実装するタスクは原則中止（§11） |
 
 ---
@@ -33,52 +33,40 @@
 
 利用者決定（2026-10-15）: **新しいリポジトリは作らず、今のフォルダとリポジトリを改名して、その中で Rust 版を作る。**
 
-| 対象 | 今 | 改名後 |
-|---|---|---|
-| ローカルのフォルダ | `C:\00_PG\00_yukkurijidou` | `C:\00_PG\22_PicoCast`（PicoAgent=20、LP=21 の並び） |
-| GitHub | `benybeny777/yukkurijidou` | `benybeny777/PicoCast`（旧 URL は GitHub が自動で転送する） |
-| VS Code のワークスペース | `yukkurijidou.code-workspace` | `PicoCast.code-workspace` |
+| 対象 | 現在（改名済み） |
+|---|---|
+| ローカルのフォルダ | `C:\00_PG\22_PicoCast` |
+| GitHub | `benybeny777/PicoCast`（originはSSH） |
+| VS Code のワークスペース | `PicoCast.code-workspace` |
 
 ### 2.1 中の配置
 
-> **2026-10-16 利用者決定で変更**: `legacy/` は作らない。Python 版は今の位置のまま本番に使い、R5 の切り替えの検証後に不要コードを削除する（Git 管理外の DB・生成物・認証情報は削除しない）。本節・§2.2 の手順 6〜8・§9.1・§12 の `legacy/` は「リポジトリ直下の Python 版」と読み替える。作業順は `DESIGN_implementation_plan.md` が正本。
+利用者決定（2026-10-16）: 保管用の `legacy/` は作らない。Rust版とPython旧版は切り替えまでリポジトリ直下で共存する。R5の切り替え検証後に不要な旧コードを削除し、必要ならGit履歴から参照する。Git管理外のDB・生成物・認証情報をコードと一緒に削除しない。
 
-Rust 版をリポジトリ直下に置き（PicoAgent と同じ配置）、今の Python 版は `legacy/` に移す。移行が終わったら `legacy/` を消す（履歴は Git に残る）。
-
-```
+```text
 22_PicoCast/
-├─ AGENTS.md / CLAUDE.md / HANDOFF.md / SPEC.md / DESIGN_*.md / docs/   ← 共通（直下のまま）
-├─ .agents/skills/ / .claude/skills/                                     ← 共通
-├─ Cargo.toml / crates/ / src-tauri/ / ui/ / xtask/ / tools/             ← Rust 版（R0 で追加）
-└─ legacy/                                                               ← 今の Python 版をそのまま移す
-   ├─ core/ web_app/ workers/ config/ tests/ assets/ scripts/ dev/ tools/license/
-   ├─ start.ps1 / start.command / build_exe.ps1 / ...
-   ├─ pyproject.toml / uv.lock / .python-version（§12.4 で追加）
-   └─ data/ output/ .venv/（Git 管理外。改名作業のときに一緒に移す）
+├─ AGENTS.md / CLAUDE.md / HANDOFF.md / SPEC.md / DESIGN_*.md / docs/
+├─ .agents/skills/ / .claude/skills/
+├─ Cargo.toml / crates/ / xtask/                 ← Rust共通基盤（実装済み）
+├─ src-tauri/ / ui/                             ← Rust版の画面（未実装）
+├─ core/ / web_app/ / workers/ / config/ / tests/ ← 現位置のPython旧版
+├─ assets/ / scripts/ / dev/ / tools/            ← 旧版・開発用資産。棚卸しして移す
+├─ start.ps1 / start.command / pyproject.toml / uv.lock / .python-version
+└─ data/ / output/ / .venv/                      ← Git管理外。現位置を維持
 ```
 
-- Python 版は「リポジトリ直下（`core/` の 1 つ上）を基準に `data/` と `output/` を探す」作りなので、`legacy/` の中に `data/`・`output/` ごと移せばコードの変更なしで動く。
-- `README.md` は直下を PicoCast（Rust 版）の説明にし、Python 版の起動手順は `legacy/README.md` に移す。
+- 起動手順は切り替えまで直下の `README.md` で扱う。
+- 取り込み用コマンド名 `import-legacy` は旧版データを意味し、フォルダ作成を意味しない。
 
-### 2.2 改名の作業手順（1 回のメンテナンスで行う）
+### 2.2 改名後の作業手順
 
-本番が止まるため、自動運用と予約投稿が無い時間帯に行う。所要は 1 時間程度。Python 3.12 化（§12.4）も同じ時間に行う（`.venv` の作り直しが 1 回で済む）。
+フォルダ・GitHub・ワークスペースの改名は完了しているため繰り返さない。Claude Remote Controlの起動先も新パスへ更新済み。Codexの現在のチャットは新パスを参照しているが、アプリの保存済みプロジェクト登録は別に確認する。
 
-| # | 作業 | 担当 |
-|---|---|---|
-| 1 | 自動運用を一時停止し、実行中のジョブが無いことを確認。Web UI とジョブランナーを止める | 利用者（または Codex） |
-| 2 | 設定画面の「バックアップ」で全体をバックアップ | 同上 |
-| 3 | このフォルダを開いている VS Code・Codex・Claude Code をすべて閉じる | 利用者 |
-| 4 | フォルダを `C:\00_PG\00_yukkurijidou` → `C:\00_PG\22_PicoCast` に改名 | 利用者 |
-| 5 | GitHub でリポジトリ名を `PicoCast` に変更し、`git remote set-url origin https://github.com/benybeny777/PicoCast.git` | 利用者の承認のうえ Codex（`gh repo rename`） |
-| 6 | 作業ブランチで Python 版を `legacy/` へ移す（`git mv`）。`data/`・`output/`・`.venv` も `legacy/` へ移動（同じドライブ内なので一瞬） | Codex |
-| 7 | `legacy/` で Python 3.12＋`uv.lock` の `.venv` を作り直す（§12.4。古い `.venv` は退避してから） | Codex |
-| 8 | `legacy/` で全テスト → Web UI を起動 → サンプル 1 本の生成。固定コメントのタスクは起動時の自己修復で新しい場所に登録し直されるので、タスクスケジューラで確認 | Codex（確認は利用者） |
-| 9 | 自動運用を再開 | 利用者 |
-| 10 | `yukkurijidou.code-workspace` を `PicoCast.code-workspace` に改名。Claude Code のメモリ（`~/.claude/projects/C--00-PG-00-yukkurijidou/memory/`）を新しいパス用のフォルダ（`C--00-PG-22-PicoCast`）へコピー。Codex の信頼済みフォルダの設定も新しいパスで登録 | 利用者（メモリのコピーは Codex でも可） |
-
-- 問題が出た場合の戻し方: フォルダ名を戻し、退避した `.venv` を戻せば元どおりに動く（手順 6・7 はブランチ上の変更なので、マージ前なら破棄できる）。
-- 手順 4 の後は、作業中のエージェントのセッションは古いパスを指したままになるため、新しいパスで開き直す。
+1. `DESIGN_implementation_plan.md` §5の最初の未完了WPと、`HANDOFF.md` の現在状態を照合する。
+2. Python 3.12への切り替え（WP-R0-2）は、自動運用と予約投稿の無い時間帯に現位置で行う。ジョブ表示だけでなく実プロセスも確認する。
+3. 切り替え直前に設定・metadata DBをオンラインバックアップし、マスターキー・認証情報・未コミット差分をリポジトリ外へ退避する。
+4. §12.4に従って環境を切り替え、最後に全テストとサンプル生成・レンダーをまとめて確認する。有料APIは明示指示または運用上の明確な必要がある場合だけ使う。
+5. 検証が成功するまで旧環境を保持し、失敗時は環境を戻す。成功後に不要な旧環境を片付ける。履歴のジョブを勝手に削除・再実行しない。
 
 ---
 
@@ -201,11 +189,11 @@ Rust 版をリポジトリ直下に置き（PicoAgent と同じ配置）、今�
 
 ### 9.1 進め方
 
-1. **Python 版は凍結**: 新機能は入れない。本番の不具合修正だけを行う（既存 PR #35 の自動運用はマージして運用に使う）。
+1. **Python 版は凍結**: 新機能は入れない。本番の不具合修正と、実装計画 §8で定めた移行安全性のための変更だけを行う。既存PRのマージは別作業として扱う。
 2. **Rust 版を並行で育てる**: 機能ごとに Rust 版を作り、Python 版と同じ入力で同じ結果になるかを比べる（下の「同等性の確認」）。
 3. **影運用（シャドー）**: Rust 版を本番データのコピーで動かし、投稿だけはしない状態で 1〜2 週間、Python 版と並べて生成結果と QA の値を比べる。
-4. **チャンネルごとに切り替え**: 1 チャンネルずつ Rust 版の投稿へ切り替える。問題があれば、そのチャンネルだけ Python 版に戻せるよう、切り替え後 30 日は Python 版の起動手段を残す。
-5. **Python 版を片付ける**: 全チャンネルの切り替え後 30 日で `legacy/` を削除する（履歴は Git に残る）。
+4. **チャンネルごとに切り替え**: 1 チャンネルずつ Rust 版の投稿へ切り替える。運用元を1か所で管理し、旧版とRust版の二重投稿を拒否する（WP-R5-3・N30）。問題があれば切り替えを中止し、旧版に戻す。
+5. **Python 版を片付ける**: 全チャンネルの切り替え検証後に、棚卸し表で不要と確認した旧コードを削除する。保管用フォルダや30日保管は設けない。Git履歴で参照できるコードと、Git管理外のDB・生成物・認証情報を分けて扱う。
 
 ### 9.2 旧データの取り込み（`xtask import-legacy`）
 
@@ -236,13 +224,13 @@ Rust 版をリポジトリ直下に置き（PicoAgent と同じ配置）、今�
 
 | M | 内容 | 完了条件 |
 |---|---|---|
-| **R0 土台** | 改名と `legacy/` への移動（§2.2）、ワークスペース、Python 3.12 と `uv.lock` の固定（§12）、`xtask verify`、CI、clippy の禁止設定と走査ガード、`core`（clock・AppError・settings・proc・http・fsutil・tracing）、`store`（DB・マイグレーション・バックアップ・秘密値）、AGENTS.md・HANDOFF・スキル | `xtask verify` が CI で緑。ガードが「違反を入れると落ちる」ことをテストで確認 |
+| **R0 土台** | 改名後の文書整合・運用参照先の確認（§2.2）、ワークスペース、Python 3.12 と `uv.lock` の固定（§12）、`xtask verify`、CI、clippy の禁止設定と走査ガード、`core`（clock・AppError・settings・proc・http・fsutil・tracing）、`store`（DB・マイグレーション・バックアップ・秘密値）、AGENTS.md・HANDOFF・スキル | `xtask verify` が CI で緑。ガードが「違反を入れると落ちる」ことをテストで確認 |
 | **R1 取り込みと棚卸し** | `docs/migration-inventory.md`、`xtask import-legacy`、立ち絵の PNG 化 | 本番データのコピーを取り込み、照合が全件一致 |
 | **R2 生成エンジン** | `voice`（VOICEVOX・読みの正規化）、`ai`（Gemini・Ollama・再試行・費用）、`media`（音声ミックス・字幕組版・キャラ合成・レンダー）、`pipeline`（工程キャッシュ・永続ジョブ・事前点検・QA ゲート） | §9.3 の読み・音声・動画の同等性。`DESIGN_quality.md` §1 の完成動画の指標 |
 | **R3 YouTube** | アップロード・メタデータ・再生リスト・固定コメント・Analytics・クォータ | §9.3 の投稿・分析の同等性（影運用で要求内容を比較） |
 | **R4 画面** | ホーム・つくる・スタジオ・自動運用・ライブラリ・分析・設定、トレイと通知、`--tick` の OS タスク | 主要画面の撮影検査が緑。Python 版の全操作が Rust 版でできる（棚卸し表で確認） |
 | **R5 影運用と切り替え** | §9.1 の 3〜5 | 影運用 2 週間で重大な差分 0、チャンネルごとの切り替え完了、自動運用 30 日無人で `DESIGN_quality.md` §1 を満たす |
-| **R6 伸ばす** | `growth`（勝ちパターン・ネタ在庫・企画提案）、多言語メタデータ・字幕、運用ダッシュボード | `DESIGN_quality.md` §6・§8 の Q-M4 相当 |
+| **R6 伸ばす** | `growth`（勝ちパターン・ネタ在庫・企画提案）、多言語メタデータ・字幕、運用ダッシュボード | `DESIGN_quality.md` §1・§6および `DESIGN_implementation_plan.md` §5のR6完了条件 |
 
 各マイルストーンの着手前に、その範囲の詳細設計（型・DB スキーマ・呼び出し口・画面の構成）を PR 本文に書く（利用者の承認は待たない。AGENTS.md）。`DESIGN_backlog.md` の優先度 A の案は、組み込み先のマイルストーンの詳細設計に ID 付きで取り込む。
 
@@ -252,9 +240,10 @@ Rust 版をリポジトリ直下に置き（PicoAgent と同じ配置）、今�
 
 | タスク | 扱い |
 |---|---|
-| PR #35（自動運用） | マージして本番運用に使う（Python 版の最後の機能追加） |
+| PR #35（自動運用） | 既存の未マージ作業。実装計画の各WPとは分けてレビュー・マージする |
 | PR #36 の実装済み部分（ライセンス v1・v2、PicoAgent ルール・スキル） | マージしてよい。ライセンスは Rust 版では作らない（§9.4） |
 | `DESIGN_product_v2.md` の未着手タスク（T5〜T41）、`DESIGN_foundations.md` の Python 版ガード、`DESIGN_quality.md` §5・§8 | **Python 版では実施しない**。中身は Rust 版の要件として R0〜R6 に取り込む |
+| 移行の安全性 | WP-R0-2（環境固定）、WP-R1-7（テスト隔離・オラクル）、WP-R5-3（二重運用の拒否）は実施する（実装計画 §8） |
 | 例外: 本番で実害が出ているもの | Python 版でも直す（AGENTS.md の「実害のあるバグは見つけ次第直す」）。例: 日付処理の不具合が実際に起きた場合 |
 
 ---
@@ -269,8 +258,8 @@ Rust に作り直しても、次の 3 か所には Python が残る。
 
 | 場所 | 用途 | CUDA |
 |---|---|---|
-| 旧アプリ（`legacy/`、凍結） | 移行完了まで本番を動かす。旧データの取り込み（§9.2）と立ち絵 PSD の書き出しにも使う | 使わない（エンコードは外部 ffmpeg の NVENC） |
-| PicoCast が管理する機械学習ランタイム（任意機能） | ローカル AI 作曲（ACE-Step 等）、将来のローカル音声合成など PyTorch を使う機能 | 使う |
+| 旧アプリ（リポジトリ直下、凍結） | 移行完了まで本番を動かす。旧データの取り込み（§9.2）と立ち絵 PSD の書き出しにも使う | 使わない（エンコードは外部 ffmpeg の NVENC） |
+| PicoCastが管理する機械学習ランタイム（将来の保留案） | 現行WPでは導入しない。ローカルAI作曲は作らない。将来別機能で採用する場合だけ§12.3の方針を再確認する | 現段階では導入しない |
 | 利用者が別に入れた Stable Diffusion WebUI・Ollama | 画像生成・ローカル LLM | 各ソフトが自分で管理。**PicoCast は環境を共有しない・触らない** |
 
 ### 12.2 基準の版
@@ -294,9 +283,9 @@ Rust に作り直しても、次の 3 か所には Python が残る。
 - 大容量（PyTorch＋モデルで数 GB〜十数 GB）のため、取得は利用者の明示操作のときだけ。容量と所要時間を事前に表示する。
 - PyTorch と CUDA の具体的な版は、`uv.lock` と専用のインデックス指定（`cu130` / `cu126`）で固定する。版を上げるときは、全 CUDA 機能の公式 wheel が揃っていることを確認し、起動と実処理を新しい組み合わせで検証してから切り替える（毎月の依存監査スキルで点検）。
 
-### 12.4 旧アプリ（`legacy/`）の固定手順
+### 12.4 旧アプリ（現位置）の固定手順
 
-旧アプリは今 Python 3.11.9 の仮想環境で動いている。凍結中も、取り込みツールと同じ基準にそろえる。**§2.2 の改名作業（手順 7）と同時に行う。** パスはすべて `legacy/` の中。
+旧アプリは今 Python 3.11.9 の仮想環境で動いている。凍結中も、取り込みツールと同じ基準にそろえる。**WP-R0-2で、改名済みのリポジトリ直下で行う。** フォルダやデータの移動は行わない。
 
 1. `pyproject.toml`（`requires-python = ">=3.12,<3.13"`）と `.python-version`（`3.12`）を追加し、今の `config/requirements.txt` の実際の版（`pip freeze`）を元に `uv.lock` を作る。
 2. 今の `.venv` を `.venv-311-backup` に退避してから、3.12 の `.venv` を作り直す。
@@ -312,7 +301,7 @@ Rust に作り直しても、次の 3 か所には Python が残る。
 - PyPI の CUDA wheel を 13.0 へ移行（2.11）: https://dev-discuss.pytorch.org/t/transitioning-pypi-cuda-wheels-to-cuda-13-0-as-the-stable-release-2-11/3325
 - PyTorch のリリース一覧: https://github.com/pytorch/pytorch/releases
 
-## 13. 決定待ち
+## 13. 決定事項
 
 | 項目 | 推奨 |
 |---|---|
@@ -320,7 +309,7 @@ Rust に作り直しても、次の 3 か所には Python が残る。
 | ライセンス・購入導線を Rust 版で作らない | 作らない（販売しないため） |
 | 画面を素の JS にする（PicoAgent と同じ） | する |
 | 影運用の期間 | **決定（2026-10-15）**: 2 週間 |
-| 切り替え後に Python 版を残す期間 | **決定（2026-10-15）**: 30 日 |
+| 旧コードの保管 | **決定（2026-10-16）**: 保管用フォルダと30日保管は撤回。切り替え検証後に不要コードを削除し、Git履歴で参照 |
 
 ## 14. 出典（ライブラリ調査 2026-10-15）
 
