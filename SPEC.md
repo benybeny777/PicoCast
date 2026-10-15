@@ -9,6 +9,8 @@
 
 完成形は `DESIGN_rust_rewrite.md`、実装・移行の現状は `docs/r0-foundation.md` を正本とする。新規RustコードはCargoワークスペースの `picocast-core` と `picocast-store` に集約する。チャンネルID、UTC日時、エラー、設定、プロセス、HTTP、原子的保存、SQLite・暗号化保存を実装し、clippyとASTガードで共通部品の迂回を検出する。旧Pythonアプリの置換、旧データ取込み、Tauri画面はまだ未完了。以下はPython旧版の仕様で、パスはPython版のルートからの相対表記とする。
 
+WP-R0-3の共通ログはチャンネル・ジョブ・工程をJSONLへ記録し、`log_retention_days`（既定30日）、`log_max_bytes`（合計256MiB、2役割へ均等配分）、`job_log_compress_days`（既定90日）を型付きレジストリから読む。異常終了通知は確認されるまで保持する。秘密値、内部トレースと画面向け通知の分離、初期化・終了APIは [Rust共通ログ](docs/logging.md) を参照する。画面とジョブ側への接続は後続WPで実装する。
+
 ## 概要
 
 複数のYouTubeチャンネル向けに、台本生成・VOICEVOX音声・画像生成・native MP4・YouTubeアップロード・Analytics確認までを行うローカルWebツール。チャンネルごとの設定は channel profile で管理し、Web UI上でいつでも切り替えられる。

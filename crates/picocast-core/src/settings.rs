@@ -2,6 +2,60 @@ use crate::{AppError, Result};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::RwLock};
 
+/// OSから渡される実行環境情報だけを扱い、設定DBの代わりには使わない。
+#[derive(Debug, Clone)]
+pub struct StorageEnvironment {
+    pub data_parent: std::path::PathBuf,
+    pub sync_roots: Vec<std::path::PathBuf>,
+}
+
+#[cfg(test)]
+#[allow(clippy::disallowed_methods)]
+pub(crate) fn test_environment_value(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name)
+}
+
+#[cfg(windows)]
+#[allow(clippy::disallowed_methods)]
+pub fn windows_storage_environment() -> Result<StorageEnvironment> {
+    let data_parent = std::env::var_os("APPDATA")
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .ok_or_else(|| {
+            tracing::error!(code = "E-SETTING-ENV", "OSのAPPDATA保存先を取得できません");
+            AppError::new(
+                "E-SETTING-ENV",
+                "OSのデータ保存先を取得できません",
+                "WindowsのユーザープロファイルとAPPDATAの設定を確認してください",
+            )
+        })?;
+    let mut sync_roots = Vec::new();
+    for name in ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"] {
+        if let Some(value) = std::env::var_os(name) {
+            let path = std::path::PathBuf::from(value);
+            if !path.is_absolute() {
+                tracing::error!(
+                    code = "E-SETTING-ENV",
+                    environment_name = name,
+                    "OSの同期先が絶対パスではありません"
+                );
+                return Err(AppError::new(
+                    "E-SETTING-ENV",
+                    "OSの同期先が不正です",
+                    "Windowsの同期ソフトとユーザープロファイル設定を確認してください",
+                ));
+            }
+            if !sync_roots.contains(&path) {
+                sync_roots.push(path);
+            }
+        }
+    }
+    Ok(StorageEnvironment {
+        data_parent,
+        sync_roots,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
 pub enum Value {
