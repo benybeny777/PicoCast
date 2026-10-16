@@ -15,6 +15,25 @@ pub(crate) fn test_environment_value(name: &str) -> Option<std::ffi::OsString> {
     std::env::var_os(name)
 }
 
+/// 開発用の明示実ツール受入だけで使う。製品設定や環境変数の一般取得APIではない。
+#[allow(clippy::disallowed_methods)]
+pub fn validation_ffmpeg_path() -> Result<std::path::PathBuf> {
+    std::env::var_os("PICOCAST_TEST_FFMPEG")
+        .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .ok_or_else(|| {
+            tracing::error!(
+                code = "E-SETTING-INVALID",
+                "実ツール検証用のffmpeg絶対パスが未指定です"
+            );
+            AppError::new(
+                "E-SETTING-INVALID",
+                "実ツール検証用のパスが不正です",
+                "ローカル受入時だけPICOCAST_TEST_FFMPEGへ既存ffmpegの絶対パスを指定してください",
+            )
+        })
+}
+
 #[cfg(windows)]
 #[allow(clippy::disallowed_methods)]
 pub fn windows_storage_environment() -> Result<StorageEnvironment> {

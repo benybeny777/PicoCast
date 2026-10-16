@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/picocast-core", "crates/picocast-store", "xtask"]
+members = ["crates/picocast-core", "crates/picocast-store", "crates/picocast-ai", "crates/picocast-testkit", "xtask"]
 resolver = "2"
 
 [workspace.package]
@@ -14,7 +14,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 chrono = { version = "=0.4.45", features = ["serde"] }
 chrono-tz = "=0.10.4"
-tokio = { version = "=1.53.2", features = ["macros", "rt-multi-thread", "process", "time", "io-util", "net"] }
+tokio = { version = "=1.53.2", features = ["macros", "rt-multi-thread", "process", "time", "io-util", "net", "sync"] }
 reqwest = { version = "=0.13.5", default-features = false, features = ["json", "rustls"] }
 tracing = "0.1"
 tracing-subscriber = { version = "=0.3.23", default-features = false, features = ["registry", "std"] }
@@ -23,6 +23,12 @@ tempfile = "=3.27.0"
 rusqlite = { version = "0.37", features = ["bundled", "backup"] }
 aes-gcm = "0.10"
 argon2 = { version = "=0.6.0", default-features = false, features = ["alloc", "zeroize"] }
+jsonschema = { version = "=0.58.6", default-features = false }
+sudachi = { git = "https://github.com/WorksApplications/sudachi.rs", rev = "90fd6068c80c2fc3b63e0dbab0e341475bad4d8f" }
+cosmic-text = { version = "=0.19.0", default-features = false, features = ["std"] }
+proptest = { version = "=1.12.0", default-features = false, features = ["std"] }
+unicode-segmentation = "=1.13.3"
+budouy = { version = "=0.2.2", default-features = false, features = ["std", "vendored-models"] }
 sha2 = "=0.11.1"
 getrandom = "=0.3.4"
 zeroize = "1"

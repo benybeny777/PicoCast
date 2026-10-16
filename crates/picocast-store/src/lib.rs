@@ -1,6 +1,7 @@
 //! チャンネルを明示する永続ストア。旧 Python データは参照しない。
 #![allow(clippy::disallowed_methods)]
 
+pub mod ai_cost;
 pub mod channel_import;
 pub mod character_layers;
 pub mod imports;
