@@ -592,10 +592,26 @@ mod tests {
 
     #[test]
     fn panic_is_allowed_only_in_real_test_boundaries() {
-        assert!(violations("crates/picocast-store/src/external_tests.rs", "#![cfg(test)] fn fixture() { Some(1).unwrap(); }").is_empty());
-        assert!(!violations("crates/picocast-store/src/external_tests.rs", "fn fixture() { Some(1).unwrap(); }").is_empty());
-        assert!(!violations("crates/picocast-core/src/feature.rs", "fn f() { chrono::NaiveDateTime::parse_from_str(\"x\", \"y\"); }").is_empty());
-        assert!(violations("crates/picocast-core/src/clock.rs", "fn f() { chrono::NaiveDateTime::parse_from_str(\"x\", \"y\"); }").is_empty());
+        assert!(violations(
+            "crates/picocast-store/src/external_tests.rs",
+            "#![cfg(test)] fn fixture() { Some(1).unwrap(); }"
+        )
+        .is_empty());
+        assert!(!violations(
+            "crates/picocast-store/src/external_tests.rs",
+            "fn fixture() { Some(1).unwrap(); }"
+        )
+        .is_empty());
+        assert!(!violations(
+            "crates/picocast-core/src/feature.rs",
+            "fn f() { chrono::NaiveDateTime::parse_from_str(\"x\", \"y\"); }"
+        )
+        .is_empty());
+        assert!(violations(
+            "crates/picocast-core/src/clock.rs",
+            "fn f() { chrono::NaiveDateTime::parse_from_str(\"x\", \"y\"); }"
+        )
+        .is_empty());
         assert!(!violations(
             "crates/picocast-core/src/lib.rs",
             "fn f() { Some(1).unwrap(); }"

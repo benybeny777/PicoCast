@@ -530,5 +530,12 @@
     "retry_recommended": false,
     "message_key": "errors.E-TIME-LEGACY.message",
     "fix_key": "errors.E-TIME-LEGACY.fix"
+  },
+  {
+    "code": "E-IMPORT-SETTINGS",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-IMPORT-SETTINGS.message",
+    "fix_key": "errors.E-IMPORT-SETTINGS.fix"
   }
 ]
