@@ -1345,6 +1345,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "picocast-script"
+version = "0.1.0"
+dependencies = [
+ "picocast-ai",
+ "picocast-core",
+ "picocast-store",
+ "picocast-testkit",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "picocast-store"
 version = "0.1.0"
 dependencies = [

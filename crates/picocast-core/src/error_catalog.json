@@ -665,6 +665,13 @@
     "fix_key": "errors.E-AI-USAGE.fix"
   },
   {
+    "code": "E-SCRIPT-FORMAT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SCRIPT-FORMAT.message",
+    "fix_key": "errors.E-SCRIPT-FORMAT.fix"
+  },
+  {
     "code": "E-AI-CHANNEL",
     "category": "auth",
     "retry_recommended": false,

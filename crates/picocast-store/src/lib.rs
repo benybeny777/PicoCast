@@ -7,6 +7,7 @@ pub mod character_layers;
 pub mod imports;
 mod migrations;
 pub mod portable_backup;
+mod projects;
 pub mod repository;
 mod secrets;
 
