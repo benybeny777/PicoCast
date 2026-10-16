@@ -1,13 +1,40 @@
-#![allow(clippy::disallowed_methods)]
+#![allow(clippy::disallowed_methods, clippy::disallowed_types)]
 
 use crate::{AppError, Result};
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{DateTime, SecondsFormat, TimeZone, Utc};
 use chrono_tz::Tz;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 pub use std::time::Instant;
 
 pub fn now_utc_iso() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
+}
+
+/// 旧DBだけにあるnaive日時は、呼出元が明示したzoneで一度だけUTCへ変換する。
+/// 夏時間の曖昧な日時・存在しない日時を推測で補わない。
+pub fn parse_legacy(value: &str, source_timezone: &str) -> Result<Timestamp> {
+    if let Ok(value) = DateTime::parse_from_rfc3339(value) {
+        return Ok(Timestamp(value.with_timezone(&Utc)));
+    }
+    let zone = timezone(source_timezone)?;
+    let parsed = ["%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M:%S%.f"]
+        .iter()
+        .find_map(|format| chrono::NaiveDateTime::parse_from_str(value, format).ok())
+        .and_then(|naive| zone.from_local_datetime(&naive).single());
+    match parsed {
+        Some(value) => Ok(Timestamp(value.with_timezone(&Utc))),
+        None => {
+            tracing::error!(
+                code = "E-TIME-LEGACY",
+                "旧データの日時を一意に変換できません"
+            );
+            Err(AppError::new(
+                "E-TIME-LEGACY",
+                "旧データの日時をUTCへ変換できません",
+                "元の日時と指定タイムゾーンを確認し、欠損・夏時間の曖昧さを修正してください",
+            ))
+        }
+    }
 }
 
 /// タイムゾーンのない日時を受け付けず、保存時は UTC に統一する。
@@ -70,6 +97,24 @@ pub fn timezone(name: &str) -> Result<Tz> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    #[test]
+    fn legacy_timestamps_require_explicit_zone_and_unique_local_time() {
+        assert_eq!(
+            parse_legacy("2026-10-16T12:00:00", "Asia/Tokyo")
+                .unwrap()
+                .to_utc_iso(),
+            "2026-10-16T03:00:00Z"
+        );
+        assert_eq!(
+            parse_legacy("2026-10-16T12:00:00+09:00", "Asia/Tokyo")
+                .unwrap()
+                .to_utc_iso(),
+            "2026-10-16T03:00:00Z"
+        );
+        assert!(parse_legacy("", "Asia/Tokyo").is_err());
+        assert!(parse_legacy("2026-10-25T01:30:00", "Europe/London").is_err());
+        assert!(parse_legacy("2026-03-29T01:30:00", "Europe/London").is_err());
+    }
     #[test]
     fn timestamp_rejects_naive_and_normalizes_offset() {
         assert!(Timestamp::parse("2026-10-15T12:00:00").is_err());

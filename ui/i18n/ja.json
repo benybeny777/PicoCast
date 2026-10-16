@@ -144,5 +144,11 @@
   "errors.E-LOG-CRASH.message": "前回の処理が正常に終了しませんでした",
   "errors.E-LOG-CRASH.fix": "ジョブとデバッグログを確認してから再開してください。自動再送は行いません",
   "errors.E-SETTING-ENV.message": "OSのデータ保存先を取得できません",
-  "errors.E-SETTING-ENV.fix": "WindowsのユーザープロファイルとAPPDATAの設定を確認してください"
+  "errors.E-SETTING-ENV.fix": "WindowsのユーザープロファイルとAPPDATAの設定を確認してください",
+  "errors.E-STORE-MIGRATION.message": "DB の版と移行履歴が一致しません。",
+  "errors.E-STORE-MIGRATION.fix": "対応するアプリ版と SQL ファイルを復元してください。既存 DB を削除せず、移行前バックアップを保管してください。",
+  "errors.E-FILE-IMPORT.message": "素材を取り込めませんでした",
+  "errors.E-FILE-IMPORT.fix": "元素材の変更・保存先の権限と容量・既存ハッシュの整合性を確認してください",
+  "errors.E-TIME-LEGACY.message": "旧データの日時をUTCへ変換できません",
+  "errors.E-TIME-LEGACY.fix": "元の日時と指定タイムゾーンを確認し、欠損・夏時間の曖昧さを修正してください"
 }

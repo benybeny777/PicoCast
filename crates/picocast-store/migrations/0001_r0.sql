@@ -1,0 +1,3 @@
+CREATE TABLE channels(channel_id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL);
+CREATE TABLE settings(channel_id TEXT NOT NULL REFERENCES channels(channel_id) ON DELETE CASCADE, key TEXT NOT NULL, value_json TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(channel_id,key));
+CREATE TABLE encrypted_secrets(channel_id TEXT NOT NULL REFERENCES channels(channel_id) ON DELETE CASCADE, secret_type TEXT NOT NULL, nonce BLOB NOT NULL CHECK(length(nonce)=12), encrypted_value BLOB NOT NULL, key_version INTEGER NOT NULL CHECK(key_version=2), updated_at TEXT NOT NULL, PRIMARY KEY(channel_id,secret_type));
