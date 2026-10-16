@@ -2072,8 +2072,12 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "picocast-core",
+ "picocast-store",
+ "serde",
  "serde_json",
  "syn 2.0.119",
+ "tempfile",
 ]
 
 [[package]]

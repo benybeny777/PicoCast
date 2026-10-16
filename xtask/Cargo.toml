@@ -9,3 +9,9 @@ publish.workspace = true
 anyhow.workspace = true
 serde_json.workspace = true
 syn.workspace = true
+serde.workspace = true
+picocast-core.workspace = true
+picocast-store = { path = "../crates/picocast-store" }
+
+[dev-dependencies]
+tempfile.workspace = true
