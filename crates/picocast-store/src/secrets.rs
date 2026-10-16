@@ -120,6 +120,52 @@ impl MasterKey {
         Ok((nonce, encrypted))
     }
 
+    /// 旧PythonのAESGCM(...).decrypt(nonce,ciphertext,None)だけを扱う。
+    /// 既存のDPAPI生blobはloadで読み、欠損キーを生成しない。
+    pub(crate) fn decrypt_legacy(
+        &self,
+        nonce: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<Zeroizing<Vec<u8>>> {
+        if nonce.len() != 12 {
+            return Err(failure(
+                "E-SECRET-DECRYPT",
+                "旧認証情報の暗号形式が壊れています。",
+                "旧版のDBとマスターキーのバックアップを確認してください。",
+            ));
+        }
+        let cipher = Aes256Gcm::new_from_slice(self.0.as_slice()).map_err(|_| {
+            failure(
+                "E-SECRET-KEY",
+                "旧マスターキーの長さが不正です。",
+                "旧版のキーを復元してください。",
+            )
+        })?;
+        cipher
+            .decrypt(Nonce::from_slice(nonce), ciphertext)
+            .map(Zeroizing::new)
+            .map_err(|_| {
+                failure(
+                    "E-SECRET-DECRYPT",
+                    "旧認証情報を復号できません。",
+                    "同じ利用者の旧DBと旧マスターキーを指定してください。",
+                )
+            })
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::unwrap_used)]
+    pub(crate) fn encrypt_legacy_fixture(&self, plaintext: &[u8]) -> (Vec<u8>, Vec<u8>) {
+        let nonce = vec![7u8; 12];
+        let cipher = Aes256Gcm::new_from_slice(self.0.as_slice()).unwrap();
+        (
+            nonce.clone(),
+            cipher
+                .encrypt(Nonce::from_slice(&nonce), plaintext)
+                .unwrap(),
+        )
+    }
+
     pub(crate) fn decrypt(
         &self,
         channel_id: &ChannelId,
@@ -325,5 +371,23 @@ mod tests {
         let before = std::fs::read(&path).unwrap();
         assert!(MasterKey::create(&path).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+
+    #[test]
+    fn legacy_cipher_matches_aes256_gcm_without_aad_and_rejects_damage() {
+        let key = MasterKey(Zeroizing::new([0u8; 32]));
+        // AES-256-GCMの公開既知値。旧PythonのAAD=Noneと同じ形式。
+        let tag = [
+            0x53, 0x0f, 0x8a, 0xfb, 0xc7, 0x45, 0x36, 0xb9, 0xa9, 0x63, 0xb4, 0xf1, 0xc4, 0xcb,
+            0x73, 0x8b,
+        ];
+        assert!(key.decrypt_legacy(&[0u8; 12], &tag).unwrap().is_empty());
+        let mut changed = tag;
+        changed[0] ^= 1;
+        assert!(key.decrypt_legacy(&[0u8; 12], &changed).is_err());
+        assert!(key.decrypt_legacy(&[0u8; 11], &tag).is_err());
+        assert!(key
+            .decrypt(&channel("a"), "google_api_key", &[0u8; 12], &tag)
+            .is_err());
     }
 }

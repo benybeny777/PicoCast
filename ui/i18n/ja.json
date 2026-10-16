@@ -150,5 +150,7 @@
   "errors.E-FILE-IMPORT.message": "素材を取り込めませんでした",
   "errors.E-FILE-IMPORT.fix": "元素材の変更・保存先の権限と容量・既存ハッシュの整合性を確認してください",
   "errors.E-TIME-LEGACY.message": "旧データの日時をUTCへ変換できません",
-  "errors.E-TIME-LEGACY.fix": "元の日時と指定タイムゾーンを確認し、欠損・夏時間の曖昧さを修正してください"
+  "errors.E-TIME-LEGACY.fix": "元の日時と指定タイムゾーンを確認し、欠損・夏時間の曖昧さを修正してください",
+  "errors.E-IMPORT-SETTINGS.message": "旧データの取り込み・照合に失敗しました",
+  "errors.E-IMPORT-SETTINGS.fix": "元データを変更せず、バックアップのスキーマ・関連・型・指定素材を確認してください"
 }
