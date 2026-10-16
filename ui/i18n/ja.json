@@ -152,5 +152,9 @@
   "errors.E-TIME-LEGACY.message": "旧データの日時をUTCへ変換できません",
   "errors.E-TIME-LEGACY.fix": "元の日時と指定タイムゾーンを確認し、欠損・夏時間の曖昧さを修正してください",
   "errors.E-IMPORT-SETTINGS.message": "旧データの取り込み・照合に失敗しました",
-  "errors.E-IMPORT-SETTINGS.fix": "元データを変更せず、バックアップのスキーマ・関連・型・指定素材を確認してください"
+  "errors.E-IMPORT-SETTINGS.fix": "元データを変更せず、バックアップのスキーマ・関連・型・指定素材を確認してください",
+  "errors.E-PSD-REGISTER.message": "立ち絵レイヤーを登録できませんでした",
+  "errors.E-PSD-REGISTER.fix": "書き出したmanifestとPNGのハッシュ・画素比較結果・チャンネルとキャラクターの指定を確認してください",
+  "errors.E-BACKUP-PORTABLE.message": "暗号化バックアップの保存・認証・復元に失敗しました",
+  "errors.E-BACKUP-PORTABLE.fix": "パスフレーズ、元DBとキー、容量、素材目録を確認し、既存の保存先を上書きせず再実行してください"
 }

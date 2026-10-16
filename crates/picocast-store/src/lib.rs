@@ -2,8 +2,10 @@
 #![allow(clippy::disallowed_methods)]
 
 pub mod channel_import;
+pub mod character_layers;
 pub mod imports;
 mod migrations;
+pub mod portable_backup;
 pub mod repository;
 mod secrets;
 

@@ -7,6 +7,7 @@ from contextlib import ExitStack
 import gc
 import os
 from pathlib import Path
+import re
 import shutil
 import socket
 import tempfile
@@ -14,7 +15,7 @@ import threading
 from unittest.mock import patch
 
 
-def isolate():
+def isolate(*, work_name="legacy-tests"):
     """本番モジュールを読む前に呼び、一時データ領域を返す。"""
     from core import runtime_env
     import dotenv
@@ -22,7 +23,9 @@ def isolate():
     root = Path(__file__).resolve().parents[1]
     if "config.config" in __import__("sys").modules:
         raise RuntimeError("隔離はconfigの読み込み前に実行してください")
-    base = root / "temp" / "legacy-tests"
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", work_name):
+        raise ValueError("隔離用の作業名が不正です")
+    base = root / "temp" / work_name
     base.mkdir(parents=True, exist_ok=True)
     directory = tempfile.TemporaryDirectory(prefix="session-", dir=base)
     target = Path(directory.name)

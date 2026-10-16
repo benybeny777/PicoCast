@@ -537,5 +537,19 @@
     "retry_recommended": false,
     "message_key": "errors.E-IMPORT-SETTINGS.message",
     "fix_key": "errors.E-IMPORT-SETTINGS.fix"
+  },
+  {
+    "code": "E-PSD-REGISTER",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PSD-REGISTER.message",
+    "fix_key": "errors.E-PSD-REGISTER.fix"
+  },
+  {
+    "code": "E-BACKUP-PORTABLE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-BACKUP-PORTABLE.message",
+    "fix_key": "errors.E-BACKUP-PORTABLE.fix"
   }
 ]

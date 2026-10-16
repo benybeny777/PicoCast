@@ -38,6 +38,31 @@ impl StorePaths {
         self.root.join("assets")
     }
 
+    /// 保存構成を変えずに復元用ステージへ向ける。実ファイルは移動・作成しない。
+    pub fn relocated(&self, new_root: &Path) -> Result<Self> {
+        require_absolute(&self.root)?;
+        require_absolute(new_root)?;
+        let rebase = |path: &Path| -> Result<PathBuf> {
+            let relative = path
+                .strip_prefix(&self.root)
+                .map_err(|_| path_failure("保存構成が元の管理ルート外を指しています。"))?;
+            if relative.as_os_str().is_empty()
+                || relative
+                    .components()
+                    .any(|component| !matches!(component, std::path::Component::Normal(_)))
+            {
+                return Err(path_failure("保存構成の相対パスが不正です。"));
+            }
+            Ok(new_root.join(relative))
+        };
+        Ok(Self {
+            root: new_root.to_path_buf(),
+            database: rebase(&self.database)?,
+            backups: rebase(&self.backups)?,
+            master_key: rebase(&self.master_key)?,
+        })
+    }
+
     pub fn validate_storage(&self, policy: &StoragePolicy) -> Result<()> {
         let assets = self.assets_directory();
         for path in [
@@ -114,7 +139,7 @@ pub fn validate_storage(path: &Path, policy: &StoragePolicy) -> Result<()> {
     policy.check(&risks)
 }
 
-fn require_absolute(path: &Path) -> Result<()> {
+pub(crate) fn require_absolute(path: &Path) -> Result<()> {
     if !path.is_absolute() || path.as_os_str().as_encoded_bytes().contains(&0) {
         return Err(path_failure("保存先は有効な絶対パスで指定してください。"));
     }
@@ -337,6 +362,31 @@ fn path_failure(message: &str) -> AppError {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn relocating_preserves_layout_without_creating_files_and_rejects_external_fields() {
+        let temporary = tempfile::tempdir().unwrap();
+        let mut original = StorePaths::new(temporary.path(), DataMode::Development).unwrap();
+        original.database = original.root.join("nested").join("custom.db");
+        let stage = temporary.path().join("stage");
+        let relocated = original.relocated(&stage).unwrap();
+        assert_eq!(relocated.database, stage.join("nested").join("custom.db"));
+        assert_eq!(
+            relocated.backups,
+            stage.join(original.backups.strip_prefix(&original.root).unwrap())
+        );
+        assert_eq!(
+            relocated.master_key,
+            stage.join(original.master_key.strip_prefix(&original.root).unwrap())
+        );
+        assert_eq!(relocated.assets_directory(), stage.join("assets"));
+        assert!(!stage.exists());
+        assert!(original.relocated(Path::new("relative")).is_err());
+        original.database = temporary.path().join("external.db");
+        assert!(original.relocated(&stage).is_err());
+        original.database = original.root.join("..").join("external.db");
+        assert!(original.relocated(&stage).is_err());
+    }
 
     #[test]
     fn simulated_sync_and_network_paths_require_specific_permission() {
