@@ -677,5 +677,61 @@
     "retry_recommended": false,
     "message_key": "errors.E-AI-CHANNEL.message",
     "fix_key": "errors.E-AI-CHANNEL.fix"
+  },
+  {
+    "code": "E-VOICE-ACCENT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-ACCENT.message",
+    "fix_key": "errors.E-VOICE-ACCENT.fix"
+  },
+  {
+    "code": "E-VOICE-AUDIO",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-AUDIO.message",
+    "fix_key": "errors.E-VOICE-AUDIO.fix"
+  },
+  {
+    "code": "E-VOICE-CHANNEL",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-CHANNEL.message",
+    "fix_key": "errors.E-VOICE-CHANNEL.fix"
+  },
+  {
+    "code": "E-VOICE-CONFIG",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-CONFIG.message",
+    "fix_key": "errors.E-VOICE-CONFIG.fix"
+  },
+  {
+    "code": "E-VOICE-DICTIONARY",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-DICTIONARY.message",
+    "fix_key": "errors.E-VOICE-DICTIONARY.fix"
+  },
+  {
+    "code": "E-VOICE-ENGINE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-ENGINE.message",
+    "fix_key": "errors.E-VOICE-ENGINE.fix"
+  },
+  {
+    "code": "E-VOICE-READING",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-READING.message",
+    "fix_key": "errors.E-VOICE-READING.fix"
+  },
+  {
+    "code": "E-VOICE-STYLE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-VOICE-STYLE.message",
+    "fix_key": "errors.E-VOICE-STYLE.fix"
   }
 ]

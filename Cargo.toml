@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/picocast-core", "crates/picocast-store", "crates/picocast-ai", "crates/picocast-testkit", "crates/picocast-script", "xtask"]
+members = ["crates/picocast-core", "crates/picocast-store", "crates/picocast-ai", "crates/picocast-testkit", "crates/picocast-script", "crates/picocast-voice", "xtask"]
 resolver = "2"
 
 [workspace.package]
