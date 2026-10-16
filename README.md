@@ -24,6 +24,8 @@ Rust統合DBは38表の型付きリポジトリと、バックアップ付きの
 
 旧設定の取込APIは、元DBと秘密値を保護して全件照合します。型・鍵・素材の指定と実データ受入の境界は [設定の取り込み](docs/settings-import.md) を参照してください。
 
+動画履歴と出力コピーは、素材のSHA-256を照合して取り込みます。放置ジョブの区別と原データ保持は [動画・素材の取り込み](docs/channel-import.md) を参照してください。
+
 旧版テストは実設定・鍵・出力から隔離され、`.venv/Scripts/python.exe -m pytest tests -q` で実APIを使わず検査します。`cargo xtask oracle` は6分野12ケースの旧版比較契約を確認し、`cargo xtask oracle record` は基準候補を標準出力へ出すだけで既存基準を書き換えません。契約と環境の詳細は [旧版オラクル](tests/oracle/README.md) を参照してください。CIではPython3.12とuv.lockの固定環境を用意して同じ検査を実行します。
 
 2026-10-16時点でローカルフォルダは `C:\00_PG\22_PicoCast` へ改名済みです。保管用の `legacy/` は作らず、Rust版への切り替え後は不要な旧コードを削除してGit履歴で参照します。DB・生成物・認証情報は別に保護します。Claude Remote Controlも `PicoCast` 名で新しいフォルダを参照し、既存のログオンタスク `Claude Remote Control - Projects` から起動します。
