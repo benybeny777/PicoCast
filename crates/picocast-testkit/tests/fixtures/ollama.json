@@ -1,0 +1,4 @@
+[
+  {"method":"GET","path":"/api/tags","expected_body":null,"status":200,"retry_after_ms":null,"response":{"models":[{"name":"synthetic-ollama"}]}},
+  {"method":"POST","path":"/api/generate","expected_body":{"model":"synthetic-ollama","prompt":"架空の題名をJSONで","stream":false,"format":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false},"options":{"num_predict":64}},"status":200,"retry_after_ms":null,"response":{"model":"synthetic-ollama","response":"{\"title\":\"架空の題名\"}","done":true,"done_reason":"stop","prompt_eval_count":5,"eval_count":10}}
+]

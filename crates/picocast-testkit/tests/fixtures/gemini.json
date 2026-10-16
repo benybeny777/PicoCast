@@ -1,0 +1,4 @@
+[
+  {"method":"GET","path":"/models","expected_body":null,"status":200,"retry_after_ms":null,"response":{"models":[{"name":"models/synthetic-gemini","supportedGenerationMethods":["generateContent"]}]}},
+  {"method":"POST","path":"/models/synthetic-gemini:generateContent","expected_body":{"contents":[{"role":"user","parts":[{"text":"架空の題名をJSONで"}]}],"generationConfig":{"maxOutputTokens":64,"responseMimeType":"application/json","responseJsonSchema":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false}}},"status":200,"retry_after_ms":null,"response":{"candidates":[{"content":{"parts":[{"text":"{\"title\":\"架空の題名\"}"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":8,"totalTokenCount":15}}}
+]

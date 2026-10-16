@@ -1,0 +1,4 @@
+[
+  {"method":"GET","path":"/models","expected_body":null,"status":200,"retry_after_ms":null,"response":{"object":"list","data":[{"id":"synthetic-openai","object":"model"}]}},
+  {"method":"POST","path":"/responses","expected_body":{"model":"synthetic-openai","input":"架空の題名をJSONで","store":false,"max_output_tokens":64,"text":{"format":{"type":"json_schema","name":"picocast_output","strict":true,"schema":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false}}}},"status":200,"retry_after_ms":null,"response":{"status":"completed","error":null,"model":"synthetic-openai","output":[{"type":"message","content":[{"type":"output_text","text":"{\"title\":\"架空の題名\"}"}]}],"usage":{"input_tokens":5,"output_tokens":10,"total_tokens":15}}}
+]

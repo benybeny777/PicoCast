@@ -551,5 +551,124 @@
     "retry_recommended": false,
     "message_key": "errors.E-BACKUP-PORTABLE.message",
     "fix_key": "errors.E-BACKUP-PORTABLE.fix"
+  },
+  {
+    "code": "E-HTTP-REQUEST",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-HTTP-REQUEST.message",
+    "fix_key": "errors.E-HTTP-REQUEST.fix"
+  },
+  {
+    "code": "E-HTTP-RESPONSE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-HTTP-RESPONSE.message",
+    "fix_key": "errors.E-HTTP-RESPONSE.fix"
+  },
+  {
+    "code": "E-HTTP-OFFLINE",
+    "category": "system",
+    "retry_recommended": true,
+    "message_key": "errors.E-HTTP-OFFLINE.message",
+    "fix_key": "errors.E-HTTP-OFFLINE.fix"
+  },
+  {
+    "code": "E-HTTP-DEADLINE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-HTTP-DEADLINE.message",
+    "fix_key": "errors.E-HTTP-DEADLINE.fix"
+  },
+  {
+    "code": "E-AI-AUTH",
+    "category": "auth",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-AUTH.message",
+    "fix_key": "errors.E-AI-AUTH.fix"
+  },
+  {
+    "code": "E-AI-BUDGET",
+    "category": "quota",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-BUDGET.message",
+    "fix_key": "errors.E-AI-BUDGET.fix"
+  },
+  {
+    "code": "E-AI-CANCELLED",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-CANCELLED.message",
+    "fix_key": "errors.E-AI-CANCELLED.fix"
+  },
+  {
+    "code": "E-AI-MODEL",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-MODEL.message",
+    "fix_key": "errors.E-AI-MODEL.fix"
+  },
+  {
+    "code": "E-AI-OFFLINE",
+    "category": "system",
+    "retry_recommended": true,
+    "message_key": "errors.E-AI-OFFLINE.message",
+    "fix_key": "errors.E-AI-OFFLINE.fix"
+  },
+  {
+    "code": "E-AI-PROVIDER",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-PROVIDER.message",
+    "fix_key": "errors.E-AI-PROVIDER.fix"
+  },
+  {
+    "code": "E-AI-RATE",
+    "category": "api_busy",
+    "retry_recommended": true,
+    "message_key": "errors.E-AI-RATE.message",
+    "fix_key": "errors.E-AI-RATE.fix"
+  },
+  {
+    "code": "E-AI-RESERVATION",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-RESERVATION.message",
+    "fix_key": "errors.E-AI-RESERVATION.fix"
+  },
+  {
+    "code": "E-AI-SCHEMA",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-SCHEMA.message",
+    "fix_key": "errors.E-AI-SCHEMA.fix"
+  },
+  {
+    "code": "E-AI-TIMEOUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-TIMEOUT.message",
+    "fix_key": "errors.E-AI-TIMEOUT.fix"
+  },
+  {
+    "code": "E-AI-TOKENS",
+    "category": "quota",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-TOKENS.message",
+    "fix_key": "errors.E-AI-TOKENS.fix"
+  },
+  {
+    "code": "E-AI-USAGE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-USAGE.message",
+    "fix_key": "errors.E-AI-USAGE.fix"
+  },
+  {
+    "code": "E-AI-CHANNEL",
+    "category": "auth",
+    "retry_recommended": false,
+    "message_key": "errors.E-AI-CHANNEL.message",
+    "fix_key": "errors.E-AI-CHANNEL.fix"
   }
 ]
