@@ -1,8 +1,8 @@
 //! 旧チャンネルのバックアップを読み取り、原記録と内容アドレス素材を照合して保存する。
 
 use crate::repository::{
-    Asset, AssetKey, AssetRef, AuditEntry, AuditEntryKey, Channel, ChannelKey, Job, JobStep,
-    Project, ProjectRevision, Topic, Upload, YoutubeVideo,
+    Asset, AssetRef, AuditEntry, AuditEntryKey, Channel, ChannelKey, Job, JobStep, Project,
+    ProjectRevision, Topic, Upload, YoutubeVideo,
 };
 use crate::{db_failure, imports, repository, Store};
 use picocast_core::{
@@ -566,29 +566,17 @@ fn import_assets(
 ) -> Result<()> {
     for asset in assets {
         let bytes = i64::try_from(asset.bytes).map_err(|_| imports::import_failure())?;
-        if let Some(existing) = repository::get::<Asset>(
+        imports::put_asset_checked(
             tx,
-            &AssetKey {
+            &Asset {
                 sha256: asset.sha256.clone(),
+                kind: "legacy".into(),
+                ext: asset.ext.clone(),
+                bytes,
+                created_at: at.clone(),
+                provenance_json: json!({"source":"legacy_channel_import"}),
             },
-            None,
-        )? {
-            if existing.bytes != bytes || existing.ext != asset.ext {
-                return Err(imports::import_failure());
-            }
-        } else {
-            imports::put_checked(
-                tx,
-                &Asset {
-                    sha256: asset.sha256.clone(),
-                    kind: "legacy".into(),
-                    ext: asset.ext.clone(),
-                    bytes,
-                    created_at: at.clone(),
-                    provenance_json: json!({"source":"legacy_channel_import"}),
-                },
-            )?;
-        }
+        )?;
         imports::put_checked(
             tx,
             &AssetRef {

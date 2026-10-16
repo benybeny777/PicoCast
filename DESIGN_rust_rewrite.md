@@ -168,7 +168,7 @@
 ## 7. 品質の仕組み
 
 - `xtask verify`: `cargo fmt --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` → 走査ガード → `node --test` → `cargo deny check`（脆弱性・ライセンス）。
-- GitHub Actions（Windows）で同じ `xtask verify` を実行。pre-commit でも実行し、赤のままコミットしない。
+- 検証はこのPCで `xtask verify` を実行する。GitHub Actionsは利用者指示（2026-10-16）により使用しない。ローカルで失敗を修正してから結果を記録する。
 - 依存は `Cargo.lock` で固定。
 - ゴールデンテスト（`DESIGN_quality.md` R6）: 固定の台本・素材・シードから作った動画の長さ・ラウドネス・字幕の位置・代表フレームの特徴量を基準と比較。基準の更新は `xtask golden --update` と理由の記録で行う。
 - 画面: PicoAgent の撮影検査（Playwright）方式で、主要画面のはみ出し・重なり・状態表示を検査。
@@ -224,7 +224,7 @@
 
 | M | 内容 | 完了条件 |
 |---|---|---|
-| **R0 土台** | 改名後の文書整合・運用参照先の確認（§2.2）、ワークスペース、Python 3.12 と `uv.lock` の固定（§12）、`xtask verify`、CI、clippy の禁止設定と走査ガード、`core`（clock・AppError・settings・proc・http・fsutil・tracing）、`store`（DB・マイグレーション・バックアップ・秘密値）、AGENTS.md・HANDOFF・スキル | `xtask verify` が CI で緑。ガードが「違反を入れると落ちる」ことをテストで確認 |
+| **R0 土台** | 改名後の文書整合・運用参照先の確認（§2.2）、ワークスペース、Python 3.12 と `uv.lock` の固定（§12）、ローカルの `xtask verify`、clippy の禁止設定と走査ガード、`core`（clock・AppError・settings・proc・http・fsutil・tracing）、`store`（DB・マイグレーション・バックアップ・秘密値）、AGENTS.md・HANDOFF・スキル | このPCで `xtask verify` が成功。ガードが「違反を入れると落ちる」ことをテストで確認 |
 | **R1 取り込みと棚卸し** | `docs/migration-inventory.md`、`xtask import-legacy`、立ち絵の PNG 化 | 本番データのコピーを取り込み、照合が全件一致 |
 | **R2 生成エンジン** | `voice`（VOICEVOX・読みの正規化）、`ai`（Gemini・Ollama・再試行・費用）、`media`（音声ミックス・字幕組版・キャラ合成・レンダー）、`pipeline`（工程キャッシュ・永続ジョブ・事前点検・QA ゲート） | §9.3 の読み・音声・動画の同等性。`DESIGN_quality.md` §1 の完成動画の指標 |
 | **R3 YouTube** | アップロード・メタデータ・再生リスト・固定コメント・Analytics・クォータ | §9.3 の投稿・分析の同等性（影運用で要求内容を比較） |

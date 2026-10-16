@@ -34,6 +34,9 @@ def _configured_active_profile(request, monkeypatch, tmp_path_factory):
     if request.node.get_closest_marker("no_active_profile"):
         return
     import core.channel_profile as cp
+    from config import config
+    # 画面テストは同梱音源の自動移行や外部ffprobeを前提にしない。
+    monkeypatch.setattr(config, "BGM_PATH", "")
     root = tmp_path_factory.mktemp("active_profile_output")
     dummy = cp.ChannelProfile(
         profile_id="test_profile",

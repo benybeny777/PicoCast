@@ -2,8 +2,8 @@
 use crate::{
     db_failure, failure, io_failure,
     repository::{
-        self, AppSetting, AppSettingKey, Asset, AssetKey, AssetRef, AutopilotPolicy, Channel,
-        ChannelSetting, Character, MusicTags, Notification, PromptTemplate, PromptTemplateVersion,
+        self, AppSetting, AppSettingKey, Asset, AssetRef, AutopilotPolicy, Channel, ChannelSetting,
+        Character, MusicTags, Notification, PromptTemplate, PromptTemplateVersion,
         ReadingCandidate, ReadingEntry, Record, ScheduleSlot,
     },
     MasterKey, Store,
@@ -180,6 +180,84 @@ pub(crate) fn put_checked<R: Record>(connection: &Connection, record: &R) -> Res
         return Err(import_failure());
     }
     Ok(())
+}
+
+/// 同じ内容の素材は最初の来歴を維持し、サイズ・形式の矛盾だけを拒否する。
+pub(crate) fn put_asset_checked(connection: &Connection, record: &Asset) -> Result<()> {
+    if let Some(existing) = repository::get::<Asset>(connection, &record.key(), None)? {
+        if existing.bytes != record.bytes || existing.ext != record.ext {
+            return Err(import_failure());
+        }
+        Ok(())
+    } else {
+        put_checked(connection, record)
+    }
+}
+
+fn snapshot_plaintext(value: &Value, key: &MasterKey) -> Result<zeroize::Zeroizing<Vec<u8>>> {
+    if value["format"] != "aes-gcm-settings-backup-v1" {
+        return Err(import_failure());
+    }
+    let nonce: Vec<u8> =
+        serde_json::from_value(value["nonce"].clone()).map_err(|_| import_failure())?;
+    let ciphertext: Vec<u8> =
+        serde_json::from_value(value["ciphertext"].clone()).map_err(|_| import_failure())?;
+    key.decrypt(
+        &ChannelId::new("picocast-import:settings")?,
+        "database-backup-v1",
+        &nonce,
+        &ciphertext,
+    )
+}
+
+fn snapshot_envelope(bytes: &[u8], key: &MasterKey) -> Result<Value> {
+    let (nonce, ciphertext) = key.encrypt(
+        &ChannelId::new("picocast-import:settings")?,
+        "database-backup-v1",
+        bytes,
+    )?;
+    Ok(
+        json!({"format":"aes-gcm-settings-backup-v1","nonce":nonce.to_vec(),"ciphertext":ciphertext}),
+    )
+}
+
+pub(crate) fn verify_database_snapshots(connection: &Connection, key: &MasterKey) -> Result<usize> {
+    let records = repository::GlobalRepository { connection }.list::<AppSetting>()?;
+    let mut count = 0;
+    for record in records.iter().filter(|record| {
+        record
+            .key
+            .starts_with("legacy:encrypted-settings-snapshot:")
+    }) {
+        snapshot_plaintext(&record.value_json, key)?;
+        count += 1;
+    }
+    Ok(count)
+}
+
+pub(crate) fn rewrap_database_snapshots(
+    connection: &Connection,
+    old_key: &MasterKey,
+    new_key: &MasterKey,
+) -> Result<usize> {
+    let records = repository::GlobalRepository { connection }.list::<AppSetting>()?;
+    let mut count = 0;
+    for mut record in records.into_iter().filter(|record| {
+        record
+            .key
+            .starts_with("legacy:encrypted-settings-snapshot:")
+    }) {
+        let plain = snapshot_plaintext(&record.value_json, old_key)?;
+        record.value_json = snapshot_envelope(&plain, new_key)?;
+        repository::save(connection, &record)?;
+        let persisted = repository::get::<AppSetting>(connection, &record.key(), None)?
+            .ok_or_else(import_failure)?;
+        if snapshot_plaintext(&persisted.value_json, new_key)?.as_slice() != plain.as_slice() {
+            return Err(import_failure());
+        }
+        count += 1;
+    }
+    Ok(count)
 }
 
 pub(crate) fn digest_file(path: &Path) -> Result<String> {
@@ -469,44 +547,25 @@ fn preserve_database_snapshot(
         return Err(import_failure());
     }
     let name = format!("legacy:encrypted-settings-snapshot:{hash}");
-    let identity = ChannelId::new("picocast-import:settings")?;
-    let kind = "database-backup-v1";
     if let Some(existing) =
         repository::get::<AppSetting>(tx, &AppSettingKey { key: name.clone() }, None)?
     {
-        let nonce: Vec<u8> = serde_json::from_value(existing.value_json["nonce"].clone())
-            .map_err(|_| import_failure())?;
-        let ciphertext: Vec<u8> = serde_json::from_value(existing.value_json["ciphertext"].clone())
-            .map_err(|_| import_failure())?;
-        if key
-            .decrypt(&identity, kind, &nonce, &ciphertext)?
-            .as_slice()
-            != bytes.as_slice()
-        {
+        if snapshot_plaintext(&existing.value_json, key)?.as_slice() != bytes.as_slice() {
             return Err(import_failure());
         }
     } else {
-        let (nonce, ciphertext) = key.encrypt(&identity, kind, &bytes)?;
         put_checked(
             tx,
             &AppSetting {
                 key: name.clone(),
-                value_json: json!({"format":"aes-gcm-settings-backup-v1","nonce":nonce.to_vec(),"ciphertext":ciphertext}),
+                value_json: snapshot_envelope(&bytes, key)?,
                 updated_at: at.clone(),
             },
         )?;
     }
     let persisted = repository::get::<AppSetting>(tx, &AppSettingKey { key: name }, None)?
         .ok_or_else(import_failure)?;
-    let nonce: Vec<u8> = serde_json::from_value(persisted.value_json["nonce"].clone())
-        .map_err(|_| import_failure())?;
-    let ciphertext: Vec<u8> = serde_json::from_value(persisted.value_json["ciphertext"].clone())
-        .map_err(|_| import_failure())?;
-    if key
-        .decrypt(&identity, kind, &nonce, &ciphertext)?
-        .as_slice()
-        != bytes.as_slice()
-    {
+    if snapshot_plaintext(&persisted.value_json, key)?.as_slice() != bytes.as_slice() {
         return Err(import_failure());
     }
     Ok(())
@@ -828,30 +887,17 @@ fn import_bgm(
         preserve_row(tx, "bgm_assets", row, bgm_id, at, Some(&id))?;
         let copied = picocast_core::fsutil::import_content_addressed(source, &options.assets_root)?;
         let bytes = i64::try_from(copied.bytes).map_err(|_| import_failure())?;
-        let existing = repository::get::<Asset>(
+        put_asset_checked(
             tx,
-            &AssetKey {
+            &Asset {
                 sha256: copied.sha256.clone(),
+                kind: "audio".into(),
+                ext: copied.ext.clone(),
+                bytes,
+                created_at: timestamp(row, "created_at")?,
+                provenance_json: json!({"source":"legacy-bgm-backup"}),
             },
-            None,
         )?;
-        if let Some(asset) = existing {
-            if asset.bytes != bytes || asset.ext != copied.ext {
-                return Err(import_failure());
-            }
-        } else {
-            put_checked(
-                tx,
-                &Asset {
-                    sha256: copied.sha256.clone(),
-                    kind: "audio".into(),
-                    ext: copied.ext.clone(),
-                    bytes,
-                    created_at: timestamp(row, "created_at")?,
-                    provenance_json: json!({"source":"legacy-bgm-backup"}),
-                },
-            )?;
-        }
         put_checked(
             tx,
             &AssetRef {

@@ -26,7 +26,9 @@ Rust統合DBは38表の型付きリポジトリと、バックアップ付きの
 
 動画履歴と出力コピーは、素材のSHA-256を照合して取り込みます。放置ジョブの区別と原データ保持は [動画・素材の取り込み](docs/channel-import.md) を参照してください。
 
-旧版テストは実設定・鍵・出力から隔離され、`.venv/Scripts/python.exe -m pytest tests -q` で実APIを使わず検査します。`cargo xtask oracle` は6分野12ケースの旧版比較契約を確認し、`cargo xtask oracle record` は基準候補を標準出力へ出すだけで既存基準を書き換えません。契約と環境の詳細は [旧版オラクル](tests/oracle/README.md) を参照してください。CIではPython3.12とuv.lockの固定環境を用意して同じ検査を実行します。
+旧PSDのレイヤー書き出しと画素比較は [立ち絵の移行](docs/psd-layer-export.md)、パスフレーズで保護したDB・素材の書き出しと復元APIは [暗号化バックアップ](docs/portable-backup.md) を参照してください。実素材・別PCの受入や画面への接続は、合成テストと区別して確認します。
+
+旧版テストは実設定・鍵・出力から隔離され、`.venv/Scripts/python.exe -m pytest tests -q` で実APIを使わず検査します。`cargo xtask oracle` は6分野12ケースの旧版比較契約を確認し、`cargo xtask oracle record` は基準候補を標準出力へ出すだけで既存基準を書き換えません。契約と環境の詳細は [旧版オラクル](tests/oracle/README.md) を参照してください。検証はこのPCで実行し、GitHub Actionsは使用しません（2026-10-16利用者指示）。
 
 2026-10-16時点でローカルフォルダは `C:\00_PG\22_PicoCast` へ改名済みです。保管用の `legacy/` は作らず、Rust版への切り替え後は不要な旧コードを削除してGit履歴で参照します。DB・生成物・認証情報は別に保護します。Claude Remote Controlも `PicoCast` 名で新しいフォルダを参照し、既存のログオンタスク `Claude Remote Control - Projects` から起動します。
 
@@ -246,6 +248,8 @@ uv sync --locked --group build --group dev
 Python本体とuvを準備してから実行します。既存の3.11環境はこの手順で上書きせず、DB・鍵を退避する [Python 3.12切り替え手順](docs/python312-switch.md) を使います。外部のVOICEVOX・Stable Diffusion・Ollama環境は変更しません。
 
 通常起動は `uv run --locked --no-sync` で準備済み環境を使い、起動時に依存を更新しません。隔離テストは次で実行できます。
+
+環境切り替え後のローカル実サンプルは [受入手順](docs/python312-sample.md) に従います。実設定を隔離し、インストール済みOllama・VOICEVOX・ffmpegだけを使います。
 
 ```powershell
 uv run --locked --no-sync python -m pytest tests -q

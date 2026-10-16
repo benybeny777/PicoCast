@@ -1,6 +1,6 @@
 # 引き継ぎ（未マージ作業と再開方法）
 
-最終更新: 2026-10-16（WP-R0-1: 文書の整合）
+最終更新: 2026-10-16（旧データ移行・ローカル検証への切り替え）
 
 ## 再開方法
 
@@ -13,9 +13,10 @@
 
 ## 次の作業
 
-- **WP-R1-2（ドメインDB）・WP-R1-3（設定の取り込み）・WP-R1-4（動画/素材の取り込み）** の統合を進めている。WP-R1-7はPython3.12/CIでの再現確認が残る。実装済みの範囲と検証は実装計画の状態表を参照する。
-- **WP-R0-2（Python 3.12＋uvへの切り替え）** は、自動運用と予約投稿の無い時間帯に現位置で行う。切り替え直前の実プロセス確認とDBの再バックアップが必要。有料APIは明示指示または運用上の明確な必要がある場合だけ使う。
+- **WP-R1-3・4・6の本番コピー受入** が残る。PSD取り込みと暗号化バックアップもAPIを実装し、R1時点のローカルverifyはRust94件を含め全成功。旧版オラクルはPython3.12でも一致した。次の生成基盤WP-R2-1〜5を実装中。
+- **WP-R0-2** はPython3.12.13へ切り替え済み。旧新で同じ682件（681成功・1skip）と12オラクルが一致。ローカルLLM→VOICEVOX→旧nativeで1920x1080/4.6秒の実サンプル成功、PNG入力fixtureで日本語字幕も確認。旧 `.venv-311-backup` の削除は自動承認レビューにblocked by policyで拒否され未実行。別経路で迂回しない。DB/鍵の退避は保持。有料APIは使っていない。
 - R1以降の全WPの状態と完了条件は実装計画を参照する。
+- **GitHub Actionsは全プロジェクトで全面禁止（利用者指示）**。所有11リポジトリすべてenabled=falseを確認し、実行中は0件。PicoCastの実行中3件は中止済み。PicoAgent-Distributionに9月のqueued記録1件が残るが、通常/強制cancelともGitHubの409で拒否され、Actions無効設定で実行を抑止している。Codex・Claude・C:/00_PG共通ルールへ禁止を反映した。検証はこのPCだけで行う。
 
 ## 未マージのブランチとPR
 
@@ -27,14 +28,21 @@
 | [#39](https://github.com/benybeny777/PicoCast/pull/39) | `codex/wp-r0-4-storage-safety` | `codex/wp-r0-3-logging` | 保存先の共通化と危険検出 |
 | [#40](https://github.com/benybeny777/PicoCast/pull/40) | `codex/wp-r0-5-error-catalog` | `codex/wp-r0-4-storage-safety` | エラーカタログ・文書検査・スキル |
 | [#41](https://github.com/benybeny777/PicoCast/pull/41) | `codex/wp-r1-1-migration-inventory` | `codex/wp-r0-5-error-catalog` | 全642項目の棚卸し |
+| [#42](https://github.com/benybeny777/PicoCast/pull/42) | `codex/wp-r1-7-legacy-oracle` | `codex/wp-r1-1-migration-inventory` | 旧テスト隔離・比較契約 |
+| [#43](https://github.com/benybeny777/PicoCast/pull/43) | `codex/wp-r1-2-domain-store` | `codex/wp-r1-7-legacy-oracle` | 38表のDB・型付きRepository |
+| [#44](https://github.com/benybeny777/PicoCast/pull/44) | `codex/wp-r1-3-settings-import` | `codex/wp-r1-2-domain-store` | 旧設定・秘密値の照合取り込み |
+| [#45](https://github.com/benybeny777/PicoCast/pull/45) | `codex/wp-r1-4-channel-import` | `codex/wp-r1-3-settings-import` | 動画履歴・素材の取り込み |
+| [#46](https://github.com/benybeny777/PicoCast/pull/46) | `codex/wp-r1-6-import-cli` | `codex/wp-r1-4-channel-import` | バックアップ限定CLI・照合報告 |
+| [#47](https://github.com/benybeny777/PicoCast/pull/47) | `codex/wp-r0-2-python312-switch` | `codex/wp-r1-6-import-cli` | 3.12切替手順・uv起動（実Apply前） |
+| [#48](https://github.com/benybeny777/PicoCast/pull/48) | `codex/wp-r1-migration-safety` | `codex/wp-r0-2-python312-switch` | ローカル検証・全プロジェクトActions禁止・PSD/バックアップ・3.12実切替と実サンプル |
 
 WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0-1-doc-consistency` → `codex/license-v2-rebrand-design`）でレビュー待ち。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
 
 ## 移行前に残る確認
 
-- Pythonの実環境は3.11.9。3.12用の `pyproject.toml`・`.python-version`・`uv.lock` は準備済みだが、環境切り替えとサンプル受入は未実施。
-- RustのフルドメインDB・旧データ取り込み・生成・YouTube・Tauri画面は未実装。共通ログのAPIは実装したが、本番画面・ジョブへの接続は後続WP。NodeテストはUIが無いため明示スキップ。macOS実機は検証対象外。
-- 旧版の隔離テストはPython3.11で661件成功・1skip。3.12/CIでの再現と本番のサンプル生成・レンダーは別の確認とする。
+- Python実環境は3.12.13。uv.lockから構築し前後suite/実サンプルを確認した。旧3.11環境は削除拒否のため残る。証拠は `temp/python312-sample/artifacts/run-8dzzuz_0/report.json` とMP4。実PSD/GPUエンコーダ/有料生成の受入とは区別する。
+- RustのフルドメインDB・取り込みAPIは実装済みだが、本番コピーでの受入は未実施。生成・YouTube・Tauri画面とログの画面/ジョブ接続は後続WP。NodeテストはUIが無いため明示スキップ。macOS実機は検証対象外。
+- 旧版の隔離テストはPython3.11で661件成功・1skip。その後のツールテスト追加・Python3.12への切替後は同一ID/件数/skipを比較する。旧CIで発見したUTF-8/ffprobe依存は修正し関連98件成功。今後の検証はローカルだけで行う。
 - テスト用一時領域 `temp/legacy-tests/session-f0csi71v` の削除は自動承認レビューに拒否されたため残っている。迂回して削除しない。Git管理・実データには含めない。
 - 設定・metadata DB3件、暗号化キー・認証情報・当時の未コミット差分の退避先は `~/.codex/backups/picocast-r0/`。過去の整合性確認を切り替え直前の再確認の代わりにしない。
 - 6月の対応プロセスの無い `running` 記録10件は履歴として扱い、勝手に削除・キャンセル・再実行しない。取り込み時の区別はWP-R1-4。
@@ -56,6 +64,7 @@ WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0
 | 多言語 | 日本語画面。言語別メタデータ・字幕をen / zh-Hans / koで、既定OFF・チャンネル単位ON |
 | 対応OS | Windows。macOSは動く範囲で保つが実機検証対象外 |
 | 通常の判断 | 利用者へ確認せず既定で決め、ここに記録。課金・公開・破壊的操作の境界はAGENTS.mdに従う |
+| 検証場所 | このPCだけ。GitHub Actionsは他プロジェクトも含め全面禁止（2026-10-16）。無料枠を理由に再有効化しない |
 
 ## ローカルのリモート起動設定
 

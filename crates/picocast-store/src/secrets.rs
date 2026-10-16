@@ -26,6 +26,31 @@ impl MasterKey {
 
     /// 新規 DB の初期化時だけ呼ぶ。既存キーを上書きしない。
     pub fn create(path: &Path) -> Result<Self> {
+        let key = Self::generate()?;
+        key.save_new(path)?;
+        Ok(key)
+    }
+
+    /// ポータブル書き出しの暗号化処理だけへ渡す。表示・ログ・平文保存をしない。
+    pub(crate) fn portable_material(&self) -> Zeroizing<Vec<u8>> {
+        Zeroizing::new(self.0.to_vec())
+    }
+
+    pub(crate) fn from_portable_material(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() != 32 {
+            return Err(failure(
+                "E-SECRET-KEY",
+                "マスターキーの長さが不正です。",
+                "元のマスターキーまたは正しい暗号化バックアップを復元してください。",
+            ));
+        }
+        let mut key = Zeroizing::new([0u8; 32]);
+        key.copy_from_slice(bytes);
+        Ok(Self(key))
+    }
+
+    /// 復元した同じ鍵を新しい利用者の DPAPI で保護し、新規先だけへ保存する。
+    pub(crate) fn save_new(&self, path: &Path) -> Result<()> {
         let lock_path = path.with_extension("key.lock");
         let lock = fsutil::reserve_new_file(&lock_path)?;
         let result = (|| {
@@ -43,10 +68,8 @@ impl MasterKey {
                     "既存キーを読み込んでください。",
                 ));
             }
-            let key = Self::generate()?;
-            let protected = protect(key.0.as_slice())?;
-            fsutil::atomic_write(path, &protected)?;
-            Ok(key)
+            let protected = protect(self.0.as_slice())?;
+            fsutil::atomic_write_new(path, &protected)
         })();
         drop(lock);
         std::fs::remove_file(&lock_path).map_err(|error| {
@@ -71,16 +94,7 @@ impl MasterKey {
             )
         })?;
         let bytes = unprotect(&protected)?;
-        if bytes.len() != 32 {
-            return Err(failure(
-                "E-SECRET-KEY",
-                "マスターキーの長さが不正です。",
-                "元のマスターキーを復元してください。",
-            ));
-        }
-        let mut key = Zeroizing::new([0u8; 32]);
-        key.copy_from_slice(&bytes);
-        Ok(Self(key))
+        Self::from_portable_material(&bytes)
     }
 
     pub(crate) fn encrypt(
@@ -349,6 +363,50 @@ mod tests {
         assert!(key
             .decrypt(&channel("channel"), "api", &[1], &encrypted)
             .is_err());
+    }
+
+    #[test]
+    fn portable_material_restores_authentication_without_exposing_key() {
+        let key = MasterKey::generate().unwrap();
+        let material = key.portable_material();
+        let restored = MasterKey::from_portable_material(&material).unwrap();
+        let (nonce, ciphertext) = key
+            .encrypt(&channel("portable"), "api", b"fixture-only")
+            .unwrap();
+        assert_eq!(
+            restored
+                .decrypt(&channel("portable"), "api", &nonce, &ciphertext)
+                .unwrap()
+                .as_slice(),
+            b"fixture-only"
+        );
+        for length in [0, 31, 33] {
+            assert!(MasterKey::from_portable_material(&vec![0; length]).is_err());
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn restored_key_is_protected_for_new_location_without_overwrite() {
+        let directory = tempfile::tempdir().unwrap();
+        let target = directory.path().join("restored.key");
+        let source = MasterKey::generate().unwrap();
+        let restored = MasterKey::from_portable_material(&source.portable_material()).unwrap();
+        restored.save_new(&target).unwrap();
+        let loaded = MasterKey::load(&target).unwrap();
+        let (nonce, ciphertext) = source
+            .encrypt(&channel("one"), "api", b"fixture-only")
+            .unwrap();
+        assert_eq!(
+            loaded
+                .decrypt(&channel("one"), "api", &nonce, &ciphertext)
+                .unwrap()
+                .as_slice(),
+            b"fixture-only"
+        );
+        let before = std::fs::read(&target).unwrap();
+        assert!(MasterKey::generate().unwrap().save_new(&target).is_err());
+        assert_eq!(std::fs::read(&target).unwrap(), before);
     }
 
     #[cfg(windows)]

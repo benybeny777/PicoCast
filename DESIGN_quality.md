@@ -133,9 +133,9 @@
 
 Rustは `Cargo.lock` と `--locked` を使う。Python用の `pyproject.toml`・`.python-version`・`uv.lock` は準備済みで、実環境の3.12への切り替えはWP-R0-2で行う。外部のVOICEVOX・SD・Ollamaの環境は変更しない。
 
-### C3 自動テストの常時実行（CI）
+### C3 ローカルでの一括検証
 
-Windows CI（`.github/workflows/rust-verify.yml`）で `cargo xtask verify` を実行する。UIが無い段階のNodeテストは明示スキップする。録画再生・ゴールデン検査・型生成などの追加ゲートは、該当WPで実装した時点で同じ入口に追加する。未実装ゲートを稼働済みと扱わない。
+このPCで `cargo xtask verify` を実行する。GitHub Actionsは利用者指示（2026-10-16）により使用しない。UIが無い段階のNodeテストは明示スキップする。録画再生・ゴールデン検査・型生成などの追加ゲートは、該当WPで実装した時点で同じ入口に追加する。未実装ゲートを稼働済みと扱わない。
 
 ### C4 大きなファイルの整理
 

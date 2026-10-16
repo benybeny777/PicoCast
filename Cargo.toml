@@ -22,6 +22,7 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 tempfile = "=3.27.0"
 rusqlite = { version = "0.37", features = ["bundled", "backup"] }
 aes-gcm = "0.10"
+argon2 = { version = "=0.6.0", default-features = false, features = ["alloc", "zeroize"] }
 sha2 = "=0.11.1"
 getrandom = "=0.3.4"
 zeroize = "1"
