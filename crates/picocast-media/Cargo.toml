@@ -1,0 +1,23 @@
+[package]
+name = "picocast-media"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+picocast-core = { path = "../picocast-core" }
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+tempfile.workspace = true
+budouy.workspace = true
+cosmic-text.workspace = true
+unicode-segmentation.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

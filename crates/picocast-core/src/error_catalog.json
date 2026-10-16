@@ -679,6 +679,48 @@
     "fix_key": "errors.E-AI-CHANNEL.fix"
   },
   {
+    "code": "E-SUBTITLE-SETTINGS",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SUBTITLE-SETTINGS.message",
+    "fix_key": "errors.E-SUBTITLE-SETTINGS.fix"
+  },
+  {
+    "code": "E-SUBTITLE-FONT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SUBTITLE-FONT.message",
+    "fix_key": "errors.E-SUBTITLE-FONT.fix"
+  },
+  {
+    "code": "E-SUBTITLE-INPUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SUBTITLE-INPUT.message",
+    "fix_key": "errors.E-SUBTITLE-INPUT.fix"
+  },
+  {
+    "code": "E-SUBTITLE-LIMIT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SUBTITLE-LIMIT.message",
+    "fix_key": "errors.E-SUBTITLE-LIMIT.fix"
+  },
+  {
+    "code": "E-SUBTITLE-LAYOUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SUBTITLE-LAYOUT.message",
+    "fix_key": "errors.E-SUBTITLE-LAYOUT.fix"
+  },
+  {
+    "code": "E-SUBTITLE-TIME",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SUBTITLE-TIME.message",
+    "fix_key": "errors.E-SUBTITLE-TIME.fix"
+  },
+  {
     "code": "E-VOICE-ACCENT",
     "category": "system",
     "retry_recommended": false,
