@@ -8,10 +8,11 @@ import sys
 import tempfile
 import unittest
 
-from PIL import Image
+from PIL import Image, ImageCms
 from psd_tools import PSDImage
 from psd_tools.api.layers import Group, PixelLayer
-from psd_tools.constants import BlendMode
+from psd_tools.constants import BlendMode, Resource
+from psd_tools.psd.image_resources import ImageResource
 
 from tools.export_psd_layers import ExportError, export_psd, file_digest
 
@@ -65,6 +66,70 @@ class ExportLayersTests(unittest.TestCase):
         manifest = export_psd(source, self.root / "unsupported", pixel_tolerance=255)
         self.assertFalse(manifest["qualified"])
         self.assertTrue(manifest["unsupported_composition"])
+
+    def translucent_fixture(self, *, icc: bool):
+        document = PSDImage.new("RGB", (4, 4))
+        for name, color in [("base", (70, 130, 190, 103)), ("overlay", (180, 35, 80, 179))]:
+            group = Group.new(document, name)
+            with Image.new("RGBA", (4, 4), color) as pixels:
+                PixelLayer.frompil(pixels, group, "translucent")
+        if icc:
+            # 実素材を取り込まず、生成した標準ICCのTRCを変えて非恒等な色変換を作る。
+            profile = bytearray(ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB")).tobytes())
+            count = int.from_bytes(profile[128:132], "big")
+            for index in range(count):
+                tag = 132 + 12 * index
+                if profile[tag:tag + 4] == b"rTRC":
+                    offset = int.from_bytes(profile[tag + 4:tag + 8], "big")
+                    self.assertEqual(profile[offset:offset + 4], b"para")
+                    profile[offset + 12:offset + 16] = (1 << 16).to_bytes(4, "big")
+                    break
+            else:
+                self.fail("生成ICCに赤のTRCがありません")
+            document.image_resources[Resource.ICC_PROFILE] = ImageResource(key=Resource.ICC_PROFILE, data=bytes(profile))
+        source = self.root / ("icc.psd" if icc else "translucent.psd")
+        document.save(source)
+        return source
+
+    def test_float_composition_and_rgba8_intermediate_rounding_remain_unqualified(self):
+        source = self.translucent_fixture(icc=False)
+        before = file_digest(source)
+        result = export_psd(source, self.root / "rounding", pixel_tolerance=0)
+        self.assertFalse(result["qualified"])
+        self.assertEqual(result["unsupported_composition"], [])
+        self.assertGreater(result["variants"][0]["validation"]["max_abs_channel_diff"], 0)
+        self.assertEqual(result["pixel_tolerance"], 0)
+        self.assertEqual(file_digest(source), before)
+
+    def test_cli_returns_two_for_unqualified_without_internal_trace(self):
+        source = self.translucent_fixture(icc=False)
+        output = self.root / "cli-unqualified"
+        completed = subprocess.run(
+            [sys.executable, str(ROOT / "tools/export_psd_layers.py"), str(source), str(output),
+             "--pixel-tolerance", "0", "--log-dir", str(self.root / "logs")],
+            cwd=ROOT, capture_output=True, text=True, encoding="utf-8", timeout=15,
+        )
+        self.assertEqual(completed.returncode, 2, completed.stderr)
+        self.assertFalse(json.loads(completed.stdout)["qualified"])
+        self.assertFalse(json.loads((output / "manifest.json").read_text(encoding="utf-8"))["qualified"])
+        self.assertIn("E-PSD-EXPORT", completed.stderr)
+        self.assertNotIn("Traceback", completed.stderr)
+
+    def test_icc_before_or_after_composition_is_not_interchangeable(self):
+        source = self.translucent_fixture(icc=True)
+        before = file_digest(source)
+        document = PSDImage.open(source)
+        with document.composite(force=True, apply_icc=False) as raw:
+            from psd_tools.api.pil_io import post_process
+            with post_process(raw.copy(), None, document.image_resources.get_data(Resource.ICC_PROFILE)) as after:
+                with document.composite(force=True) as reference:
+                    self.assertEqual(after.tobytes(), reference.tobytes())
+        result = export_psd(source, self.root / "icc", pixel_tolerance=0)
+        self.assertFalse(result["qualified"])
+        self.assertEqual(result["unsupported_composition"], [])
+        self.assertGreater(result["variants"][0]["validation"]["max_abs_channel_diff"], 1)
+        self.assertEqual(result["pixel_tolerance"], 0)
+        self.assertEqual(file_digest(source), before)
 
     def test_incomplete_or_duplicate_visibility_does_not_produce_success_manifest(self):
         source = self.fixture()

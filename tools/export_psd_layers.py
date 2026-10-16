@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from PIL import Image, ImageChops
 from psd_tools import PSDImage
+from psd_tools.constants import Resource
 import psd_tools
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -193,6 +194,7 @@ def export_psd(source: Path, output: Path, *, pixel_tolerance: int, variants: li
     output.mkdir(parents=True, exist_ok=False)
     with source.open("rb") as stream:
         document = PSDImage.open(stream)
+        has_icc_profile = Resource.ICC_PROFILE in document.image_resources
         layers, unsupported = rasterize(document, output)
         if not layers:
             raise ExportError("書き出せるPSDレイヤーがありません。")
@@ -236,6 +238,14 @@ def export_psd(source: Path, output: Path, *, pixel_tolerance: int, variants: li
     if file_digest(source) != before:
         raise ExportError("書き出し中に元PSDの内容が変わりました。元ファイルは上書きしていません。")
     manifest["qualified"] = all(variant["validation"]["qualified"] for variant in manifest["variants"])
+    if not manifest["qualified"]:
+        # PNGごとの量子化・ICC変換とPSD全体のfloat合成は同値ではない。許容差は変更しない。
+        _logger.warning(
+            "PSD再合成が不適格です: icc_profile_present=%s unsupported_layers=%s max_abs_channel_diff=%s; "
+            "RGBA8中間丸め・ICC変換順序・未対応blendを確認してください",
+            has_icc_profile, len(unsupported),
+            max(variant["validation"]["max_abs_channel_diff"] for variant in manifest["variants"]),
+        )
     (output / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return manifest
 
@@ -260,7 +270,7 @@ def main() -> int:
             "max_abs_channel_diff": maximum, "manifest": str(args.output / "manifest.json")}, ensure_ascii=False))
         if not result["qualified"]:
             _logger.error("PSDのレイヤー合成が許容差または対応範囲を超えました: max_abs_channel_diff=%s", maximum)
-            print("[E-PSD-EXPORT] 合成の画素差または未対応の混合方式を確認してください。登録はできません。", file=sys.stderr)
+            print("[E-PSD-EXPORT] PNG再合成が旧PSDと一致しません。中間丸め・ICC色変換順序・未対応blendをデバッグログで確認してください。登録はできません。", file=sys.stderr)
             return 2
         return 0
     except Exception:
