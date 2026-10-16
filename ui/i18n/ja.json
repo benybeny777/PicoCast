@@ -192,5 +192,21 @@
   "errors.E-SCRIPT-FORMAT.message": "台本の形式または参照先が不正です",
   "errors.E-SCRIPT-FORMAT.fix": "話者・シーン・必須項目・テンプレートの版を確認して、台本を修正してください",
   "errors.E-AI-CHANNEL.message": "AI要求のチャンネルが一致しません",
-  "errors.E-AI-CHANNEL.fix": "対象チャンネルの認証情報で生成処理を作り直し、別チャンネルのプロバイダを共有しないでください"
+  "errors.E-AI-CHANNEL.fix": "対象チャンネルの認証情報で生成処理を作り直し、別チャンネルのプロバイダを共有しないでください",
+  "errors.E-VOICE-ACCENT.message": "アクセントの指定が不正です",
+  "errors.E-VOICE-ACCENT.fix": "句の位置とアクセント値、辞書の版を確認してください",
+  "errors.E-VOICE-AUDIO.message": "音声データの形式または無音区間が不正です",
+  "errors.E-VOICE-AUDIO.fix": "対応するPCM WAV形式と容量・末尾無音の設定を確認してください",
+  "errors.E-VOICE-CHANNEL.message": "音声要求のチャンネルが一致しません",
+  "errors.E-VOICE-CHANNEL.fix": "対象チャンネルで音声処理を作り直してください",
+  "errors.E-VOICE-CONFIG.message": "音声処理の設定が不正です",
+  "errors.E-VOICE-CONFIG.fix": "接続先・速度・音量・無音・入力上限を確認してください",
+  "errors.E-VOICE-DICTIONARY.message": "読み辞書を使用できません",
+  "errors.E-VOICE-DICTIONARY.fix": "辞書ファイルと形式・資源の組み合わせ、登録内容を確認してください",
+  "errors.E-VOICE-ENGINE.message": "音声エンジンの要求を完了できませんでした",
+  "errors.E-VOICE-ENGINE.fix": "エンジンの起動状態と接続設定、対応する応答形式を確認してください",
+  "errors.E-VOICE-READING.message": "台詞の読みを処理できませんでした",
+  "errors.E-VOICE-READING.fix": "入力本文と読み辞書・正規化設定を確認してください",
+  "errors.E-VOICE-STYLE.message": "音声の話者またはスタイルが不正です",
+  "errors.E-VOICE-STYLE.fix": "キャラクターと利用可能なスタイル、感情の対応を確認してください"
 }
