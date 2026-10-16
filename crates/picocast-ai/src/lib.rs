@@ -1,5 +1,8 @@
 //! 工程別の明示モデル選択、契約検査と費用制限をまとめる生成入口。
 mod gateway;
+pub mod image;
+pub mod image_contract;
+pub mod image_fake;
 mod provider;
 mod types;
 
@@ -17,8 +20,15 @@ pub use types::{
 
 use picocast_core::AppError;
 
+#[track_caller]
 pub(crate) fn failure(code: &str) -> AppError {
-    tracing::error!(code, "AI処理を停止しました");
+    let caller = std::panic::Location::caller();
+    tracing::error!(
+        code,
+        source = caller.file(),
+        line = caller.line(),
+        "AI処理を停止しました"
+    );
     AppError::new(
         code,
         "AI処理を完了できませんでした",

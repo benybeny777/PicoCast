@@ -11,6 +11,7 @@ pub type FutureResult<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderId {
+    StableDiffusionWebUi,
     Gemini,
     Ollama,
     OpenAi,
@@ -39,6 +40,9 @@ pub struct StageModel {
 }
 impl StageModel {
     pub fn validate(&self) -> Result<()> {
+        if self.provider == ProviderId::StableDiffusionWebUi {
+            return Err(failure("E-AI-MODEL"));
+        }
         if self.model.is_empty()
             || self.model.contains("..")
             || !self
@@ -183,7 +187,7 @@ impl Cancellation {
             Ok(())
         }
     }
-    pub(crate) async fn cancelled(&mut self) {
+    pub async fn cancelled(&mut self) {
         loop {
             if *self.0.borrow_and_update() {
                 return;

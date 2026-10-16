@@ -466,6 +466,7 @@ async fn protocol_rejects_missing_usage_refusal_and_credential_echo_without_leak
         let input_schema = schema();
         let error = provider
             .call(Operation::Generate(CompletionInput {
+                images: &[],
                 model: "fixture",
                 prompt: "架空",
                 schema: &input_schema,

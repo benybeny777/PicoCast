@@ -31,6 +31,104 @@ fn fixture() -> (tempfile::TempDir, crate::StorePaths, Store, ChannelId) {
 }
 
 #[test]
+fn image_units_share_budget_without_inventing_tokens_and_unknown_is_held() {
+    let (_temporary, _paths, mut store, channel) = fixture();
+    let token = request(&channel, "tokens");
+    store.reserve_ai_cost(&token).unwrap();
+    store
+        .settle_ai_cost(
+            &channel,
+            "tokens",
+            &AiCostSettlement::Succeeded {
+                actual_cost_micros: 10,
+                input_tokens: 10,
+                output_tokens: 10,
+            },
+        )
+        .unwrap();
+    let mut image = request(&channel, "image");
+    image.max_input_tokens = 0;
+    image.max_output_tokens = 0;
+    image.daily_token_budget = 0;
+    image.max_cost_micros = Some(60);
+    assert!(store.reserve_ai_cost(&image).is_err());
+    assert_eq!(
+        store.reserve_ai_image_cost(&image, 1).unwrap().max_images,
+        Some(1)
+    );
+    assert!(store
+        .settle_ai_cost(
+            &channel,
+            "image",
+            &AiCostSettlement::Succeeded {
+                actual_cost_micros: 5,
+                input_tokens: 0,
+                output_tokens: 0
+            }
+        )
+        .is_err());
+    store
+        .settle_ai_cost(
+            &channel,
+            "image",
+            &AiCostSettlement::Unknown {
+                error_code: "E-AI-TIMEOUT".into(),
+            },
+        )
+        .unwrap();
+    let totals = store.ai_cost_totals(&channel, &image.day).unwrap();
+    assert_eq!(
+        (
+            totals.held_images,
+            totals.held_tokens,
+            totals.held_micros,
+            totals.input_tokens
+        ),
+        (1, 0, 60, 10)
+    );
+    let mut another = image.clone();
+    another.request_id = "second-image".into();
+    assert!(store.reserve_ai_image_cost(&another, 1).is_err());
+    let settled = AiCostSettlement::ImagesSucceeded {
+        actual_cost_micros: 20,
+        images: 1,
+    };
+    store.settle_ai_cost(&channel, "image", &settled).unwrap();
+    store.settle_ai_cost(&channel, "image", &settled).unwrap();
+    let totals = store.ai_cost_totals(&channel, &image.day).unwrap();
+    assert_eq!(
+        (totals.charged_micros, totals.images, totals.held_images),
+        (30, 1, 0)
+    );
+}
+#[test]
+fn image_overrun_is_saved_before_error_and_units_cannot_be_mixed() {
+    let (_temporary, _paths, mut store, channel) = fixture();
+    let mut image = request(&channel, "image");
+    image.max_input_tokens = 0;
+    image.max_output_tokens = 0;
+    store.reserve_ai_image_cost(&image, 1).unwrap();
+    assert_eq!(
+        store
+            .settle_ai_cost(
+                &channel,
+                "image",
+                &AiCostSettlement::ImagesSucceeded {
+                    actual_cost_micros: 80,
+                    images: 2
+                }
+            )
+            .unwrap_err()
+            .code,
+        "E-AI-USAGE"
+    );
+    let totals = store.ai_cost_totals(&channel, &image.day).unwrap();
+    assert_eq!((totals.charged_micros, totals.images), (80, 2));
+    let invalid = request(&channel, "invalid");
+    assert!(store.reserve_ai_image_cost(&invalid, 1).is_err());
+}
+
+#[test]
 fn reservation_then_usage_is_shared_with_totals_and_same_settlement_is_idempotent() {
     let (_temporary, _paths, mut store, channel) = fixture();
     let request = request(&channel, "first");
