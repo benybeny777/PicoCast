@@ -5,6 +5,7 @@ pub mod ai_cost;
 pub mod channel_import;
 pub mod character_layers;
 pub mod imports;
+pub mod jobs;
 mod migrations;
 pub mod portable_backup;
 mod projects;

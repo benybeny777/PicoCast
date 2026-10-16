@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use quote::ToTokens;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use syn::visit::{self, Visit};
@@ -86,6 +87,154 @@ fn test_attrs(attrs: &[Attribute]) -> bool {
     })
 }
 
+pub(crate) struct ProductionSteps {
+    pub source: String,
+    pub versions: BTreeMap<String, (String, String)>,
+}
+
+/// Step検査も禁止API検査と同じimport解決・テスト境界を使用する。
+pub(crate) fn production_step_sources(path: &str, source: &str) -> Result<ProductionSteps> {
+    fn retain_production(items: &mut Vec<Item>) {
+        items.retain(|item| !test_attrs(item_attrs(item)));
+        for item in items {
+            match item {
+                Item::Mod(module) => {
+                    if let Some((_, items)) = &mut module.content {
+                        retain_production(items);
+                    }
+                }
+                Item::Impl(implementation) => implementation.items.retain(|item| {
+                    let attrs = match item {
+                        syn::ImplItem::Const(item) => &item.attrs,
+                        syn::ImplItem::Fn(item) => &item.attrs,
+                        syn::ImplItem::Type(item) => &item.attrs,
+                        syn::ImplItem::Macro(item) => &item.attrs,
+                        _ => return true,
+                    };
+                    !test_attrs(attrs)
+                }),
+                _ => {}
+            }
+        }
+    }
+    fn collect(
+        items: &[Item],
+        scope: &str,
+        resolver: &mut Scanner<'_>,
+        versions: &mut BTreeMap<String, (String, String)>,
+    ) -> Result<String> {
+        let saved = resolver.aliases.clone();
+        resolver.imports(items);
+        let mut context = String::new();
+        for item in items {
+            match item {
+                Item::Mod(module) => {
+                    if let Some((_, items)) = &module.content {
+                        let mut shell = module.clone();
+                        shell.content = Some((syn::token::Brace::default(), Vec::new()));
+                        context.push_str(&shell.to_token_stream().to_string());
+                        context.push_str(&collect(
+                            items,
+                            &format!("{scope}{}::", module.ident),
+                            resolver,
+                            versions,
+                        )?);
+                    } else {
+                        context.push_str(&module.to_token_stream().to_string());
+                    }
+                }
+                Item::Impl(implementation) => {
+                    let Some((_, trait_path, _)) = &implementation.trait_ else {
+                        context.push_str(&implementation.to_token_stream().to_string());
+                        continue;
+                    };
+                    if !matches!(
+                        resolver.resolve(trait_path).as_str(),
+                        "picocast_pipeline::Step"
+                            | "picocast_pipeline::step::Step"
+                            | "crate::Step"
+                            | "crate::step::Step"
+                    ) {
+                        context.push_str(&implementation.to_token_stream().to_string());
+                        continue;
+                    }
+                    let mut name = None;
+                    let mut version = None;
+                    for item in &implementation.items {
+                        if let syn::ImplItem::Const(value) = item {
+                            if value.ident == "NAME" {
+                                name = Some(value.expr.to_token_stream().to_string());
+                            }
+                            if value.ident == "VERSION" {
+                                version = Some(value.expr.to_token_stream().to_string());
+                            }
+                        }
+                    }
+                    if let (Some(name), Some(version)) = (name, version) {
+                        let identity = format!(
+                            "{scope}{}::{name}",
+                            implementation.self_ty.to_token_stream()
+                        );
+                        if versions
+                            .insert(
+                                identity,
+                                (version, implementation.to_token_stream().to_string()),
+                            )
+                            .is_some()
+                        {
+                            bail!("Step識別子が重複しています");
+                        }
+                    }
+                }
+                _ => context.push_str(&item.to_token_stream().to_string()),
+            }
+        }
+        resolver.aliases = saved;
+        Ok(context)
+    }
+    let mut syntax = syn::parse_file(source)?;
+    if path.split('/').any(|part| part == "tests") || test_attrs(&syntax.attrs) {
+        return Ok(ProductionSteps {
+            source: String::new(),
+            versions: BTreeMap::new(),
+        });
+    }
+    retain_production(&mut syntax.items);
+    let mut versions = BTreeMap::new();
+    let mut resolver = Scanner {
+        path,
+        aliases: BTreeMap::new(),
+        violations: Vec::new(),
+        tests: false,
+    };
+    let context = collect(&syntax.items, "", &mut resolver, &mut versions)?;
+    Ok(ProductionSteps {
+        source: context,
+        versions,
+    })
+}
+
+fn item_attrs(item: &Item) -> &[Attribute] {
+    match item {
+        Item::Const(item) => &item.attrs,
+        Item::Enum(item) => &item.attrs,
+        Item::ExternCrate(item) => &item.attrs,
+        Item::Fn(item) => &item.attrs,
+        Item::ForeignMod(item) => &item.attrs,
+        Item::Impl(item) => &item.attrs,
+        Item::Macro(item) => &item.attrs,
+        Item::Mod(item) => &item.attrs,
+        Item::Static(item) => &item.attrs,
+        Item::Struct(item) => &item.attrs,
+        Item::Trait(item) => &item.attrs,
+        Item::TraitAlias(item) => &item.attrs,
+        Item::Type(item) => &item.attrs,
+        Item::Union(item) => &item.attrs,
+        Item::Use(item) => &item.attrs,
+        _ => &[],
+    }
+}
+
 /// テスト専用の項目を除外し、マクロ内も含めた本番の文字列リテラルを収集する。
 pub fn production_string_literals(source: &str) -> Result<BTreeSet<String>> {
     struct Literals {
@@ -94,24 +243,7 @@ pub fn production_string_literals(source: &str) -> Result<BTreeSet<String>> {
     }
     impl<'ast> Visit<'ast> for Literals {
         fn visit_item(&mut self, node: &'ast syn::Item) {
-            let attributes: &[Attribute] = match node {
-                syn::Item::Const(item) => &item.attrs,
-                syn::Item::Enum(item) => &item.attrs,
-                syn::Item::ExternCrate(item) => &item.attrs,
-                syn::Item::Fn(item) => &item.attrs,
-                syn::Item::ForeignMod(item) => &item.attrs,
-                syn::Item::Impl(item) => &item.attrs,
-                syn::Item::Macro(item) => &item.attrs,
-                syn::Item::Mod(item) => &item.attrs,
-                syn::Item::Static(item) => &item.attrs,
-                syn::Item::Struct(item) => &item.attrs,
-                syn::Item::Trait(item) => &item.attrs,
-                syn::Item::TraitAlias(item) => &item.attrs,
-                syn::Item::Type(item) => &item.attrs,
-                syn::Item::Union(item) => &item.attrs,
-                syn::Item::Use(item) => &item.attrs,
-                _ => &[],
-            };
+            let attributes = item_attrs(node);
             if !test_attrs(attributes) {
                 visit::visit_item(self, node);
             }
