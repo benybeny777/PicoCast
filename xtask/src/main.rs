@@ -4,6 +4,7 @@
 mod catalog;
 mod docs;
 mod guards;
+mod import_legacy;
 mod inventory;
 mod oracle;
 
@@ -21,9 +22,10 @@ fn main() -> Result<()> {
         Some("guard") => guards::check(&root),
         Some("inventory") => inventory::check(&root),
         Some("oracle") => oracle::run(&root, std::env::args().nth(2).as_deref()),
+        Some("import-legacy") => import_legacy::run(&std::env::args().skip(2).collect::<Vec<_>>()),
         Some("catalog-check") => catalog::check(&root),
         Some("docs-check") => docs::check(&root),
-        _ => bail!("使い方: cargo xtask verify | guard | inventory | oracle [check|record] | catalog-check | docs-check"),
+        _ => bail!("使い方: cargo xtask verify | guard | inventory | oracle [check|record] | import-legacy (--settings|--channel) --config <JSON> | catalog-check | docs-check"),
     }
 }
 
