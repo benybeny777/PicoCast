@@ -3,6 +3,7 @@ mod dag;
 mod resources;
 mod runner;
 mod step;
+pub mod thumbnail;
 pub use dag::{CacheEnvelope, CachePolicy, Dag, Node, Provenance, RetrySafety};
 pub use resources::{CoordinatedResources, SleepInhibitor, SleepPermit};
 pub use runner::{Pipeline, ResourceGate, ResourcePermit, RunOptions, TickOutcome};
