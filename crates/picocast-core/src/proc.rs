@@ -8,7 +8,7 @@ use std::{
     time::Duration,
 };
 use tokio::{
-    io::{AsyncRead, AsyncReadExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     process::Command,
 };
 
@@ -19,6 +19,12 @@ pub struct RunOptions {
     pub timeout: Duration,
     /// 標準出力・標準エラーそれぞれの上限。呼出元の設定から指定する。
     pub max_output_bytes: usize,
+}
+
+/// 有界channelから順次入力する。生成元の失敗をEOFと取り違えない。
+pub struct ProcessInput {
+    pub chunks: tokio::sync::mpsc::Receiver<Result<Vec<u8>>>,
+    pub max_chunk_bytes: usize,
 }
 
 /// 有限処理専用。終了・失敗・中断のいずれでも所有する子孫を回収する。
@@ -33,7 +39,32 @@ pub async fn run_with_environment(
     options: RunOptions,
     environment: &[(OsString, OsString)],
 ) -> Result<Output> {
-    if options.timeout.is_zero() || options.max_output_bytes == 0 {
+    run_inner(program, args, options, environment, None).await
+}
+
+/// 全入力をメモリや一時ファイルへ集めず、標準入力へ送る有限処理。
+pub async fn run_with_input(
+    program: &Path,
+    args: &[OsString],
+    options: RunOptions,
+    input: ProcessInput,
+) -> Result<Output> {
+    run_inner(program, args, options, &[], Some(input)).await
+}
+
+async fn run_inner(
+    program: &Path,
+    args: &[OsString],
+    options: RunOptions,
+    environment: &[(OsString, OsString)],
+    input: Option<ProcessInput>,
+) -> Result<Output> {
+    if options.timeout.is_zero()
+        || options.max_output_bytes == 0
+        || input
+            .as_ref()
+            .is_some_and(|input| input.max_chunk_bytes == 0)
+    {
         return Err(failure(
             "E-PROCESS-LIMIT",
             "実行制限が不正です",
@@ -44,7 +75,11 @@ pub async fn run_with_environment(
     command
         .args(args)
         .envs(environment.iter().map(|(key, value)| (key, value)))
-        .stdin(Stdio::null())
+        .stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
@@ -80,13 +115,26 @@ pub async fn run_with_environment(
         )
         .await;
     };
-    // 根を回収する前に出力を読み切る。子孫がパイプを保持する場合も期限を適用する。
+    let stdin = child.stdin.take();
+    // 入力の送信と出力の読み取りを並行し、どのパイプの待機にも同じ期限を適用する。
     let operation = async {
-        let (stdout, stderr) = tokio::try_join!(
+        let (stdout, stderr, (), status) = tokio::try_join!(
             bounded(stdout, options.max_output_bytes),
-            bounded(stderr, options.max_output_bytes)
+            bounded(stderr, options.max_output_bytes),
+            feed_input(stdin, input),
+            async {
+                let status = child.wait().await.map_err(internal)?;
+                if !status.success() {
+                    tracing::error!(exit_code=?status.code(),"外部プロセスが入力完了前も含め失敗終了しました");
+                    return Err(failure(
+                        "E-PROCESS-EXIT",
+                        "外部処理が失敗しました",
+                        "外部ツールの設定と入力を確認してください",
+                    ));
+                }
+                Ok(status)
+            },
         )?;
-        let status = child.wait().await.map_err(internal)?;
         Ok::<_, AppError>(Output {
             status,
             stdout,
@@ -94,12 +142,7 @@ pub async fn run_with_environment(
         })
     };
     let result = match tokio::time::timeout(options.timeout, operation).await {
-        Ok(Ok(output)) if output.status.success() => Ok(output),
-        Ok(Ok(_)) => Err(failure(
-            "E-PROCESS-EXIT",
-            "外部処理が失敗しました",
-            "外部ツールの設定と入力を確認してください",
-        )),
+        Ok(Ok(output)) => Ok(output),
         Ok(Err(err)) => Err(err),
         Err(_) => Err(failure(
             "E-PROCESS-TIMEOUT",
@@ -108,6 +151,30 @@ pub async fn run_with_environment(
         )),
     };
     finish(&mut child, scope, result).await
+}
+
+async fn feed_input<W: AsyncWrite + Unpin>(
+    pipe: Option<W>,
+    input: Option<ProcessInput>,
+) -> Result<()> {
+    let Some(mut input) = input else {
+        return Ok(());
+    };
+    let mut pipe = pipe.ok_or_else(|| internal(std::io::Error::other("標準入力なし")))?;
+    while let Some(chunk) = input.chunks.recv().await {
+        let chunk = chunk.inspect_err(|error| {
+            tracing::error!(code = %error.code, "外部プロセスの入力生成に失敗しました");
+        })?;
+        if chunk.len() > input.max_chunk_bytes {
+            return Err(failure(
+                "E-PROCESS-LIMIT",
+                "外部処理の入力単位が上限を超えました",
+                "入力を分割するか、検証済みフレームの上限を確認してください",
+            ));
+        }
+        pipe.write_all(&chunk).await.map_err(internal)?;
+    }
+    pipe.shutdown().await.map_err(internal)
 }
 
 async fn finish(
@@ -215,6 +282,127 @@ impl Drop for UnixScope {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn streamed_input_preserves_chunks_and_propagates_generation_or_size_errors() {
+        let (send, receive) = tokio::sync::mpsc::channel(1);
+        let producer = tokio::spawn(async move {
+            for chunk in [b"first".to_vec(), b"second".to_vec()] {
+                send.send(Ok(chunk)).await.unwrap();
+            }
+        });
+        let (write, mut read) = tokio::io::duplex(3);
+        let (written, bytes) = tokio::join!(
+            feed_input(
+                Some(write),
+                Some(ProcessInput {
+                    chunks: receive,
+                    max_chunk_bytes: 6
+                })
+            ),
+            async {
+                let mut bytes = Vec::new();
+                read.read_to_end(&mut bytes).await.unwrap();
+                bytes
+            },
+        );
+        written.unwrap();
+        producer.await.unwrap();
+        assert_eq!(bytes, b"firstsecond");
+        for chunk in [
+            Ok(vec![0; 7]),
+            Err(AppError::new("E-PROCESS-IO", "合成検証", "入力を確認")),
+        ] {
+            let (send, receive) = tokio::sync::mpsc::channel(1);
+            send.send(chunk).await.unwrap();
+            drop(send);
+            let (write, mut read) = tokio::io::duplex(3);
+            let (result, bytes) = tokio::join!(
+                feed_input(
+                    Some(write),
+                    Some(ProcessInput {
+                        chunks: receive,
+                        max_chunk_bytes: 6
+                    })
+                ),
+                async {
+                    let mut bytes = Vec::new();
+                    read.read_to_end(&mut bytes).await.unwrap();
+                    bytes
+                },
+            );
+            assert!(result.is_err());
+            assert!(bytes.is_empty());
+        }
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn failed_child_does_not_wait_for_a_still_open_input_producer() {
+        let (_held_sender, receive) = tokio::sync::mpsc::channel(1);
+        let error = run_with_input(
+            Path::new("cmd.exe"),
+            &["/D".into(), "/C".into(), "exit /b 7".into()],
+            RunOptions {
+                timeout: Duration::from_secs(1),
+                max_output_bytes: 4096,
+            },
+            ProcessInput {
+                chunks: receive,
+                max_chunk_bytes: 8192,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, "E-PROCESS-EXIT");
+    }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn hidden_streaming_child_echoes_binary_and_timeout_covers_unclosed_input() {
+        let args = ["-NoProfile".into(), "-NonInteractive".into(), "-Command".into(),
+            "$streamIn=[Console]::OpenStandardInput();$streamOut=[Console]::OpenStandardOutput();$streamIn.CopyTo($streamOut)".into()];
+        let (send, receive) = tokio::sync::mpsc::channel(1);
+        let producer = tokio::spawn(async move {
+            for byte in 0..64u8 {
+                send.send(Ok(vec![byte; 8192])).await.unwrap();
+            }
+        });
+        let output = run_with_input(
+            Path::new("powershell.exe"),
+            &args,
+            RunOptions {
+                timeout: Duration::from_secs(10),
+                max_output_bytes: 1024 * 1024,
+            },
+            ProcessInput {
+                chunks: receive,
+                max_chunk_bytes: 8192,
+            },
+        )
+        .await
+        .unwrap();
+        producer.await.unwrap();
+        assert_eq!(output.stdout.len(), 64 * 8192);
+        for (byte, chunk) in output.stdout.chunks_exact(8192).enumerate() {
+            assert!(chunk.iter().all(|value| usize::from(*value) == byte));
+        }
+        let (_held_sender, receive) = tokio::sync::mpsc::channel(1);
+        let error = run_with_input(
+            Path::new("powershell.exe"),
+            &args,
+            RunOptions {
+                timeout: Duration::from_millis(100),
+                max_output_bytes: 4096,
+            },
+            ProcessInput {
+                chunks: receive,
+                max_chunk_bytes: 8192,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, "E-PROCESS-TIMEOUT");
+    }
+
     #[tokio::test]
     async fn output_limit_rejects_instead_of_truncating() {
         assert_eq!(

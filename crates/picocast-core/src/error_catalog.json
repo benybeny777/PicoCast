@@ -791,6 +791,48 @@
     "fix_key": "errors.E-VOICE-STYLE.fix"
   },
   {
+    "code": "E-FILE-INVALID",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-FILE-INVALID.message",
+    "fix_key": "errors.E-FILE-INVALID.fix"
+  },
+  {
+    "code": "E-GPU-BUSY",
+    "category": "system",
+    "retry_recommended": true,
+    "message_key": "errors.E-GPU-BUSY.message",
+    "fix_key": "errors.E-GPU-BUSY.fix"
+  },
+  {
+    "code": "E-GPU-CHANNEL",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-GPU-CHANNEL.message",
+    "fix_key": "errors.E-GPU-CHANNEL.fix"
+  },
+  {
+    "code": "E-GPU-CONFIG",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-GPU-CONFIG.message",
+    "fix_key": "errors.E-GPU-CONFIG.fix"
+  },
+  {
+    "code": "E-GPU-STATE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-GPU-STATE.message",
+    "fix_key": "errors.E-GPU-STATE.fix"
+  },
+  {
+    "code": "E-GPU-UNAVAILABLE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-GPU-UNAVAILABLE.message",
+    "fix_key": "errors.E-GPU-UNAVAILABLE.fix"
+  },
+  {
     "code": "E-CHARACTER-ASSET",
     "category": "system",
     "retry_recommended": false,
@@ -831,5 +873,75 @@
     "retry_recommended": false,
     "message_key": "errors.E-CHARACTER-TIMING.message",
     "fix_key": "errors.E-CHARACTER-TIMING.fix"
+  },
+  {
+    "code": "E-RENDER-SETTINGS",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-SETTINGS.message",
+    "fix_key": "errors.E-RENDER-SETTINGS.fix"
+  },
+  {
+    "code": "E-RENDER-TIMELINE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-TIMELINE.message",
+    "fix_key": "errors.E-RENDER-TIMELINE.fix"
+  },
+  {
+    "code": "E-RENDER-ASSET",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-ASSET.message",
+    "fix_key": "errors.E-RENDER-ASSET.fix"
+  },
+  {
+    "code": "E-RENDER-OUTPUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-OUTPUT.message",
+    "fix_key": "errors.E-RENDER-OUTPUT.fix"
+  },
+  {
+    "code": "E-RENDER-VERSION",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-VERSION.message",
+    "fix_key": "errors.E-RENDER-VERSION.fix"
+  },
+  {
+    "code": "E-RENDER-ENCODER",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-ENCODER.message",
+    "fix_key": "errors.E-RENDER-ENCODER.fix"
+  },
+  {
+    "code": "E-RENDER-ENCODE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-ENCODE.message",
+    "fix_key": "errors.E-RENDER-ENCODE.fix"
+  },
+  {
+    "code": "E-RENDER-VERIFY",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-VERIFY.message",
+    "fix_key": "errors.E-RENDER-VERIFY.fix"
+  },
+  {
+    "code": "E-RENDER-CANCELLED",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-RENDER-CANCELLED.message",
+    "fix_key": "errors.E-RENDER-CANCELLED.fix"
+  },
+  {
+    "code": "E-SUBTITLE-RASTER",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-SUBTITLE-RASTER.message",
+    "fix_key": "errors.E-SUBTITLE-RASTER.fix"
   }
 ]

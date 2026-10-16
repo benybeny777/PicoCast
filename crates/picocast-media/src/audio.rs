@@ -1,7 +1,7 @@
 //! 計測した音声だけを、来歴と一緒に排他的に公開する音声mix。
 use picocast_core::{
     clock::{self, Timestamp},
-    fsutil, proc, AppError, ChannelId, Result,
+    fsutil, paths, proc, AppError, ChannelId, Result,
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -175,16 +175,6 @@ impl AudioMixOptions {
 fn finite_in(value: f64, min: f64, max: f64) -> bool {
     value.is_finite() && (min..=max).contains(&value)
 }
-fn regular(path: &Path) -> Result<()> {
-    if !path.is_absolute() {
-        return Err(failure());
-    }
-    let metadata = std::fs::symlink_metadata(path).map_err(|_| failure())?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() {
-        return Err(failure());
-    }
-    Ok(())
-}
 fn check(cancel: &watch::Receiver<bool>) -> Result<()> {
     if *cancel.borrow() {
         Err(cancelled())
@@ -199,7 +189,7 @@ async fn run(
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<std::process::Output> {
     check(cancel)?;
-    regular(tool)?;
+    paths::require_regular_file(tool)?;
     let operation = proc::run(
         tool,
         &args,
@@ -358,7 +348,7 @@ async fn duration(
     limits: &AudioRunLimits,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<f64> {
-    regular(path)?;
+    paths::require_regular_file(path)?;
     let mut command = args(&[
         "-v",
         "error",
@@ -465,7 +455,7 @@ pub async fn measure_audio(
     limits: &AudioRunLimits,
     cancel: &mut watch::Receiver<bool>,
 ) -> Result<Measurement> {
-    regular(path)?;
+    paths::require_regular_file(path)?;
     let mut command = args(&["-hide_banner", "-nostdin", "-nostats", "-i"]);
     command.push(path.as_os_str().into());
     command.extend(args(&[
@@ -711,3 +701,13 @@ async fn mix_inner(
 #[cfg(test)]
 #[path = "audio_tests.rs"]
 mod tests;
+
+/// 合成レンダーのテストも、音声設定のfixtureを一つの正本から作る。
+#[cfg(test)]
+pub(crate) fn fixture_output(
+    channel: &ChannelId,
+    audio_path: PathBuf,
+    duration_ms: u64,
+) -> AudioOutput {
+    tests::fixture_output(channel, audio_path, duration_ms)
+}

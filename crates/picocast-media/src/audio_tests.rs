@@ -42,6 +42,59 @@ fn pauses() -> PauseProfile {
         speaker_change_ms: 150,
     }
 }
+
+pub(super) fn fixture_output(
+    channel: &ChannelId,
+    audio_path: PathBuf,
+    duration_ms: u64,
+) -> AudioOutput {
+    let stats = LoudnormStats {
+        input_i: -14.,
+        input_tp: -1.2,
+        input_lra: 0.,
+        input_thresh: -24.,
+        target_offset: 0.,
+        normalization_type: "dynamic".into(),
+    };
+    let report = AudioReport {
+        schema_version: 1,
+        channel_id: channel.clone(),
+        at: Timestamp::parse("2026-01-01T00:00:00Z").unwrap(),
+        tools: ToolProvenance {
+            ffmpeg_version: "synthetic-ffmpeg".into(),
+            ffprobe_version: "synthetic-ffprobe".into(),
+        },
+        options: options(),
+        pause_profile: PauseProfile {
+            comma_ms: 0,
+            terminal_ms: 0,
+            newline_ms: 0,
+            speaker_change_ms: 0,
+            ..pauses()
+        },
+        timeline: vec![ClipTimeline {
+            index: 0,
+            speaker_id: "fixture".into(),
+            start_ms: 0,
+            end_ms: duration_ms,
+            pause_after_ms: 0,
+        }],
+        duration_ms,
+        has_bgm: false,
+        first_pass: stats.clone(),
+        second_pass: stats,
+        measured: Measurement {
+            integrated_lufs: -14.,
+            true_peak_dbtp: -1.2,
+            loudness_range_lu: 0.,
+        },
+    };
+    AudioOutput {
+        report_path: audio_path.with_extension("report.json"),
+        audio_path,
+        report,
+    }
+}
 fn clip(speaker: &str, text: &str, duration_ms: u64) -> SpokenClip {
     SpokenClip {
         path: PathBuf::from("unused"),

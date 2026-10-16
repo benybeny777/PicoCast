@@ -10,6 +10,25 @@ pub fn now_utc_iso() -> String {
     Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)
 }
 
+/// リース等の期限をUTC日時に加える。桁あふれや日時の上限を黙って丸めない。
+pub fn add_duration(at: &Timestamp, duration: std::time::Duration) -> Result<Timestamp> {
+    chrono::TimeDelta::from_std(duration)
+        .ok()
+        .and_then(|delta| at.0.checked_add_signed(delta))
+        .map(Timestamp)
+        .ok_or_else(|| {
+            tracing::error!(
+                code = "E-TIME-INVALID",
+                "期限の加算が日時の範囲を超えました"
+            );
+            AppError::new(
+                "E-TIME-INVALID",
+                "期限を日時へ加算できません",
+                "基準日時と待機・リース期間の上限を確認してください",
+            )
+        })
+}
+
 /// 旧DBだけにあるnaive日時は、呼出元が明示したzoneで一度だけUTCへ変換する。
 /// 夏時間の曖昧な日時・存在しない日時を推測で補わない。
 pub fn parse_legacy(value: &str, source_timezone: &str) -> Result<Timestamp> {
@@ -97,6 +116,18 @@ pub fn timezone(name: &str) -> Result<Tz> {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    #[test]
+    fn duration_crosses_leap_day_in_utc_and_rejects_overflow() {
+        let at = Timestamp::parse("2024-03-01T08:59:59.500+09:00").unwrap();
+        assert_eq!(
+            add_duration(&at, std::time::Duration::from_millis(500))
+                .unwrap()
+                .to_utc_iso(),
+            "2024-03-01T00:00:00Z"
+        );
+        assert_eq!(add_duration(&at, std::time::Duration::ZERO).unwrap(), at);
+        assert!(add_duration(&at, std::time::Duration::MAX).is_err());
+    }
     #[test]
     fn legacy_timestamps_require_explicit_zone_and_unique_local_time() {
         assert_eq!(
