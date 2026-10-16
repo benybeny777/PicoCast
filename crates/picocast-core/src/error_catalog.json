@@ -721,6 +721,20 @@
     "fix_key": "errors.E-SUBTITLE-TIME.fix"
   },
   {
+    "code": "E-AUDIO-MIX",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AUDIO-MIX.message",
+    "fix_key": "errors.E-AUDIO-MIX.fix"
+  },
+  {
+    "code": "E-AUDIO-CANCELLED",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-AUDIO-CANCELLED.message",
+    "fix_key": "errors.E-AUDIO-CANCELLED.fix"
+  },
+  {
     "code": "E-VOICE-ACCENT",
     "category": "system",
     "retry_recommended": false,

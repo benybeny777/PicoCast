@@ -6,7 +6,7 @@ description: PicoCastのRust共通基盤、検証ガード、改名とPython旧�
 # Rust基盤と旧環境を移行する
 
 1. `HANDOFF.md` → `DESIGN_implementation_plan.md` §5 → `DESIGN_rust_rewrite.md`・`docs/r0-foundation.md`・対象WPの正本の順に読み、現在の差分と照合する。販売機能とPythonの新規機能は作らない。既存未コミット差分は保持する。
-2. Rustの所有境界は `crates/picocast-core`、`crates/picocast-store`、`xtask` に分ける。チャンネルを `ChannelId` で明示し、設定・時刻・HTTP・プロセス・書込み・DBの持ち主を通す。禁止を解除して通すのではなく、共通部品へ集約する。
+2. Rustの共通境界は `crates/picocast-core`、DBは `crates/picocast-store`、開発入口は `xtask` が持つ。生成処理は `picocast-ai`・`picocast-script`・`picocast-voice`・`picocast-media`、偽実装は `picocast-testkit` に置く。チャンネルを `ChannelId` で明示し、設定・時刻・HTTP・プロセス・書込み・DBの持ち主を通す。禁止を解除して通すのではなく、共通部品へ集約する。
 3. 修正中は確実に必要な単体テストのみ実行する。変更がまとまった最後に、このPCで `cargo fmt --all` と `cargo xtask verify` を実行する。依存は `Cargo.lock` の `--locked` を使う。利用者指示（2026-10-16）によりGitHub Actionsでの検証は禁止し、無料枠を理由に有効化しない。Windows実機とmacOSの未確認を分けて記録する。
 4. 改名と旧環境移行の前に、自動運用、実プロセス、metadataの未完了記録を照合する。古い `running` 表示だけで活動中と断定せず、PID・時刻・プロセスを確認する。履歴を消したり有料処理を自動再実行したりしない。
 5. マスターキーと設定・metadata DBをリポジトリ外へ退避する。DBはSQLiteのオンラインバックアップを使い、WAL込みで整合性を確認する。未コミット差分も退避し、秘密値は画面・ログ・Gitへ出さない。
