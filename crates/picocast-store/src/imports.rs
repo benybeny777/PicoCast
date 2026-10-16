@@ -33,7 +33,7 @@ pub enum SettingKind {
 /// 旧版文字列の型を曖昧に推定せず、呼出側の設定定義で指定する。
 pub struct SettingsImportOptions {
     pub setting_types: BTreeMap<String, SettingKind>,
-    /// 撤回済み販売設定等は有効設定にせず旧行として保持する。
+    /// 撤回済み販売設定等の原文は暗号化元DBにだけ保持し、有効設定へ移さない。
     pub retired_settings: BTreeSet<String>,
     pub language: String,
     pub timezone: String,
@@ -459,6 +459,10 @@ impl Store {
                 "aquestalk_license_key",
             ]
             .contains(&key.to_ascii_lowercase().as_str())
+                || (matches!(
+                    key.to_ascii_lowercase().as_str(),
+                    "license_key" | "license_activation"
+                ) && !options.retired_settings.contains(key))
             {
                 return Err(import_failure());
             }
@@ -472,7 +476,10 @@ impl Store {
                 import_policy(&tx, &id, &policy, &at)?;
                 report.holds.push(format!("{}: 旧有料API回数上限は金額へ換算できません。予算を設定して再承認するまで自動運用を保留します。", id.as_str()));
             } else if options.retired_settings.contains(key) {
-                preserve_row(&tx, "retired_settings", row, key, &at, None)?;
+                // 廃止したライセンス等の秘密値を、平文の互換設定へ複製しない。
+                let reference = json!({"key":key,"source":"encrypted_settings_snapshot",
+                    "snapshot_key":format!("legacy:encrypted-settings-snapshot:{before}")});
+                preserve_row(&tx, "retired_settings", &reference, key, &at, None)?;
             } else {
                 let kind = options.setting_types.get(key).ok_or_else(import_failure)?;
                 let value = decode_setting(field(row, "value")?, *kind)?;
