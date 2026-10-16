@@ -189,6 +189,20 @@ impl Manifest {
     }
 }
 
+/// 登録と本番合成で、manifestの意味と受入済み状態を同じ境界で検査する。
+pub fn validate_manifest(bytes: &[u8]) -> Result<()> {
+    parse_manifest(bytes).map(|_| ())
+}
+
+fn parse_manifest(bytes: &[u8]) -> Result<Manifest> {
+    let manifest: Manifest = serde_json::from_slice(bytes).map_err(|error| {
+        tracing::error!(cause = ?error.classify(), "立ち絵manifestの形式が不正です");
+        invalid()
+    })?;
+    manifest.validate()?;
+    Ok(manifest)
+}
+
 impl Store {
     /// 画素検査済みのPNGとmanifestをCASへ保存する。元PSDや書き出し元は変更しない。
     pub fn register_character_layers(
@@ -208,11 +222,7 @@ impl Store {
             .ok_or_else(invalid)?;
         let manifest_hash = imports::digest_file(manifest_path)?;
         let bytes = std::fs::read(manifest_path).map_err(filesystem_failure)?;
-        let manifest: Manifest = serde_json::from_slice(&bytes).map_err(|error| {
-            tracing::error!(cause = ?error.classify(), "立ち絵manifestの形式が不正です");
-            invalid()
-        })?;
-        manifest.validate()?;
+        let manifest = parse_manifest(&bytes)?;
         let base = std::fs::canonicalize(manifest_path.parent().ok_or_else(invalid)?)
             .map_err(filesystem_failure)?;
         let mut copied = Vec::new();

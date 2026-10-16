@@ -7,6 +7,10 @@ publish.workspace = true
 
 [dependencies]
 picocast-core = { path = "../picocast-core" }
+picocast-store = { path = "../picocast-store" }
+picocast-voice = { path = "../picocast-voice" }
+image.workspace = true
+sha2.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tracing.workspace = true

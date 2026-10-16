@@ -789,5 +789,47 @@
     "retry_recommended": false,
     "message_key": "errors.E-VOICE-STYLE.message",
     "fix_key": "errors.E-VOICE-STYLE.fix"
+  },
+  {
+    "code": "E-CHARACTER-ASSET",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-CHARACTER-ASSET.message",
+    "fix_key": "errors.E-CHARACTER-ASSET.fix"
+  },
+  {
+    "code": "E-CHARACTER-CHANNEL",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-CHARACTER-CHANNEL.message",
+    "fix_key": "errors.E-CHARACTER-CHANNEL.fix"
+  },
+  {
+    "code": "E-CHARACTER-CONFIG",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-CHARACTER-CONFIG.message",
+    "fix_key": "errors.E-CHARACTER-CONFIG.fix"
+  },
+  {
+    "code": "E-CHARACTER-PIXELS",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-CHARACTER-PIXELS.message",
+    "fix_key": "errors.E-CHARACTER-PIXELS.fix"
+  },
+  {
+    "code": "E-CHARACTER-RIG",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-CHARACTER-RIG.message",
+    "fix_key": "errors.E-CHARACTER-RIG.fix"
+  },
+  {
+    "code": "E-CHARACTER-TIMING",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-CHARACTER-TIMING.message",
+    "fix_key": "errors.E-CHARACTER-TIMING.fix"
   }
 ]

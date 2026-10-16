@@ -224,5 +224,17 @@
   "errors.E-VOICE-READING.message": "台詞の読みを処理できませんでした",
   "errors.E-VOICE-READING.fix": "入力本文と読み辞書・正規化設定を確認してください",
   "errors.E-VOICE-STYLE.message": "音声の話者またはスタイルが不正です",
-  "errors.E-VOICE-STYLE.fix": "キャラクターと利用可能なスタイル、感情の対応を確認してください"
+  "errors.E-VOICE-STYLE.fix": "キャラクターと利用可能なスタイル、感情の対応を確認してください",
+  "errors.E-CHARACTER-ASSET.message": "キャラクター素材を読み取れません",
+  "errors.E-CHARACTER-ASSET.fix": "登録済みのレイヤー・画像形式・内容ハッシュ・容量上限を確認してください",
+  "errors.E-CHARACTER-CHANNEL.message": "キャラクター素材のチャンネルが一致しません",
+  "errors.E-CHARACTER-CHANNEL.fix": "対象チャンネルに登録したキャラクター素材を選び直してください",
+  "errors.E-CHARACTER-CONFIG.message": "キャラクター合成の設定が不正です",
+  "errors.E-CHARACTER-CONFIG.fix": "画像の上限・配置・動き・フレーム設定を確認してください",
+  "errors.E-CHARACTER-PIXELS.message": "キャラクター合成の画素が基準と一致しません",
+  "errors.E-CHARACTER-PIXELS.fix": "元のレイヤー構成と合成方法を確認し、基準を書き換えず原因を修正してください",
+  "errors.E-CHARACTER-RIG.message": "キャラクターの表情や口・目の対応が不正です",
+  "errors.E-CHARACTER-RIG.fix": "登録した表情・口・まばたきの対応と重なりを確認してください",
+  "errors.E-CHARACTER-TIMING.message": "キャラクターの音素時刻が不正です",
+  "errors.E-CHARACTER-TIMING.fix": "音声と音素・速度・無音・フレームレートの設定を確認してください"
 }
