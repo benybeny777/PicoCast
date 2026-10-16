@@ -13,7 +13,7 @@
 
 ## 次の作業
 
-- **WP-R1-3・4・6の本番コピー受入** が残る。PSD取り込みと暗号化バックアップもAPIを実装し、R1時点のローカルverifyはRust94件を含め全成功。旧版オラクルはPython3.12でも一致した。次の生成基盤WP-R2-1〜5を実装中。
+- **WP-R1-3・4・6の本番コピー受入** が残る。PSD取り込みと暗号化バックアップもAPIを実装済み。旧版オラクルはPython3.12でも一致した。WP-R2-1〜5を実装し、統合verifyはRust147成功/実ツール専用2件は別受入、clippy・整形・ガード・棚卸し642・オラクル12・カタログ113・文書リンクがすべて成功。次はキャラクター合成・画像・永続ジョブとパイプライン。
 - **WP-R0-2** はPython3.12.13へ切り替え済み。旧新で同じ682件（681成功・1skip）と12オラクルが一致。ローカルLLM→VOICEVOX→旧nativeで1920x1080/4.6秒の実サンプル成功、PNG入力fixtureで日本語字幕も確認。旧 `.venv-311-backup` の削除は自動承認レビューにblocked by policyで拒否され未実行。別経路で迂回しない。DB/鍵の退避は保持。有料APIは使っていない。
 - R1以降の全WPの状態と完了条件は実装計画を参照する。
 - **GitHub Actionsは全プロジェクトで全面禁止（利用者指示）**。所有11リポジトリすべてenabled=falseを確認し、実行中は0件。PicoCastの実行中3件は中止済み。PicoAgent-Distributionに9月のqueued記録1件が残るが、通常/強制cancelともGitHubの409で拒否され、Actions無効設定で実行を抑止している。Codex・Claude・C:/00_PG共通ルールへ禁止を反映した。検証はこのPCだけで行う。
@@ -35,6 +35,11 @@
 | [#46](https://github.com/benybeny777/PicoCast/pull/46) | `codex/wp-r1-6-import-cli` | `codex/wp-r1-4-channel-import` | バックアップ限定CLI・照合報告 |
 | [#47](https://github.com/benybeny777/PicoCast/pull/47) | `codex/wp-r0-2-python312-switch` | `codex/wp-r1-6-import-cli` | 3.12切替手順・uv起動（実Apply前） |
 | [#48](https://github.com/benybeny777/PicoCast/pull/48) | `codex/wp-r1-migration-safety` | `codex/wp-r0-2-python312-switch` | ローカル検証・全プロジェクトActions禁止・PSD/バックアップ・3.12実切替と実サンプル |
+| [#49](https://github.com/benybeny777/PicoCast/pull/49) | `codex/wp-r2-1-ai-gateway` | `codex/wp-r1-migration-safety` | AI契約・チャンネル別費用予約 |
+| [#50](https://github.com/benybeny777/PicoCast/pull/50) | `codex/wp-r2-2-script-engine` | `codex/wp-r2-1-ai-gateway` | 構造化台本・版付き保存 |
+| [#51](https://github.com/benybeny777/PicoCast/pull/51) | `codex/wp-r2-3-voice-engine` | `codex/wp-r2-2-script-engine` | Rustの読みとVOICEVOX・実音声確認 |
+| [#52](https://github.com/benybeny777/PicoCast/pull/52) | `codex/wp-r2-4-subtitle-layout` | `codex/wp-r2-3-voice-engine` | 実測字幕・表示時間・性質検査 |
+| [#53](https://github.com/benybeny777/PicoCast/pull/53) | `codex/wp-r2-5-audio-mixing` | `codex/wp-r2-4-subtitle-layout` | 音声ミックス・実ffmpeg測定・R2文書同期 |
 
 WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0-1-doc-consistency` → `codex/license-v2-rebrand-design`）でレビュー待ち。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
 
