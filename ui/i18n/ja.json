@@ -268,5 +268,11 @@
   "errors.E-RENDER-CANCELLED.message": "動画出力を中止しました",
   "errors.E-RENDER-CANCELLED.fix": "処理状態を確認してから必要な工程を再実行してください",
   "errors.E-SUBTITLE-RASTER.message": "測定した字幕を正しく描画できません",
-  "errors.E-SUBTITLE-RASTER.fix": "フォント・文字領域・強調とフチの設定を確認してください"
+  "errors.E-SUBTITLE-RASTER.fix": "フォント・文字領域・強調とフチの設定を確認してください",
+  "errors.E-IMAGE-CONTRACT.message": "画像サービスの応答が契約に一致しません",
+  "errors.E-IMAGE-CONTRACT.fix": "対応モデル・画像形式・応答項目・選択した設定を確認してください",
+  "errors.E-IMAGE-HOLD.message": "画像の再生成上限に達したため保留しました",
+  "errors.E-IMAGE-HOLD.fix": "画像の検査結果と指定内容を確認し、承認後に再開してください",
+  "errors.E-IMAGE-POLICY.message": "画像生成の指定または許可が不正です",
+  "errors.E-IMAGE-POLICY.fix": "チャンネル・画風・モデル・画像サイズ・費用と開発用設定を確認してください"
 }

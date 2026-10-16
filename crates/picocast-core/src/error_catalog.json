@@ -943,5 +943,26 @@
     "retry_recommended": false,
     "message_key": "errors.E-SUBTITLE-RASTER.message",
     "fix_key": "errors.E-SUBTITLE-RASTER.fix"
+  },
+  {
+    "code": "E-IMAGE-CONTRACT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-IMAGE-CONTRACT.message",
+    "fix_key": "errors.E-IMAGE-CONTRACT.fix"
+  },
+  {
+    "code": "E-IMAGE-HOLD",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-IMAGE-HOLD.message",
+    "fix_key": "errors.E-IMAGE-HOLD.fix"
+  },
+  {
+    "code": "E-IMAGE-POLICY",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-IMAGE-POLICY.message",
+    "fix_key": "errors.E-IMAGE-POLICY.fix"
   }
 ]

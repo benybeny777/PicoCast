@@ -88,6 +88,10 @@ pub enum AiCostState {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AiCostSettlement {
+    ImagesSucceeded {
+        actual_cost_micros: u64,
+        images: u64,
+    },
     Succeeded {
         actual_cost_micros: u64,
         input_tokens: u64,
@@ -104,6 +108,8 @@ pub enum AiCostSettlement {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AiCostRecord {
+    pub max_images: Option<u64>,
+    pub images: Option<u64>,
     pub channel_id: ChannelId,
     pub request_id: String,
     pub day: UtcDay,
@@ -119,6 +125,8 @@ pub struct AiCostRecord {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct AiCostTotals {
+    pub images: u64,
+    pub held_images: u64,
     pub charged_micros: u64,
     pub held_micros: u64,
     pub input_tokens: u64,
@@ -130,6 +138,10 @@ pub struct AiCostTotals {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Metadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    max_images: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    images: Option<u64>,
     version: u32,
     day: UtcDay,
     state: AiCostState,
@@ -164,6 +176,20 @@ impl Metadata {
             return Err(usage("AI 費用台帳の実績が一致しません。"));
         }
         let pending = matches!(metadata.state, AiCostState::Reserved | AiCostState::Unknown);
+        match metadata.max_images {
+            Some(maximum)
+                if maximum > 0
+                    && metadata.max_input_tokens == 0
+                    && metadata.max_output_tokens == 0 =>
+            {
+                if (pending && metadata.images.is_some()) || (!pending && metadata.images.is_none())
+                {
+                    return Err(usage("画像費用の個数と状態が一致しません。"));
+                }
+            }
+            None if metadata.images.is_none() => {}
+            _ => return Err(usage("費用の計量単位が不正です。")),
+        }
         if pending {
             if metadata.actual_cost_micros.is_some()
                 || metadata.input_tokens.is_some()
@@ -203,6 +229,8 @@ impl Metadata {
 
     fn record(&self, row: &CostLedger) -> AiCostRecord {
         AiCostRecord {
+            max_images: self.max_images,
+            images: self.images,
             channel_id: row.channel_id.clone(),
             request_id: row.id.clone(),
             day: self.day.clone(),
@@ -218,8 +246,12 @@ impl Metadata {
     }
 
     fn is_overrun(&self) -> bool {
-        self.actual_cost_micros
-            .is_some_and(|actual| actual > self.max_cost_micros)
+        self.images
+            .zip(self.max_images)
+            .is_some_and(|(actual, max)| actual > max)
+            || self
+                .actual_cost_micros
+                .is_some_and(|actual| actual > self.max_cost_micros)
             || self
                 .input_tokens
                 .is_some_and(|actual| actual > self.max_input_tokens)
@@ -230,12 +262,30 @@ impl Metadata {
 }
 
 impl Store {
+    /// 画像料金も同じ台帳へ予約する。トークンを架空の枚数として流用しない。
+    pub fn reserve_ai_image_cost(
+        &mut self,
+        request: &AiCostReservation,
+        max_images: u64,
+    ) -> Result<AiCostRecord> {
+        if max_images == 0 || request.max_input_tokens != 0 || request.max_output_tokens != 0 {
+            return Err(budget("画像予約の枚数または計量単位が不正です。"));
+        }
+        self.reserve_ai_cost_inner(request, Some(max_images))
+    }
     pub fn ai_cost_totals(&self, channel_id: &ChannelId, day: &UtcDay) -> Result<AiCostTotals> {
         channel_record(&self.connection, channel_id)?;
         totals(&self.connection, channel_id, day)
     }
 
     pub fn reserve_ai_cost(&mut self, request: &AiCostReservation) -> Result<AiCostRecord> {
+        self.reserve_ai_cost_inner(request, None)
+    }
+    fn reserve_ai_cost_inner(
+        &mut self,
+        request: &AiCostReservation,
+        max_images: Option<u64>,
+    ) -> Result<AiCostRecord> {
         validate_identity(&request.request_id)?;
         validate_identity(&request.provider)?;
         validate_identity(&request.model)?;
@@ -248,7 +298,7 @@ impl Store {
         money(maximum)?;
         money(request.daily_budget_micros)?;
         let maximum_tokens = add(request.max_input_tokens, request.max_output_tokens)?;
-        if maximum_tokens == 0 {
+        if maximum_tokens == 0 && max_images.is_none() {
             return Err(budget("呼び出しトークン数の上限がありません。"));
         }
         let transaction = self
@@ -273,19 +323,22 @@ impl Store {
         }
         if add(add(current.charged_micros, current.held_micros)?, maximum)?
             > request.daily_budget_micros
-            || add(
-                add(
-                    add(current.input_tokens, current.output_tokens)?,
-                    current.held_tokens,
-                )?,
-                maximum_tokens,
-            )? > request.daily_token_budget
+            || (max_images.is_none()
+                && add(
+                    add(
+                        add(current.input_tokens, current.output_tokens)?,
+                        current.held_tokens,
+                    )?,
+                    maximum_tokens,
+                )? > request.daily_token_budget)
         {
             return Err(budget(
                 "日次の費用またはトークン予算を超えるため送信できません。",
             ));
         }
         let metadata = Metadata {
+            max_images,
+            images: None,
             version: METADATA_VERSION,
             day: request.day.clone(),
             state: AiCostState::Reserved,
@@ -335,11 +388,29 @@ impl Store {
         let previous = Metadata::from_row(&row)?;
         let mut next = previous.clone();
         match settlement {
+            AiCostSettlement::ImagesSucceeded {
+                actual_cost_micros,
+                images,
+            } => {
+                if previous.max_images.is_none() {
+                    return Err(usage("トークン予約を画像実績として精算できません。"));
+                }
+                money(*actual_cost_micros)?;
+                next.state = AiCostState::Succeeded;
+                next.actual_cost_micros = Some(*actual_cost_micros);
+                next.images = Some(*images);
+                next.input_tokens = Some(0);
+                next.output_tokens = Some(0);
+                next.error_code = None;
+            }
             AiCostSettlement::Succeeded {
                 actual_cost_micros,
                 input_tokens,
                 output_tokens,
             } => {
+                if previous.max_images.is_some() {
+                    return Err(usage("画像予約をトークン実績として精算できません。"));
+                }
                 money(*actual_cost_micros)?;
                 add(*input_tokens, *output_tokens)?;
                 next.state = AiCostState::Succeeded;
@@ -363,6 +434,9 @@ impl Store {
                 next.input_tokens = Some(0);
                 next.output_tokens = Some(0);
                 next.error_code = Some(error_code.clone());
+                if next.max_images.is_some() {
+                    next.images = Some(0);
+                }
             }
             AiCostSettlement::Unknown { error_code } => {
                 validate_error_code(error_code)?;
@@ -463,6 +537,9 @@ fn totals(connection: &Connection, channel: &ChannelId, day: &UtcDay) -> Result<
             let metadata = Metadata::from_row(&row)?;
             match metadata.state {
                 AiCostState::Reserved | AiCostState::Unknown => {
+                    if let Some(images) = metadata.max_images {
+                        total.held_images = add(total.held_images, images)?;
+                    }
                     total.held_micros = add(total.held_micros, metadata.max_cost_micros)?;
                     total.held_tokens = add(
                         total.held_tokens,
@@ -470,6 +547,9 @@ fn totals(connection: &Connection, channel: &ChannelId, day: &UtcDay) -> Result<
                     )?;
                 }
                 AiCostState::Succeeded | AiCostState::Failed => {
+                    if let Some(images) = metadata.images {
+                        total.images = add(total.images, images)?;
+                    }
                     total.charged_micros = add(
                         total.charged_micros,
                         metadata

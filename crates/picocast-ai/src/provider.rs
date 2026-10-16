@@ -22,6 +22,21 @@ pub struct ProviderFault {
     pub retry_after: Option<Duration>,
 }
 impl ProviderFault {
+    pub fn cost_settlement(self) -> picocast_store::ai_cost::AiCostSettlement {
+        if matches!(
+            self.kind,
+            FaultKind::Http(400 | 401 | 403 | 404 | 422 | 429)
+        ) {
+            picocast_store::ai_cost::AiCostSettlement::Failed {
+                actual_cost_micros: 0,
+                error_code: self.code().into(),
+            }
+        } else {
+            picocast_store::ai_cost::AiCostSettlement::Unknown {
+                error_code: self.code().into(),
+            }
+        }
+    }
     pub fn contract() -> Self {
         Self {
             kind: FaultKind::Contract,
@@ -45,8 +60,23 @@ impl ProviderFault {
     }
 }
 pub type ProviderResult<T> = std::result::Result<T, ProviderFault>;
+pub(crate) fn gemini_usage(body: &Value) -> ProviderResult<Usage> {
+    let input = body["usageMetadata"]["promptTokenCount"]
+        .as_u64()
+        .ok_or_else(ProviderFault::contract)?;
+    let total = body["usageMetadata"]["totalTokenCount"]
+        .as_u64()
+        .ok_or_else(ProviderFault::contract)?;
+    Ok(Usage {
+        input_tokens: input,
+        output_tokens: total
+            .checked_sub(input)
+            .ok_or_else(ProviderFault::contract)?,
+    })
+}
 
 pub struct CompletionInput<'a> {
+    pub images: &'a [crate::image::InlineImage],
     pub model: &'a str,
     pub prompt: &'a str,
     pub schema: &'a Value,
@@ -215,7 +245,7 @@ impl<T: Transport> ProviderContract<T> {
                     && matches!(url.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
                     && url.path() == "/"
             }
-            ProviderId::Fake => false,
+            ProviderId::Fake | ProviderId::StableDiffusionWebUi => false,
         };
         if !valid
             || url.query().is_some()
@@ -266,20 +296,24 @@ impl<T: Transport> ProviderContract<T> {
                         input.model.trim_start_matches("models/")
                     ),
                     Some(
-                        json!({"contents":[{"role":"user","parts":[{"text":input.prompt}]}],"generationConfig":{"maxOutputTokens":input.max_output_tokens,"responseMimeType":"application/json","responseJsonSchema":input.schema}}),
+                        json!({"contents":[{"role":"user","parts":crate::image::gemini_parts(input.prompt,input.images)}],"generationConfig":{"maxOutputTokens":input.max_output_tokens,"responseMimeType":"application/json","responseJsonSchema":input.schema}}),
                     ),
                 ),
                 ProviderId::OpenAi => (
                     "/responses".into(),
                     Some(
-                        json!({"model":input.model,"input":input.prompt,"store":false,"max_output_tokens":input.max_output_tokens,"text":{"format":{"type":"json_schema","name":"picocast_output","strict":true,"schema":input.schema}}}),
+                        json!({"model":input.model,"input":crate::image::openai_input(input.prompt,input.images),"store":false,"max_output_tokens":input.max_output_tokens,"text":{"format":{"type":"json_schema","name":"picocast_output","strict":true,"schema":input.schema}}}),
                     ),
                 ),
                 _ => (
                     "/api/generate".into(),
-                    Some(
-                        json!({"model":input.model,"prompt":input.prompt,"stream":false,"format":input.schema,"options":{"num_predict":input.max_output_tokens}}),
-                    ),
+                    Some(crate::image::ollama_input(
+                        input.model,
+                        input.prompt,
+                        input.schema,
+                        input.max_output_tokens,
+                        input.images,
+                    )),
                 ),
             },
         };
@@ -345,20 +379,9 @@ impl<T: Transport> ProviderContract<T> {
                     }
                     text.push_str(part["text"].as_str().ok_or_else(ProviderFault::contract)?);
                 }
-                let input = body["usageMetadata"]["promptTokenCount"]
-                    .as_u64()
-                    .ok_or_else(ProviderFault::contract)?;
                 // thinkingも出力の費用・token上限に含める。
-                let total = body["usageMetadata"]["totalTokenCount"]
-                    .as_u64()
-                    .ok_or_else(ProviderFault::contract)?;
-                (
-                    text,
-                    input,
-                    total
-                        .checked_sub(input)
-                        .ok_or_else(ProviderFault::contract)?,
-                )
+                let usage = gemini_usage(&body)?;
+                (text, usage.input_tokens, usage.output_tokens)
             }
             ProviderId::OpenAi => {
                 if body["status"] != "completed" || !body["error"].is_null() {

@@ -77,6 +77,36 @@ impl Gateway {
         cancel: &mut Cancellation,
         validate: F,
     ) -> Result<Generation<T>> {
+        self.generate_json_inner(store, request, schema, cancel, validate, None)
+            .await
+    }
+    pub async fn generate_json_with_images<T: DeserializeOwned>(
+        &mut self,
+        store: &mut Store,
+        request: GenerateRequest,
+        schema: &Value,
+        cancel: &mut Cancellation,
+        media: crate::image::MultimodalInput<'_>,
+    ) -> Result<Generation<T>> {
+        self.generate_json_inner(store, request, schema, cancel, |_: &T| Ok(()), Some(media))
+            .await
+    }
+    async fn generate_json_inner<T: DeserializeOwned, F: Fn(&T) -> Result<()>>(
+        &mut self,
+        store: &mut Store,
+        request: GenerateRequest,
+        schema: &Value,
+        cancel: &mut Cancellation,
+        validate: F,
+        media: Option<crate::image::MultimodalInput<'_>>,
+    ) -> Result<Generation<T>> {
+        let images = match &media {
+            Some(media) => {
+                media.limits.validate_images(media.images)?;
+                media.images
+            }
+            None => &[],
+        };
         cancel.check()?;
         if request.channel_id != self.channel_id {
             return Err(failure("E-AI-CHANNEL"));
@@ -100,7 +130,7 @@ impl Gateway {
         }
         let validator = jsonschema::validator_for(schema).map_err(|_| failure("E-AI-SCHEMA"))?;
         let request_hash = hash(
-            &serde_json::json!({"channel":request.channel_id.as_str(),"stage":request.stage,"model":model,"prompt":request.prompt,"schema":schema,"template_version":request.template_version,"settings_hash":request.settings_hash}),
+            &serde_json::json!({"channel":request.channel_id.as_str(),"stage":request.stage,"model":model,"prompt":request.prompt,"schema":schema,"template_version":request.template_version,"settings_hash":request.settings_hash,"images":images.iter().map(crate::image::InlineImage::fingerprint).collect::<Vec<_>>()}),
         )?;
         let mut sequence = 0u32;
         let models = self
@@ -152,6 +182,7 @@ impl Gateway {
         }
         for schema_attempt in 0..2 {
             let operation = Operation::Generate(CompletionInput {
+                images,
                 model: &model.model,
                 prompt: &request.prompt,
                 schema,
@@ -258,6 +289,7 @@ impl Gateway {
             let operation = match &operation {
                 Operation::Models => Operation::Models,
                 Operation::Generate(input) => Operation::Generate(CompletionInput {
+                    images: input.images,
                     model: input.model,
                     prompt: input.prompt,
                     schema: input.schema,
@@ -315,19 +347,7 @@ impl Gateway {
                 }
                 Ok(Err(fault)) => {
                     if let Some(id) = request_id {
-                        let settlement = if matches!(
-                            fault.kind,
-                            FaultKind::Http(400 | 401 | 403 | 404 | 422 | 429)
-                        ) {
-                            AiCostSettlement::Failed {
-                                actual_cost_micros: 0,
-                                error_code: fault.code().into(),
-                            }
-                        } else {
-                            AiCostSettlement::Unknown {
-                                error_code: fault.code().into(),
-                            }
-                        };
+                        let settlement = fault.cost_settlement();
                         store.settle_ai_cost(&request.channel_id, &id, &settlement)?;
                     }
                     if !fault.retryable() || attempt + 1 >= self.options.max_attempts {
@@ -357,6 +377,7 @@ pub fn provider_name(id: ProviderId) -> &'static str {
         ProviderId::OpenAi => "openai",
         ProviderId::Ollama => "ollama",
         ProviderId::Fake => "fake",
+        ProviderId::StableDiffusionWebUi => "stable_diffusion_web_ui",
     }
 }
 fn hash(value: &Value) -> Result<String> {
