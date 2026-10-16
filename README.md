@@ -249,6 +249,8 @@ Python本体とuvを準備してから実行します。既存の3.11環境は�
 
 通常起動は `uv run --locked --no-sync` で準備済み環境を使い、起動時に依存を更新しません。隔離テストは次で実行できます。
 
+環境切り替え後のローカル実サンプルは [受入手順](docs/python312-sample.md) に従います。実設定を隔離し、インストール済みOllama・VOICEVOX・ffmpegだけを使います。
+
 ```powershell
 uv run --locked --no-sync python -m pytest tests -q
 ```

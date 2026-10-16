@@ -14,7 +14,7 @@
 ## 次の作業
 
 - **WP-R1-3・4・6の本番コピー受入** が残る。PSD取り込みと暗号化バックアップもAPIを実装し、ローカルverifyはRust94件を含め全成功。WP-R1-7はPython3.12のローカル確認が残る。次の生成基盤はWP-R2-1・2へ着手中。
-- **WP-R0-2（Python 3.12＋uvへの切り替え）** は、自動運用と予約投稿の無い時間帯に現位置で行う。切り替え直前の実プロセス確認とDBの再バックアップが必要。有料APIは明示指示または運用上の明確な必要がある場合だけ使う。
+- **WP-R0-2** はPython3.12.13へ切り替え済み。旧新で同じ682件（681成功・1skip）と12オラクルが一致。ローカルLLM→VOICEVOX→旧nativeで1920x1080/4.6秒の実サンプル成功、PNG入力fixtureで日本語字幕も確認。旧 `.venv-311-backup` の削除は自動承認レビューにblocked by policyで拒否され未実行。別経路で迂回しない。DB/鍵の退避は保持。有料APIは使っていない。
 - R1以降の全WPの状態と完了条件は実装計画を参照する。
 - **GitHub Actionsは全プロジェクトで全面禁止（利用者指示）**。所有11リポジトリすべてenabled=falseを確認し、実行中は0件。PicoCastの実行中3件は中止済み。PicoAgent-Distributionに9月のqueued記録1件が残るが、通常/強制cancelともGitHubの409で拒否され、Actions無効設定で実行を抑止している。Codex・Claude・C:/00_PG共通ルールへ禁止を反映した。検証はこのPCだけで行う。
 
@@ -39,7 +39,7 @@ WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0
 
 ## 移行前に残る確認
 
-- Pythonの実環境は3.11.9。3.12用の `pyproject.toml`・`.python-version`・`uv.lock` は準備済みだが、環境切り替えとサンプル受入は未実施。
+- Python実環境は3.12.13。uv.lockから構築し前後suite/実サンプルを確認した。旧3.11環境は削除拒否のため残る。証拠は `temp/python312-sample/artifacts/run-8dzzuz_0/report.json` とMP4。実PSD/GPUエンコーダ/有料生成の受入とは区別する。
 - RustのフルドメインDB・取り込みAPIは実装済みだが、本番コピーでの受入は未実施。生成・YouTube・Tauri画面とログの画面/ジョブ接続は後続WP。NodeテストはUIが無いため明示スキップ。macOS実機は検証対象外。
 - 旧版の隔離テストはPython3.11で661件成功・1skip。その後のツールテスト追加・Python3.12への切替後は同一ID/件数/skipを比較する。旧CIで発見したUTF-8/ffprobe依存は修正し関連98件成功。今後の検証はローカルだけで行う。
 - テスト用一時領域 `temp/legacy-tests/session-f0csi71v` の削除は自動承認レビューに拒否されたため残っている。迂回して削除しない。Git管理・実データには含めない。

@@ -195,6 +195,8 @@ def tests(root: Path, destination: Path, label: str, timeout_seconds: int):
     if not (root / "tools" / "oracle_environment.py").is_file():
         raise ValueError("オフライン隔離の共通処理がありません")
     report = destination / (label + ".xml")
+    # pytestはbasetemp自身だけを作るため、専用作業領域の親を先に用意する。
+    (root / "temp" / "python312-switch").mkdir(parents=True, exist_ok=True)
     arguments = [sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider", "--junitxml", str(report), "--basetemp", str(root / "temp" / "python312-switch" / label)]
     with (destination / "app_debug_migration.log").open("ab") as log:
         completed = subprocess.run(arguments, cwd=root, stdout=log, stderr=log, timeout=timeout_seconds)
