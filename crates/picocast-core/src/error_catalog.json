@@ -509,5 +509,26 @@
     "retry_recommended": false,
     "message_key": "errors.E-SETTING-ENV.message",
     "fix_key": "errors.E-SETTING-ENV.fix"
+  },
+  {
+    "code": "E-STORE-MIGRATION",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-STORE-MIGRATION.message",
+    "fix_key": "errors.E-STORE-MIGRATION.fix"
+  },
+  {
+    "code": "E-FILE-IMPORT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-FILE-IMPORT.message",
+    "fix_key": "errors.E-FILE-IMPORT.fix"
+  },
+  {
+    "code": "E-TIME-LEGACY",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-TIME-LEGACY.message",
+    "fix_key": "errors.E-TIME-LEGACY.fix"
   }
 ]

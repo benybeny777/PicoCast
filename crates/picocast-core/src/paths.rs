@@ -33,8 +33,20 @@ impl StorePaths {
         })
     }
 
+    /// 内容アドレス素材の保存先。呼び出し側でパス名を重複定義しない。
+    pub fn assets_directory(&self) -> PathBuf {
+        self.root.join("assets")
+    }
+
     pub fn validate_storage(&self, policy: &StoragePolicy) -> Result<()> {
-        for path in [&self.root, &self.database, &self.backups, &self.master_key] {
+        let assets = self.assets_directory();
+        for path in [
+            &self.root,
+            &self.database,
+            &self.backups,
+            &self.master_key,
+            &assets,
+        ] {
             validate_storage(path, policy)?;
         }
         Ok(())
@@ -381,6 +393,25 @@ mod tests {
             .check(&classify_volume(false, "FAT32", "USB"))
             .is_ok());
         assert!(classify_volume(false, "NTFS", "Local").is_empty());
+    }
+
+    #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
+    #[test]
+    fn assets_directory_has_one_owner_and_is_guarded_before_database_open() {
+        let temporary = tempfile::tempdir().unwrap();
+        let paths = StorePaths::new(temporary.path(), DataMode::Development).unwrap();
+        assert_eq!(paths.assets_directory(), paths.root.join("assets"));
+        let production = StorePaths::new(temporary.path(), DataMode::Production).unwrap();
+        assert_ne!(production.assets_directory(), paths.assets_directory());
+        let policy = StoragePolicy {
+            sync_roots: vec![paths.assets_directory()],
+            ..Default::default()
+        };
+        assert_eq!(
+            paths.validate_storage(&policy).unwrap_err().code,
+            "E-STORE-UNSAFE-PATH"
+        );
+        assert!(!paths.root.exists());
     }
 
     #[cfg(windows)]

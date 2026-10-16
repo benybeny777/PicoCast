@@ -20,6 +20,8 @@ Rust版のエラーは日本語カタログから安定したコード・説明�
 
 旧版の機能・API・画面・設定・DB表の対応先は [移行棚卸し](docs/migration-inventory.md) に集約しています。`cargo xtask inventory` はソースと642項目の一致を確認します。
 
+Rust統合DBは38表の型付きリポジトリと、バックアップ付きの番号・チェックサム検証を備えます。版番号、既存R0との互換、チャンネル・素材・履歴の境界は [統合DB](docs/store-schema.md) を参照してください。
+
 旧版テストは実設定・鍵・出力から隔離され、`.venv/Scripts/python.exe -m pytest tests -q` で実APIを使わず検査します。`cargo xtask oracle` は6分野12ケースの旧版比較契約を確認し、`cargo xtask oracle record` は基準候補を標準出力へ出すだけで既存基準を書き換えません。契約と環境の詳細は [旧版オラクル](tests/oracle/README.md) を参照してください。CIではPython3.12とuv.lockの固定環境を用意して同じ検査を実行します。
 
 2026-10-16時点でローカルフォルダは `C:\00_PG\22_PicoCast` へ改名済みです。保管用の `legacy/` は作らず、Rust版への切り替え後は不要な旧コードを削除してGit履歴で参照します。DB・生成物・認証情報は別に保護します。Claude Remote Controlも `PicoCast` 名で新しいフォルダを参照し、既存のログオンタスク `Claude Remote Control - Projects` から起動します。

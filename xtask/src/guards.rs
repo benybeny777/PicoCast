@@ -187,6 +187,9 @@ pub fn production_string_literals(source: &str) -> Result<BTreeSet<String>> {
     if test_attrs(&syntax.attrs) {
         return Ok(BTreeSet::new());
     }
+    if test_attrs(&syntax.attrs) {
+        return Ok(BTreeSet::new());
+    }
     let mut collector = Literals {
         values: BTreeSet::new(),
         error: None,
@@ -201,7 +204,7 @@ pub fn production_string_literals(source: &str) -> Result<BTreeSet<String>> {
 fn scan_rust(path: &str, source: &str) -> Result<Vec<String>> {
     let ast = syn::parse_file(source)?;
     // integration tests は Cargo により本番バイナリから分離される。
-    let tests = path.split('/').any(|p| p == "tests");
+    let tests = path.split('/').any(|p| p == "tests") || test_attrs(&ast.attrs);
     let mut scanner = Scanner {
         path,
         aliases: BTreeMap::new(),
@@ -370,7 +373,9 @@ impl Scanner<'_> {
         {
             self.reject("DB は picocast-store に集約", value);
         }
-        if value == "chrono::NaiveDateTime" {
+        if (value == "chrono::NaiveDateTime" || value.starts_with("chrono::NaiveDateTime::"))
+            && !owner(self.path, "clock")
+        {
             self.reject("日時は UTC 型で保持", value);
         }
     }
@@ -587,6 +592,26 @@ mod tests {
 
     #[test]
     fn panic_is_allowed_only_in_real_test_boundaries() {
+        assert!(violations(
+            "crates/picocast-store/src/external_tests.rs",
+            "#![cfg(test)] fn fixture() { Some(1).unwrap(); }"
+        )
+        .is_empty());
+        assert!(!violations(
+            "crates/picocast-store/src/external_tests.rs",
+            "fn fixture() { Some(1).unwrap(); }"
+        )
+        .is_empty());
+        assert!(!violations(
+            "crates/picocast-core/src/feature.rs",
+            "fn f() { chrono::NaiveDateTime::parse_from_str(\"x\", \"y\"); }"
+        )
+        .is_empty());
+        assert!(violations(
+            "crates/picocast-core/src/clock.rs",
+            "fn f() { chrono::NaiveDateTime::parse_from_str(\"x\", \"y\"); }"
+        )
+        .is_empty());
         assert!(!violations(
             "crates/picocast-core/src/lib.rs",
             "fn f() { Some(1).unwrap(); }"
