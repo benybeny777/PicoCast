@@ -70,6 +70,9 @@ def evaluate(corpus):
 
 
 def main():
+    # OSの既定コードページによらず、比較結果と候補JSONをUTF-8で返す。
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--emit-json", action="store_true", help="初回記録の候補を標準出力へ出す。既存基準は変更しない")
     args = parser.parse_args()
