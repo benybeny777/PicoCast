@@ -24,7 +24,11 @@ Rust統合DBは38表の型付きリポジトリと、バックアップ付きの
 
 Rustの生成基盤は、[AIゲートウェイ](docs/ai-gateway.md) と [費用台帳](docs/ai-cost-ledger.md)、[台本エンジン](docs/script-engine.md) に分けています。チャンネルごとのモデル・秘密値・予約上限を検査し、構造化応答を台本の版へ保存します。録画契約のテストは合成値で行い、有料APIの実通信や完成した生成画面の受入とは区別します。
 
-Rust音声の読み辞書とVOICEVOXは [音声エンジン](docs/voice-engine.md)、文節・禁則・フォント実測による改行は [字幕](docs/subtitle-layout.md)、ffmpegの2パス補正・ダッキングと測定は [音声ミックス](docs/audio-mixing.md) を参照してください。動画レンダーや画面への接続は後続WPで行います。
+Rust音声の読み辞書とVOICEVOXは [音声エンジン](docs/voice-engine.md)、文節・禁則・フォント実測による改行は [字幕](docs/subtitle-layout.md)、ffmpegの2パス補正・ダッキングと測定は [音声ミックス](docs/audio-mixing.md) を参照してください。
+
+Rustの [キャラクター合成](docs/character-composition.md) と [タイムラインレンダー](docs/timeline-render.md) は字幕の実測と同じフォントで動画を描きます。[画像プロバイダ](docs/image-providers.md) は契約検査と回数・費用上限で保留を判断します。[永続ジョブ](docs/pipeline-jobs.md) と [実行資源](docs/runtime-resources.md) は中断後の再開、チャンネル分離、GPU実行枠を管理します。小さいCPU動画の実出力は確認していますが、実素材・旧版同等性・性能・画面接続の受入は残っています。
+
+[サムネイル](docs/thumbnail-generation.md) はDBテンプレートから3案を生成し、同じ文字組み部品で配置します。縮小検査と画像からの文字転記を通した後も、人が候補を確認して選びます。実APIと実素材の視認性は未受入です。
 
 旧設定の取込APIは、元DBと秘密値を保護して全件照合します。型・鍵・素材の指定と実データ受入の境界は [設定の取り込み](docs/settings-import.md) を参照してください。
 

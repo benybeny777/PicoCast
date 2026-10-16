@@ -3,3 +3,4 @@ pub mod audio;
 pub mod character;
 pub mod render;
 pub mod subtitle;
+pub mod thumbnail;

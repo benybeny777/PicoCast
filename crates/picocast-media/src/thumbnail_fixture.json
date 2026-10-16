@@ -1,0 +1,18 @@
+{
+  "channel_id":"fixture", "version":1, "width":640, "height":360, "maximum_pixels":230400,
+  "text_left":20, "text_top":70, "panel_rgba":[0,0,0,255], "character":null,
+  "layout_duration_ms":60000,
+  "layout":{
+    "width_px":600.0,"height_px":220.0,"max_lines_per_cue":2,
+    "max_graphemes_per_line":12,"min_graphemes_per_line":2,"max_input_graphemes":100,
+    "max_measurements":20000,"allow_inside_phrase_break":true,
+    "prohibited_line_start":"、。！？)]」』","prohibited_line_end":"([「『",
+    "minimum_display_ms":500,"max_graphemes_per_second":12.0,
+    "style":{"family":"Yu Gothic","font_size":64.0,"line_height":100.0,
+      "normal_weight":700,"emphasis_weight":700,"normal_rgba":[255,255,255,255],
+      "emphasis_rgba":[255,255,255,255],"stroke_px":2.0}
+  },
+  "raster":{"alignment":"center","stroke_rgba":[0,0,0,255],"maximum_pixels":230400,"maximum_stroke_kernel_samples":81},
+  "readability":{"preview_width":320,"preview_height":180,"minimum_glyph_height_px":20,
+    "minimum_contrast_ratio":4.5,"minimum_passing_fraction":0.9,"minimum_mask_alpha":200}
+}

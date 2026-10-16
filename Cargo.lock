@@ -1655,9 +1655,13 @@ dependencies = [
 name = "picocast-pipeline"
 version = "0.1.0"
 dependencies = [
+ "image",
  "picocast-ai",
  "picocast-core",
+ "picocast-media",
+ "picocast-script",
  "picocast-store",
+ "picocast-testkit",
  "serde",
  "serde_json",
  "sha2",
