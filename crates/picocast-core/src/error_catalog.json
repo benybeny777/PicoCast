@@ -964,5 +964,89 @@
     "retry_recommended": false,
     "message_key": "errors.E-IMAGE-POLICY.message",
     "fix_key": "errors.E-IMAGE-POLICY.fix"
+  },
+  {
+    "code": "E-JOB-MONITOR",
+    "category": "network",
+    "retry_recommended": true,
+    "message_key": "errors.E-JOB-MONITOR.message",
+    "fix_key": "errors.E-JOB-MONITOR.fix"
+  },
+  {
+    "code": "E-JOB-STATE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-JOB-STATE.message",
+    "fix_key": "errors.E-JOB-STATE.fix"
+  },
+  {
+    "code": "E-JOB-STUCK",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-JOB-STUCK.message",
+    "fix_key": "errors.E-JOB-STUCK.fix"
+  },
+  {
+    "code": "E-JOB-UNCERTAIN",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-JOB-UNCERTAIN.message",
+    "fix_key": "errors.E-JOB-UNCERTAIN.fix"
+  },
+  {
+    "code": "E-PIPELINE-CACHE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PIPELINE-CACHE.message",
+    "fix_key": "errors.E-PIPELINE-CACHE.fix"
+  },
+  {
+    "code": "E-PIPELINE-DAG",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PIPELINE-DAG.message",
+    "fix_key": "errors.E-PIPELINE-DAG.fix"
+  },
+  {
+    "code": "E-PIPELINE-INPUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PIPELINE-INPUT.message",
+    "fix_key": "errors.E-PIPELINE-INPUT.fix"
+  },
+  {
+    "code": "E-PIPELINE-OUTPUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PIPELINE-OUTPUT.message",
+    "fix_key": "errors.E-PIPELINE-OUTPUT.fix"
+  },
+  {
+    "code": "E-PIPELINE-RESOURCE",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PIPELINE-RESOURCE.message",
+    "fix_key": "errors.E-PIPELINE-RESOURCE.fix"
+  },
+  {
+    "code": "E-PIPELINE-SETTINGS",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PIPELINE-SETTINGS.message",
+    "fix_key": "errors.E-PIPELINE-SETTINGS.fix"
+  },
+  {
+    "code": "E-PIPELINE-TIMEOUT",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PIPELINE-TIMEOUT.message",
+    "fix_key": "errors.E-PIPELINE-TIMEOUT.fix"
+  },
+  {
+    "code": "E-PIPELINE-VERSION",
+    "category": "system",
+    "retry_recommended": false,
+    "message_key": "errors.E-PIPELINE-VERSION.message",
+    "fix_key": "errors.E-PIPELINE-VERSION.fix"
   }
 ]

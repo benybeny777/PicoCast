@@ -1652,6 +1652,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "picocast-pipeline"
+version = "0.1.0"
+dependencies = [
+ "picocast-ai",
+ "picocast-core",
+ "picocast-store",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "picocast-script"
 version = "0.1.0"
 dependencies = [
@@ -3158,6 +3173,7 @@ dependencies = [
  "anyhow",
  "picocast-core",
  "picocast-store",
+ "quote",
  "serde",
  "serde_json",
  "syn 2.0.119",

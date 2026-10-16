@@ -7,6 +7,7 @@ mod guards;
 mod import_legacy;
 mod inventory;
 mod oracle;
+mod step_versions;
 
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -20,12 +21,13 @@ fn main() -> Result<()> {
     match std::env::args().nth(1).as_deref() {
         Some("verify") => verify(&root),
         Some("guard") => guards::check(&root),
+        Some("step-versions") => step_versions::check(&root),
         Some("inventory") => inventory::check(&root),
         Some("oracle") => oracle::run(&root, std::env::args().nth(2).as_deref()),
         Some("import-legacy") => import_legacy::run(&std::env::args().skip(2).collect::<Vec<_>>()),
         Some("catalog-check") => catalog::check(&root),
         Some("docs-check") => docs::check(&root),
-        _ => bail!("使い方: cargo xtask verify | guard | inventory | oracle [check|record] | import-legacy (--settings|--channel) --config <JSON> | catalog-check | docs-check"),
+        _ => bail!("使い方: cargo xtask verify | guard | step-versions | inventory | oracle [check|record] | import-legacy (--initialize|--settings|--channel) --config <JSON> | catalog-check | docs-check"),
     }
 }
 
@@ -54,6 +56,7 @@ fn verify(root: &Path) -> Result<()> {
         results.push((label, run(root, "cargo", &args)));
     }
     results.push(("走査ガード", guards::check(root)));
+    results.push(("工程の版", step_versions::check(root)));
     results.push(("移行棚卸し", inventory::check(root)));
     results.push(("旧版オラクル", oracle::check(root)));
     results.push(("エラーカタログ", catalog::check(root)));
