@@ -2,7 +2,7 @@
   <h1>🎥 PicoCast</h1>
   <p><strong>複数YouTubeチャンネル対応の台本生成→動画→アップロード→Analytics確認までを行うローカルWebツール</strong></p>
 
-  ![Python Version](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
+  ![Python Version](https://img.shields.io/badge/Python-3.12-blue?style=for-the-badge&logo=python)
   ![VOICEVOX](https://img.shields.io/badge/VOICEVOX-Supported-green?style=for-the-badge)
   ![FastAPI](https://img.shields.io/badge/FastAPI-Framework-009688?style=for-the-badge&logo=fastapi)
   ![ffmpeg](https://img.shields.io/badge/ffmpeg-Native_Render-black?style=for-the-badge&logo=ffmpeg)
@@ -127,7 +127,7 @@ Google AI、YouTube投稿、YouTube Analyticsの認証と、既存の動画生�
 
 | ソフトウェア | 用途 | 備考 |
 |:---|:---|:---|
-| **Python 3.10+** | 実行環境 | `.venv` 仮想環境を使用 |
+| **Python 3.12 / uv** | 実行環境 | `uv.lock` から `.venv` を作成 |
 | **VOICEVOX** | 音声合成 | デフォルトポート `50021` |
 | **AquesTalk系エンジン** | ゆっくり音声合成 | 任意。利用時はA-Quest公式ライセンス確認が必要 |
 | **ffmpeg** | 動画レンダリング | `h264_nvenc`（GPU）または `libx264`（CPU）|
@@ -235,22 +235,20 @@ Native Video Factory はローカルPC上で動作する Web UI アプリです�
 
 **Windows:**
 ```powershell
-py -3 -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install --upgrade -r config/requirements.txt
+uv sync --locked --group build --group dev
 ```
 
 **macOS:**
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade -r config/requirements.txt
+uv sync --locked --group build --group dev
 ```
 
-テストを実行する開発環境では、追加で開発用依存を入れます。
+Python本体とuvを準備してから実行します。既存の3.11環境はこの手順で上書きせず、DB・鍵を退避する [Python 3.12切り替え手順](docs/python312-switch.md) を使います。外部のVOICEVOX・Stable Diffusion・Ollama環境は変更しません。
+
+通常起動は `uv run --locked --no-sync` で準備済み環境を使い、起動時に依存を更新しません。隔離テストは次で実行できます。
 
 ```powershell
-pip install --upgrade -r config/requirements-dev.txt
+uv run --locked --no-sync python -m pytest tests -q
 ```
 
 ### Step 2. 認証情報の登録
@@ -434,6 +432,6 @@ Web UI は起動時に表示される `127.0.0.1`（または同じポートの 
 ## 🖥 開発環境
 
 - OS: Windows 11
-- Python: 3.11.9
+- Python: 3.12を正本とする。現PCの切り替え・実生成受入の状況はHANDOFF.mdを参照
 - ffmpeg: 8.0.1 (NVENC 対応)
 - FastAPI: 0.136.3

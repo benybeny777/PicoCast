@@ -3,9 +3,17 @@ set -eu
 
 cd "$(dirname "$0")"
 
+if ! command -v uv >/dev/null 2>&1; then
+  echo "エラー: uv がありません。セットアップ手順で導入してください。"
+  exit 1
+fi
 if [ ! -x ".venv/bin/python" ]; then
-  echo "エラー: .venv/bin/python が見つかりません。先に python3 -m venv .venv と .venv/bin/python -m pip install --upgrade -r requirements.txt を実行してください。"
+  echo "エラー: Python環境がありません。uv sync --locked --group build --group dev を実行してください。"
+  exit 1
+fi
+if [ "$(.venv/bin/python -I -S -c 'import sys; print(*sys.version_info[:2],sep=chr(46))')" != "3.12" ]; then
+  echo "エラー: Python 3.12環境が必要です。既存環境とDBを退避してから移行してください。"
   exit 1
 fi
 
-exec ".venv/bin/python" -m web_app.app --open-browser
+exec uv run --locked --no-sync python -m web_app.app --open-browser
