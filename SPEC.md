@@ -7,9 +7,13 @@
 
 ## Rust版の基盤（R0）
 
-完成形は `DESIGN_rust_rewrite.md`、実装・移行の現状は `docs/r0-foundation.md` を正本とする。新規RustコードはCargoワークスペースの `picocast-core` と `picocast-store` に集約する。チャンネルID、UTC日時、エラー、設定、プロセス、HTTP、原子的保存、SQLite・暗号化保存を実装し、clippyとASTガードで共通部品の迂回を検出する。旧Pythonアプリの置換、旧データ取込み、Tauri画面はまだ未完了。以下はPython旧版の仕様で、パスはPython版のルートからの相対表記とする。
+完成形は `DESIGN_rust_rewrite.md`、実装・移行の現状は `docs/r0-foundation.md` を正本とする。共通境界はCargoワークスペースの `picocast-core` と `picocast-store`、生成処理は `picocast-ai`・`picocast-script`・`picocast-voice`・`picocast-media` に置く。チャンネルID、UTC日時、エラー、設定、プロセス、HTTP、原子的保存、SQLite・暗号化保存を実装し、clippyとASTガードで共通部品の迂回を検出する。旧Pythonアプリの置換、旧データ取込みの本番受入、Tauri画面はまだ未完了。以下はPython旧版の仕様で、パスはPython版のルートからの相対表記とする。
 
 WP-R0-3の共通ログはチャンネル・ジョブ・工程をJSONLへ記録し、`log_retention_days`（既定30日）、`log_max_bytes`（合計256MiB、2役割へ均等配分）、`job_log_compress_days`（既定90日）を型付きレジストリから読む。異常終了通知は確認されるまで保持する。秘密値、内部トレースと画面向け通知の分離、初期化・終了APIは [Rust共通ログ](docs/logging.md) を参照する。画面とジョブ側への接続は後続WPで実装する。
+
+生成基盤のモデル検証・録画契約・費用予約は [AIゲートウェイ](docs/ai-gateway.md) と [費用台帳](docs/ai-cost-ledger.md)、構造化台本・旧記法の互換・版管理は [台本エンジン](docs/script-engine.md) を参照する。応答が不明な呼び出しは予約を解放せず、別チャンネルの認証情報・台本・cacheを共有しない。HTTPはリダイレクトを追従せず、ローカルサービスはproxyを通さない。
+
+Rustの読みは共通辞書と明示パスのSudachi資源から正規化し、VOICEVOX応答のPCM WAVと末尾無音を検査する。字幕は元本文・強調を保持して文節・禁則・実フォント幅から改行し、配置や表示時間が足りなければ停止する。音声ミックスはジャンル別の間とダッキング、2パス補正を適用し、実測のLUFS・True Peakが受入範囲を外れた結果は公開しない。個々の契約は [音声](docs/voice-engine.md)・[字幕](docs/subtitle-layout.md)・[ミックス](docs/audio-mixing.md) を参照する。実動画合成と画面の受入とは区別する。
 
 ## 概要
 
