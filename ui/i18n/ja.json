@@ -189,6 +189,8 @@
   "errors.E-AI-TOKENS.fix": "入力サイズとモデルの上限、トークン予算を確認してください",
   "errors.E-AI-USAGE.message": "AI処理の利用実績を確認できませんでした",
   "errors.E-AI-USAGE.fix": "実請求と利用記録を確認してください。未確定の費用を解放して再実行しないでください",
+  "errors.E-SCRIPT-FORMAT.message": "台本の形式または参照先が不正です",
+  "errors.E-SCRIPT-FORMAT.fix": "話者・シーン・必須項目・テンプレートの版を確認して、台本を修正してください",
   "errors.E-AI-CHANNEL.message": "AI要求のチャンネルが一致しません",
   "errors.E-AI-CHANNEL.fix": "対象チャンネルの認証情報で生成処理を作り直し、別チャンネルのプロバイダを共有しないでください"
 }
