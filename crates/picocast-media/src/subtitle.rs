@@ -1,7 +1,8 @@
 use cosmic_text::skrifa::{instance::Size, raw::types::Tag, FontRef, GlyphId, MetadataProvider};
 use cosmic_text::{
-    fontdb, Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, Weight, Wrap,
+    fontdb, Attrs, Buffer, Color, Family, FontSystem, Metrics, Shaping, SwashCache, Weight, Wrap,
 };
+use image::{Rgba, RgbaImage};
 use picocast_core::{AppError, Result};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -38,6 +39,23 @@ pub struct TextStyle {
     pub emphasis_rgba: [u8; 4],
     pub stroke_px: f32,
 }
+impl TextStyle {
+    fn validate(&self) -> Result<()> {
+        if !self.font_size.is_finite()
+            || self.font_size <= 0.0
+            || !self.line_height.is_finite()
+            || self.line_height < self.font_size
+            || !self.stroke_px.is_finite()
+            || self.stroke_px < 0.0
+            || self.family.is_empty()
+            || !(1..=1000).contains(&self.normal_weight)
+            || !(1..=1000).contains(&self.emphasis_weight)
+        {
+            return Err(failure("E-SUBTITLE-SETTINGS"));
+        }
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -58,7 +76,7 @@ pub struct LayoutOptions {
 }
 impl LayoutOptions {
     pub fn validate(&self) -> Result<()> {
-        let style = &self.style;
+        self.style.validate()?;
         if !self.width_px.is_finite()
             || self.width_px <= 0.0
             || !self.height_px.is_finite()
@@ -71,15 +89,6 @@ impl LayoutOptions {
             || self.minimum_display_ms == 0
             || !self.max_graphemes_per_second.is_finite()
             || self.max_graphemes_per_second <= 0.0
-            || !style.font_size.is_finite()
-            || style.font_size <= 0.0
-            || !style.line_height.is_finite()
-            || style.line_height < style.font_size
-            || !style.stroke_px.is_finite()
-            || style.stroke_px < 0.0
-            || style.family.is_empty()
-            || !(1..=1000).contains(&style.normal_weight)
-            || !(1..=1000).contains(&style.emphasis_weight)
         {
             return Err(failure("E-SUBTITLE-SETTINGS"));
         }
@@ -123,6 +132,30 @@ pub struct SubtitleCue {
 pub struct SubtitleLayout {
     pub cues: Vec<SubtitleCue>,
     pub font_families: Vec<String>,
+    pub text_style: TextStyle,
+    pub area_width_px: f32,
+    pub area_height_px: f32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SubtitleAlignment {
+    Left,
+    Center,
+    Right,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SubtitleRasterOptions {
+    pub alignment: SubtitleAlignment,
+    pub stroke_rgba: [u8; 4],
+    pub maximum_pixels: u64,
+    pub maximum_stroke_kernel_samples: usize,
+}
+pub struct RasterizedSubtitle {
+    pub start_ms: u64,
+    pub end_ms: u64,
+    pub image: RgbaImage,
 }
 
 /// フォントを自動探索せず、呼出側が指定したファイルだけを読み込む。
@@ -256,6 +289,9 @@ impl TextLayoutEngine {
         Ok(SubtitleLayout {
             cues,
             font_families: self.families.iter().cloned().collect(),
+            text_style: options.style.clone(),
+            area_width_px: options.width_px,
+            area_height_px: options.height_px,
         })
     }
 
@@ -405,35 +441,8 @@ impl TextLayoutEngine {
                 }
             })
             .collect::<Vec<_>>();
-        let attrs = Attrs::new()
-            .family(Family::Name(&style.family))
-            .weight(Weight(style.normal_weight));
+        let buffer = self.shape_runs(&runs, style)?;
         let content_height = style.line_height - style.stroke_px * 2.0;
-        if content_height < style.font_size {
-            return Err(failure("E-SUBTITLE-SETTINGS"));
-        }
-        let mut buffer = Buffer::new(
-            &mut self.fonts,
-            Metrics::new(style.font_size, content_height),
-        );
-        buffer.set_wrap(Wrap::None);
-        buffer.set_rich_text(
-            runs.iter().map(|run| {
-                (
-                    run.text.as_str(),
-                    attrs.clone().weight(Weight(run.weight)).color(Color::rgba(
-                        run.rgba[0],
-                        run.rgba[1],
-                        run.rgba[2],
-                        run.rgba[3],
-                    )),
-                )
-            }),
-            &attrs,
-            Shaping::Advanced,
-            None,
-        );
-        buffer.shape_until_scroll(&mut self.fonts, false);
         let mut width = 0.0f32;
         let mut height = 0.0f32;
         let mut min_x = 0.0f32;
@@ -486,6 +495,216 @@ impl TextLayoutEngine {
             height_px: max_y - min_y + style.stroke_px * 2.0,
             runs,
             inside_phrase_break,
+        })
+    }
+
+    fn shape_runs(&mut self, runs: &[StyledRun], style: &TextStyle) -> Result<Buffer> {
+        style.validate()?;
+        if !self.families.contains(&style.family) {
+            return Err(failure("E-SUBTITLE-FONT"));
+        }
+        let attrs = Attrs::new()
+            .family(Family::Name(&style.family))
+            .weight(Weight(style.normal_weight));
+        let content_height = style.line_height - style.stroke_px * 2.0;
+        if content_height < style.font_size {
+            return Err(failure("E-SUBTITLE-SETTINGS"));
+        }
+        let mut buffer = Buffer::new(
+            &mut self.fonts,
+            Metrics::new(style.font_size, content_height),
+        );
+        buffer.set_wrap(Wrap::None);
+        buffer.set_rich_text(
+            runs.iter().map(|run| {
+                (
+                    run.text.as_str(),
+                    attrs.clone().weight(Weight(run.weight)).color(Color::rgba(
+                        run.rgba[0],
+                        run.rgba[1],
+                        run.rgba[2],
+                        run.rgba[3],
+                    )),
+                )
+            }),
+            &attrs,
+            Shaping::Advanced,
+            None,
+        );
+        buffer.shape_until_scroll(&mut self.fonts, false);
+        Ok(buffer)
+    }
+
+    /// 実測と同じFontSystem・shaping関数で描く。ffmpegへ文字列を再組版させない。
+    pub fn rasterize_cue(
+        &mut self,
+        layout: &SubtitleLayout,
+        index: usize,
+        options: &SubtitleRasterOptions,
+    ) -> Result<RasterizedSubtitle> {
+        if layout
+            .font_families
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            != self.families
+            || !layout.area_width_px.is_finite()
+            || !layout.area_height_px.is_finite()
+            || layout.area_width_px <= 0.0
+            || layout.area_height_px <= 0.0
+            || layout.area_width_px > u32::MAX as f32
+            || layout.area_height_px > u32::MAX as f32
+        {
+            return Err(failure("E-SUBTITLE-RASTER"));
+        }
+        let width = layout.area_width_px.ceil() as u32;
+        let height = layout.area_height_px.ceil() as u32;
+        if u64::from(width) * u64::from(height) > options.maximum_pixels {
+            return Err(failure("E-SUBTITLE-LIMIT"));
+        }
+        let style = &layout.text_style;
+        style.validate()?;
+        if !style.stroke_px.is_finite()
+            || style.stroke_px < 0.0
+            || style.stroke_px > u32::MAX as f32
+        {
+            return Err(failure("E-SUBTITLE-RASTER"));
+        }
+        let radius = style.stroke_px.ceil() as i64;
+        let diameter = (radius as u64)
+            .checked_mul(2)
+            .and_then(|value| value.checked_add(1))
+            .ok_or_else(|| failure("E-SUBTITLE-LIMIT"))?;
+        if diameter
+            .checked_mul(diameter)
+            .is_none_or(|samples| samples > options.maximum_stroke_kernel_samples as u64)
+        {
+            return Err(failure("E-SUBTITLE-LIMIT"));
+        }
+        let cue = layout
+            .cues
+            .get(index)
+            .ok_or_else(|| failure("E-SUBTITLE-RASTER"))?;
+        let mut image = RgbaImage::new(width, height);
+        let mut cache = SwashCache::new();
+        let mut clipped = false;
+        for (line_index, line) in cue.lines.iter().enumerate() {
+            if !line.origin_x.is_finite()
+                || !line.origin_y.is_finite()
+                || !line.width_px.is_finite()
+                || !line.height_px.is_finite()
+                || line.width_px <= 0.0
+                || line.height_px <= 0.0
+                || line.width_px > layout.area_width_px
+                || line.height_px > style.line_height
+                || line
+                    .runs
+                    .iter()
+                    .map(|run| run.text.as_str())
+                    .collect::<String>()
+                    != line.text
+            {
+                return Err(failure("E-SUBTITLE-RASTER"));
+            }
+            let mut buffer = self.shape_runs(&line.runs, style)?;
+            for run in buffer.layout_runs() {
+                for glyph in run.glyphs {
+                    let visible = line
+                        .text
+                        .get(glyph.start..glyph.end)
+                        .is_some_and(|text| !text.chars().all(char::is_whitespace));
+                    if visible
+                        && cache
+                            .get_image(
+                                &mut self.fonts,
+                                glyph.physical((0.0, run.line_y), 1.0).cache_key,
+                            )
+                            .is_none()
+                    {
+                        return Err(failure("E-SUBTITLE-FONT"));
+                    }
+                }
+            }
+            let alignment = match options.alignment {
+                SubtitleAlignment::Left => 0.0,
+                SubtitleAlignment::Center => (layout.area_width_px - line.width_px) / 2.0,
+                SubtitleAlignment::Right => layout.area_width_px - line.width_px,
+            };
+            let left = (line.origin_x + alignment).floor() as i64;
+            let top = (line.origin_y + line_index as f32 * style.line_height).floor() as i64;
+            buffer.draw(
+                &mut self.fonts,
+                &mut cache,
+                Color::rgba(255, 255, 255, 255),
+                |x, y, w, h, color| {
+                    for dy in 0..h {
+                        for dx in 0..w {
+                            let x = left + i64::from(x) + i64::from(dx);
+                            let y = top + i64::from(y) + i64::from(dy);
+                            if color.a() == 0 {
+                                continue;
+                            }
+                            if x < 0 || y < 0 || x >= i64::from(width) || y >= i64::from(height) {
+                                clipped = true;
+                                continue;
+                            }
+                            crate::character::composite_pixel(
+                                image.get_pixel_mut(x as u32, y as u32),
+                                Rgba([color.r(), color.g(), color.b(), color.a()]),
+                            );
+                        }
+                    }
+                },
+            );
+        }
+        if clipped {
+            return Err(failure("E-SUBTITLE-RASTER"));
+        }
+        if radius > 0 {
+            let mut stroke = RgbaImage::new(width, height);
+            for (x, y, pixel) in image
+                .enumerate_pixels()
+                .filter(|(_, _, pixel)| pixel[3] > 0)
+            {
+                for dy in -radius..=radius {
+                    for dx in -radius..=radius {
+                        let coverage = (f64::from(style.stroke_px) + 0.5
+                            - ((dx * dx + dy * dy) as f64).sqrt())
+                        .clamp(0.0, 1.0);
+                        let alpha = (f64::from(pixel[3]) * f64::from(options.stroke_rgba[3])
+                            / 255.0
+                            * coverage)
+                            .round() as u8;
+                        if alpha == 0 {
+                            continue;
+                        }
+                        let sx = i64::from(x) + dx;
+                        let sy = i64::from(y) + dy;
+                        if sx < 0 || sy < 0 || sx >= i64::from(width) || sy >= i64::from(height) {
+                            return Err(failure("E-SUBTITLE-RASTER"));
+                        }
+                        let target = stroke.get_pixel_mut(sx as u32, sy as u32);
+                        if alpha > target[3] {
+                            *target = Rgba([
+                                options.stroke_rgba[0],
+                                options.stroke_rgba[1],
+                                options.stroke_rgba[2],
+                                alpha,
+                            ]);
+                        }
+                    }
+                }
+            }
+            crate::character::composite_at(&mut stroke, &image, 0, 0);
+            image = stroke;
+        }
+        if !image.pixels().any(|pixel| pixel[3] > 0) {
+            return Err(failure("E-SUBTITLE-RASTER"));
+        }
+        Ok(RasterizedSubtitle {
+            start_ms: cue.start_ms,
+            end_ms: cue.end_ms,
+            image,
         })
     }
 }

@@ -3,6 +3,37 @@
 use crate::{AppError, Result};
 use std::path::{Path, PathBuf};
 
+/// ツールや入力素材の末尾が通常ファイルであることを、追従せず確認する。
+pub fn require_regular_file(path: &Path) -> Result<()> {
+    let invalid = |cause: &'static str| {
+        tracing::error!(
+            code = "E-FILE-INVALID",
+            cause,
+            "通常ファイルの検査に失敗しました"
+        );
+        AppError::new("E-FILE-INVALID", "指定したファイルを使用できません",
+            "存在する通常ファイルの絶対パスを指定し、リンク・ディレクトリ・アクセス権限を確認してください")
+    };
+    if !path.is_absolute() {
+        return Err(invalid("relative_path"));
+    }
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| {
+        tracing::error!(kind = ?error.kind(), "ファイルの属性を取得できませんでした");
+        invalid("metadata")
+    })?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(invalid("file_type"));
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err(invalid("reparse_point"));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataMode {
     Production,
