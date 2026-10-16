@@ -13,7 +13,7 @@
 
 ## 次の作業
 
-- **WP-R1-3・4・6の本番コピー受入** が残る。PSD取り込みと暗号化バックアップもAPIを実装済み。旧版オラクルはPython3.12でも一致した。WP-R2-1〜5を実装し、統合verifyはRust147成功/実ツール専用2件は別受入、clippy・整形・ガード・棚卸し642・オラクル12・カタログ113・文書リンクがすべて成功。次はキャラクター合成・画像・永続ジョブとパイプライン。
+- **WP-R1-3・4・6の本番コピー受入** が残る。WP-R2-1〜10のAPIを実装し、今回の統合verifyはRust202成功/実ツール専用3件は別受入、clippy・整形・ガード・工程版・棚卸し642・オラクル12・カタログ152・文書リンクがすべて成功。次はWP-R2-11の事前点検/サービス管理、QA・同等性・費用制御と画面の接続。R2-6/7/10の実素材・性能条件はまだ未受入。
 - **WP-R0-2** はPython3.12.13へ切り替え済み。旧新で同じ682件（681成功・1skip）と12オラクルが一致。ローカルLLM→VOICEVOX→旧nativeで1920x1080/4.6秒の実サンプル成功、PNG入力fixtureで日本語字幕も確認。旧 `.venv-311-backup` の削除は自動承認レビューにblocked by policyで拒否され未実行。別経路で迂回しない。DB/鍵の退避は保持。有料APIは使っていない。
 - R1以降の全WPの状態と完了条件は実装計画を参照する。
 - **GitHub Actionsは全プロジェクトで全面禁止（利用者指示）**。所有11リポジトリすべてenabled=falseを確認し、実行中は0件。PicoCastの実行中3件は中止済み。PicoAgent-Distributionに9月のqueued記録1件が残るが、通常/強制cancelともGitHubの409で拒否され、Actions無効設定で実行を抑止している。Codex・Claude・C:/00_PG共通ルールへ禁止を反映した。検証はこのPCだけで行う。
@@ -41,6 +41,11 @@
 | [#52](https://github.com/benybeny777/PicoCast/pull/52) | `codex/wp-r2-4-subtitle-layout` | `codex/wp-r2-3-voice-engine` | 実測字幕・表示時間・性質検査 |
 | [#53](https://github.com/benybeny777/PicoCast/pull/53) | `codex/wp-r2-5-audio-mixing` | `codex/wp-r2-4-subtitle-layout` | 音声ミックス・実ffmpeg測定・R2文書同期 |
 | [#54](https://github.com/benybeny777/PicoCast/pull/54) | `codex/wp-r1-retired-settings-safety` | `codex/wp-r2-5-audio-mixing` | 廃止秘密値の平文複製防止・実コピーの事前確認 |
+| [#55](https://github.com/benybeny777/PicoCast/pull/55) | `codex/wp-r2-6-character-composition` | `codex/wp-r1-retired-settings-safety` | 立ち絵合成・音素時刻・PSDの厳格拒否 |
+| [#56](https://github.com/benybeny777/PicoCast/pull/56) | `codex/wp-r2-7-timeline-render` | `codex/wp-r2-6-character-composition` | 字幕の実描画・背景演出・CPU動画・資源管理 |
+| [#57](https://github.com/benybeny777/PicoCast/pull/57) | `codex/wp-r2-8-image-providers` | `codex/wp-r2-7-timeline-render` | 画像契約・検査上限・画像費用予約 |
+| [#58](https://github.com/benybeny777/PicoCast/pull/58) | `codex/wp-r2-10-persistent-pipeline` | `codex/wp-r2-8-image-providers` | 永続DAG・リース・再開・工程版検査 |
+| [#59](https://github.com/benybeny777/PicoCast/pull/59) | `codex/wp-r2-9-thumbnail-generation` | `codex/wp-r2-10-persistent-pipeline` | 実測レイアウトと縮小検査付きサムネ3案 |
 
 WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0-1-doc-consistency` → `codex/license-v2-rebrand-design`）でレビュー待ち。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
 
@@ -48,6 +53,7 @@ WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0
 
 - Python実環境は3.12.13。uv.lockから構築し前後suite/実サンプルを確認した。旧3.11環境は削除拒否のため残る。証拠は `temp/python312-sample/artifacts/run-8dzzuz_0/report.json` とMP4。実PSD/GPUエンコーダ/有料生成の受入とは区別する。
 - RustのフルドメインDB・取り込みAPIは実装済みだが、本番コピーでの受入は未実施。生成・YouTube・Tauri画面とログの画面/ジョブ接続は後続WP。NodeテストはUIが無いため明示スキップ。macOS実機は検証対象外。
+- 実PSD2種の全11variantは不適格（最大差25/13）。途中のRGBA8丸めとDisplay P3 ICC変換順序が原因で、めたんの非表示口差分にはMULTIPLYもある。原本は不変、許容0・登録拒否を維持。原因の限定回帰7件が成功。raw/f32階層probeはdefaultだけ差0を確認した調査用で、本番の新方式・LUT・preset限定は採用していない。
 - 旧版の隔離テストはPython3.11で661件成功・1skip。その後のツールテスト追加・Python3.12への切替後は同一ID/件数/skipを比較する。旧CIで発見したUTF-8/ffprobe依存は修正し関連98件成功。今後の検証はローカルだけで行う。
 - テスト用一時領域 `temp/legacy-tests/session-f0csi71v` の削除は自動承認レビューに拒否されたため残っている。迂回して削除しない。Git管理・実データには含めない。
 - `temp/r2-prs/` の一時PR本文削除も自動承認レビューのポリシー拒否で未実行。別経路で削除しない。
