@@ -65,7 +65,7 @@ cargo xtask import-legacy --channel --config C:\PicoCastImport\channel-import.js
 }
 ```
 
-`setting_types`は保存済み設定の全キーについて`boolean`・`integer`・`decimal`・`json`・`text`を指定する。未知キーを文字列として黙って取り込まない。`AUTOPILOT_POLICY:<profile_id>`は専用処理するので型一覧に含めない。販売など撤回済み設定は`retired_settings`へ明示し、有効設定へ移さず旧行として保持する。平文の認証情報キーが非認証settings表にあれば停止する。
+`setting_types`は保存済み設定の全キーについて`boolean`・`integer`・`decimal`・`json`・`text`を指定する。未知キーを文字列として黙って取り込まない。`AUTOPILOT_POLICY:<profile_id>`は専用処理するので型一覧に含めない。販売など撤回済み設定は`retired_settings`へ明示し、有効設定へ移さない。廃止した設定の値は暗号化した元DBのsnapshotだけに保持し、互換行にはその参照だけを記録する。ライセンスキー等を平文AppSettingへ複製しない。平文の認証情報キーが非認証settings表にあれば停止する。
 
 旧BGMがある場合は`bgm_files`へ旧`bgm_id`からコピー音源の絶対パスへの対応を入れる。旧DBに尺が無い音源だけ、`bgm_durations_ms`に測定済みのミリ秒値を指定する。0秒を推測しない。素材は共通保存先の内容アドレスへコピーし、ハッシュとサイズを照合する。音量・ループ・有効/既定状態・元パス等の旧行も保持する。利用規約・クレジットが旧DBに無いため、権利確認が必要なことを報告する。
 

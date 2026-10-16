@@ -143,6 +143,50 @@ fn fixture() -> (
 }
 
 #[test]
+fn retired_credentials_remain_only_in_encrypted_source_snapshot() {
+    let (_temp, path, mut store, legacy, target, mut options) = fixture();
+    let sensitive = "synthetic-retired-license-key";
+    let source = Connection::open(&path).unwrap();
+    source
+        .execute(
+            "INSERT INTO settings(key,value) VALUES('LICENSE_KEY',?1)",
+            [sensitive],
+        )
+        .unwrap();
+    drop(source);
+    let before = std::fs::read(&path).unwrap();
+    options.retired_settings.insert("LICENSE_KEY".into());
+    let first = store
+        .import_legacy_settings(&path, Some(&legacy), &target, &options)
+        .unwrap();
+    let second = store
+        .import_legacy_settings(&path, Some(&legacy), &target, &options)
+        .unwrap();
+    assert_eq!(first, second);
+    assert_eq!(std::fs::read(&path).unwrap(), before);
+    let settings = store.global_repository().list::<AppSetting>().unwrap();
+    assert!(settings
+        .iter()
+        .all(|setting| !setting.value_json.to_string().contains(sensitive)));
+    let reference = settings
+        .iter()
+        .find(|setting| setting.key == "legacy:retired_settings:LICENSE_KEY")
+        .unwrap();
+    assert_eq!(
+        reference.value_json["source"],
+        "encrypted_settings_snapshot"
+    );
+    let snapshot = settings
+        .iter()
+        .find(|setting| setting.key == reference.value_json["snapshot_key"].as_str().unwrap())
+        .unwrap();
+    let restored = snapshot_plaintext(&snapshot.value_json, &target).unwrap();
+    assert!(restored
+        .windows(sensitive.len())
+        .any(|part| part == sensitive.as_bytes()));
+}
+
+#[test]
 fn imports_all_settings_domains_readonly_and_repeats_without_overwriting() {
     let (_temp, path, mut store, legacy, target, options) = fixture();
     let before = std::fs::read(&path).unwrap();
