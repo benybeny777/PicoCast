@@ -459,6 +459,10 @@ impl Store {
                 "aquestalk_license_key",
             ]
             .contains(&key.to_ascii_lowercase().as_str())
+                || (matches!(
+                    key.to_ascii_lowercase().as_str(),
+                    "license_key" | "license_activation"
+                ) && !options.retired_settings.contains(key))
             {
                 return Err(import_failure());
             }

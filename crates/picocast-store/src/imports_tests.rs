@@ -155,6 +155,17 @@ fn retired_credentials_remain_only_in_encrypted_source_snapshot() {
         .unwrap();
     drop(source);
     let before = std::fs::read(&path).unwrap();
+    options
+        .setting_types
+        .insert("LICENSE_KEY".into(), SettingKind::Text);
+    assert!(store
+        .import_legacy_settings(&path, Some(&legacy), &target, &options)
+        .is_err());
+    assert!(store
+        .global_repository()
+        .list::<AppSetting>()
+        .unwrap()
+        .is_empty());
     options.retired_settings.insert("LICENSE_KEY".into());
     let first = store
         .import_legacy_settings(&path, Some(&legacy), &target, &options)

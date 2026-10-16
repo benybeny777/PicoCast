@@ -40,6 +40,7 @@
 | [#51](https://github.com/benybeny777/PicoCast/pull/51) | `codex/wp-r2-3-voice-engine` | `codex/wp-r2-2-script-engine` | Rustの読みとVOICEVOX・実音声確認 |
 | [#52](https://github.com/benybeny777/PicoCast/pull/52) | `codex/wp-r2-4-subtitle-layout` | `codex/wp-r2-3-voice-engine` | 実測字幕・表示時間・性質検査 |
 | [#53](https://github.com/benybeny777/PicoCast/pull/53) | `codex/wp-r2-5-audio-mixing` | `codex/wp-r2-4-subtitle-layout` | 音声ミックス・実ffmpeg測定・R2文書同期 |
+| [#54](https://github.com/benybeny777/PicoCast/pull/54) | `codex/wp-r1-retired-settings-safety` | `codex/wp-r2-5-audio-mixing` | 廃止秘密値の平文複製防止・実コピーの事前確認 |
 
 WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0-1-doc-consistency` → `codex/license-v2-rebrand-design`）でレビュー待ち。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
 
