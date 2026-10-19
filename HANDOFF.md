@@ -48,6 +48,7 @@
 | [#57](https://github.com/benybeny777/PicoCast/pull/57) | `codex/wp-r2-8-image-providers` | `codex/wp-r2-7-timeline-render` | 画像契約・検査上限・画像費用予約 |
 | [#58](https://github.com/benybeny777/PicoCast/pull/58) | `codex/wp-r2-10-persistent-pipeline` | `codex/wp-r2-8-image-providers` | 永続DAG・リース・再開・工程版検査 |
 | [#59](https://github.com/benybeny777/PicoCast/pull/59) | `codex/wp-r2-9-thumbnail-generation` | `codex/wp-r2-10-persistent-pipeline` | 実測レイアウトと縮小検査付きサムネ3案 |
+| [#61](https://github.com/benybeny777/PicoCast/pull/61) | `codex/wp-r2-11-preflight-services` | `codex/wp-r2-9-thumbnail-generation` | 事前点検と所有サービスの起動管理（ローカル検証待ち・ドラフト） |
 
 WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0-1-doc-consistency` → `codex/license-v2-rebrand-design`）でレビュー待ち。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
 
