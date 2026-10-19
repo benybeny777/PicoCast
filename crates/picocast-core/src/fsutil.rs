@@ -6,6 +6,64 @@ use std::{
     path::Path,
 };
 
+/// 保存先そのものに一時ファイルを作って閉じ、利用可能容量も確認する。
+/// 保存領域の同期/共有ドライブ許可は呼出元のStoragePolicyで別途照合する。
+pub fn check_output_capacity(directory: &Path, minimum_free_bytes: u64) -> Result<bool> {
+    let operation = || -> std::io::Result<bool> {
+        if !directory.is_absolute() || minimum_free_bytes == 0 {
+            return Err(std::io::Error::other("保存先と必要容量が不正"));
+        }
+        regular_directory(directory)?;
+        let probe = tempfile::NamedTempFile::new_in(directory)?;
+        probe.close()?;
+        Ok(available_space(directory)? >= minimum_free_bytes)
+    };
+    operation().map_err(|error| {
+        tracing::error!(cause = ?error.kind(), "生成先の書込み・容量点検に失敗");
+        AppError::new(
+            "E-PREFLIGHT-DISK",
+            "保存先を利用できません",
+            "保存先の実体・権限・必要空き容量を確認してください",
+        )
+    })
+}
+
+#[cfg(windows)]
+fn available_space(directory: &Path) -> std::io::Result<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    let path: Vec<u16> = directory.as_os_str().encode_wide().chain(Some(0)).collect();
+    if path[..path.len() - 1].contains(&0) {
+        return Err(std::io::Error::other("パスが不正"));
+    }
+    let mut available = 0;
+    let success = unsafe {
+        windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW(
+            path.as_ptr(),
+            &mut available,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    if success == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(available)
+    }
+}
+
+#[cfg(unix)]
+fn available_space(directory: &Path) -> std::io::Result<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let path = std::ffi::CString::new(directory.as_os_str().as_bytes())?;
+    let mut stat = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    if unsafe { libc::statvfs(path.as_ptr(), stat.as_mut_ptr()) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let stat = unsafe { stat.assume_init() };
+    let available = u128::from(stat.f_bavail) * u128::from(stat.f_frsize);
+    u64::try_from(available).map_err(|_| std::io::Error::other("容量計算の上限超過"))
+}
+
 /// ログの内部I/O。失敗は呼出側のhealthへ返し、同じログへ再入しない。
 pub(crate) fn append_log(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut file = std::fs::OpenOptions::new()

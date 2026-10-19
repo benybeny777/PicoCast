@@ -7,6 +7,8 @@
 
 ## Rust版の基盤（R0）
 
+Rustの[事前点検](docs/preflight-services.md)は、チャンネルと必要な依存を明示し、サービス・認証・保存先に問題があれば工程前に安定コード付きで停止する。外部サービスは明示起動した子ハンドルと専用領域だけを管理する。既存外部サービスを停止しない。本番認証と画面からの組立ては後続WPとする。
+
 完成形は `DESIGN_rust_rewrite.md`、実装・移行の現状は `docs/r0-foundation.md` を正本とする。共通境界はCargoワークスペースの `picocast-core` と `picocast-store`、生成処理は `picocast-ai`・`picocast-script`・`picocast-voice`・`picocast-media` に置く。チャンネルID、UTC日時、エラー、設定、プロセス、HTTP、原子的保存、SQLite・暗号化保存を実装し、clippyとASTガードで共通部品の迂回を検出する。旧Pythonアプリの置換、旧データ取込みの本番受入、Tauri画面はまだ未完了。以下はPython旧版の仕様で、パスはPython版のルートからの相対表記とする。
 
 WP-R0-3の共通ログはチャンネル・ジョブ・工程をJSONLへ記録し、`log_retention_days`（既定30日）、`log_max_bytes`（合計256MiB、2役割へ均等配分）、`job_log_compress_days`（既定90日）を型付きレジストリから読む。異常終了通知は確認されるまで保持する。秘密値、内部トレースと画面向け通知の分離、初期化・終了APIは [Rust共通ログ](docs/logging.md) を参照する。画面とジョブ側への接続は後続WPで実装する。

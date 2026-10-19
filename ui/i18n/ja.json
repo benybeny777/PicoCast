@@ -302,5 +302,19 @@
   "errors.E-THUMBNAIL-INPUT.message": "サムネイルの生成入力が不正です",
   "errors.E-THUMBNAIL-INPUT.fix": "台本・テンプレート・生成候補・検査設定を確認してください",
   "errors.E-THUMBNAIL-HOLD.message": "サムネイルを品質確認のため保留しました",
-  "errors.E-THUMBNAIL-HOLD.fix": "文字の収まり・縮小時の読みやすさ・検査理由を確認して修正してください"
+  "errors.E-THUMBNAIL-HOLD.fix": "文字の収まり・縮小時の読みやすさ・検査理由を確認して修正してください",
+  "errors.E-PREFLIGHT-SETTINGS.message": "事前点検の設定が不正です",
+  "errors.E-PREFLIGHT-SETTINGS.fix": "対象工程の依存・絶対実行パス・点検期限・起動期限・確認間隔を確認してください",
+  "errors.E-PREFLIGHT-CHANNEL.message": "事前点検のチャンネルが一致しません",
+  "errors.E-PREFLIGHT-CHANNEL.fix": "対象チャンネルの設定から事前点検を構築し直してください",
+  "errors.E-PREFLIGHT-SERVICE.message": "必要な外部サービスを利用できません",
+  "errors.E-PREFLIGHT-SERVICE.fix": "対象サービスの起動状態・応答形式・実行パス・起動引数を確認してください",
+  "errors.E-PREFLIGHT-CREDENTIAL.message": "必要な認証情報を利用できません",
+  "errors.E-PREFLIGHT-CREDENTIAL.fix": "対象チャンネルのAPIキー・YouTube認可・有効期限を確認してください",
+  "errors.E-PREFLIGHT-DISK.message": "生成に必要な保存領域を利用できません",
+  "errors.E-PREFLIGHT-DISK.fix": "保存先の書込み権限と必要な空き容量を確認してください",
+  "errors.E-PREFLIGHT-TIMEOUT.message": "事前点検またはサービスの起動が制限時間を超えました",
+  "errors.E-PREFLIGHT-TIMEOUT.fix": "サービスの状態と点検・起動の制限時間を確認してください",
+  "errors.E-PREFLIGHT-RESTART.message": "外部サービスの再起動回数が上限に達しました",
+  "errors.E-PREFLIGHT-RESTART.fix": "対象サービスの不調を解消してから生成を開始し直してください"
 }

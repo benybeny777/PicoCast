@@ -1,6 +1,6 @@
 # 引き継ぎ（未マージ作業と再開方法）
 
-最終更新: 2026-10-16（旧データ移行・ローカル検証への切り替え）
+最終更新: 2026-10-19（Rust事前点検・外部サービス管理の実装）
 
 ## 再開方法
 
@@ -13,7 +13,9 @@
 
 ## 次の作業
 
-- **WP-R1-3・4・6の本番コピー受入** が残る。WP-R2-1〜10のAPIを実装し、今回の統合verifyはRust202成功/実ツール専用3件は別受入、clippy・整形・ガード・工程版・棚卸し642・オラクル12・カタログ152・文書リンクがすべて成功。次はWP-R2-11の事前点検/サービス管理、QA・同等性・費用制御と画面の接続。R2-6/7/10の実素材・性能条件はまだ未受入。
+- **WP-R2-11は[#61](https://github.com/benybeny777/PicoCast/pull/61)でレビュー待ち**。API・所有プロセス管理・loopback/ディスク点検を実装し、ローカル全体検証はRust216件成功/専用4件skip、clippy等すべて成功。読み取りレビューの指摘も修正して再確認した。詳細は`docs/preflight-services.md`。本番認証・実サービスの起動受入・画面との接続は未完了。次の独立した生成WPはWP-R2-12のQAゲート。
+
+- **WP-R1-3・4・6の本番コピー受入** が残る。WP-R2-1〜11のAPIを実装した。次はQA・同等性・費用制御と画面の接続。R2-6/7/10/11の実素材・性能・実サービス起動条件はまだ未受入。
 - **WP-R0-2** はPython3.12.13へ切り替え済み。旧新で同じ682件（681成功・1skip）と12オラクルが一致。ローカルLLM→VOICEVOX→旧nativeで1920x1080/4.6秒の実サンプル成功、PNG入力fixtureで日本語字幕も確認。旧 `.venv-311-backup` の削除は自動承認レビューにblocked by policyで拒否され未実行。別経路で迂回しない。DB/鍵の退避は保持。有料APIは使っていない。
 - R1以降の全WPの状態と完了条件は実装計画を参照する。
 - **GitHub Actionsは全プロジェクトで全面禁止（利用者指示）**。所有11リポジトリすべてenabled=falseを確認し、実行中は0件。PicoCastの実行中3件は中止済み。PicoAgent-Distributionに9月のqueued記録1件が残るが、通常/強制cancelともGitHubの409で拒否され、Actions無効設定で実行を抑止している。Codex・Claude・C:/00_PG共通ルールへ禁止を反映した。検証はこのPCだけで行う。
@@ -46,6 +48,7 @@
 | [#57](https://github.com/benybeny777/PicoCast/pull/57) | `codex/wp-r2-8-image-providers` | `codex/wp-r2-7-timeline-render` | 画像契約・検査上限・画像費用予約 |
 | [#58](https://github.com/benybeny777/PicoCast/pull/58) | `codex/wp-r2-10-persistent-pipeline` | `codex/wp-r2-8-image-providers` | 永続DAG・リース・再開・工程版検査 |
 | [#59](https://github.com/benybeny777/PicoCast/pull/59) | `codex/wp-r2-9-thumbnail-generation` | `codex/wp-r2-10-persistent-pipeline` | 実測レイアウトと縮小検査付きサムネ3案 |
+| [#61](https://github.com/benybeny777/PicoCast/pull/61) | `codex/wp-r2-11-preflight-services` | `codex/wp-r2-9-thumbnail-generation` | 事前点検と所有サービスの起動管理（ローカル検証済み・レビュー待ち） |
 
 WP-R0-1は [#37](https://github.com/benybeny777/PicoCast/pull/37)（`codex/wp-r0-1-doc-consistency` → `codex/license-v2-rebrand-design`）でレビュー待ち。#35と#36のマージ・base変更は別作業。既存PR #33・#34もこのWPでは変更しない。
 

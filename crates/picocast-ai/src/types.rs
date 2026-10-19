@@ -174,6 +174,7 @@ impl Secret {
 
 #[derive(Clone)]
 pub struct CancelHandle(watch::Sender<bool>);
+#[derive(Clone)]
 pub struct Cancellation(watch::Receiver<bool>);
 impl Cancellation {
     pub fn pair() -> (CancelHandle, Self) {

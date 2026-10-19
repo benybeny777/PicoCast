@@ -1062,5 +1062,12 @@
     "retry_recommended": false,
     "message_key": "errors.E-THUMBNAIL-HOLD.message",
     "fix_key": "errors.E-THUMBNAIL-HOLD.fix"
-  }
+  },
+  { "code": "E-PREFLIGHT-SETTINGS", "category": "system", "retry_recommended": false, "message_key": "errors.E-PREFLIGHT-SETTINGS.message", "fix_key": "errors.E-PREFLIGHT-SETTINGS.fix" },
+  { "code": "E-PREFLIGHT-CHANNEL", "category": "system", "retry_recommended": false, "message_key": "errors.E-PREFLIGHT-CHANNEL.message", "fix_key": "errors.E-PREFLIGHT-CHANNEL.fix" },
+  { "code": "E-PREFLIGHT-SERVICE", "category": "system", "retry_recommended": false, "message_key": "errors.E-PREFLIGHT-SERVICE.message", "fix_key": "errors.E-PREFLIGHT-SERVICE.fix" },
+  { "code": "E-PREFLIGHT-CREDENTIAL", "category": "system", "retry_recommended": false, "message_key": "errors.E-PREFLIGHT-CREDENTIAL.message", "fix_key": "errors.E-PREFLIGHT-CREDENTIAL.fix" },
+  { "code": "E-PREFLIGHT-DISK", "category": "system", "retry_recommended": false, "message_key": "errors.E-PREFLIGHT-DISK.message", "fix_key": "errors.E-PREFLIGHT-DISK.fix" },
+  { "code": "E-PREFLIGHT-TIMEOUT", "category": "system", "retry_recommended": false, "message_key": "errors.E-PREFLIGHT-TIMEOUT.message", "fix_key": "errors.E-PREFLIGHT-TIMEOUT.fix" },
+  { "code": "E-PREFLIGHT-RESTART", "category": "system", "retry_recommended": false, "message_key": "errors.E-PREFLIGHT-RESTART.message", "fix_key": "errors.E-PREFLIGHT-RESTART.fix" }
 ]
