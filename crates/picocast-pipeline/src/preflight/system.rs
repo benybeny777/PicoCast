@@ -64,7 +64,9 @@ impl ReadinessProbe for SystemProbe {
                         .disk
                         .as_ref()
                         .ok_or_else(|| failure("E-PREFLIGHT-SETTINGS"))?;
-                    fsutil::check_output_capacity(&disk.directory, disk.minimum_free_bytes)
+                    let directory = disk.directory.clone();
+                    let minimum = disk.minimum_free_bytes;
+                    disk_worker(move || fsutil::check_output_capacity(&directory, minimum)).await
                 }
                 _ => {
                     let endpoint = self
@@ -97,5 +99,32 @@ impl ReadinessProbe for SystemProbe {
                 }
             }
         })
+    }
+}
+
+async fn disk_worker(operation: impl FnOnce() -> Result<bool> + Send + 'static) -> Result<bool> {
+    tokio::task::spawn_blocking(operation)
+        .await
+        .map_err(|_| failure("E-PREFLIGHT-DISK"))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn blocked_disk_does_not_block_timeout_or_executor() -> Result<()> {
+        let (release, wait) = std::sync::mpsc::channel();
+        let worker = disk_worker(move || {
+            // 外部I/Oの停止を模し、executorからの解除まで待つ。
+            wait.recv_timeout(Duration::from_secs(1))
+                .map_err(|_| failure("E-PREFLIGHT-DISK"))?;
+            Ok(true)
+        });
+        let timed = tokio::time::timeout(Duration::from_millis(10), worker).await;
+        let released = release.send(());
+        assert!(timed.is_err());
+        assert!(released.is_ok());
+        Ok(())
     }
 }

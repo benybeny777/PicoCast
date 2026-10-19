@@ -60,9 +60,8 @@ fn available_space(directory: &Path) -> std::io::Result<u64> {
         return Err(std::io::Error::last_os_error());
     }
     let stat = unsafe { stat.assume_init() };
-    u64::from(stat.f_bavail)
-        .checked_mul(u64::from(stat.f_frsize))
-        .ok_or_else(|| std::io::Error::other("容量計算の上限超過"))
+    let available = u128::from(stat.f_bavail) * u128::from(stat.f_frsize);
+    u64::try_from(available).map_err(|_| std::io::Error::other("容量計算の上限超過"))
 }
 
 /// ログの内部I/O。失敗は呼出側のhealthへ返し、同じログへ再入しない。

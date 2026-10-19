@@ -152,7 +152,8 @@ async fn response_server(body: &str) -> (String, tokio::task::JoinHandle<()>) {
     let task = tokio::spawn(async move {
         let (mut stream, _) = listener.accept().await.unwrap();
         let mut buffer = [0; 4096];
-        stream.read(&mut buffer).await.unwrap();
+        let read = stream.read(&mut buffer).await.unwrap();
+        assert!(read > 0);
         stream.write_all(response.as_bytes()).await.unwrap();
     });
     (url, task)
