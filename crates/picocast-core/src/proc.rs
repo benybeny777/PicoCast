@@ -12,6 +12,7 @@ use tokio::{
     process::Command,
 };
 
+pub mod service;
 #[cfg(windows)]
 mod windows;
 

@@ -18,6 +18,32 @@ pub fn local_client(timeout: Duration) -> Result<Client> {
     build_client(timeout, true)
 }
 
+/// 稼働中サービスの点検専用。秘密値・proxy・リダイレクト・外部ホストを使わない。
+pub async fn local_health_json(
+    client: &Client,
+    url: &str,
+    max_bytes: usize,
+) -> Result<Option<serde_json::Value>> {
+    let parsed = reqwest::Url::parse(url).map_err(|_| request_failure())?;
+    let loopback = parsed
+        .host_str()
+        .and_then(|host| {
+            host.trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .ok()
+        })
+        .is_some_and(|ip| ip.is_loopback());
+    if !loopback || parsed.query().is_some() || parsed.scheme() != "http" {
+        return Err(request_failure());
+    }
+    match request_json(client, reqwest::Method::GET, url, &[], None, max_bytes).await {
+        Ok(response) if response.status == 200 => Ok(Some(response.body)),
+        Ok(_) => Err(response_failure()),
+        Err(error) if error.code == "E-HTTP-OFFLINE" => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 fn build_client(timeout: Duration, local: bool) -> Result<Client> {
     if timeout.is_zero() {
         tracing::error!("HTTP制限時間に0を指定");

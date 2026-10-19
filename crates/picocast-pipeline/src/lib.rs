@@ -1,5 +1,6 @@
 //! 永続ジョブと工程DAG。実プロバイダの副作用は個別Stepが所有する。
 mod dag;
+pub mod preflight;
 mod resources;
 mod runner;
 mod step;
